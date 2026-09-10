@@ -9,6 +9,9 @@ None yet.
 ## Implemented
 Harness and project specification only. Application implementation has not started.
 
+Version control is live: git repository initialized on branch `main`, entire harness
+committed, remote `origin` = `https://github.com/ipoderator/coffee_ride_app` (public).
+
 ## In progress
 None.
 
@@ -37,6 +40,11 @@ See `docs/decisions.md`. Notably:
   through CR-062 and CR-053 through CR-056 are the implementation tasks.
 - `docs/api.md` now lists auth endpoints (verify-email, forgot/reset-password) and a
   `/health` endpoint that have no implementation yet — contract-first, per usual.
+- CI fails at `pnpm install --frozen-lockfile` until CR-001 creates `pnpm-lock.yaml` and
+  the workspace packages — expected until Foundation lands, not a regression.
+- Redis has no healthcheck in `docker-compose.yml` (postgres and minio do).
+- CR-056's lint rule against direct 2GIS SDK imports is not implemented yet, so the
+  ADR-010 boundary is currently held by review discipline only.
 
 ## Do not break
 - documented stack;
@@ -50,4 +58,4 @@ See `docs/decisions.md`. Notably:
   (`.claude/rules/extensibility.md`).
 
 ## Last updated
-2026-09-09
+2026-09-10

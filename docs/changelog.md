@@ -147,3 +147,19 @@ Files: `README.md` (rewritten), `.claude/rules/architecture.md`,
 Decisions: none (consistency fixes, not new architecture).
 Follow-up: none outstanding from this audit; re-run this kind of check periodically as
 more rules files accumulate.
+
+## 2026-09-10 — Infra — git repository initialized and pushed to GitHub
+
+Summary: The working directory was not a git repository at all, which broke the parts of
+the harness that assume one: the "review git diff" step of the mandatory development loop,
+`.claude/rules/git.md`, the Husky pre-commit hook, and GitHub Actions CI. Ran `git init -b
+main`, committed the entire harness as a single initial commit, and pushed to the user's
+remote `https://github.com/ipoderator/coffee_ride_app` (public). Verified before pushing
+that no secrets are tracked: `.env` is gitignored and only `.env.example` with placeholder
+values (`AUTH_SECRET=change-me`, empty `NEXT_PUBLIC_MAPS_2GIS_API_KEY`) is committed.
+Files: all 59 harness/spec/tooling files (initial commit `2642f31`); no content changes.
+Decisions: none (infrastructure, not architecture). Default branch is `main`, matching
+`.github/workflows/ci.yml`.
+Follow-up: CI will fail its `pnpm install --frozen-lockfile` step until CR-001 produces a
+`pnpm-lock.yaml` — expected, not a regression. CR-001 (initialize pnpm/Turborepo monorepo)
+is next.
