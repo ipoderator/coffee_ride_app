@@ -31,7 +31,9 @@ See `docs/decisions.md`. Notably:
   `packages/maps-2gis` adapter split, so the provider can be swapped later.
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette, no
   neon/vivid accents, warm neutral base with one muted teal-green accent; metric
-  presentation modeled on Strava/TrainingPeaks/Rouvy information design.
+  presentation modeled on Strava/TrainingPeaks/Rouvy information design. One deliberate
+  exception: `danger` is a bright red (`#D42B20` / `#FF5A4F`), reserved for cancellation
+  and failure, allowed as a filled badge.
 
 ## Known limitations
 - Production map provider (2GIS) credentials/configuration are not present.

@@ -198,3 +198,30 @@ no raw hex in `apps/web`) is recorded in `docs/design.md` §14 and enforced by C
 Follow-up: CR-063 and CR-064 must land before CR-011's register form — the first screen
 with user-visible Russian strings and colors. Open questions (cover-image aspect ratio,
 map clustering, wordmark) are listed in `docs/design.md` §15.
+
+## 2026-09-10 — Design — cancellation uses a bright red (revises the muted-brick draft)
+
+Summary: Reviewing the rendered token preview, the product owner decided that "Отменён"
+should be a genuinely bright red rather than the muted brick tone recorded earlier the same
+day. Applied: `danger` is now `#D42B20` (light) / `#FF5A4F` (dark), and the cancelled badge
+is a filled badge rather than text-and-border only. Both values were contrast-checked
+before being written down — 4.79:1 and 5.88:1 against their theme grounds, and 5.04:1 /
+5.88:1 for the label on the filled badge, so AA holds for the louder treatment too.
+An `on-danger` token was added for text on that fill.
+
+This revises, but does not erase, the exception paragraph written earlier today in
+`docs/design.md` §1: the earlier entry in this changelog stands as written, per the
+append-only rule. What changed is the hue and the permission to fill; what did not change
+is that red stays reserved for destructive/failed states and never appears without a word
+or icon beside it.
+
+Also recorded the typeface actually used in the preview: Golos Text (Paratype) replaces
+"Inter as an optional upgrade" in §4 as the recommended face, because it is drawn for
+Russian text rather than merely covering Cyrillic; IBM Plex Mono is named as the utility
+face for hex/IDs.
+
+Files: `docs/design.md` (§1 exception rewritten, §3 danger/on-danger rows in both themes,
+§4 typeface), `.claude/context/project-state.md`.
+Decisions: none — palette revision, not architecture.
+Follow-up: CR-063 implements these tokens. Remaining design open questions unchanged
+(`docs/design.md` §15).

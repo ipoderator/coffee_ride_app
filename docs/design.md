@@ -19,9 +19,9 @@ outdoors, often on a phone, sometimes in bright sunlight or at 6 a.m. before a r
 Legibility and quiet hierarchy beat personality.
 
 Rules:
-- **No neon, no vivid saturated accents, no bright red as decoration.** Keep accent
-  saturation moderate (roughly ≤ 45% HSL saturation); nothing should glow or vibrate
-  against the background.
+- **No neon and no vivid saturated accents.** Red is semantic only, never decorative —
+  see the destructive-state exception below. Keep accent saturation moderate (roughly
+  ≤ 45% HSL saturation); nothing should glow or vibrate against the background.
 - **Warm neutral base**, not clinical blue-gray. Surfaces are off-white/warm stone in
   light theme, warm near-black in dark theme.
 - **One accent color** (muted teal-green) for interactive elements. Do not introduce a
@@ -31,19 +31,22 @@ Rules:
 - No gradients on data surfaces, no glow/neon shadows, no full-bleed saturated hero
   blocks. Photography (ride cover images) provides the color; the chrome stays quiet.
 
-### The one deliberate exception: destructive semantics
+### The one exception: destructive semantics
 
-"No red" is the stated direction, and the palette follows it — nothing in the interface is
-vivid red. But cancellation, deletion and validation failure still need to be
-distinguishable from an ordinary action, and a fully red-free interface either hides those
-states or overloads another color. The compromise recorded here:
+The calm direction governs the interface's ordinary surfaces. Destructive and failed states
+are the deliberate exception, settled by the product owner on 2026-09-10 after reviewing a
+muted-brick first draft: **cancellation uses a genuinely bright red.** A cancelled ride is
+the one thing a participant must not scroll past, and a whisper-quiet cancellation badge is
+a missed-ride support ticket waiting to happen.
 
-- destructive/error uses a **muted brick tone** (`#8F4F47`), not a saturated red;
-- it is used for **text, icon and 1px borders only** — never as a large filled area;
-- it never appears without an accompanying word ("Отменён", "Ошибка") or icon.
-
-If that still reads as too red in review, the fallback is desaturating further toward
-warm gray-brown — but the state must remain visually distinct from a neutral one.
+- `danger` is a saturated red — `#D42B20` light / `#FF5A4F` dark, both AA against their
+  ground (4.79:1 and 5.88:1);
+- it may be used as text, icon, border **or a filled badge** — a filled "Отменён" badge is
+  the intended treatment, not a violation of the calm direction;
+- it still never appears without an accompanying word ("Отменён", "Ошибка") or icon —
+  color alone is never the signal (§12);
+- it stays reserved for destructive and failed states. Red is the loudest thing in this
+  interface precisely because nothing else is allowed to use it.
 
 ---
 
@@ -86,7 +89,8 @@ Contrast ratios below were computed against the theme background and meet WCAG 2
 | `on-primary` | `#FFFFFF` | 6.81:1 on `primary` | Text on primary fill |
 | `success` | `#3F6B4E` | 5.83:1 | Registration confirmed, published |
 | `warning` | `#8A6520` | 5.04:1 | Waitlist, registration closing, degraded service |
-| `danger` | `#8F4F47` | 5.91:1 | Cancellation, destructive action, validation error |
+| `danger` | `#D42B20` | 4.79:1 | Cancellation, destructive action, validation error |
+| `on-danger` | `#FFFFFF` | 5.04:1 on `danger` | Text on a filled danger badge |
 | `info` | `#3D5F85` | 6.29:1 | Neutral informational notes, ride updates |
 | `border` | `#E4E0D9` | decorative | Dividers, card outlines |
 | `border-input` | `#8C857D` | 3.46:1 | Form control boundaries (AA for UI components) |
@@ -104,7 +108,8 @@ Contrast ratios below were computed against the theme background and meet WCAG 2
 | `on-primary` | `#171614` | 7.66:1 on `primary` | Text on primary fill |
 | `success` | `#84AE8F` | 7.26:1 | — |
 | `warning` | `#C6A063` | 7.41:1 | — |
-| `danger` | `#C98D84` | 6.57:1 | — |
+| `danger` | `#FF5A4F` | 5.88:1 | — |
+| `on-danger` | `#171614` | 5.88:1 on `danger` | Text on a filled danger badge |
 | `info` | `#8CACCE` | 7.67:1 | — |
 | `border` | `#302D29` | decorative | — |
 | `border-input` | `#736E66` | 3.57:1 | Form control boundaries |
@@ -123,9 +128,12 @@ status are encoded by **label + position on a scale**, not by hue.
 
 ## 4. Typography
 
-- **Family:** system stack first (`-apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-  sans-serif`), Inter as an optional self-hosted upgrade. No decorative or display face.
-  Cyrillic coverage is a hard requirement — verify any added face renders Russian text.
+- **Family:** Golos Text (Paratype) — a grotesque drawn for Russian text, with Cyrillic as
+  a first-class script rather than an afterthought — over the system stack
+  (`-apple-system, "Segoe UI", Roboto, sans-serif`) as fallback. No decorative or display
+  face. Cyrillic coverage is a hard requirement: verify any added face renders Russian
+  text before adopting it. IBM Plex Mono is the utility face for hex values, IDs and other
+  data that is scanned in columns.
 - **Numerals: `font-variant-numeric: tabular-nums` on every metric.** Non-tabular figures
   make numbers jitter between states and misalign in tables; this is the single most
   visible difference between an amateur and a professional metrics UI.
