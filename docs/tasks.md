@@ -12,6 +12,21 @@
 - [ ] CR-009 Configure Docker Compose
 - [ ] CR-010 Configure CI + Git hooks
 
+## Design foundations
+Must land before the first user-facing screen (CR-011's register form) — see
+`docs/design.md`. Retrofitting tokens, formatters and states after the screens exist is a
+rewrite, not a polish pass.
+- [ ] CR-063 Design tokens in `packages/ui` (light + dark palette, typography, spacing,
+      radius) exposed via the Tailwind theme; lint rule rejecting raw hex colors in
+      `apps/web`
+- [ ] CR-064 Russian formatters (distance/elevation/pace/duration/date/price/participants)
+      and the UI terminology mapping (status, bicycle type, services) as one shared,
+      unit-tested module — `docs/design.md` §7, §13
+- [ ] CR-065 Metric presentation components: `MetricTile`, `MetricRow`, `StatusBadge`,
+      `DifficultyScale` — `docs/design.md` §6
+- [ ] CR-066 Shared state primitives: `Skeleton`, `EmptyState`, `ErrorState` + the
+      degraded-state pattern used by CR-052 — `docs/design.md` §10
+
 ## Auth
 - [ ] CR-011 User registration
 - [ ] CR-012 Login/logout/session
@@ -60,9 +75,12 @@
 - [ ] CR-043 Organizer rating summary
 
 ## Quality
-- [ ] CR-044 Responsive UI
-- [ ] CR-045 Accessibility
-- [ ] CR-046 Error/loading/empty states
+These three are **verification passes over screens already built to `docs/design.md`**,
+not the point where responsive/a11y/state work starts. A screen that ships without them
+is not done (`docs/definition-of-done.md`).
+- [ ] CR-044 Responsive UI — audit against `docs/design.md` §11
+- [ ] CR-045 Accessibility — audit against `docs/design.md` §12 (WCAG 2.1 AA)
+- [ ] CR-046 Error/loading/empty states — audit against `docs/design.md` §10
 - [ ] CR-047 Security review
 - [ ] CR-048 Performance review
 

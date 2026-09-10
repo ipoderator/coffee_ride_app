@@ -163,3 +163,38 @@ Decisions: none (infrastructure, not architecture). Default branch is `main`, ma
 Follow-up: CI will fail its `pnpm install --frozen-lockfile` step until CR-001 produces a
 `pnpm-lock.yaml` — expected, not a regression. CR-001 (initialize pnpm/Turborepo monorepo)
 is next.
+
+## 2026-09-10 — Design — UX/UI specification added (`docs/design.md`)
+
+Summary: The project had no design layer at all — only "Tailwind + shadcn/ui" as a stack
+choice and two flow lines in `.claude/rules/frontend.md`. Added `docs/design.md` covering
+visual direction, color tokens, typography, spacing, metric presentation, Russian
+number/date formatting, screen inventory, component inventory, required UI states,
+breakpoints, WCAG 2.1 AA target, and the Russian UI terminology table.
+
+Direction per user: calm and low-saturation — no neon, no vivid accents, no bright red.
+Warm neutral base, one muted teal-green accent. Every palette token's contrast ratio was
+computed against its theme background before being written down; light `text-muted` and
+the form-control border were adjusted after an initial pair failed AA (4.44:1 and 1.34:1),
+so the AA claim in the document is verified rather than asserted.
+
+Recorded one deliberate deviation from "no red": destructive/error semantics use a muted
+brick tone (`#8F4F47`), restricted to text/icon/1px borders and always paired with a word
+or icon, because cancellation and validation failure must stay distinguishable from
+neutral states. Documented in §1 rather than decided silently.
+
+Metric presentation is modeled on Strava/TrainingPeaks/FinalSurge/Zwift/Rouvy per user's
+reference list — their information design (metric row, label→value→unit hierarchy,
+tabular numerals, elevation profile, discrete difficulty scale), explicitly not their
+branding (Strava orange, Zwift neon), which conflicts with the calm direction.
+
+Files: `docs/design.md` (new), `docs/tasks.md` (CR-063..CR-066 added; CR-044/045/046
+reframed as audits over screens already built to the spec, not the place UI quality
+starts), `.claude/rules/frontend.md` (pointer to `docs/design.md` + metrics/a11y rules —
+a rules file the acting agent reads, so the spec doesn't sit unread).
+Decisions: none — palette/typography are product design, not architecture. The
+implementation constraint (tokens live in `packages/ui`, consumed via the Tailwind theme,
+no raw hex in `apps/web`) is recorded in `docs/design.md` §14 and enforced by CR-063.
+Follow-up: CR-063 and CR-064 must land before CR-011's register form — the first screen
+with user-visible Russian strings and colors. Open questions (cover-image aspect ratio,
+map clustering, wordmark) are listed in `docs/design.md` §15.

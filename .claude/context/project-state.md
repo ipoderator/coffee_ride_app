@@ -29,6 +29,9 @@ See `docs/decisions.md`. Notably:
   Full checklist in `.claude/rules/security.md`.
 - ADR-010: maps provider (2GIS) accessed only through `packages/maps-core` /
   `packages/maps-2gis` adapter split, so the provider can be swapped later.
+- Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette, no
+  neon/vivid accents, warm neutral base with one muted teal-green accent; metric
+  presentation modeled on Strava/TrainingPeaks/Rouvy information design.
 
 ## Known limitations
 - Production map provider (2GIS) credentials/configuration are not present.
@@ -45,6 +48,10 @@ See `docs/decisions.md`. Notably:
 - Redis has no healthcheck in `docker-compose.yml` (postgres and minio do).
 - CR-056's lint rule against direct 2GIS SDK imports is not implemented yet, so the
   ADR-010 boundary is currently held by review discipline only.
+- `docs/design.md` exists but nothing implements it yet — CR-063..CR-066 are the
+  implementation tasks, and CR-063/CR-064 block the first UI screen (CR-011).
+- Design open questions: cover-image aspect ratio, discovery-map clustering, wordmark
+  (`docs/design.md` §15).
 
 ## Do not break
 - documented stack;
