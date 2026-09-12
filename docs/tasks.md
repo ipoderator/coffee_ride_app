@@ -14,8 +14,9 @@ Decisions and config that are cheap now and a breaking change once code exists �
 - [x] CR-072 Bind local infrastructure ports to `127.0.0.1`
 - [x] CR-087 Run Prettier over the whole repository as one isolated commit — done
       2026-09-12, formatting-only, see `docs/changelog.md`.
-- [ ] CR-073 Zod environment validation at API startup; refuse to boot in production on
-      placeholder/missing values (implemented inside CR-003)
+- [x] CR-073 Zod environment validation at API startup; refuse to boot in production on
+      placeholder/missing values — done 2026-09-12 inside CR-003
+      (`apps/api/src/env.ts`).
 
 ## Foundation
 
@@ -25,7 +26,10 @@ Decisions and config that are cheap now and a breaking change once code exists �
 - [x] CR-002 Configure Next.js web — done 2026-09-12: `apps/web` scaffolded
       (Next.js 15, Tailwind v4, shadcn/ui foundation), turbo lint/typecheck/build
       verified. See `docs/changelog.md`.
-- [ ] CR-003 Configure Fastify API
+- [x] CR-003 Configure Fastify API — done 2026-09-12: `apps/api` scaffolded
+      (Fastify 5, ESM, Zod validation via `@fastify/type-provider-zod`, RFC 9457
+      error envelope, OpenAPI at `/docs`, `/health` stub, `/v1` prefix wired).
+      Includes CR-073. See `docs/changelog.md`.
 - [ ] CR-004 Configure PostgreSQL + Drizzle
 - [ ] CR-005 Configure Redis
 - [ ] CR-006 Configure MinIO/S3 adapter

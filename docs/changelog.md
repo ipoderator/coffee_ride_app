@@ -492,3 +492,84 @@ are implementation details of the already-fixed stack, not architectural decisio
 Follow-up: CR-003 (Configure Fastify API) is next. CR-063 replaces the placeholder
 theme with real design tokens; CR-010 fixes the KI-012 pre-commit lint gap; CR-008
 adds the test runner this app doesn't have yet.
+
+## 2026-09-12 — CR-003 — apps/api scaffolded (Fastify 5 + Zod + RFC 9457 + OpenAPI)
+
+Summary: Second workspace member. `apps/api` is Fastify 5.12.4 (ESM,
+`"type": "module"`), TypeScript pinned to `6.0.3` (same `typescript-eslint`
+compatibility ceiling as `apps/web`, see CR-002). Scope/design decisions were
+gathered via a `/grill-me` interview session before implementation — six questions,
+all recommended options accepted by the user:
+
+1. ESM, not CommonJS.
+2. OpenAPI wired now (`@fastify/swagger` + `@fastify/swagger-ui` + the official
+   `@fastify/type-provider-zod` — confirmed via npm registry `repository.url` that
+   this scoped package, not the community `turkerdev/fastify-type-provider-zod` it
+   was migrated from, is current), not deferred until real routes exist.
+3. `GET /health` ships now as a bootstrap stub (`{ status: 'ok' }`, no dependency
+   checks) — `docs/api.md`/ADR-011 explicitly assign the real DB/Redis/S3-checking
+   version to CR-051; this task only reserves the unversioned route.
+4. RFC 9457 `type` URIs use `https://coffee-ride.example/errors/{code}`, the same
+   placeholder domain ADR-011's own example already uses.
+5. The API's listen port is `API_PORT`, not bare `PORT` (ambiguous once web and api
+   share one `.env` in local dev).
+6. Zod env validation (CR-073) covers the _full_ `.env.example` surface now,
+   including variables no code reads yet, not just what CR-003 itself introduces.
+
+Implementation:
+
+- `@fastify/type-provider-zod` gives typed Zod request/response validation and
+  drives OpenAPI generation (`jsonSchemaTransform`) from the same route schemas —
+  no hand-maintained OpenAPI file. Swagger UI at `/docs`, spec at `/docs/json`.
+- Global error handler (`src/plugins/error-handler.ts`) produces the exact RFC 9457
+  shape from `docs/api.md` for every non-2xx response: 404s, Zod validation
+  failures (mapped into `errors[]` via `hasZodFastifySchemaValidationErrors`), and
+  any other thrown error (5xx bodies never include the real error — only a generic
+  message; the real error is logged server-side via `request.log`, per
+  `.claude/rules/backend.md`).
+- `/v1` is registered as an (empty) prefixed plugin now, `/health` outside it — the
+  versioning convention exists structurally before the first real route (CR-011).
+- `src/env.ts` (CR-073): Zod schema for every `.env.example` variable, including
+  ones no client exists for yet (`DATABASE_URL`, `REDIS_URL`, `S3_*`,
+  `MAPS_2GIS_API_KEY` — optional, since nothing reads them yet, but typed and
+  placeholder-checked for when something does). Refuses to boot when
+  `NODE_ENV=production` and a value matches a known-unsafe default: `AUTH_SECRET
+=== 'change-me'` (the exact promise `.env.example`'s own comment already made),
+  the MinIO local credentials, or `localhost`/`127.0.0.1` in `DATABASE_URL`/
+  `REDIS_URL`/`S3_ENDPOINT`. Error messages name the field and reason, never the
+  offending value (`.claude/rules/security.md`: never log secrets).
+- Local dev loads one root `.env` (matching `.env.example`'s existing location) via
+  Node 24's native `process.loadEnvFile()` — no `dotenv` dependency. Production
+  reads real platform environment variables; a missing `.env` file is not an error.
+- No CORS plugin (ADR-013: single origin, not a supported configuration to add
+  "just in case"). No rate limiting yet — `.claude/rules/security.md` scopes that
+  to "the first auth-related task (CR-011/CR-012) onward," and no Redis client
+  exists yet (CR-005) to back it.
+- `apps/api/eslint.config.mjs`: own copy of the plain typescript-eslint flat config
+  (no framework-specific plugin needed for a bare Fastify app) — required, not
+  optional, since root's `eslint.config.mjs` already ignores `apps/**` (CR-002).
+
+Verified live, not just typechecked: `turbo run lint|typecheck|build` all pass for
+`api` (and `web` stays green — regression check); dev server (`tsx watch`) boots and
+`curl`'d `/health` (200), an unknown route (404 with the documented envelope), and a
+temporary Zod-validated test route with a bad payload (400, `errors[]` correctly
+populated with `path`/`message` — route removed before commit, was never shipped);
+compiled `dist/server.js` boots identically to `tsx` dev mode; a simulated
+production boot with `AUTH_SECRET=change-me` correctly refuses to start with the
+expected message, and a boot missing `AUTH_SECRET` entirely correctly refuses too.
+
+Files: `apps/api/**` (new — package.json, tsconfig.json, eslint.config.mjs,
+.gitignore, src/{env,app,server}.ts, src/plugins/{error-handler,openapi}.ts,
+src/routes/{health,v1}.ts); `.env.example` (`API_PORT`), `turbo.json` (`API_PORT` in
+every task's env list); `docs/tasks.md` (CR-003 and CR-073 checked off),
+`.claude/context/{architecture-map,project-state,current-task}.md`.
+Dependencies: `fastify`, `zod`, `@fastify/type-provider-zod`, `@fastify/swagger`,
+`@fastify/swagger-ui` (runtime); `tsx`, `pino-pretty`, `typescript`, `@types/node`,
+`eslint`, `@eslint/js`, `typescript-eslint` (dev — mirrors `apps/web`'s own copies,
+`packages/config` doesn't exist yet to centralize this, CR-007).
+Decisions: none new at the ADR level — OpenAPI-from-Zod and the placeholder `type`
+base URI are implementation details of contracts already fixed by ADR-011, not new
+architectural decisions.
+Follow-up: CR-004 (Configure PostgreSQL + Drizzle) is next. CR-051 upgrades
+`/health`; CR-011 adds the first real `/v1` route and exercises this scaffold for
+real; CR-057/CR-058 add password hashing and auth rate limiting once Redis exists.

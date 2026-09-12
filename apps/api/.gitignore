@@ -1,0 +1,4 @@
+# Already covered by the root .gitignore; kept here too so apps/api is
+# self-contained if ever extracted or linted in isolation.
+/dist/
+*.tsbuildinfo

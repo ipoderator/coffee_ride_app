@@ -8,6 +8,7 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
         "NEXT_PUBLIC_*",
+        "API_PORT",
         "DATABASE_URL",
         "REDIS_URL",
         "S3_*",
@@ -20,6 +21,7 @@
       "persistent": true,
       "env": [
         "NEXT_PUBLIC_*",
+        "API_PORT",
         "DATABASE_URL",
         "REDIS_URL",
         "S3_*",
@@ -37,6 +39,7 @@
       "dependsOn": ["^test"],
       "env": [
         "NEXT_PUBLIC_*",
+        "API_PORT",
         "DATABASE_URL",
         "REDIS_URL",
         "S3_*",
@@ -48,6 +51,7 @@
       "cache": false,
       "env": [
         "NEXT_PUBLIC_*",
+        "API_PORT",
         "DATABASE_URL",
         "REDIS_URL",
         "S3_*",

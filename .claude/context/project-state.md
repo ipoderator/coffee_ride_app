@@ -7,15 +7,19 @@ MVP / Foundation
 ## Current task
 
 None active. Pre-foundation hardening (CR-067..CR-072), CR-087 (repository-wide
-Prettier formatting), CR-001 (monorepo tooling initialized), and CR-002 (`apps/web`
-scaffolded) all completed 2026-09-12.
+Prettier formatting), CR-001 (monorepo tooling initialized), CR-002 (`apps/web`
+scaffolded), and CR-003 (`apps/api` scaffolded, includes CR-073) all completed
+2026-09-12.
 
 ## Implemented
 
 Harness, project specification, and pre-foundation decisions. Root monorepo tooling is
 operational (CR-001). `apps/web` exists (CR-002): Next.js 15 + Tailwind v4 + shadcn/ui
-foundation, builds/typechecks/lints clean, placeholder home page smoke-tested. No other
-`apps/*`/`packages/*` exist yet — `apps/api` starts with CR-003.
+foundation, builds/typechecks/lints clean, placeholder home page smoke-tested.
+`apps/api` exists (CR-003): Fastify 5 + Zod (`@fastify/type-provider-zod`) + RFC 9457
+errors + OpenAPI, boots and was smoke-tested (health/404/validation/production
+placeholder-rejection all verified live, not just typechecked). No `packages/*` exist
+yet — starts with CR-004.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -51,13 +55,32 @@ via their own config through `turbo lint`); this leaves lint-staged's pre-commit
 not covering `apps/*` ESLint (KI-012, deferred to CR-010). `turbo lint/typecheck/build`
 verified green; `next build` output smoke-tested with `next start` + `curl`.
 
+`apps/api` scaffolded 2026-09-12 (CR-003, see `docs/changelog.md`): Fastify 5.12.4,
+ESM, `@fastify/type-provider-zod` (typed Zod validation + OpenAPI generation),
+`@fastify/swagger`/`swagger-ui` at `/docs`. Global RFC 9457 (`application/
+problem+json`) error handler with Zod validation errors mapped into `errors[]`.
+`/health` bootstrap stub (`{ status: 'ok' }`, no dependency checks — CR-051 upgrades
+it); `/v1` prefix wired, empty (first route is CR-011). Env validated via Zod at
+startup (CR-073, `src/env.ts`): full `.env.example` surface typed, refuses to boot
+when `NODE_ENV=production` and a value matches a known placeholder/local default
+(`AUTH_SECRET=change-me`, MinIO defaults, `localhost` in `DATABASE_URL`/`REDIS_URL`/
+`S3_ENDPOINT`). TypeScript pinned to `6.0.3` (same ceiling as `apps/web`, see
+CR-002). Local dev loads one root `.env` via Node's native `process.loadEnvFile()`
+(no `dotenv` dependency). Decisions locked via a `/grill-me` session before
+implementation (ESM, OpenAPI-now, health-stub-now, ADR-011's example `type` URI,
+`API_PORT` naming, full-schema env validation) — all recommended options accepted.
+Smoke-tested live: `/health` (200), unknown route (404, correct envelope), a
+temporary Zod-validated route with a bad payload (400, `errors[]` populated
+correctly), compiled `dist/server.js` boots identically to `tsx` dev mode,
+production-mode boot correctly refuses on a placeholder `AUTH_SECRET`.
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-003 — Configure Fastify API.
+CR-004 — Configure PostgreSQL + Drizzle.
 
 ## Important decisions
 
@@ -89,9 +112,9 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 - MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
 - CI cannot test uploads and does not run e2e (KI-007, CR-080); the install step
   (KI-008) and the Format check step (KI-011) are both resolved; `apps/web` (CR-002)
-  is the first workspace member CI can actually lint/typecheck/build, but there's no
-  test runner for it yet (CR-008) and `apps/api`/`packages/*` still don't exist
-  (CR-003..CR-007);
+  and `apps/api` (CR-003) are workspace members CI can lint/typecheck/build, but
+  neither has a test runner yet (CR-008) and every `packages/*` still doesn't exist
+  (CR-004..CR-007);
 - lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
   files — only `turbo lint` in CI does (KI-012, CR-010);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
