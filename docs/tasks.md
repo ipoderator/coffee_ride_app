@@ -22,7 +22,9 @@ Decisions and config that are cheap now and a breaking change once code exists �
 - [x] CR-001 Initialize pnpm/Turborepo monorepo — done 2026-09-12: `pnpm-lock.yaml`
       generated, `tsconfig.base.json` added, root scripts and turbo tasks verified
       against zero packages. See `docs/changelog.md`.
-- [ ] CR-002 Configure Next.js web
+- [x] CR-002 Configure Next.js web — done 2026-09-12: `apps/web` scaffolded
+      (Next.js 15, Tailwind v4, shadcn/ui foundation), turbo lint/typecheck/build
+      verified. See `docs/changelog.md`.
 - [ ] CR-003 Configure Fastify API
 - [ ] CR-004 Configure PostgreSQL + Drizzle
 - [ ] CR-005 Configure Redis

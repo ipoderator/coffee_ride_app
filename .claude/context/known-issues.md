@@ -107,6 +107,29 @@ Problem: the lint rule forbidding direct 2GIS SDK imports outside `packages/maps
 does not exist yet.
 Next action: CR-056.
 
+### KI-012 — Pre-commit ESLint does not cover `apps/*`/`packages/*` staged files
+
+Status: open, accepted for now. Discovered: 2026-09-12 (CR-002).
+Problem: ESLint's flat config has no automatic directory cascading — one config
+file wins per invocation, chosen by the process's working directory (verified
+empirically while wiring `apps/web`'s own `eslint.config.mjs`), not by the linted
+file's own location. `turbo lint` runs each workspace's `lint` script with CWD
+inside that package, so it correctly picks up that package's own config. But
+lint-staged's pre-commit `eslint --fix` runs with CWD at the repo root, so it
+always uses the root config — which now deliberately ignores `apps/**`/
+`packages/**` (so it doesn't wrongly lint Next/JSX files with the bare root
+rules; see `eslint.config.mjs`'s comment). Net effect: staged `apps/*`/
+`packages/*` files are not ESLint-checked at commit time (only Prettier, via the
+broader lint-staged glob, still runs on them).
+Impact: a commit can introduce an ESLint violation in `apps/web` (or any future
+package) that only surfaces later, in CI's `turbo lint`/`pnpm lint` — not blocked
+at commit time the way root-level file violations are.
+Workaround: none needed for correctness (CI still catches it before merge); this
+is a coverage gap in the fast local feedback loop, not a broken check.
+Next action: CR-010 ("Configure CI + Git hooks") — make lint-staged
+workspace-aware (e.g. group staged files by workspace and invoke each package's
+own `eslint` from its own directory) rather than a single flat `eslint --fix`.
+
 ---
 
 ## Resolved

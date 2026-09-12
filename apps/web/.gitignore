@@ -1,0 +1,6 @@
+# Most of these are already covered by the root .gitignore; kept here too so
+# `apps/web` is self-contained if ever extracted or linted in isolation.
+/.next/
+/out/
+*.tsbuildinfo
+.env*.local

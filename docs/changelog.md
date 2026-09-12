@@ -426,3 +426,69 @@ Dependencies: installed the devDependencies already declared in `package.json`
 Decisions: none.
 Follow-up: CR-002 (Configure Next.js web) is next; it and CR-003..CR-007 will create the
 actual `apps/*`/`packages/*` directories and extend `tsconfig.base.json`.
+
+## 2026-09-12 — CR-002 — apps/web scaffolded (Next.js 15 + Tailwind v4 + shadcn/ui foundation)
+
+Summary: First real workspace member. `apps/web` is Next.js 15.5.25 (App Router,
+`src/` directory per `.claude/rules/extensibility.md`'s feature-module layout), React
+19.3.0, Tailwind CSS v4 (CSS-first config — no `tailwind.config.js`), and the shadcn/ui
+foundation hand-written to match what `shadcn init` would generate (`components.json`,
+`src/lib/utils.ts`'s `cn` helper, baseline neutral CSS-variable theme in
+`globals.css`) — the interactive CLI has no way to answer its Tailwind v4 prompts
+non-interactively in this environment. A single placeholder home page proves the app
+builds/renders; it deliberately does not use any hard-coded brand color (`.claude/
+rules/frontend.md`) since the real design tokens are CR-063, not this task.
+
+Version pinning, checked against the npm registry before writing (not "latest" — fixed
+stack pins Next **15**, and latest `next`/`typescript` at the time were 16.3.5/7.0.2):
+`next@^15.5.25`, `react@^19.3.0`, `react-dom@^19.3.0`, `tailwindcss@^4.3.3` +
+`@tailwindcss/postcss@^4.3.3`, `eslint-config-next@^15.5.25`, shadcn deps
+(`class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`,
+`tw-animate-css`), `@eslint/eslintrc` (`eslint-config-next` still ships legacy-style
+shareable configs, not a prebuilt flat export — bridged via `FlatCompat`, matching
+Next's own documented ESLint 9 setup). **`typescript` is pinned exactly to `6.0.3`, not
+a caret range**: `typescript-eslint@8.70.0` (already at the repo root) requires
+`typescript >=4.8.4 <6.1.0`, and the registry's `latest` tag is already `7.0.2` (a new
+major with a different architecture) — 6.0.3 is the newest release inside the
+compatible range. Added the same exact pin to the root `devDependencies` (it was
+previously only present as pnpm's own implicit peer resolution).
+
+Two root-tooling fixes this task required, not scope creep — both were already implied
+by comments/behavior that only became a real problem once a workspace member existed:
+
+- `eslint.config.mjs` now ignores `apps/**`/`packages/**`. Verified empirically that
+  ESLint flat config has no automatic directory cascading (one config wins per
+  invocation, chosen by the process's CWD, not by each file's own directory) — without
+  this, `pnpm lint:root`/lint-staged would try to lint Next/JSX files with the bare
+  root config. This matches what the file's own comment already promised ("apps/* and
+  packages/* will extend individually via turbo lint").
+- Same CWD-resolution fact means lint-staged's pre-commit `eslint --fix` (CWD = repo
+  root) can no longer reach `apps/web`'s own richer config either — recorded as KI-012,
+  fix deferred to CR-010 ("Configure CI + Git hooks"). Added `--no-warn-ignored` to the
+  lint-staged command so this shows up as silence, not console noise, in the meantime.
+- `.gitignore`: added `.turbo`, `out`, `*.tsbuildinfo` (Prettier reads `.gitignore`
+  automatically — confirmed empirically — so this also kept `.turbo/cache/*.json` out
+  of `prettier --check`).
+
+Also added `apps/web/src/css.d.ts` (`declare module '*.css'`): TypeScript 6.0.3 raises
+TS2882 on the side-effect `import './globals.css'` in `app/layout.tsx` without it —
+newer/stricter behavior than the TS versions most existing Next.js tutorials were
+written against.
+
+Verified: `turbo run lint|typecheck|build` all pass for `web`; `pnpm format:check` and
+`pnpm lint:root` still pass at the repo root; `next build` output smoke-tested with
+`next start` (`curl` returned 200 with the expected page text). No test runner wired
+yet — that's CR-008.
+
+Files: `apps/web/**` (new — package.json, tsconfig.json, next.config.ts,
+next-env.d.ts, postcss.config.mjs, eslint.config.mjs, components.json, .gitignore,
+src/app/{layout,page}.tsx, src/app/globals.css, src/lib/utils.ts, src/css.d.ts); root
+`package.json` (pinned `typescript`, `--no-warn-ignored`), `eslint.config.mjs`,
+`.gitignore`; `docs/tasks.md` (CR-002 checked off), `.claude/context/known-issues.md`
+(KI-012), `.claude/context/{architecture-map,project-state,current-task}.md`.
+Dependencies: see version list above — all new, none replace an existing choice.
+Decisions: none (Tailwind v4 CSS-first config and shadcn/ui's default neutral theme
+are implementation details of the already-fixed stack, not architectural decisions).
+Follow-up: CR-003 (Configure Fastify API) is next. CR-063 replaces the placeholder
+theme with real design tokens; CR-010 fixes the KI-012 pre-commit lint gap; CR-008
+adds the test runner this app doesn't have yet.

@@ -6,15 +6,16 @@ MVP / Foundation
 
 ## Current task
 
-None active. Pre-foundation hardening (CR-067..CR-072) completed 2026-09-11; CR-087
-(repository-wide Prettier formatting) and CR-001 (monorepo tooling initialized)
-completed 2026-09-12.
+None active. Pre-foundation hardening (CR-067..CR-072), CR-087 (repository-wide
+Prettier formatting), CR-001 (monorepo tooling initialized), and CR-002 (`apps/web`
+scaffolded) all completed 2026-09-12.
 
 ## Implemented
 
 Harness, project specification, and pre-foundation decisions. Root monorepo tooling is
-now operational (CR-001), but no `apps/*` or `packages/*` workspace members exist yet —
-that starts with CR-002.
+operational (CR-001). `apps/web` exists (CR-002): Next.js 15 + Tailwind v4 + shadcn/ui
+foundation, builds/typechecks/lints clean, placeholder home page smoke-tested. No other
+`apps/*`/`packages/*` exist yet — `apps/api` starts with CR-003.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -41,13 +42,22 @@ this machine — fixes KI-008), `tsconfig.base.json` added for future packages t
 `.prettierignore` added for the lockfile, and `format:check`/`lint:root`/turbo-delegated
 `lint`/`typecheck`/`test`/`build` all verified to exit 0 against zero workspace packages.
 
+`apps/web` scaffolded 2026-09-12 (CR-002, see `docs/changelog.md`): Next.js 15.5.25
+(App Router, `src/` dir), React 19.3.0, TypeScript pinned to `6.0.3` (not latest —
+`typescript-eslint` compatibility), Tailwind CSS v4, shadcn/ui foundation
+(`components.json`, `cn` helper, baseline neutral theme — real tokens are CR-063).
+Root `eslint.config.mjs` now ignores `apps/**`/`packages/**` (workspace members lint
+via their own config through `turbo lint`); this leaves lint-staged's pre-commit step
+not covering `apps/*` ESLint (KI-012, deferred to CR-010). `turbo lint/typecheck/build`
+verified green; `next build` output smoke-tested with `next start` + `curl`.
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-002 — Configure Next.js web.
+CR-003 — Configure Fastify API.
 
 ## Important decisions
 
@@ -78,9 +88,12 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 - Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
 - MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
 - CI cannot test uploads and does not run e2e (KI-007, CR-080); the install step
-  (KI-008) and the Format check step (KI-011) are both resolved now, but CI still has
-  nothing to actually build/test/lint at the workspace level until CR-002..CR-007 add
-  `apps/*`/`packages/*`;
+  (KI-008) and the Format check step (KI-011) are both resolved; `apps/web` (CR-002)
+  is the first workspace member CI can actually lint/typecheck/build, but there's no
+  test runner for it yet (CR-008) and `apps/api`/`packages/*` still don't exist
+  (CR-003..CR-007);
+- lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
+  files — only `turbo lint` in CI does (KI-012, CR-010);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);

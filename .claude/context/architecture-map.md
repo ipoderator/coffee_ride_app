@@ -2,16 +2,21 @@
 
 ## Current state
 
-Root tooling is now operational (CR-001, 2026-09-12): `pnpm-lock.yaml` generated,
-`tsconfig.base.json` added for future packages to extend, `turbo lint/typecheck/test/build`
-run cleanly against zero packages, root ESLint/Prettier/Husky verified working. `apps/*`
-and `packages/*` themselves still do not exist — their content is created by CR-002..CR-007.
+Root tooling is operational (CR-001, 2026-09-12). `apps/web` now exists (CR-002,
+2026-09-12): Next.js 15.5.25 (App Router, `src/` dir per `.claude/rules/
+extensibility.md`), React 19.3.0, TypeScript 6.0.3 (pinned below the version
+`typescript-eslint@8.70.0` supports — see `docs/changelog.md`), Tailwind CSS v4
+(CSS-first config, no `tailwind.config.js`), and the shadcn/ui foundation
+(`components.json`, `cn` helper, baseline neutral CSS-variable theme — real tokens
+are CR-063, not yet applied). `turbo lint/typecheck/build` all pass for it; no test
+runner wired yet (CR-008). `apps/api` and every `packages/*` still do not exist —
+created by CR-003..CR-007.
 
 ## Target structure
 
 apps/
 
-- web/
+- web/ ← exists (CR-002)
 - api/
 
 packages/
