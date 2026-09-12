@@ -8,8 +8,8 @@ MVP / Foundation
 
 None active. Pre-foundation hardening (CR-067..CR-072), CR-087 (repository-wide
 Prettier formatting), CR-001 (monorepo tooling initialized), CR-002 (`apps/web`
-scaffolded), and CR-003 (`apps/api` scaffolded, includes CR-073) all completed
-2026-09-12.
+scaffolded), CR-003 (`apps/api` scaffolded, includes CR-073), and CR-004
+(`packages/db` scaffolded) all completed 2026-09-12.
 
 ## Implemented
 
@@ -18,8 +18,9 @@ operational (CR-001). `apps/web` exists (CR-002): Next.js 15 + Tailwind v4 + sha
 foundation, builds/typechecks/lints clean, placeholder home page smoke-tested.
 `apps/api` exists (CR-003): Fastify 5 + Zod (`@fastify/type-provider-zod`) + RFC 9457
 errors + OpenAPI, boots and was smoke-tested (health/404/validation/production
-placeholder-rejection all verified live, not just typechecked). No `packages/*` exist
-yet — starts with CR-004.
+placeholder-rejection all verified live, not just typechecked). `packages/db` exists
+(CR-004): Drizzle + `drizzle-kit`, zero domain tables by design, validated live
+against a real Postgres. No other `packages/*` exist yet — starts with CR-005.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -74,13 +75,30 @@ temporary Zod-validated route with a bad payload (400, `errors[]` populated
 correctly), compiled `dist/server.js` boots identically to `tsx` dev mode,
 production-mode boot correctly refuses on a placeholder `AUTH_SECRET`.
 
+`packages/db` scaffolded 2026-09-12 (CR-004, see `docs/changelog.md`): Drizzle
+ORM (`postgres-js` driver, `drizzle-orm@^0.45.2`) + `drizzle-kit@^0.31.10`. Asked
+the user directly (one question, not a full grill session): empty schema vs
+shipping a `users` table now — user picked empty schema (recommended). Zero
+domain tables committed; `src/client.ts` exports a `createDbClient(
+connectionString)` factory (library, not an env-reading singleton — `apps/api`
+will call it once a route needs the DB, starting CR-011); `src/migrate.ts` is
+the standalone migration-runner CR-076 reuses at deploy time. Docker wasn't
+available in this environment (daemon didn't come up), so validation ran
+against the machine's local Homebrew Postgres instead: generated a scratch
+table's migration, applied it, queried it through `createDbClient`, then
+removed everything, leaving only the genuine drizzle-kit-initialized empty
+`migrations/meta/_journal.json`. Needed an explicit `"types": ["node"]` in its
+tsconfig for bare Node globals to resolve (KI-013 — apps/api never hit this
+because every file there already imports something from `fastify`, which
+pulls in `@types/node` incidentally).
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-004 — Configure PostgreSQL + Drizzle.
+CR-005 — Configure Redis.
 
 ## Important decisions
 
@@ -111,12 +129,15 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 - Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
 - MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
 - CI cannot test uploads and does not run e2e (KI-007, CR-080); the install step
-  (KI-008) and the Format check step (KI-011) are both resolved; `apps/web` (CR-002)
-  and `apps/api` (CR-003) are workspace members CI can lint/typecheck/build, but
-  neither has a test runner yet (CR-008) and every `packages/*` still doesn't exist
-  (CR-004..CR-007);
+  (KI-008) and the Format check step (KI-011) are both resolved; `apps/web`
+  (CR-002), `apps/api` (CR-003), and `packages/db` (CR-004) are workspace members
+  CI can lint/typecheck/build, but none has a test runner yet (CR-008) and
+  `packages/types`/`ui`/`config`/`maps-*` still don't exist (CR-005..CR-007);
 - lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
   files — only `turbo lint` in CI does (KI-012, CR-010);
+- a Node package whose entry file uses only bare Node globals (no `node:` import)
+  needs an explicit `"types": ["node"]` in its tsconfig or `tsc` silently fails to
+  see `process`/`console`/etc. (KI-013, CR-007 centralizes the fix);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);

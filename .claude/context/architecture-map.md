@@ -22,7 +22,24 @@ in production on known placeholder/local values. TypeScript pinned to `6.0.3` (s
 ceiling as `apps/web`).
 
 `turbo lint/typecheck/build` pass for both. No test runner wired yet for either
-(CR-008). Every `packages/*` still does not exist — created by CR-004..CR-007.
+(CR-008).
+
+`packages/db` exists (CR-004, 2026-09-12): Drizzle ORM (`postgres-js` driver) +
+`drizzle-kit`. Tooling only — **zero domain tables** (user picked this over
+shipping a `users` table now); `src/client.ts` exports a `createDbClient(
+connectionString)` factory (a library, not a global env-reading singleton —
+`apps/api` will own the actual `DATABASE_URL` and call this when a route needs
+it, starting CR-011); `src/migrate.ts` is the standalone migration-runner script
+CR-076's deploy step reuses later. Validated live against a real local Postgres
+(Docker wasn't available in this environment — see `docs/changelog.md`): a
+scratch table was generated, migrated, queried through `createDbClient`, then
+fully removed, leaving the committed `migrations/meta/_journal.json` at its
+genuine drizzle-kit-initialized empty state. TypeScript pinned to `6.0.3` (same
+ceiling as `apps/web`/`apps/api`); needed an explicit `"types": ["node"]` in its
+tsconfig — see KI-013.
+
+`packages/types`, `packages/ui`, `packages/config`, `packages/maps-core`,
+`packages/maps-2gis` still do not exist — created by CR-005..CR-007 and later.
 
 ## Target structure
 
@@ -33,7 +50,7 @@ apps/
 
 packages/
 
-- db/
+- db/ ← exists (CR-004)
 - types/
 - ui/
 - config/

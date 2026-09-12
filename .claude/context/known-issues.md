@@ -130,6 +130,26 @@ Next action: CR-010 ("Configure CI + Git hooks") — make lint-staged
 workspace-aware (e.g. group staged files by workspace and invoke each package's
 own `eslint` from its own directory) rather than a single flat `eslint --fix`.
 
+### KI-013 — Node global types need an explicit `"types": ["node"]` in some packages
+
+Status: resolved (worked around) 2026-09-12 (CR-004). Discovered: 2026-09-12.
+Problem: TypeScript's automatic `@types` inclusion (no explicit `"types"` field)
+did not pick up `process`/`console`/`URL`/`import.meta.url` in
+`packages/db/src/migrate.ts`, even though `@types/node` was correctly installed
+and resolvable there — `tsc` reported `TS2591`/`TS2304`/`TS2339`/`TS2584`.
+`apps/api` never hit this, apparently because every file there already imports
+something from `fastify` (which itself references Node builtin types),
+incidentally pulling `@types/node` into the program; `packages/db`'s
+`migrate.ts` uses only bare Node globals with no `node:`-prefixed import, so
+nothing forced the inclusion.
+Impact: a future package whose entry file also uses only bare Node globals
+(no `node:` import) would hit the same silent-until-`tsc` failure.
+Resolution: added `"types": ["node"]` explicitly to `packages/db/tsconfig.json`.
+Not applied to `apps/web`/`apps/api` since neither is currently failing.
+Next action: CR-007 ("Configure shared packages") should put this in the shared
+Node-target tsconfig fragment `packages/config` will own, so every future
+Node package gets it by default instead of rediscovering this per package.
+
 ---
 
 ## Resolved

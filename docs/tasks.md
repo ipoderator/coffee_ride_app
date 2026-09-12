@@ -30,7 +30,10 @@ Decisions and config that are cheap now and a breaking change once code exists â
       (Fastify 5, ESM, Zod validation via `@fastify/type-provider-zod`, RFC 9457
       error envelope, OpenAPI at `/docs`, `/health` stub, `/v1` prefix wired).
       Includes CR-073. See `docs/changelog.md`.
-- [ ] CR-004 Configure PostgreSQL + Drizzle
+- [x] CR-004 Configure PostgreSQL + Drizzle â€” done 2026-09-12: `packages/db`
+      scaffolded (Drizzle + drizzle-kit + `postgres` driver), zero domain
+      tables by design (first table lands with CR-011). See
+      `docs/changelog.md`.
 - [ ] CR-005 Configure Redis
 - [ ] CR-006 Configure MinIO/S3 adapter
 - [ ] CR-007 Configure shared packages

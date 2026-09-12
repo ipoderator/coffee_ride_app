@@ -573,3 +573,72 @@ architectural decisions.
 Follow-up: CR-004 (Configure PostgreSQL + Drizzle) is next. CR-051 upgrades
 `/health`; CR-011 adds the first real `/v1` route and exercises this scaffold for
 real; CR-057/CR-058 add password hashing and auth rate limiting once Redis exists.
+
+## 2026-09-12 — CR-004 — packages/db scaffolded (Drizzle + Postgres, zero domain tables)
+
+Summary: Third workspace member, first under `packages/*`. `packages/db` is
+Drizzle ORM on the `postgres-js` driver (`drizzle-orm@^0.45.2`, `postgres@^3.4.9`)
+plus `drizzle-kit@^0.31.10` for migrations, TypeScript pinned to `6.0.3` (same
+`typescript-eslint` ceiling as `apps/web`/`apps/api`).
+
+Asked the user one direct question before implementing (not a full `/grill-me`
+session — a single scope fork, not a multi-branch design tree): ship an empty
+schema (tooling only) or a first `users` table now. The recommended, chosen
+answer was the empty schema — `packages/db` owns the client/migration tooling,
+zero domain tables; the `users` table (and every other domain table) is added
+later via the `db-migration` skill, at the point a real feature needs it
+(starting CR-011, User registration), the same way CR-002/CR-003 shipped zero
+domain routes/screens.
+
+`src/client.ts` exports `createDbClient(connectionString)` — a factory, not a
+global singleton reading `process.env` itself: `packages/db` is a library
+(`.claude/rules/architecture.md`), `apps/api` owns env validation and will pass
+in an already-validated `DATABASE_URL` once it actually needs the client
+(CR-011 — this task deliberately does NOT wire `apps/api` to depend on
+`packages/db` yet, keeping the diff scoped like CR-002/CR-003 didn't touch each
+other). `src/migrate.ts` is a standalone script (reads `DATABASE_URL` directly,
+same as `drizzle.config.ts` — CLI tooling, not app runtime code) that applies
+pending migrations; CR-076 ("migrations as an explicit deploy step") reuses it
+later. `drizzle-kit generate` (never `push`) produces real, committed SQL
+migration files per `.claude/rules/database.md`.
+
+Validated live, not just typechecked — with a real caveat: Docker's daemon did
+not come up in this environment (`docker compose up postgres` failed to
+connect, and it didn't finish starting within several minutes), so validation
+ran against the machine's existing local Homebrew PostgreSQL 14 instead, using
+a scratch database. Confirmed the full pipeline: temporarily added a scratch
+table to the schema, ran `drizzle-kit generate` (produced a real migration
+file), applied it via `src/migrate.ts`, verified the table via both raw `psql`
+and a query through `createDbClient` (proving the client factory + schema
+typing work end-to-end, not just the SQL), then removed the scratch table, its
+migration file, and the scratch database entirely — same discipline as
+CR-002/CR-003's temporary test routes. What's actually committed is the
+genuine state `drizzle-kit generate` leaves behind for a zero-table schema:
+`migrations/meta/_journal.json` with an empty entry list, ready for CR-011's
+first real migration to extend.
+
+Discovered and fixed: TypeScript's automatic `@types` inclusion did not pick up
+Node's ambient globals (`process`, `console`, `URL`, `import.meta.url`) in
+`src/migrate.ts`, even with `@types/node` correctly installed — needed an
+explicit `"types": ["node"]` in `packages/db/tsconfig.json`. `apps/api` never
+hit this, apparently because every file there already imports something from
+`fastify`, which itself references Node builtin types and incidentally pulls in
+`@types/node`; `migrate.ts` uses only bare globals with no `node:`-prefixed
+import, so nothing forced the inclusion. Recorded as KI-013 — CR-007 should put
+`"types": ["node"]` in the shared Node-target tsconfig fragment
+`packages/config` will own, so future packages don't rediscover this.
+`.prettierignore` also gained `**/migrations/meta/**` (drizzle-kit writes these
+itself, same reasoning as `pnpm-lock.yaml` already being excluded).
+
+Files: `packages/db/**` (new — package.json, tsconfig.json, eslint.config.mjs,
+.gitignore, drizzle.config.ts, src/schema/index.ts, src/client.ts,
+src/migrate.ts, migrations/meta/_journal.json); `.prettierignore`;
+`docs/tasks.md` (CR-004 checked off); `.claude/context/{architecture-map,
+project-state,known-issues,current-task}.md` (KI-013).
+Dependencies: `drizzle-orm`, `postgres` (runtime); `drizzle-kit`, `tsx`,
+`typescript`, `@types/node`, `eslint`, `@eslint/js`, `typescript-eslint` (dev —
+mirrors `apps/api`'s own copies, `packages/config` doesn't exist yet, CR-007).
+Decisions: none new at the ADR level.
+Follow-up: CR-005 (Configure Redis) is next. CR-011 adds the first real table
+(`users`) and wires `apps/api` to depend on `packages/db`, exercising this
+scaffold for real.

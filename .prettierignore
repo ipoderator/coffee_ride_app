@@ -1,1 +1,5 @@
 pnpm-lock.yaml
+
+# drizzle-kit writes these itself (SQL migrations + journal); not Prettier's to
+# reformat, same reasoning as the lockfile above.
+**/migrations/meta/**

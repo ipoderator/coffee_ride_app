@@ -6,143 +6,133 @@ done
 
 ## Task ID
 
-CR-003 — Configure Fastify API
+CR-004 — Configure PostgreSQL + Drizzle
 
 ## Goal
 
-Scaffold `apps/api` as the second workspace member: Fastify 5 + TypeScript (ESM),
-Zod request/env validation, RFC 9457 error envelope, `/v1` versioning convention,
-OpenAPI generation infrastructure. Framework/tooling layer only — zero real domain
-routes (first is CR-011). Includes CR-073 (Zod env validation, refuse boot in
-production on placeholder values), as the backlog entry for CR-073 specifies.
-
-Decisions locked via `/grill-me` before implementation (all recommended options
-accepted by the user):
-
-1. **ESM**, not CommonJS (`"type": "module"`, `moduleResolution: NodeNext`).
-2. **OpenAPI wired now**, not deferred: `@fastify/swagger` + `@fastify/swagger-ui` +
-   `@fastify/type-provider-zod` (the official `fastify/fastify-type-provider-zod`
-   package, not the community `turkerdev/fastify-type-provider-zod` it superseded —
-   confirmed via npm registry `repository.url`).
-3. **`GET /health` stub now**: returns `{ status: 'ok' }`, no dependency checks.
-   CR-051 later replaces the handler body with real DB/Redis/S3 checks — same route,
-   same contract position (unversioned, per ADR-011/docs/api.md).
-4. **RFC 9457 `type` base URI**: `https://coffee-ride.example/errors/{code}`,
-   matching ADR-011's own example verbatim (not `about:blank`).
-5. **`API_PORT=4000`** (not bare `PORT` — avoids ambiguity with `apps/web`'s own
-   port in a shared `.env`).
-6. **Env validation (CR-073) covers the full `.env.example` schema now**, including
-   vars no code reads yet (`DATABASE_URL`, `REDIS_URL`, `S3_*`,
-   `MAPS_2GIS_API_KEY`) — refuses to boot when `NODE_ENV=production` and a value
-   matches a known placeholder (`change-me`, `minio`, `minio12345`, etc.). Schema
-   grows as future CRs add variables.
+Scaffold `packages/db`: Drizzle ORM + Postgres driver, migration tooling
+(`drizzle-kit`), a connection-factory client. Tooling only — zero domain tables.
+Asked the user directly (one focused question, not a full `/grill-me` round):
+empty schema (packages/db owns client + migrations, no tables) vs shipping a first
+`users` table now. User picked the recommended option: **empty schema**. The
+`users` table (and every other domain table) is added later via the
+`db-migration` skill, at the point a real feature (starting CR-011, User
+registration) actually needs it — mirrors how CR-002/CR-003 shipped zero domain
+routes/screens.
 
 ## Requirements
 
-1. `apps/api` matches `pnpm-workspace.yaml` and turbo.json's task expectations
-   (`dev`, `build`, `lint`, `typecheck`; no `test` yet — CR-008).
-2. Versions checked against the npm registry before writing (same discipline as
-   CR-002): `fastify@^5.12.4`, `zod@^4.6.2`, `@fastify/type-provider-zod@^1.0.0`,
-   `@fastify/swagger@^9.8.1`, `@fastify/swagger-ui@^6.1.1`, `pino-pretty@^13.1.3`
-   (dev-only, pretty logs outside production), `tsx@^4.23.13` (dev server/watch),
-   `typescript` pinned exactly to `6.0.3` (same `typescript-eslint` ceiling as
-   `apps/web` — see CR-002), `@types/node@^24.13.4`, `eslint@^9.0.0`.
-3. `route/controller → validation → use case/service → repository/db` layering
-   (`.claude/rules/backend.md`) — even with no domain routes yet, the plugin/module
-   structure should not have to be reshaped when CR-011 adds the first one.
-4. Global error handler producing the exact RFC 9457 shape from `docs/api.md`
-   (`type`/`title`/`status`/`detail`/`instance`/`code`/`errors[]`), including Zod
-   validation failures mapped into `errors[]`. Never leak stack traces / DB
-   internals in `detail` (`.claude/rules/backend.md`).
-5. `/v1` prefix wired structurally now (an empty versioned plugin), `/health`
-   outside it, matching ADR-011.
-6. Zod-validated env module, fails fast with a clear message on missing values
-   always, and on placeholder values specifically when `NODE_ENV=production`.
-7. No CORS plugin (ADR-013: single origin, none supported). No rate limiting yet
-   (`.claude/rules/security.md`: applies "from the first auth-related task
-   (CR-011/CR-012) onward" — no Redis client exists yet, CR-005).
-8. `apps/api/eslint.config.mjs`: own flat config (plain `typescript-eslint`
-   recommended, no framework-specific plugin needed) — root `eslint.config.mjs`
-   already ignores `apps/**`/`packages/**` (CR-002), so this is required, not
-   optional, for `turbo lint` to check this package at all.
-9. `pnpm format:check`, `pnpm lint:root`, `turbo run lint|typecheck|build` must all
-   pass with `apps/api` in scope; `apps/web`'s checks must remain green too
-   (regression check, not just the new package).
+1. `packages/db` matches `pnpm-workspace.yaml` (`packages/*`).
+2. Versions checked against npm registry: `drizzle-orm@^0.45.2`,
+   `drizzle-kit@^0.31.10` (dev), Postgres driver `postgres@^3.4.9` (postgres.js —
+   Drizzle's currently favored driver for plain Postgres, lighter than `pg`),
+   `typescript` pinned exactly `6.0.3` (same ceiling as `apps/web`/`apps/api`),
+   `tsx` (for the migrate script), `@types/node`, `eslint` + own flat config
+   (mirrors `apps/api`'s pattern — `packages/config` doesn't exist yet, CR-007).
+3. `src/schema/index.ts`: empty schema module (documents the per-entity-file
+   convention for when tables are added), `src/client.ts`: `createDbClient(
+connectionString)` factory (a factory, not a global singleton reading
+   `process.env` itself — `packages/db` is a library, `apps/api` owns env
+   validation per `.claude/rules/architecture.md`'s dependency direction).
+   `src/migrate.ts`: standalone script applying pending migrations (used by
+   CR-076's deploy step later, and to validate this task now).
+4. `drizzle.config.ts` — dialect `postgresql`, schema path, migrations output
+   folder, reads `DATABASE_URL` from the environment only for drizzle-kit's own
+   CLI invocation (not committed anywhere as a value).
+5. Every migration is a real generated file (`drizzle-kit generate`), never
+   `drizzle-kit push` (`.claude/rules/database.md`: "every schema change requires
+   a migration").
+6. `apps/api`/`apps/web` are NOT wired to depend on `packages/db` in this task —
+   that starts when a real route needs it (CR-011). Keeps this task's diff scoped
+   to the package itself, like CR-002/CR-003 didn't touch each other.
+7. Validate the full pipeline for real, not just typecheck: since the committed
+   schema has zero tables, temporarily add one scratch table, run `docker compose
+up postgres`, `drizzle-kit generate`, apply via the migrate script, confirm via
+   `psql` that the table exists, then remove the scratch table, its generated
+   migration file(s)/journal, and drop it from the live DB — committed state ends
+   with zero tables/migrations, same discipline as CR-002/CR-003's temporary test
+   routes.
 
 ## Acceptance criteria
 
-- `apps/api` builds and typechecks cleanly via `turbo`;
-- `turbo lint` passes for `apps/api` using its own config;
-- server boots locally, `GET /health` returns 200 `{ status: 'ok' }`;
-- a request validation failure and a 404 both return the documented
-  `application/problem+json` shape;
-- env module rejects a missing required var and (in a simulated production run)
-  a known placeholder value, with a clear non-leaking error message;
-- `pnpm lint:root` / `format:check` still pass at the repo root;
+- `packages/db` builds/typechecks/lints cleanly via `turbo`;
+- `drizzle-kit generate` runs cleanly against the empty schema (no error, no
+  spurious migration);
+- proven live: a scratch table can be generated, migrated onto the real
+  docker-compose Postgres, and queried — then fully removed before commit;
+- `pnpm lint:root` / `format:check` still pass at the repo root; `apps/web`/
+  `apps/api` stay green (regression check);
+- `docs/database.md` still accurately describes reality (still true — no tables
+  changed);
 - `docs/tasks.md`, `project-state.md`, `known-issues.md`, `architecture-map.md`,
   `docs/changelog.md` updated;
-- `git diff` reviewed, no `dist`/`node_modules`/`.env` committed.
+- `git diff` reviewed — no scratch migration/table artifacts, no `dist`/
+  `node_modules`/`.env` committed.
 
 ## Planned files
 
-`apps/api/package.json`, `tsconfig.json`, `eslint.config.mjs`, `.gitignore`,
-`src/env.ts`, `src/app.ts`, `src/server.ts`, `src/plugins/error-handler.ts`,
-`src/plugins/openapi.ts`, `src/routes/health.ts`, `src/routes/v1.ts`;
-`.env.example` (`API_PORT`), `turbo.json` (env list), `.claude/context/{project-state,
-architecture-map,known-issues,current-task}.md`, `docs/tasks.md`, `docs/changelog.md`.
+`packages/db/package.json`, `tsconfig.json`, `eslint.config.mjs`, `.gitignore`,
+`drizzle.config.ts`, `src/schema/index.ts`, `src/client.ts`, `src/migrate.ts`;
+`.claude/context/{project-state,architecture-map,known-issues,current-task}.md`,
+`docs/tasks.md`, `docs/changelog.md`.
 
 ## Implementation progress
 
-- [x] grilled scope/decisions with the user, all recommended options accepted
-- [x] scaffold `apps/api` files
-- [x] `.env.example` (`API_PORT`) / `turbo.json` (`API_PORT` in every env list)
+- [x] asked scope question, user picked empty-schema (recommended)
+- [x] scaffold `packages/db` files
 - [x] `pnpm install`
-- [x] validate: boot server, curl `/health` and an error case, turbo lint/typecheck/build
+- [x] validate live against a real Postgres (scratch table, then removed) —
+      Docker daemon didn't come up in this environment, used local Homebrew
+      Postgres 14 instead (same protocol/dialect, sufficient to prove the
+      pipeline)
 - [x] update context/docs
 
 ## Validation
 
-- [x] `turbo run lint|typecheck|build` — all exit 0 for `api`; `web` stays green
+- [x] `turbo run lint|typecheck|build` — all exit 0 for `db`; `web`/`api` stay green
 - [x] `pnpm format:check` / root `eslint .` — still pass
-- [x] `tsx watch` dev boot: `GET /health` → 200 `{"status":"ok"}`
-- [x] unknown route → 404, correct RFC 9457 envelope (`code: "not_found"`)
-- [x] temporary Zod-validated test route with a bad payload → 400,
-      `errors: [{ path: "name", message: "..." }]` correctly populated; route
-      removed before commit, never shipped
-- [x] `dist/server.js` (compiled build, not `tsx`) boots identically, `/health` 200
-- [x] simulated production boot with `AUTH_SECRET=change-me` → refuses with the
-      expected message; a boot missing `AUTH_SECRET` entirely also refuses
-- [x] `git status` reviewed — no `dist`/`.env`/`node_modules` staged
-- [n/a] `turbo test` — no test runner in `apps/api` yet (CR-008)
+- [x] `drizzle-kit generate` on the empty (committed) schema: "0 tables", no
+      spurious migration file, only the initial empty
+      `migrations/meta/_journal.json`
+- [x] scratch validation: added a throwaway table → `drizzle-kit generate`
+      produced a real SQL migration → applied via `src/migrate.ts` → confirmed
+      via `psql` (`\d`, insert, select) AND via `createDbClient` + Drizzle
+      query (proves the client factory + schema typing, not just raw SQL) →
+      removed the table from schema, deleted the scratch migration file, and
+      dropped the scratch database
+- [x] `git status` reviewed — no `dist`/scratch migration/`.env` staged
+- [n/a] `turbo test` — no test runner in `packages/db` yet (CR-008)
 
 ## Discovered issues
 
-- Fastify 5's `setErrorHandler` callback needed an explicit `FastifyError` type
-  annotation on the `error` parameter — inferred as `unknown` otherwise (TS18046)
-  under this `withTypeProvider<ZodTypeProvider>()` setup, unlike untyped Fastify
-  apps where it's usually inferred automatically.
-- Node has no built-in `.env` auto-loading tied to a script's location; used
-  `process.loadEnvFile()` (stable since Node 20.6) pointed explicitly at the repo
-  root `.env` via `import.meta.dirname`, since the process's CWD is `apps/api`
-  (turbo runs each package's script from inside that package), not the repo root
-  where `.env.example`/`.env` live.
-- `@fastify/type-provider-zod` is the official, actively maintained package
-  (`fastify/fastify-type-provider-zod` on GitHub) — the unscoped
-  `fastify-type-provider-zod` (`turkerdev/...`) it was migrated from is now
-  effectively legacy. Worth remembering for any future doc/tutorial that still
-  references the unscoped name.
-- `pnpm install` reported "Ignored build scripts: esbuild, unrs-resolver" (pnpm's
-  default script-approval gate). `tsx`/esbuild worked fine anyway in this
-  environment (esbuild ships prebuilt platform binaries as optional
-  dependencies, not solely via its own postinstall script) — noted here in case
-  a future environment behaves differently; not blocking, not filed as a KI.
+- Docker Desktop's daemon did not come up within several minutes in this
+  environment (`docker compose up postgres` failed to connect; `open -a
+Docker` + waiting didn't help). Used the machine's existing local Homebrew
+  PostgreSQL 14 instance with a scratch database instead — real Postgres, same
+  wire protocol, sufficient to validate Drizzle/drizzle-kit end-to-end. Not
+  filed as a KI: this is an environment quirk of this session, not a defect in
+  the repo's `docker-compose.yml`.
+- TypeScript's automatic `@types` inclusion did not pick up Node's ambient
+  globals (`process`/`console`/`URL`/`import.meta.url`) in `src/migrate.ts`
+  despite `@types/node` being correctly installed — needed an explicit
+  `"types": ["node"]` in `packages/db/tsconfig.json`. `apps/api` never hit this
+  because every file there already imports something from `fastify` (which
+  references Node builtin types), incidentally pulling `@types/node` in;
+  `migrate.ts` uses only bare globals, no `node:`-prefixed import. Filed as
+  KI-013 — CR-007 should centralize this into the shared Node tsconfig
+  fragment `packages/config` will own.
+- `drizzle.config.ts` can't live in the same `tsc` program as `src/**` (its
+  `rootDir: "src"` conflicts with a file outside `src/`) — removed it from
+  `tsconfig.json`'s `include`; `drizzle-kit` transpiles/runs its own config
+  file independently, so it doesn't need our program to include it, and ESLint
+  still lints it separately (not tied to the tsconfig's `include`).
 
 ## Final result
 
-Done. `apps/api` exists, boots, and was exercised live (not just typechecked) for
-its health route, 404 handling, Zod validation error mapping, compiled-build
-parity, and production placeholder rejection. Root tooling needed no further
-adjustment beyond what CR-002 already established (root `eslint.config.mjs`
-already ignored `apps/**`). `docs/tasks.md` (CR-003 and CR-073), `known-issues.md`
-(none new), `project-state.md`, `architecture-map.md`, `docs/changelog.md` all
-updated. Next logical task: CR-004 (Configure PostgreSQL + Drizzle).
+Done. `packages/db` exists with zero domain tables (by design, confirmed with
+the user); the full Drizzle/drizzle-kit/Postgres pipeline was proven live with a
+scratch table, then fully cleaned up. `apps/api`/`apps/web` are untouched —
+`packages/db` isn't consumed anywhere yet, deliberately (CR-011 wires it in).
+`docs/tasks.md` (CR-004), `known-issues.md` (KI-013), `project-state.md`,
+`architecture-map.md`, `docs/changelog.md`, `.prettierignore` all updated. Next
+logical task: CR-005 (Configure Redis).
