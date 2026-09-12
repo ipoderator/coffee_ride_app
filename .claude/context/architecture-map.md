@@ -2,7 +2,10 @@
 
 ## Current state
 
-The repository currently contains the harness and specification. Application source folders are created by the first implementation task.
+Root tooling is now operational (CR-001, 2026-09-12): `pnpm-lock.yaml` generated,
+`tsconfig.base.json` added for future packages to extend, `turbo lint/typecheck/test/build`
+run cleanly against zero packages, root ESLint/Prettier/Husky verified working. `apps/*`
+and `packages/*` themselves still do not exist — their content is created by CR-002..CR-007.
 
 ## Target structure
 

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Shared compiler options for every apps/* and packages/* workspace member.
+  // Each package's own tsconfig.json extends this and adds what its runtime
+  // needs (module/moduleResolution/jsx/outDir) — Next.js's bundler resolution
+  // and Fastify's NodeNext resolution are deliberately NOT decided here so
+  // this file stays usable by both (CR-002/CR-003).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": true
+  }
+}

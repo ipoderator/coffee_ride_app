@@ -395,3 +395,34 @@ Files: 37 files reformatted; no content changes. `docs/tasks.md` (CR-087 checked
 Decisions: none.
 Follow-up: CI's `Format check` step should now pass once CI can run at all (still blocked
 on CR-001 per KI-008). Next task: CR-001.
+
+## 2026-09-12 — CR-001 — pnpm/Turborepo monorepo tooling initialized
+
+Summary: Made the already-authored root tooling (`package.json`, `pnpm-workspace.yaml`,
+`turbo.json`, root ESLint config, `.prettierrc`, Husky) actually operational. Ran
+`pnpm install` (via `npx pnpm@10.34.5`, the exact pinned version — no pnpm/corepack
+installed globally on this machine) to generate `pnpm-lock.yaml`; this is the fix for
+KI-008 (CI's `pnpm install --frozen-lockfile` step had nothing to install against).
+Husky's `prepare` script ran and wired `core.hooksPath` correctly. Added
+`tsconfig.base.json` at the repo root: shared strict compiler options (`ES2022`,
+`noUncheckedIndexedAccess`, `noImplicitOverride`, etc.) for every future `apps/*`/
+`packages/*` member to extend — deliberately does not fix `module`/`moduleResolution`,
+since Next.js (bundler resolution) and Fastify (NodeNext) need different values; each
+package's own tsconfig decides that in CR-002/CR-003. Added `.prettierignore` for
+`pnpm-lock.yaml` (a machine-generated file; Prettier reformatting it would fight pnpm's
+own lockfile writer).
+
+Verified locally against zero workspace packages (no `apps/*`/`packages/*` exist yet —
+that is still CR-002..CR-007, not this task): `pnpm format:check`, `pnpm lint:root`
+(root `eslint .`), and `turbo run lint|typecheck|test|build` all exit 0 (turbo correctly
+reports "0 packages" rather than erroring).
+
+Files: `pnpm-lock.yaml` (new), `tsconfig.base.json` (new), `.prettierignore` (new),
+`.claude/context/architecture-map.md`, `docs/tasks.md` (CR-001 checked off),
+`.claude/context/known-issues.md` (KI-008 resolved), `.claude/context/project-state.md`.
+Dependencies: installed the devDependencies already declared in `package.json`
+(`eslint`, `prettier`, `turbo`, `husky`, `lint-staged`, `typescript-eslint`,
+`@eslint/js`) — no new packages added beyond what was already specified.
+Decisions: none.
+Follow-up: CR-002 (Configure Next.js web) is next; it and CR-003..CR-007 will create the
+actual `apps/*`/`packages/*` directories and extend `tsconfig.base.json`.

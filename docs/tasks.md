@@ -19,7 +19,9 @@ Decisions and config that are cheap now and a breaking change once code exists â
 
 ## Foundation
 
-- [ ] CR-001 Initialize pnpm/Turborepo monorepo
+- [x] CR-001 Initialize pnpm/Turborepo monorepo â€” done 2026-09-12: `pnpm-lock.yaml`
+      generated, `tsconfig.base.json` added, root scripts and turbo tasks verified
+      against zero packages. See `docs/changelog.md`.
 - [ ] CR-002 Configure Next.js web
 - [ ] CR-003 Configure Fastify API
 - [ ] CR-004 Configure PostgreSQL + Drizzle

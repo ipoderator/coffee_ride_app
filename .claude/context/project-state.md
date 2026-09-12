@@ -7,12 +7,14 @@ MVP / Foundation
 ## Current task
 
 None active. Pre-foundation hardening (CR-067..CR-072) completed 2026-09-11; CR-087
-(repository-wide Prettier formatting) completed 2026-09-12.
+(repository-wide Prettier formatting) and CR-001 (monorepo tooling initialized)
+completed 2026-09-12.
 
 ## Implemented
 
-Harness, project specification, and pre-foundation decisions. Application implementation
-has not started — no `apps/*` or `packages/*` exist.
+Harness, project specification, and pre-foundation decisions. Root monorepo tooling is
+now operational (CR-001), but no `apps/*` or `packages/*` workspace members exist yet —
+that starts with CR-002.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -33,13 +35,19 @@ Reformatted 2026-09-12 (CR-087): whole repository now matches `.prettierrc`
 (`prettier --check .` passes); formatting-only, no content changed (see
 `docs/changelog.md`).
 
+Monorepo tooling initialized 2026-09-12 (CR-001, see `docs/changelog.md`):
+`pnpm-lock.yaml` generated (`npx pnpm@10.34.5`, no pnpm/corepack installed globally on
+this machine — fixes KI-008), `tsconfig.base.json` added for future packages to extend,
+`.prettierignore` added for the lockfile, and `format:check`/`lint:root`/turbo-delegated
+`lint`/`typecheck`/`test`/`build` all verified to exit 0 against zero workspace packages.
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-001 — Initialize pnpm/Turborepo monorepo.
+CR-002 — Configure Next.js web.
 
 ## Important decisions
 
@@ -69,9 +77,10 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   observability (KI-001, KI-002, KI-006; CR-074..CR-079);
 - Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
 - MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
-- CI cannot test uploads and does not run e2e (KI-007, CR-080); it stays red at
-  `pnpm install --frozen-lockfile` until CR-001 (KI-008, expected); the Format check
-  step itself is now clean (KI-011 resolved by CR-087);
+- CI cannot test uploads and does not run e2e (KI-007, CR-080); the install step
+  (KI-008) and the Format check step (KI-011) are both resolved now, but CI still has
+  nothing to actually build/test/lint at the workspace level until CR-002..CR-007 add
+  `apps/*`/`packages/*`;
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);

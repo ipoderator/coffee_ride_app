@@ -68,10 +68,15 @@ Next action: CR-080.
 
 ### KI-008 — CI fails at `pnpm install --frozen-lockfile`
 
-Status: open, expected. Discovered: 2026-09-10.
-Problem: no `pnpm-lock.yaml` until CR-001 creates the workspace packages.
+Status: resolved 2026-09-12 (CR-001). Discovered: 2026-09-10.
+Problem: no `pnpm-lock.yaml` until CR-001 initialized the workspace tooling.
 Impact: red CI until Foundation lands. Not a regression.
-Next action: CR-001.
+Resolution: `pnpm-lock.yaml` generated and committed; `pnpm install
+--frozen-lockfile`, `format:check`, `lint:root`, and turbo-delegated
+`lint`/`typecheck`/`test`/`build` all verified locally against zero
+workspace packages. CI will still have nothing to actually build/test until
+`apps/*`/`packages/*` exist (CR-002..CR-007), but the install step itself is
+no longer the blocker.
 
 ### KI-009 — Contract/model follow-ups found in the audit
 
