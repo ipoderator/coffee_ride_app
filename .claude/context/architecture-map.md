@@ -21,8 +21,12 @@ Zod (`src/env.ts`, CR-073): covers the full `.env.example` surface, refuses to b
 in production on known placeholder/local values. TypeScript pinned to `6.0.3` (same
 ceiling as `apps/web`).
 
-`turbo lint/typecheck/build` pass for both. No test runner wired yet for either
-(CR-008).
+`turbo lint/typecheck/build` pass for both. Vitest is now wired for both
+(CR-008, 2026-09-12): `apps/api` tests drive `buildApp()` through Fastify's
+`.inject()` (no real port bound); `apps/web` uses jsdom + React Testing
+Library. `apps/web` also has Playwright for e2e (`playwright.config.ts` +
+`e2e/`), live-verified against a real `next dev` server but not wired into
+CI yet (KI-007/CR-080).
 
 `packages/db` exists (CR-004, 2026-09-12): Drizzle ORM (`postgres-js` driver) +
 `drizzle-kit`. Tooling only — **zero domain tables** (user picked this over
@@ -55,8 +59,57 @@ Docker's daemon has now failed to come up across all three of CR-004/CR-005/
 CR-006 in this environment (KI-015; recorded as a standing constraint in
 Claude's project memory, not re-investigated per task).
 
-`packages/types`, `packages/ui`, `packages/config`, `packages/maps-core`,
-`packages/maps-2gis` still do not exist — created by CR-007 and later.
+`packages/config` (CR-007, 2026-09-12): shared tooling for future Node
+packages, not itself in `.claude/rules/architecture.md`'s package list. A
+Node-library tsconfig fragment (`tsconfig/node-library.json` — module/
+moduleResolution `NodeNext`, `"types": ["node"]`, closing KI-013/KI-R06
+forward) and an ESLint flat-config factory (`eslint/node-library.js`,
+`nodeLibraryConfig()`) that replace the copy-pasted recommended-configs
+block `packages/db`/`apps/api` each hand-wrote. `apps/web`/`apps/api`/
+`packages/db` are not retrofitted onto it (predate it, not currently
+broken — left as optional future cleanup).
+
+`packages/types` (CR-007): `ProblemDetails` (RFC 9457 envelope) and
+`Paginated<T>` (ADR-011 cursor pagination) — the two API contract shapes
+ADR-011 already fixed. No domain entity types yet (mirrors `packages/db`'s
+zero domain tables; the first lands with CR-011). Pure `interface`s, fully
+erased at compile time — zero runtime footprint, so it can never have a
+cross-package runtime-resolution question regardless of packaging. Real
+consumer already wired in: `apps/api`'s error handler imports
+`ProblemDetails` from here (`import type`, confirmed erased in the compiled
+`dist` output) instead of declaring its own copy.
+
+`packages/ui` (CR-007): intentionally empty (`export {}`). Design tokens
+(CR-063), the Russian formatter module (CR-064), and the first shared
+components (CR-065/CR-066) are its first real content; not wired into
+`apps/web` (`transpilePackages`) until then.
+
+`packages/maps-core` (CR-007): the `MapProvider` interface (`geocode`,
+`reverseGeocode`, `getRoute`) plus `LatLng`/`GeocodeResult`/`RouteRequest`/
+`RouteResult`, transcribed verbatim from `.claude/rules/maps.md`'s already-
+fixed contract (ADR-010). Zero vendor imports, zero runtime code.
+
+`packages/maps-2gis` (CR-007): implements `MapProvider` by calling 2GIS's
+Geocoder and Routing REST APIs directly via native `fetch` — no npm SDK
+dependency, so there is nothing to keep out of domain types beyond what the
+`MapProvider` boundary already isolates. Every call has an explicit timeout
+and normalizes failures into one `MapProviderError`; bounded retries/circuit
+breaker are deferred to CR-049. Not wired into any route yet (same
+discipline as the Redis/S3 clients, CR-005/CR-006). Two recorded gaps:
+response field names are unverified against a live 2GIS account (KI-016),
+and its `package.json` exports raw TS source rather than compiled `dist`
+output, which works today only because nothing yet imports its real runtime
+code from a plain-`node`-executed path (KI-017, shared with `packages/db`).
+Now has 11 Vitest unit tests (CR-008, 2026-09-12) against `create2GisMapProvider`
+with `fetch` mocked — verifies this adapter's own parsing/fallback/
+normalization logic, not 2GIS's real response shape (KI-016 stays open).
+
+`packages/config` (CR-008 addition): a third shared fragment,
+`vitest/node-library.js` (plain JS, same reasoning as the ESLint one), for
+`apps/api`/`packages/maps-2gis` to share a Vitest `test` block. Its tsconfig
+fragment (`tsconfig/node-library.json`) no longer extends
+`tsconfig.base.json` itself — see KI-018 — every consumer now extends both
+directly as a TS 5+ array.
 
 ## Target structure
 
@@ -68,11 +121,11 @@ apps/
 packages/
 
 - db/ ← exists (CR-004)
-- types/
-- ui/
-- config/
-- maps-core/ (provider-neutral map interface — ADR-010)
-- maps-2gis/ (2GIS adapter; only package allowed to import the 2GIS SDK)
+- types/ ← exists (CR-007)
+- ui/ ← exists (CR-007, empty)
+- config/ ← exists (CR-007, shared tooling)
+- maps-core/ ← exists (CR-007; provider-neutral map interface — ADR-010)
+- maps-2gis/ ← exists (CR-007; 2GIS adapter, only package allowed to speak to 2GIS)
 
 ## Web responsibilities
 

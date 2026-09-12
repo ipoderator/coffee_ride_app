@@ -42,8 +42,28 @@ Decisions and config that are cheap now and a breaking change once code exists �
       client factory added to `apps/api` (`src/s3.ts`), no consumer yet
       (CR-027/CR-086 wire it in). Live connection not verified this session
       (KI-015). See `docs/changelog.md`.
-- [ ] CR-007 Configure shared packages
-- [ ] CR-008 Configure Vitest/Playwright
+- [x] CR-007 Configure shared packages — done 2026-09-12: `packages/config`
+      (shared Node-library tsconfig fragment + ESLint factory, closes KI-013
+      forward), `packages/types` (RFC 9457 `ProblemDetails` + ADR-011
+      `Paginated<T>`, wired into `apps/api`'s error handler as a real
+      consumer), `packages/ui` (empty scaffold, content starts CR-063),
+      `packages/maps-core` (full `MapProvider` interface per ADR-010, pure
+      types), `packages/maps-2gis` (adapter calling 2GIS's Geocoder/Routing
+      REST APIs directly, no SDK dependency; not wired into any route yet).
+      See `docs/changelog.md`.
+- [x] CR-008 Configure Vitest/Playwright — done 2026-09-12: Vitest wired for
+      `apps/api` (real tests against `buildApp()` via `.inject()`: `/health`,
+      404 RFC 9457 envelope, Zod validation → 400, thrown errors → 500/403),
+      `packages/maps-2gis` (11 unit tests against `create2GisMapProvider`
+      with `fetch` mocked — parsing, fallbacks, non-2xx/timeout/malformed-
+      JSON normalization into `MapProviderError`), and `apps/web` (jsdom +
+      React Testing Library smoke test on the placeholder home page).
+      Playwright wired for `apps/web` e2e (one smoke spec, live-verified
+      against a real `next dev` server). Shared
+      `packages/config/vitest/node-library.js` fragment for the two
+      plain-Node consumers. Fixed a real tsconfig `extends`-chain bug surfaced by Vite 8's oxc transform
+      (KI-018, resolved same session) along the way. Not wired into CI
+      (KI-007 stays open — CR-080's job). See `docs/changelog.md`.
 - [ ] CR-009 Configure Docker Compose
 - [ ] CR-010 Configure CI + Git hooks
 

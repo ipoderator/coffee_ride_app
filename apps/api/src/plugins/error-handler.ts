@@ -1,21 +1,15 @@
 import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import { hasZodFastifySchemaValidationErrors } from '@fastify/type-provider-zod';
+import type { ProblemDetails } from 'types';
 
 // RFC 9457 (application/problem+json) envelope fixed by ADR-011 / docs/api.md.
 // `type` points at a stable per-code URI; the domain doesn't exist yet, so this
 // uses the same placeholder ADR-011 itself documents — swap for the real one in
-// a single place once it does.
+// a single place once it does. The envelope shape itself lives in
+// `packages/types` (CR-007) so a future apps/web API client types a failed
+// response the same way this handler constructs it, instead of a second,
+// possibly-drifted copy of the same interface.
 const PROBLEM_BASE_URL = 'https://coffee-ride.example/errors';
-
-interface ProblemDetails {
-  type: string;
-  title: string;
-  status: number;
-  detail: string;
-  instance: string;
-  code: string;
-  errors?: Array<{ path: string; message: string }>;
-}
 
 function sendProblem(
   reply: FastifyReply,

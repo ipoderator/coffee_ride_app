@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Shared tsconfig fragment for plain Node/TypeScript library packages
+  // (packages/types, packages/maps-core, packages/maps-2gis, and any future
+  // Node-only package — apps/web and apps/api keep their own tsconfig since
+  // each needs runtime-specific settings, see their own files).
+  //
+  // Bakes in "types": ["node"] so a future package whose entry file uses only
+  // bare Node globals (process, console, fetch, ...) with no "node:"-prefixed
+  // import doesn't silently fail to resolve them under `tsc` the way
+  // packages/db's migrate.ts did — see KI-013 (docs/changelog.md, CR-004) and
+  // its "next action" note pointing at this file.
+  // "outDir"/"rootDir" are NOT set here on purpose: path-valued compiler
+  // options in a tsconfig are resolved relative to the file that DEFINES
+  // them, not the file that extends it — so "rootDir": "src" here would
+  // resolve to packages/config/tsconfig/src, not to whichever package
+  // extends this fragment (confirmed the hard way: `tsc` rejected every
+  // consumer with TS6059 until this was moved out). Each consuming
+  // package's own tsconfig.json sets "outDir"/"rootDir" itself, same as
+  // apps/api and packages/db already do.
+  //
+  // Does NOT itself extend ../../../tsconfig.base.json (it used to — see
+  // CR-008/KI-018): Vite 8's oxc-based transform (used by Vitest 5, only
+  // discovered once packages/maps-2gis got a vitest.config.ts in CR-008)
+  // resolves a nested/chained "extends" relative to the ORIGINAL consuming
+  // tsconfig's directory instead of each intermediate fragment's own
+  // directory, unlike `tsc` (which resolves each hop correctly and was
+  // never affected). A two-level chain reached through a workspace symlink
+  // (consumer -> this file -> tsconfig.base.json) breaks under oxc even
+  // though `tsc` itself resolves it fine. Fix: every consumer of this
+  // fragment extends BOTH tsconfig.base.json and this file directly, as a
+  // TS 5+ array (single hop each, nothing chained) — see
+  // packages/types/maps-core/maps-2gis's own tsconfig.json.
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"]
+  }
+}

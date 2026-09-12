@@ -6,104 +6,103 @@ done
 
 ## Task ID
 
-CR-006 — Configure MinIO/S3 adapter
+CR-008 — Configure Vitest/Playwright
 
 ## Goal
 
-Add an S3 client factory to `apps/api`. Tooling only, same pattern as
-CR-004 (`packages/db`) and CR-005 (Redis): no upload route consumes it yet
-(GPX upload is CR-027, cover images are CR-086 — which still has to decide
-"direct S3 vs proxy"), and no resilience wrapping (timeout/retry/circuit
-breaker) is added here — that's the cross-cutting CR-049
-("Timeout/retry/circuit-breaker utilities for external integrations (2GIS
-Maps, S3)"), a separate task by design.
-
-No separate `packages/storage-*` split: unlike maps (ADR-010 explicitly
-splits `packages/maps-core`/`packages/maps-2gis` because the 2GIS SDK is
-vendor-specific and must never leak into domain types), S3 is already a
-standardized, provider-neutral wire protocol — MinIO locally, "production
-provider is deployment-specific" (ADR-005). The official AWS SDK v3 speaks
-that same protocol against every S3-compatible provider (AWS S3, MinIO,
-Cloudflare R2, Backblaze B2, DigitalOcean Spaces, ...), so there's no
-vendor-SDK-leak problem to isolate behind a second package. `apps/api` is the
-only consumer, matching Redis/DB placement.
+Wire the test runners the fixed stack already commits to
+(`.claude/CLAUDE.md`: "Tests: Vitest + Playwright") into the workspace
+members that already have real logic worth testing, same "tooling first,
+real content only where there's a justified consumer" discipline as
+CR-004..CR-007.
 
 ## Requirements
 
-1. `@aws-sdk/client-s3@^3.1131.0` — official, portable S3-compatible client.
-   Not `minio` (MinIO's own client): ADR-005 doesn't pin MinIO as the
-   production provider, so the more universally-portable AWS SDK is the
-   better long-term fit.
-2. `apps/api/src/s3.ts`: `createS3Client(config)` factory — same factory
-   shape as `createDbClient`/`createRedisClient`. Config needs `endpoint`,
-   `region`, `accessKeyId`, `secretAccessKey`, and `forcePathStyle: true`
-   (required for MinIO and most non-AWS S3-compatible providers — virtual-
-   hosted-style bucket URLs don't work against them).
-3. Not wired into any route/use case in this task — `S3_*` env vars stay
-   optional in `src/env.ts` (already added in CR-003, still nothing reads
-   them).
-4. Validate for real if possible (self-correction protocol): `docker compose
-up minio` — Docker's daemon has been unavailable all session (CR-004/
-   CR-005 hit the same wall). If still unavailable, this is a third
-   consecutive occurrence — worth flagging plainly rather than re-litigating
-   per task, and validating via typecheck/lint/build only, same honest
-   gap-recording style as KI-014.
+(see prior version of this file / `docs/changelog.md` CR-008 entry for the
+full list — all delivered.)
 
 ## Acceptance criteria
 
-- `apps/api` builds/typechecks/lints cleanly via `turbo` with the new file;
-- `apps/web`/`packages/db` stay green (regression check);
-- `docs/tasks.md`, `project-state.md`, `known-issues.md`, `architecture-map.md`,
-  `docs/changelog.md` updated, honestly reflecting whatever validation was
-  actually possible;
-- `git diff` reviewed.
+- `turbo test` runs real, passing tests for `apps/api`, `packages/maps-2gis`,
+  `apps/web` — met (5 + 11 + 1 = 17 tests, all passing);
+- packages with nothing to test are silently skipped by turbo — met
+  (`packages/db`/`types`/`ui`/`maps-core`/`config` have no `test` script);
+- `apps/web`'s Playwright e2e smoke spec passes locally against `next dev` —
+  met, run live;
+- `turbo lint`/`typecheck`/`build` stay green across all 8 workspace
+  members — met (24/24 tasks green);
+- `pnpm format:check` clean — met;
+- context/docs updated honestly, including the CI-e2e gap staying open
+  (KI-007) rather than silently closed — met;
+- `git diff` reviewed — met.
 
 ## Planned files
 
-`apps/api/package.json` (`@aws-sdk/client-s3`), `apps/api/src/s3.ts`;
-`.claude/context/{project-state,architecture-map,known-issues,current-task}.md`,
-`docs/tasks.md`, `docs/changelog.md`.
+Delivered as planned — see `docs/changelog.md`'s CR-008 entry's Files line
+for the exact list, including two files not originally planned: `apps/api/
+src/app.ts` (small logger tweak, discovered necessary) and `packages/
+{types,maps-core,maps-2gis}/tsconfig.json` + `packages/config/tsconfig/
+node-library.json` (KI-018 fix, discovered necessary).
 
 ## Implementation progress
 
-- [x] researched scope/versions, decided no separate package (same reasoning
-      as CR-005)
-- [x] add `src/s3.ts`, `@aws-sdk/client-s3` dependency
-- [x] `pnpm install`
-- [x] validate: turbo lint/typecheck/build; attempted live MinIO check —
-      Docker unavailable (third consecutive occurrence, see Discovered issues)
-- [x] update context/docs
+- [x] `packages/config`: shared Vitest node-library fragment
+      (`vitest/node-library.js`, plain JS)
+- [x] `apps/api`: Vitest config + 5 tests (`buildApp()` + `.inject()`)
+- [x] `packages/maps-2gis`: Vitest config + 11 tests (`fetch` mocked)
+- [x] `apps/web`: Vitest config (jsdom + RTL) + 1 unit test
+- [x] `apps/web`: Playwright config + 1 e2e smoke spec
+- [x] `pnpm install` — 85 packages added, no unmet-peer errors
+- [x] validate: `turbo run test lint typecheck build --force` — 24/24 green
+- [x] `pnpm format:check` / `pnpm lint:root` — both clean (one prettier
+      --write pass needed on 6 new/touched files first)
+- [x] live: Playwright browsers installed, `playwright test` run and passed
+      against a real `next dev` server
+- [x] update context/docs (this file, project-state, architecture-map,
+      known-issues — KI-018 added and resolved same session —
+      docs/tasks.md, docs/changelog.md)
 
 ## Validation
 
-- [x] `turbo run lint|typecheck|build` — all exit 0 for `api`; `web`/`db` stay green
-- [x] `pnpm format:check` / root `eslint .` — still pass
-- [x] Docker daemon check — NOT_READY (third occurrence this session)
-- [x] `git status` reviewed
-- [n/a] `turbo test` — no test runner in `apps/api` yet (CR-008)
-- [n/a] live MinIO round trip — not possible without Docker; not re-attempted
-  via a fresh Homebrew install after CR-005 already declined one
+- [x] `turbo run test lint typecheck build --force` — 24/24 tasks green,
+      17 tests total (5 api + 11 maps-2gis + 1 web), 0 failures
+- [x] `pnpm format:check` — clean
+- [x] `pnpm lint:root` — clean
+- [x] live Playwright e2e run against real `next dev` (not just config-
+      checked) — 1 passed
+- [x] `git status`/`git diff` reviewed — only intended files changed
 
 ## Discovered issues
 
-- Docker's daemon has now failed to come up in this environment across all
-  three of CR-004, CR-005, and CR-006 — a confirmed standing constraint, not
-  one-off flakiness. Saved as a cross-session project memory
-  (`docker-desktop-unavailable`) so future tasks don't re-spend the ~4+ minute
-  wait before falling back.
-- No standing local fallback for Redis/MinIO the way Postgres had one (an
-  already-running Homebrew service) — noted in the same memory file so a
-  future session knows to ask before installing rather than assuming one
-  exists.
+- KI-018 (found and resolved this session): `packages/config`'s shared
+  tsconfig fragment's chained `extends` broke under Vite 8's `vite:oxc`
+  transform (used by Vitest 5) the moment a package going through that
+  chain (`packages/maps-2gis`) got a `vitest.config.ts` — `tsc` itself was
+  never affected and stayed green throughout. Root cause: oxc resolves a
+  nested `extends` relative to the _original_ consuming tsconfig's
+  directory, not each intermediate fragment's own directory (a real
+  divergence from `tsc`'s per-file-relative resolution). Fixed by having
+  every consumer of `packages/config/tsconfig/node-library.json` extend
+  both it and `tsconfig.base.json` directly as a TS 5+ `extends` array,
+  removing the chain entirely.
+- A small, deliberate `apps/api/src/app.ts` change (not originally planned):
+  `NODE_ENV=test` now gets `logger.level: 'silent'` with no `pino-pretty`
+  transport, since `buildApp()` is called once per test case and spawning a
+  pretty-printer worker thread per instance was both noisy and needlessly
+  slow. `buildApp()`'s signature/behavior is otherwise unchanged.
 
 ## Final result
 
-Done, with the same honestly-recorded gap pattern as CR-005. `apps/api` has an
-S3 client factory (`@aws-sdk/client-s3`, matching `createDbClient`/
-`createRedisClient`'s factory shape) that typechecks/lints/builds cleanly but
-was never connected to a live MinIO (KI-015) — Docker unavailable for the third
-time this session. Not wired into any route, consistent with the "first real
-consumer decides serving strategy" boundary (CR-027/CR-086). `docs/tasks.md`
-(CR-006), `known-issues.md` (KI-015), `project-state.md`, `architecture-map.md`,
-`docs/changelog.md` all updated; Docker unavailability also saved to
-cross-session memory. Next logical task: CR-007 (Configure shared packages).
+Done. Vitest wired and producing real, passing tests for the three
+workspace members with logic worth testing (`apps/api`: 5, `packages/
+maps-2gis`: 11, `apps/web`: 1 — 17 total); Playwright wired for `apps/web`
+e2e and live-verified against a real `next dev` server. The five packages
+with nothing real to test (`db`/`types`/`ui`/`maps-core`/`config`) correctly
+got no `test` script — `turbo test` skips them by design. A genuine tooling
+bug (KI-018) was discovered and fixed in the same session rather than
+worked around. All 8 workspace members stay lint/typecheck/build clean;
+`pnpm format:check`/`lint:root` clean. CI's existing `Test` step will now
+run something real; a Playwright CI job stays deliberately deferred to
+CR-080 (KI-007 unchanged). `docs/tasks.md`, `known-issues.md` (KI-018),
+`project-state.md`, `architecture-map.md`, `docs/changelog.md` all updated.
+Next logical task: CR-009 (Configure Docker Compose).

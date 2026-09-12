@@ -18,11 +18,20 @@ import { v1Routes } from './routes/v1.js';
 export async function buildApp(env: Env) {
   const app = Fastify({
     logger: {
-      level: env.NODE_ENV === 'production' ? 'info' : 'debug',
-      // pino-pretty only outside production — structured JSON logs are what a
-      // real deployment's log pipeline wants (CR-079 builds on this later).
+      // 'test' is silent (CR-008): buildApp() is called once per test case
+      // via .inject(), and a pretty-printed transport per instance is both
+      // noisy and needlessly slow (each spawns its own worker thread).
+      level:
+        env.NODE_ENV === 'production'
+          ? 'info'
+          : env.NODE_ENV === 'test'
+            ? 'silent'
+            : 'debug',
+      // pino-pretty only in local dev — structured JSON logs are what a real
+      // deployment's log pipeline wants (CR-079 builds on this later), and
+      // 'test' doesn't need a transport at all above.
       transport:
-        env.NODE_ENV === 'production' ? undefined : { target: 'pino-pretty' },
+        env.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
     },
   }).withTypeProvider<ZodTypeProvider>();
 

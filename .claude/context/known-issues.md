@@ -130,26 +130,6 @@ Next action: CR-010 ("Configure CI + Git hooks") — make lint-staged
 workspace-aware (e.g. group staged files by workspace and invoke each package's
 own `eslint` from its own directory) rather than a single flat `eslint --fix`.
 
-### KI-013 — Node global types need an explicit `"types": ["node"]` in some packages
-
-Status: resolved (worked around) 2026-09-12 (CR-004). Discovered: 2026-09-12.
-Problem: TypeScript's automatic `@types` inclusion (no explicit `"types"` field)
-did not pick up `process`/`console`/`URL`/`import.meta.url` in
-`packages/db/src/migrate.ts`, even though `@types/node` was correctly installed
-and resolvable there — `tsc` reported `TS2591`/`TS2304`/`TS2339`/`TS2584`.
-`apps/api` never hit this, apparently because every file there already imports
-something from `fastify` (which itself references Node builtin types),
-incidentally pulling `@types/node` into the program; `packages/db`'s
-`migrate.ts` uses only bare Node globals with no `node:`-prefixed import, so
-nothing forced the inclusion.
-Impact: a future package whose entry file also uses only bare Node globals
-(no `node:` import) would hit the same silent-until-`tsc` failure.
-Resolution: added `"types": ["node"]` explicitly to `packages/db/tsconfig.json`.
-Not applied to `apps/web`/`apps/api` since neither is currently failing.
-Next action: CR-007 ("Configure shared packages") should put this in the shared
-Node-target tsconfig fragment `packages/config` will own, so every future
-Node package gets it by default instead of rediscovering this per package.
-
 ### KI-014 — `apps/api`'s Redis client was never connected to a live Redis
 
 Status: open. Discovered: 2026-09-12 (CR-005).
@@ -185,6 +165,79 @@ Next action: verify a real connection (e.g. `docker compose up minio` + a
 CR-086 consumes it first) before or during whichever CR wires this client into
 a real code path.
 
+### KI-016 — 2GIS Geocoder/Routing response parsing is unverified against a live API
+
+Status: open. Discovered: 2026-09-12 (CR-007).
+Problem: `packages/maps-2gis`'s field names (`point.lat`/`lon`, `full_name`,
+`distance`/`duration`, route geometry) come from 2GIS's public documentation
+and search results, not a real request/response — no `MAPS_2GIS_API_KEY` is
+configured in this environment, and `.claude/rules/maps.md` itself defers
+that verification to "before production integration."
+Impact: low today (zero consumers — see KI-017's same "not wired in yet"
+point), but real: a wrong field name would silently produce empty/degraded
+results rather than an obvious error, since parsing is deliberately
+defensive (falls back to the requested waypoints as route geometry if the
+response doesn't carry one).
+Workaround: none needed yet — nothing calls this code.
+Next action: verify against a real 2GIS account (a geocode call, a route
+call, inspect the actual response) before CR-026 (map discovery), CR-028
+(route rendering), or CR-084 (geo query approach) wires this adapter into a
+real route.
+
+### KI-017 — `packages/maps-2gis` (and `packages/db`) export raw TS source, not compiled `dist`
+
+Status: open. Discovered: 2026-09-12 (CR-007).
+Problem: both packages' `package.json` `main`/`types`/`exports` point at
+`./src/*.ts`, not `./dist/*.js`. `tsx` (dev) and `tsc` (typecheck, and
+build-time type resolution) both handle that fine — confirmed live for the
+`packages/types` case, which is pure types and therefore never needs runtime
+resolution at all (`import type` is fully erased, verified by inspecting
+compiled `apps/api` output). But `packages/maps-2gis`'s
+`create2GisMapProvider` and `packages/db`'s `createDbClient` are real
+runtime values, not types — a plain `node dist/server.js` (no `tsx`) trying
+to `import` either package at runtime would fail to resolve a `.ts` file,
+since Node doesn't understand that extension without a loader.
+Impact: none today — neither package has a real consumer yet (`apps/api`
+doesn't import `db` until CR-011, doesn't import `maps-2gis` until CR-026/
+CR-028/CR-084), so this has never actually been exercised end to end.
+`packages/maps-core` and `packages/types` are unaffected by construction:
+both are 100% type-only (`interface`s only), so they can never have a
+runtime resolution question regardless of what their `exports` field says.
+Workaround: none needed yet.
+Next action: before wiring `maps-2gis` or `db` into any code path `apps/api`
+actually runs via `node dist/server.js` (not `tsx`), switch that package to
+declaration-based `dist` exports (`"types": "./dist/index.d.ts"`, `"main":
+"./dist/index.js"`, `"exports"` pointing at `dist`, `"declaration": true` in
+its `tsconfig.json` — the root `tsconfig.base.json` sets `declaration:
+false` for application entry points, which is correct for `apps/*` but not
+for a library package meant to be imported elsewhere) and confirm `node
+dist/server.js` actually boots with a real cross-package import.
+
+### KI-018 — `packages/config`'s shared tsconfig fragment broke under Vite 8's oxc transform
+
+Status: resolved 2026-09-12 (CR-008, same session it was discovered in).
+Problem: `packages/types`/`maps-core`/`maps-2gis`'s `tsconfig.json` extended
+`config/tsconfig/node-library.json` (a bare package specifier, resolved
+through the pnpm workspace symlink), which itself extended
+`../../../tsconfig.base.json`. `tsc` resolves each hop of a chained
+`extends` relative to the file that defines it and handles this fine (this
+is how CR-007 shipped it) — but Vite 8's default `vite:oxc` transform plugin
+(used by Vitest 5, only exercised once `packages/maps-2gis` got a
+`vitest.config.ts` in CR-008) resolves a nested `extends` relative to the
+_original_ consuming tsconfig's directory instead, and failed with
+`TSCONFIG_ERROR: Failed to load tsconfig 'tsconfig.base.json': Tsconfig not
+found`.
+Impact: blocked `packages/maps-2gis`'s Vitest suite entirely (0 tests
+collected); `apps/api`/`apps/web` were unaffected since neither's tsconfig
+goes through `packages/config` at all.
+Resolution: `packages/config/tsconfig/node-library.json` no longer extends
+`tsconfig.base.json` itself; every consumer (`packages/types`, `maps-core`,
+`maps-2gis`) now extends both directly as a TS 5+ array —
+`"extends": ["../../tsconfig.base.json", "config/tsconfig/node-library.json"]`
+— so no hop is ever chained through an intermediate file. Verified: `turbo
+build`/`typecheck` still green for all three (unaffected by construction),
+and `packages/maps-2gis`'s Vitest suite now collects and passes.
+
 ---
 
 ## Resolved
@@ -218,3 +271,24 @@ shipped inside the browser bundle. Split into a public MapGL key and a server-on
 Resolved: 2026-09-11 (CR-067). `pnpm lint` only walks workspace packages, which do not
 exist yet, so `eslint.config.mjs` was dead weight in CI. Added a `lint:root` step and
 `permissions: contents: read`.
+
+### KI-R06 — Node global types needed an explicit `"types": ["node"]` in some packages
+
+Resolved: 2026-09-12 (CR-007, worked around 2026-09-12 in CR-004). Discovered:
+2026-09-12. TypeScript's automatic `@types` inclusion (no explicit `"types"`
+field) did not pick up `process`/`console`/`URL`/`import.meta.url` in
+`packages/db/src/migrate.ts`, even though `@types/node` was correctly
+installed and resolvable there — `tsc` reported
+`TS2591`/`TS2304`/`TS2339`/`TS2584`. `apps/api` never hit this, apparently
+because every file there already imports something from `fastify` (which
+itself references Node builtin types), incidentally pulling `@types/node`
+into the program; `packages/db`'s `migrate.ts` uses only bare Node globals
+with no `node:`-prefixed import, so nothing forced the inclusion. CR-004
+worked around it locally (`"types": ["node"]` in `packages/db/tsconfig.json`
+only). CR-007 closed it properly: `packages/config/tsconfig/node-library.json`
+bakes `"types": ["node"]` into the shared fragment every new Node-library
+package (`packages/types`, `packages/maps-core`, `packages/maps-2gis`)
+extends, so it can't be silently rediscovered per package again.
+`apps/web`/`apps/api` were not retrofitted onto the shared fragment (neither
+is currently failing; see the CR-007 changelog entry for why they're left
+alone).

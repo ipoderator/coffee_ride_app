@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // No "build" script/dist output on purpose: unlike the Node-consumed
+  // packages (types, maps-core, maps-2gis), packages/ui is meant to be
+  // consumed as raw TSX source by apps/web's own bundler (Next's
+  // `transpilePackages`) — the standard pattern for a shared React package in
+  // a Next.js monorepo, avoiding a second build step that would just be
+  // recompiled again by webpack/Turbopack anyway. `transpilePackages: ['ui']`
+  // is added to apps/web's next.config once there is a real component to
+  // import (CR-063/CR-065) — wiring it in now, against an empty package,
+  // would be untestable.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "dist"]
+}

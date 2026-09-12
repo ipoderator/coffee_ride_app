@@ -9,8 +9,11 @@ MVP / Foundation
 None active. Pre-foundation hardening (CR-067..CR-072), CR-087 (repository-wide
 Prettier formatting), CR-001 (monorepo tooling initialized), CR-002 (`apps/web`
 scaffolded), CR-003 (`apps/api` scaffolded, includes CR-073), CR-004
-(`packages/db` scaffolded), CR-005 (Redis client factory), and CR-006 (S3
-client factory) all completed 2026-09-12.
+(`packages/db` scaffolded), CR-005 (Redis client factory), CR-006 (S3
+client factory), CR-007 (five shared packages: config, types, ui,
+maps-core, maps-2gis), and CR-008 (Vitest wired for `apps/api`/
+`packages/maps-2gis`/`apps/web`, Playwright wired for `apps/web` e2e) all
+completed 2026-09-12.
 
 ## Implemented
 
@@ -26,8 +29,46 @@ when justified; first S3 consumer is CR-027/CR-086) and neither live-verified
 this session (KI-014, KI-015 — Docker's daemon was unavailable throughout, see
 `docker-desktop-unavailable` in Claude's project memory).
 `packages/db` exists (CR-004): Drizzle + `drizzle-kit`, zero domain tables by
-design, validated live against a real Postgres. No other `packages/*` exist yet —
-starts with CR-007.
+design, validated live against a real Postgres.
+
+Five more `packages/*` exist now (CR-007, 2026-09-12, see `docs/changelog.md`):
+`packages/config` (shared Node-library tsconfig fragment + ESLint factory,
+closes KI-013/KI-R06 forward — not itself in `.claude/rules/architecture.md`'s
+package list); `packages/types` (`ProblemDetails` + `Paginated<T>`, the two
+ADR-011 contract shapes, already wired into `apps/api`'s error handler as a
+real consumer — `import type`, fully erased, confirmed in compiled output);
+`packages/ui` (intentionally empty, `export {}` — first content is CR-063);
+`packages/maps-core` (the full `MapProvider` interface from
+`.claude/rules/maps.md`, verbatim, pure types); `packages/maps-2gis`
+(implements `MapProvider` by calling 2GIS's Geocoder/Routing REST APIs
+directly via `fetch`, no SDK dependency — timeouts applied, retries/circuit
+breaker deferred to CR-049, not wired into any route yet). Two new gaps
+recorded: KI-016 (2GIS response parsing unverified against a live account)
+and KI-017 (`maps-2gis`/`db` export raw TS source, which only works because
+neither has a real runtime consumer yet — must switch to compiled `dist`
+exports before one does).
+
+Test runners wired 2026-09-12 (CR-008, see `docs/changelog.md`): Vitest 5 for
+`apps/api` (5 tests against `buildApp()` via Fastify's `.inject()` — health,
+404 envelope, Zod validation → 400, unexpected error → 500 with no leaked
+internals, a below-500 thrown error passed through with its own status),
+`packages/maps-2gis` (11 unit tests against `create2GisMapProvider` with
+`fetch` mocked — geocode/reverseGeocode/getRoute parsing, the waypoints-as-
+geometry fallback, non-2xx/timeout/malformed-JSON all normalized into
+`MapProviderError`), and `apps/web` (jsdom + React Testing Library, one smoke
+test on the placeholder home page). Playwright wired for `apps/web` e2e (one
+smoke spec, live-verified against a real `next dev` server: browsers
+installed, `playwright test` run and passed). `packages/db`/`types`/`ui`/
+`maps-core`/`config` intentionally got no test script (nothing real to test
+yet — same "tooling first" discipline as CR-004..CR-007); `turbo test`
+silently skips packages with no `test` script, by design, not by omission.
+Not wired into CI (`.github/workflows/ci.yml`'s existing `Test` step now
+actually runs the three Vitest suites; a Playwright CI job stays deferred to
+CR-080 — KI-007 stays open). A real tsconfig bug was found and fixed along
+the way: KI-018 (`packages/config`'s shared tsconfig fragment's chained
+`extends` broke under Vite 8's oxc transform; fixed by having every consumer
+extend both `tsconfig.base.json` and the fragment directly as a TS 5+ array,
+resolved in the same session).
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -126,7 +167,7 @@ None.
 
 ## Next
 
-CR-007 — Configure shared packages.
+CR-009 — Configure Docker Compose.
 
 ## Important decisions
 
@@ -156,20 +197,24 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   observability (KI-001, KI-002, KI-006; CR-074..CR-079);
 - Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
 - MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
-- CI cannot test uploads and does not run e2e (KI-007, CR-080); the install step
-  (KI-008) and the Format check step (KI-011) are both resolved; `apps/web`
-  (CR-002), `apps/api` (CR-003), and `packages/db` (CR-004) are workspace members
-  CI can lint/typecheck/build, but none has a test runner yet (CR-008) and
-  `packages/types`/`ui`/`config`/`maps-*` still don't exist (CR-007);
+- CI cannot test uploads and does not run e2e (KI-007, CR-080 — Vitest now
+  runs in CI via the existing `Test` step, but Playwright does not); the
+  install step (KI-008) and the Format check step (KI-011) are both resolved;
+  all eight workspace members (`apps/web`, `apps/api`, `packages/db`/`types`/
+  `ui`/`config`/`maps-core`/`maps-2gis`) lint/typecheck/build clean via
+  `turbo`; three of them (`apps/api`, `apps/web`, `packages/maps-2gis`) now
+  have real passing Vitest suites (CR-008), the other five intentionally
+  don't yet (nothing real to test);
 - lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
   files — only `turbo lint` in CI does (KI-012, CR-010);
-- a Node package whose entry file uses only bare Node globals (no `node:` import)
-  needs an explicit `"types": ["node"]` in its tsconfig or `tsc` silently fails to
-  see `process`/`console`/etc. (KI-013, CR-007 centralizes the fix);
 - `apps/api`'s Redis and S3 clients (CR-005, CR-006) have never been connected
   to a live service — Docker unavailable all session, no local fallback for
   either (KI-014, KI-015; verify before CR-050/CR-058/CR-027/CR-086 consume
   them);
+- `packages/maps-2gis`'s Geocoder/Routing response parsing is unverified
+  against a live 2GIS account (KI-016), and it (plus `packages/db`) export raw
+  TS source rather than compiled `dist` output — harmless until either gets a
+  real runtime consumer under plain `node`, not `tsx` (KI-017);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);

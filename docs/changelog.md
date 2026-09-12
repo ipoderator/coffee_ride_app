@@ -733,3 +733,229 @@ Follow-up: CR-007 (Configure shared packages) is next. CR-027/CR-086 are the
 first real consumers of this client and should close KI-015 when they land;
 CR-049 adds the resilience wrapping both this and the Redis client (CR-005)
 still lack.
+
+## 2026-09-12 — CR-007 — Five shared packages configured (config, types, ui, maps-core, maps-2gis)
+
+Summary: `packages/db` was the only `packages/*` member before this task; CR-007
+adds the rest of `.claude/rules/architecture.md`'s list.
+
+**`packages/config`** (new, not itself in that list — introduced to close
+KI-013 properly): a shared Node-library tsconfig fragment
+(`tsconfig/node-library.json`, bakes in `"types": ["node"]` so a future
+package with only bare Node globals doesn't rediscover KI-013) and a shared
+ESLint flat-config factory (`eslint/node-library.js`,
+`nodeLibraryConfig()`) that replaces the copy-pasted recommended-configs-plus-
+house-rules block `packages/db` and `apps/api` each hand-wrote. Every
+workspace member still needs its own `eslint.config.mjs` file — flat config
+has no directory cascading, `turbo lint` resolves one config per package by
+CWD (KI-012) — but that file is now one line for a plain Node package.
+`apps/api`/`packages/db` are deliberately NOT retrofitted onto this in the
+same change (`.claude/rules/git.md`: don't mix unrelated refactors with
+feature work); optional future cleanup, not a regression.
+
+One tsconfig gotcha discovered while wiring this up: `outDir`/`rootDir` (and
+other path-valued compiler options) resolve relative to the file that
+_defines_ them, not the file that `extends` it — so they cannot live in the
+shared fragment itself (confirmed via `TS6059` when they did). They stay in
+each consuming package's own `tsconfig.json`, same as `apps/api`/
+`packages/db` already do it.
+
+**`packages/types`**: `ProblemDetails` (RFC 9457 envelope) and `Paginated<T>`
+(ADR-011 cursor pagination) — the two API contract shapes already fixed
+before any endpoint exists, so their first real usage imports the shared type
+instead of re-deriving it. No domain entity types yet (User, Ride, ...): none
+of them exist in `packages/db` either (CR-004's "zero domain tables by
+design"); the first domain type lands with its first table, starting CR-011.
+Wired into a real consumer in this same task: `apps/api`'s error handler
+(`src/plugins/error-handler.ts`) now imports `ProblemDetails` from `types`
+(`import type` — fully erased at compile time, confirmed by inspecting
+`dist/plugins/error-handler.js` after build, so there is no runtime module
+resolution question for this package at all) instead of declaring its own
+copy. Re-smoke-tested live after the change: `/health` (200) and an unknown
+route (404, correct `application/problem+json` envelope) both still correct
+against the compiled `dist/server.js`.
+
+**`packages/ui`**: intentionally empty (`export {}`), same "tooling first,
+content when there's a real consumer" discipline as `packages/db`'s zero
+domain tables. `docs/design.md`'s tokens (CR-063), the Russian formatter
+module (CR-064), and the first shared components (CR-065/CR-066) all land
+before `apps/web` has a real screen to put them on (CR-011). Deliberately
+NOT wired into `apps/web` yet (no `transpilePackages` entry) — that's
+untestable against an empty package and belongs with the first real
+component.
+
+**`packages/maps-core`**: the `MapProvider` interface plus `LatLng`,
+`GeocodeResult`, `RouteRequest`, `RouteResult` — transcribed verbatim from
+the contract `.claude/rules/maps.md` already fixed (ADR-010). Zero vendor
+imports, zero runtime code (pure `interface`s, fully erased at compile
+time) — this package can never have the dist-vs-source runtime-resolution
+question `packages/maps-2gis` has (below), by construction.
+
+**`packages/maps-2gis`**: implements `MapProvider` by calling 2GIS's
+Geocoder (`catalog.api.2gis.com/3.0/items/geocode`) and Routing
+(`routing.api.2gis.com/routing/7.0.0/global`) REST APIs directly via the
+platform's native `fetch` — no npm SDK dependency at all, which trivially
+satisfies "packages/maps-2gis is the only package allowed to import the 2GIS
+SDK" (ADR-010) since there is no SDK import anywhere. Every call has an
+explicit timeout (`AbortSignal.timeout`, `.claude/rules/resilience.md`) and
+failures are normalized into one `MapProviderError` type instead of a raw
+`fetch`/driver exception, so a future caller can decide its own fallback
+(e.g. "create the ride without geocoded coordinates") rather than this
+adapter silently swallowing errors itself. Bounded retries and a circuit
+breaker — the rest of what `.claude/rules/maps.md` asks for "at the adapter
+implementation level" — are explicitly deferred to CR-049 (the same
+cross-cutting utility CR-006 deferred S3's resilience wrapping to), not
+implemented ad hoc here. Not wired into any route/composition point in this
+task — same "factory exists, no consumer until one is justified" discipline
+as the Redis (CR-005) and S3 (CR-006) clients.
+
+Two honest gaps recorded rather than silently accepted (see
+`known-issues.md`):
+
+- KI-016: the Geocoder/Routing response field names (`point.lat`/`lon`,
+  `full_name`, `distance`/`duration`, route geometry) come from 2GIS's public
+  documentation and search results, not a live call — no API key is
+  configured in this environment. Parsing is deliberately defensive (falls
+  back to the requested waypoints as route geometry if the response doesn't
+  carry one), but must be verified against a real account before CR-026/
+  CR-028/CR-084 depend on it.
+- KI-017: `packages/maps-2gis` (and, retroactively, `packages/db`) export
+  `main`/`types`/`exports` pointing at raw `.ts` source, not compiled `dist`
+  output. That's fine for `tsx` (dev) and `tsc` (typecheck/build-time type
+  resolution) but would fail to resolve at runtime under plain `node` once a
+  compiled Node consumer actually imports one of these packages' real
+  runtime code (their factory functions are not type-only, unlike
+  `packages/types`/`packages/maps-core`). Neither package has a real runtime
+  consumer yet, so this has never actually been exercised; must be fixed
+  (declaration-based `dist` exports) before either is wired into `apps/api`'s
+  compiled output for real.
+
+Files: `packages/config/**` (new: `package.json`, `tsconfig/node-library.json`,
+`eslint/node-library.js`, `eslint.config.mjs`); `packages/types/**` (new);
+`packages/ui/**` (new); `packages/maps-core/**` (new); `packages/maps-2gis/**`
+(new); `apps/api/package.json` (`types` devDependency),
+`apps/api/src/plugins/error-handler.ts` (imports `ProblemDetails` from
+`types`); `docs/tasks.md` (CR-007 checked off); `.claude/context/
+{architecture-map,project-state,known-issues,current-task}.md` (KI-016,
+KI-017).
+Dependencies: none new at the root; each new package declares its own
+(`config`/`maps-core`/`types` via `workspace:*`, `@types/node`, `eslint`,
+`typescript-eslint`, `typescript` — all already-approved dev tooling, no new
+runtime dependency added anywhere).
+Decisions: none new at the ADR level — this operationalizes ADR-009/ADR-010/
+ADR-011, it doesn't change them.
+Follow-up: CR-008 (Configure Vitest/Playwright) is next. CR-063 is the first
+real consumer of `packages/ui`; CR-026/CR-028/CR-084 are the first real
+consumers of `packages/maps-2gis` and should close KI-016/KI-017 when they
+land (or sooner, if a live 2GIS credential becomes available).
+
+## 2026-09-12 — CR-008 — Configure Vitest/Playwright
+
+Summary: wired the test runners the fixed stack already commits to
+(`.claude/CLAUDE.md`: "Tests: Vitest + Playwright") into the workspace
+members that already have real logic worth testing — same "tooling first,
+real content only where there's a justified consumer" discipline as
+CR-004..CR-007. Root `turbo.json`/`package.json` already declared
+`test`/`test:e2e` tasks since CR-001; this is what makes them do something.
+
+`apps/api`: Vitest, 5 tests driving `buildApp()` through Fastify's
+`.inject()` — no real port bound, matching `app.ts`'s own CR-003 comment
+anticipating exactly this. Covers `GET /health` (200), an unmatched route
+(404, RFC 9457 envelope), a Zod validation failure on an ad hoc test-only
+route (400 with `errors[]`), an unexpected thrown error (500, confirmed no
+leaked connection string/stack trace in the body), and a below-500 thrown
+error passed through with its own status (403). Also a small, deliberate
+`app.ts` tweak: `NODE_ENV=test` now gets `logger.level: 'silent'` with no
+`pino-pretty` transport (previously only `production` skipped the
+transport), since `buildApp()` is called once per test case and a
+pretty-printer worker thread per instance is both noisy and slower than
+needed — everything else about `buildApp()`'s signature is unchanged.
+
+`packages/maps-2gis`: Vitest, 11 unit tests against `create2GisMapProvider`
+with `global.fetch` mocked (`vi.stubGlobal`) — no live 2GIS credential is
+available in this environment (KI-016 stays open), so these verify this
+adapter's own parsing/fallback/normalization logic against constructed
+fixture responses, not 2GIS's actual response shape. Covers: geocode
+parsing (including dropping items with no `point`), empty results,
+`reverseGeocode` first-result/null, `getRoute` for both response shapes
+(`RoutingResponseItem[]` and `{ result: [...] }`), the documented fallback
+to the requested waypoints when a route response carries no geometry, a
+route response with no usable item throwing `MapProviderError`, and three
+failure-mode normalizations required by `.claude/rules/resilience.md`
+(non-2xx status, timeout, unparseable JSON body) all becoming one
+`MapProviderError` type rather than a raw `fetch`/driver exception.
+
+`apps/web`: Vitest (jsdom + `@testing-library/react` + `@vitejs/plugin-react`)
+with one smoke test on the CR-002 placeholder home page (heading + subtitle
+render). Playwright wired for e2e: `playwright.config.ts` (`webServer: pnpm
+dev`, chromium project) + one smoke spec in `e2e/` asserting the same two
+strings are visible on a real page load. Browsers installed
+(`playwright install chromium --with-deps`) and the spec run and passed live
+against a real `next dev` server in this session — not just typechecked.
+
+`packages/config` gained a third shared fragment, `vitest/node-library.js`
+(plain JS returning a plain config object — deliberately not
+`defineConfig(...)` + TypeScript, so this package doesn't need its own
+`vitest`/`vite` install just to type one object literal), which `apps/api`
+and `packages/maps-2gis` both extend via `mergeConfig`-free
+`defineConfig(nodeLibraryVitestConfig())` in their own `vitest.config.ts`.
+`apps/web` is NOT built on this fragment (jsdom + a React plugin is a
+different shape entirely) and has its own config.
+
+A real bug was found and fixed along the way, not worked around: Vite 8's
+default `vite:oxc` transform plugin (used by Vitest 5, only exercised once
+`packages/maps-2gis` got a `vitest.config.ts`) resolves a _chained_
+`extends` in a tsconfig relative to the original consuming file's directory
+instead of each intermediate fragment's own directory — unlike `tsc`, which
+resolves each hop correctly and was never affected (CR-007 shipped this
+exact chain — consumer → `packages/config/tsconfig/node-library.json` →
+`tsconfig.base.json` — and `turbo typecheck` has been green on it the whole
+time). Recorded and fixed as KI-018, resolved in the same session:
+`packages/config/tsconfig/node-library.json` no longer extends
+`tsconfig.base.json` itself; `packages/types`, `packages/maps-core`, and
+`packages/maps-2gis` each now extend both directly as a TS 5+ array
+(`"extends": ["../../tsconfig.base.json", "config/tsconfig/node-library.json"]`),
+so no hop is ever chained through an intermediate file. Verified `turbo
+build`/`typecheck` stayed green for all three afterward (they were never
+broken — only Vitest's transform was).
+
+`packages/db`, `packages/types`, `packages/ui`, `packages/maps-core`, and
+`packages/config` itself intentionally got no `test` script: zero domain
+tables / pure interfaces / intentionally empty / no logic of its own to
+test. `turbo test` silently skips a package with no `test` script — that is
+the correct, by-design outcome here, not an oversight.
+
+Full validation: `turbo run test lint typecheck build --force` — 24/24 tasks
+green across all 8 workspace members (17 tests total: 5 api + 11 maps-2gis +
+1 web, all passing); `pnpm format:check` clean; `pnpm lint:root` clean;
+Playwright's e2e spec run and passed live. CI (`.github/workflows/ci.yml`)
+already had a `Test` step (`pnpm test`) since CR-001 — it will now actually
+execute the three Vitest suites; a Playwright job was deliberately NOT added
+to CI in this task (KI-007 already names that CR-080's job — no MinIO
+service or migration step in CI yet either).
+Files: `packages/config/vitest/node-library.js` (new), `packages/config/
+package.json` (exports entry); `apps/api/vitest.config.ts`,
+`apps/api/src/app.test.ts` (new), `apps/api/src/app.ts` (logger tweak for
+`NODE_ENV=test`), `apps/api/package.json` (`test` script + `vitest`/`vite`/
+`config` devDependencies); `packages/maps-2gis/vitest.config.ts`,
+`packages/maps-2gis/src/provider.test.ts` (new), `packages/maps-2gis/
+package.json` (`test` script + `vitest`/`vite` devDependencies);
+`apps/web/vitest.config.mts`, `apps/web/vitest.setup.ts`,
+`apps/web/src/app/page.test.tsx`, `apps/web/playwright.config.ts`,
+`apps/web/e2e/home.spec.ts` (new), `apps/web/package.json` (`test`/
+`test:e2e` scripts + six new devDependencies); `packages/{types,maps-core,
+maps-2gis}/tsconfig.json` (array `extends`, KI-018 fix); `packages/config/
+tsconfig/node-library.json` (dropped its own `extends`, KI-018 fix);
+`docs/tasks.md` (CR-008 checked off); `.claude/context/{project-state,
+architecture-map,known-issues,current-task}.md` (KI-018 added/resolved).
+Dependencies: `vitest@^5.0.0`, `vite@^8.0.0` (apps/api, packages/maps-2gis,
+apps/web); `@vitejs/plugin-react@^6.1.1`, `jsdom@^30.0.1`,
+`@testing-library/react@^16.3.3`, `@testing-library/jest-dom@^7.0.1`,
+`@playwright/test@^1.63.0` (apps/web only). All dev-only, no new runtime
+dependency anywhere.
+Decisions: none new at the ADR level — the fixed stack already committed to
+Vitest + Playwright; this operationalizes that, it doesn't decide it.
+Follow-up: CR-009 (Configure Docker Compose) is next. CR-080 wires
+Playwright (and MinIO/migrations) into CI. KI-016 (2GIS response shapes
+unverified against a live account) is unaffected by this task's unit
+tests — they verify this adapter's own logic, not 2GIS's real API.
