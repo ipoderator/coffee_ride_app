@@ -167,6 +167,24 @@ Next action: verify a real connection (e.g. `docker compose up redis` +
 `redis-cli ping`, or exercise it from whichever of CR-050/CR-058 consumes it
 first) before or during whichever CR wires this client into a real code path.
 
+### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
+
+Status: open. Discovered: 2026-09-12 (CR-006).
+Problem: same root cause as KI-014 — Docker's daemon did not come up in this
+environment (confirmed a third time across CR-004/CR-005/CR-006; recorded as a
+standing environment constraint, not re-litigated per task — see
+`docker-desktop-unavailable` in Claude's project memory). `src/s3.ts`
+(`createS3Client`) was only typechecked/linted/built, never actually connected
+to a running MinIO.
+Impact: low — thin wrapper around `@aws-sdk/client-s3`'s constructor, not
+consumed by any running code path yet (first real use is CR-027 GPX upload or
+CR-086's cover image pipeline).
+Workaround: none needed yet — nothing calls this code.
+Next action: verify a real connection (e.g. `docker compose up minio` + a
+`PutObject`/`GetObject` round trip, or exercise it from whichever of CR-027/
+CR-086 consumes it first) before or during whichever CR wires this client into
+a real code path.
+
 ---
 
 ## Resolved

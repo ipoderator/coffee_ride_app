@@ -45,8 +45,18 @@ any route (ADR-004: only when justified — CR-050/CR-058). Live connection not
 verified this session — Docker's daemon didn't come up and no local Redis was
 available; see KI-014.
 
+...and an S3 client factory (CR-006, 2026-09-12, `src/s3.ts`):
+`@aws-sdk/client-s3` (portable across every S3-compatible provider — ADR-005
+leaves the production one deployment-specific — rather than MinIO's own
+client), `forcePathStyle: true` for MinIO/non-AWS compatibility. Same factory
+shape, same "not wired in yet" discipline (first consumer is CR-027 GPX
+upload or CR-086's cover image pipeline). Live connection also not verified —
+Docker's daemon has now failed to come up across all three of CR-004/CR-005/
+CR-006 in this environment (KI-015; recorded as a standing constraint in
+Claude's project memory, not re-investigated per task).
+
 `packages/types`, `packages/ui`, `packages/config`, `packages/maps-core`,
-`packages/maps-2gis` still do not exist — created by CR-006..CR-007 and later.
+`packages/maps-2gis` still do not exist — created by CR-007 and later.
 
 ## Target structure
 

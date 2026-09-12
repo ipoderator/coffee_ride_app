@@ -6,94 +6,104 @@ done
 
 ## Task ID
 
-CR-005 — Configure Redis
+CR-006 — Configure MinIO/S3 adapter
 
 ## Goal
 
-Add a Redis client factory to `apps/api`. Tooling only, mirroring CR-004's
-scope: ADR-004 ("Use for caching, rate limiting, and jobs only when
-justified") means there is no justified consumer yet — the notification queue
-is CR-050, rate limiting is CR-058. No separate `packages/redis`:
-`.claude/rules/architecture.md`'s package list doesn't call one out (unlike
-`packages/db`, which architecture.md explicitly assigns "schema/migrations/
-client"), and Redis here is a plain connection, not a schema-owning store —
-so it lives directly in `apps/api`, the only consumer per the fixed stack.
+Add an S3 client factory to `apps/api`. Tooling only, same pattern as
+CR-004 (`packages/db`) and CR-005 (Redis): no upload route consumes it yet
+(GPX upload is CR-027, cover images are CR-086 — which still has to decide
+"direct S3 vs proxy"), and no resilience wrapping (timeout/retry/circuit
+breaker) is added here — that's the cross-cutting CR-049
+("Timeout/retry/circuit-breaker utilities for external integrations (2GIS
+Maps, S3)"), a separate task by design.
+
+No separate `packages/storage-*` split: unlike maps (ADR-010 explicitly
+splits `packages/maps-core`/`packages/maps-2gis` because the 2GIS SDK is
+vendor-specific and must never leak into domain types), S3 is already a
+standardized, provider-neutral wire protocol — MinIO locally, "production
+provider is deployment-specific" (ADR-005). The official AWS SDK v3 speaks
+that same protocol against every S3-compatible provider (AWS S3, MinIO,
+Cloudflare R2, Backblaze B2, DigitalOcean Spaces, ...), so there's no
+vendor-SDK-leak problem to isolate behind a second package. `apps/api` is the
+only consumer, matching Redis/DB placement.
 
 ## Requirements
 
-1. `ioredis@^6.0.0` as the client — chosen over the official `redis` package
-   because CR-050 ("Async notification delivery via Redis queue") will almost
-   certainly use BullMQ, which requires `ioredis`; picking it now avoids a
-   client swap later.
-2. `apps/api/src/redis.ts`: `createRedisClient(url: string)` factory, same
-   shape as `packages/db`'s `createDbClient` (factory, not a singleton reading
-   `process.env` itself).
-3. Not wired into `app.ts`/any route in this task — same discipline as CR-004
-   not wiring `packages/db` into `apps/api` yet. `REDIS_URL` stays optional in
-   `src/env.ts` (already added in CR-003; nothing consumes it yet).
-4. Validate for real if at all possible (self-correction protocol) — attempted
-   `docker compose up redis`, Docker's daemon did not come up in this
-   environment (same issue as CR-004). Unlike CR-004, there was no
-   already-running local Redis to fall back to; the user explicitly declined
-   installing one via Homebrew for this session. Live connectivity is
-   therefore NOT verified this time — recorded honestly rather than skipped
-   silently. `pnpm format:check`/`lint:root`/`turbo lint|typecheck|build` are
-   still the checks that did run.
+1. `@aws-sdk/client-s3@^3.1131.0` — official, portable S3-compatible client.
+   Not `minio` (MinIO's own client): ADR-005 doesn't pin MinIO as the
+   production provider, so the more universally-portable AWS SDK is the
+   better long-term fit.
+2. `apps/api/src/s3.ts`: `createS3Client(config)` factory — same factory
+   shape as `createDbClient`/`createRedisClient`. Config needs `endpoint`,
+   `region`, `accessKeyId`, `secretAccessKey`, and `forcePathStyle: true`
+   (required for MinIO and most non-AWS S3-compatible providers — virtual-
+   hosted-style bucket URLs don't work against them).
+3. Not wired into any route/use case in this task — `S3_*` env vars stay
+   optional in `src/env.ts` (already added in CR-003, still nothing reads
+   them).
+4. Validate for real if possible (self-correction protocol): `docker compose
+up minio` — Docker's daemon has been unavailable all session (CR-004/
+   CR-005 hit the same wall). If still unavailable, this is a third
+   consecutive occurrence — worth flagging plainly rather than re-litigating
+   per task, and validating via typecheck/lint/build only, same honest
+   gap-recording style as KI-014.
 
 ## Acceptance criteria
 
-- `apps/api` still builds/typechecks/lints cleanly via `turbo` with the new file;
+- `apps/api` builds/typechecks/lints cleanly via `turbo` with the new file;
 - `apps/web`/`packages/db` stay green (regression check);
-- `docs/tasks.md`, `project-state.md`, `known-issues.md` (new KI for the
-  unverified live connection), `architecture-map.md`, `docs/changelog.md`
-  updated, honestly reflecting the validation gap;
+- `docs/tasks.md`, `project-state.md`, `known-issues.md`, `architecture-map.md`,
+  `docs/changelog.md` updated, honestly reflecting whatever validation was
+  actually possible;
 - `git diff` reviewed.
 
 ## Planned files
 
-`apps/api/package.json` (`ioredis`), `apps/api/src/redis.ts`;
+`apps/api/package.json` (`@aws-sdk/client-s3`), `apps/api/src/s3.ts`;
 `.claude/context/{project-state,architecture-map,known-issues,current-task}.md`,
 `docs/tasks.md`, `docs/changelog.md`.
 
 ## Implementation progress
 
-- [x] researched scope/versions, decided no separate package
-- [x] add `src/redis.ts`, `ioredis` dependency
+- [x] researched scope/versions, decided no separate package (same reasoning
+      as CR-005)
+- [x] add `src/s3.ts`, `@aws-sdk/client-s3` dependency
 - [x] `pnpm install`
-- [x] validate: turbo lint/typecheck/build (live connection NOT verified —
-      see Requirements §4, recorded as KI-014)
+- [x] validate: turbo lint/typecheck/build; attempted live MinIO check —
+      Docker unavailable (third consecutive occurrence, see Discovered issues)
 - [x] update context/docs
 
 ## Validation
 
 - [x] `turbo run lint|typecheck|build` — all exit 0 for `api`; `web`/`db` stay green
 - [x] `pnpm format:check` / root `eslint .` — still pass
-- [x] tried live validation twice (before and after implementation) — Docker
-      daemon never came up; no local Redis fallback; user declined a Homebrew
-      install for this session — genuinely NOT verified, recorded as KI-014
-      rather than silently skipped
+- [x] Docker daemon check — NOT_READY (third occurrence this session)
 - [x] `git status` reviewed
 - [n/a] `turbo test` — no test runner in `apps/api` yet (CR-008)
+- [n/a] live MinIO round trip — not possible without Docker; not re-attempted
+  via a fresh Homebrew install after CR-005 already declined one
 
 ## Discovered issues
 
-- `ioredis@6.0.0`'s default export has no construct signature under this
-  project's `esModuleInterop`/`moduleResolution: NodeNext` settings (`TS2351`),
-  despite working fine at runtime (confirmed via a quick `import()` probe that
-  both `default` and the named `Redis` export are functions). Fixed by
-  importing the named `{ Redis }` export instead, which is properly typed as
-  constructable.
-- Docker's daemon still hadn't come up on a second check after implementation
-  (checked before starting and again after) — not an intermittent issue,
-  genuinely unavailable for the whole session.
+- Docker's daemon has now failed to come up in this environment across all
+  three of CR-004, CR-005, and CR-006 — a confirmed standing constraint, not
+  one-off flakiness. Saved as a cross-session project memory
+  (`docker-desktop-unavailable`) so future tasks don't re-spend the ~4+ minute
+  wait before falling back.
+- No standing local fallback for Redis/MinIO the way Postgres had one (an
+  already-running Homebrew service) — noted in the same memory file so a
+  future session knows to ask before installing rather than assuming one
+  exists.
 
 ## Final result
 
-Done, with one honestly-recorded gap. `apps/api` has a Redis client factory
-(`ioredis`, matching `packages/db`'s factory shape) that typechecks/lints/builds
-cleanly but was never connected to a live Redis in this session (KI-014) — no
-Docker, no local fallback, user declined installing one. Not wired into any
-route yet, consistent with ADR-004 ("only when justified") and CR-004's
-precedent. `docs/tasks.md` (CR-005), `known-issues.md` (KI-014),
-`project-state.md`, `architecture-map.md`, `docs/changelog.md` all updated.
-Next logical task: CR-006 (Configure MinIO/S3 adapter).
+Done, with the same honestly-recorded gap pattern as CR-005. `apps/api` has an
+S3 client factory (`@aws-sdk/client-s3`, matching `createDbClient`/
+`createRedisClient`'s factory shape) that typechecks/lints/builds cleanly but
+was never connected to a live MinIO (KI-015) — Docker unavailable for the third
+time this session. Not wired into any route, consistent with the "first real
+consumer decides serving strategy" boundary (CR-027/CR-086). `docs/tasks.md`
+(CR-006), `known-issues.md` (KI-015), `project-state.md`, `architecture-map.md`,
+`docs/changelog.md` all updated; Docker unavailability also saved to
+cross-session memory. Next logical task: CR-007 (Configure shared packages).

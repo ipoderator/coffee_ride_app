@@ -685,3 +685,51 @@ Decisions: none new at the ADR level — the driver choice is an implementation
 detail of the capability ADR-004 already accepted.
 Follow-up: CR-006 (Configure MinIO/S3 adapter) is next. CR-050/CR-058 are the
 first real consumers of this client and should close KI-014 when they land.
+
+## 2026-09-12 — CR-006 — S3 client factory added to apps/api
+
+Summary: Adds an S3-compatible client factory directly to `apps/api` — no
+separate `packages/storage-*` split. Unlike maps (ADR-010 explicitly splits
+`packages/maps-core`/`packages/maps-2gis` because the 2GIS SDK is
+vendor-specific and must never leak into domain types), S3 is already a
+standardized wire protocol: MinIO locally, and ADR-005 leaves the production
+provider deployment-specific rather than pinning MinIO itself. `src/s3.ts`
+exports `createS3Client(config)` — same factory shape as `createDbClient`/
+`createRedisClient` — using `@aws-sdk/client-s3@^3.1131.0` rather than MinIO's
+own client, since the AWS SDK speaks the same protocol against every
+S3-compatible provider (AWS S3, MinIO, Cloudflare R2, Backblaze B2,
+DigitalOcean Spaces, ...) and there's no vendor lock-in to avoid by picking
+MinIO's SDK instead. `forcePathStyle: true` is set unconditionally — required
+for MinIO and most non-AWS providers, since virtual-hosted-style bucket URLs
+don't resolve against them.
+
+Not wired into any route/use case in this task: the first real consumer (GPX
+upload, CR-027; cover images, CR-086 — which still has to decide "direct S3 vs
+proxy" serving) also applies the resilience wrapping from CR-049
+(timeout/bounded-retry/circuit-breaker/"upload unavailable" fallback per
+`.claude/rules/resilience.md`) at the call site — none of that belongs in a
+bootstrap client factory. `S3_*` env vars stay optional in `src/env.ts`
+(already added in CR-003).
+
+Live validation gap, third occurrence: attempted `docker compose up minio`,
+but Docker's daemon has now failed to come up in this environment across all
+of CR-004, CR-005, and CR-006. Unlike CR-004 (local Homebrew Postgres was
+already running) there is no equivalent always-on local MinIO fallback, and
+installing one wasn't attempted again after CR-005's Redis install was
+declined. `src/s3.ts` was only typechecked/linted/built. Recorded as KI-015.
+Because this is now a confirmed, repeating environment constraint rather than
+one-off flakiness, it's also recorded in Claude's cross-session project memory
+(`docker-desktop-unavailable`) so future work in this repo doesn't re-spend
+several minutes waiting on `docker info` before falling back — the fallback
+strategy per service is decided once, not rediscovered per task.
+
+Files: `apps/api/package.json` (`@aws-sdk/client-s3`), `apps/api/src/s3.ts`
+(new); `docs/tasks.md` (CR-006 checked off); `.claude/context/{architecture-map,
+project-state,known-issues,current-task}.md` (KI-015).
+Dependencies: `@aws-sdk/client-s3` (runtime).
+Decisions: none new at the ADR level — the client choice is an implementation
+detail of the capability ADR-005 already accepted.
+Follow-up: CR-007 (Configure shared packages) is next. CR-027/CR-086 are the
+first real consumers of this client and should close KI-015 when they land;
+CR-049 adds the resilience wrapping both this and the Redis client (CR-005)
+still lack.

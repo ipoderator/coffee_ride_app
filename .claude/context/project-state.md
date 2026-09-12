@@ -9,8 +9,8 @@ MVP / Foundation
 None active. Pre-foundation hardening (CR-067..CR-072), CR-087 (repository-wide
 Prettier formatting), CR-001 (monorepo tooling initialized), CR-002 (`apps/web`
 scaffolded), CR-003 (`apps/api` scaffolded, includes CR-073), CR-004
-(`packages/db` scaffolded), and CR-005 (Redis client factory) all completed
-2026-09-12.
+(`packages/db` scaffolded), CR-005 (Redis client factory), and CR-006 (S3
+client factory) all completed 2026-09-12.
 
 ## Implemented
 
@@ -20,11 +20,14 @@ foundation, builds/typechecks/lints clean, placeholder home page smoke-tested.
 `apps/api` exists (CR-003): Fastify 5 + Zod (`@fastify/type-provider-zod`) + RFC 9457
 errors + OpenAPI, boots and was smoke-tested (health/404/validation/production
 placeholder-rejection all verified live, not just typechecked); it also has a Redis
-client factory now (CR-005, `src/redis.ts`, `ioredis`), not yet consumed
-(ADR-004: only when justified) and not live-verified this session (KI-014).
+client factory (CR-005, `src/redis.ts`, `ioredis`) and an S3 client factory
+(CR-006, `src/s3.ts`, `@aws-sdk/client-s3`), neither yet consumed (ADR-004: only
+when justified; first S3 consumer is CR-027/CR-086) and neither live-verified
+this session (KI-014, KI-015 — Docker's daemon was unavailable throughout, see
+`docker-desktop-unavailable` in Claude's project memory).
 `packages/db` exists (CR-004): Drizzle + `drizzle-kit`, zero domain tables by
 design, validated live against a real Postgres. No other `packages/*` exist yet —
-starts with CR-006.
+starts with CR-007.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -105,13 +108,25 @@ environment and, unlike CR-004, there was no already-running local Redis to
 fall back to — installing one via Homebrew for this session was declined, so
 the live connection is genuinely unverified (KI-014, not silently skipped).
 
+S3 client factory added 2026-09-12 (CR-006, see `docs/changelog.md`):
+`apps/api/src/s3.ts`, `@aws-sdk/client-s3@^3.1131.0` (portable across every
+S3-compatible provider — ADR-005 leaves the production one deployment-specific
+— not MinIO's own client), `forcePathStyle: true` for MinIO/non-AWS
+compatibility. No separate `packages/storage-*` split: unlike maps (ADR-010),
+S3 has no vendor-SDK-leak problem to isolate behind a second package. Not wired
+into any route (first consumer is CR-027 GPX upload or CR-086's cover image
+pipeline). Docker's daemon failed to come up a third consecutive time across
+CR-004/CR-005/CR-006 — recorded as a standing environment constraint in
+Claude's project memory (`docker-desktop-unavailable`) rather than
+re-investigated per task; live connection unverified (KI-015).
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-006 — Configure MinIO/S3 adapter.
+CR-007 — Configure shared packages.
 
 ## Important decisions
 
@@ -145,15 +160,16 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   (KI-008) and the Format check step (KI-011) are both resolved; `apps/web`
   (CR-002), `apps/api` (CR-003), and `packages/db` (CR-004) are workspace members
   CI can lint/typecheck/build, but none has a test runner yet (CR-008) and
-  `packages/types`/`ui`/`config`/`maps-*` still don't exist (CR-006..CR-007);
+  `packages/types`/`ui`/`config`/`maps-*` still don't exist (CR-007);
 - lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
   files — only `turbo lint` in CI does (KI-012, CR-010);
 - a Node package whose entry file uses only bare Node globals (no `node:` import)
   needs an explicit `"types": ["node"]` in its tsconfig or `tsc` silently fails to
   see `process`/`console`/etc. (KI-013, CR-007 centralizes the fix);
-- `apps/api`'s Redis client (CR-005) has never been connected to a live Redis —
-  Docker unavailable this session, no local fallback (KI-014, verify before
-  CR-050/CR-058 consume it);
+- `apps/api`'s Redis and S3 clients (CR-005, CR-006) have never been connected
+  to a live service — Docker unavailable all session, no local fallback for
+  either (KI-014, KI-015; verify before CR-050/CR-058/CR-027/CR-086 consume
+  them);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);

@@ -38,7 +38,10 @@ Decisions and config that are cheap now and a breaking change once code exists �
       to `apps/api` (`src/redis.ts`), no consumer yet (ADR-004: only when
       justified — CR-050/CR-058). Live connection not verified this session
       (KI-014). See `docs/changelog.md`.
-- [ ] CR-006 Configure MinIO/S3 adapter
+- [x] CR-006 Configure MinIO/S3 adapter — done 2026-09-12: `@aws-sdk/client-s3`
+      client factory added to `apps/api` (`src/s3.ts`), no consumer yet
+      (CR-027/CR-086 wire it in). Live connection not verified this session
+      (KI-015). See `docs/changelog.md`.
 - [ ] CR-007 Configure shared packages
 - [ ] CR-008 Configure Vitest/Playwright
 - [ ] CR-009 Configure Docker Compose
