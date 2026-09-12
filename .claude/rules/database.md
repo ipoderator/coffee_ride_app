@@ -8,6 +8,11 @@ PostgreSQL + Drizzle.
 - Add indexes based on actual query patterns.
 - Never manually alter production schema outside migrations.
 
+Time (ADR-012):
+- every timestamp column is `timestamptz`; bare `timestamp` is not used anywhere;
+- wall-clock intent tied to a place (a ride's start) also stores an IANA timezone
+  identifier, not a fixed UTC offset.
+
 Core invariants:
 - ride has an organizer;
 - registration belongs to one user and ride;

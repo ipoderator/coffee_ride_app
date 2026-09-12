@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -39,9 +42,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json → packageManager. Do not also pass
+      # `version:` here: action-setup fails when the two disagree.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -54,7 +57,10 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
-      - name: Lint
+      - name: Lint (root config)
+        run: pnpm lint:root
+
+      - name: Lint (workspaces)
         run: pnpm lint
 
       - name: Typecheck

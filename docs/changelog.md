@@ -225,3 +225,158 @@ Files: `docs/design.md` (§1 exception rewritten, §3 danger/on-danger rows in b
 Decisions: none — palette revision, not architecture.
 Follow-up: CR-063 implements these tokens. Remaining design open questions unchanged
 (`docs/design.md` §15).
+
+## 2026-09-11 — Audit — pre-foundation readiness review (scaling + deployment)
+
+Summary: At the user's request ("check everything, I will scale it and deploy it to a
+remote server"), audited the whole repository — configs, CI, infrastructure and contracts
+— since no application code exists yet. Found 23 issues and sorted them by one criterion:
+reversible or not. Irreversible ones (contract shape, data model, toolchain, secrets
+layout) were fixed now, before code exists; reversible ones (Dockerfile, backups,
+monitoring, Redis hardening, CI gaps) were written down as tracked tasks rather than built
+against an application that does not exist yet.
+
+Rationale for not "preparing everything first": the project already had twelve
+specification documents against zero lines of code, and the backlog already contains
+CR-044..048 and CR-049..052 as the "come back and harden" mechanism. Another preparation
+round would have deepened the imbalance.
+
+Files: `.claude/context/known-issues.md` (rewritten — 10 open, 5 resolved entries),
+`docs/tasks.md` (three new sections: Pre-foundation hardening, Deployment, Contract &
+model follow-ups — CR-067..CR-086).
+Decisions: ADR-011, ADR-012, ADR-013 — see the three entries below.
+Follow-up: CR-073 (env validation) lands inside CR-003; the Deployment section is picked
+up when there is something to deploy.
+
+## 2026-09-11 — CR-067/CR-068 — toolchain and build environment fixed
+
+Summary: Node 20 was still pinned in `.nvmrc`/`engines` despite reaching end-of-life in
+April 2026 — moved to Node 24 LTS (supported to April 2028). `packageManager` held
+`pnpm@10`, an incomplete descriptor that Corepack rejects and that also made
+`pnpm/action-setup` receive the version twice (from the action input and from
+`package.json`) — pinned to `pnpm@10.34.5` and dropped the duplicate `version:` input.
+
+`turbo.json` declared no environment at all, which matters because Turborepo 2 defaults to
+strict environment mode: tasks only receive variables that are declared. Left as it was,
+`next build` would have run without `NEXT_PUBLIC_*` and tests without `DATABASE_URL`, and
+the cache hash would not have tracked environment changes — a class of bug that looks like
+"configuration mysteriously empty". Declared `globalEnv`/`globalPassThroughEnv` and
+per-task `env`, and excluded `.next/cache/**` from build outputs.
+
+Two adjacent CI fixes while in the file: `pnpm lint` only walks workspace packages (none
+exist yet), so the root `eslint.config.mjs` was never actually executed in CI — added a
+`lint:root` step; and the workflow had no `permissions:` block — set `contents: read`.
+
+Files: `.nvmrc`, `package.json`, `turbo.json`, `.github/workflows/ci.yml`.
+Decisions: none (toolchain, not architecture).
+Follow-up: none.
+
+## 2026-09-11 — CR-071/CR-072 — secrets layout and port bindings
+
+Summary: `.env.example` exposed one `NEXT_PUBLIC_MAPS_2GIS_API_KEY` for every 2GIS
+product. MapGL legitimately ships in the browser bundle, but Geocoder and Directions are
+billed per request and must be called server-side — a single public key would have put a
+metered credential into every visitor's browser, against `.claude/rules/security.md`. Split
+into `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (public, domain-restricted) and `MAPS_2GIS_API_KEY`
+(server-only, `apps/api`/`packages/maps-2gis`), each with a comment explaining why it must
+stay on its side.
+
+`docker-compose.yml` published Postgres, Redis and MinIO on `0.0.0.0`. Harmless on a
+laptop, but on a host with a public IP that is three databases on the internet — bound
+them all to `127.0.0.1` and added a header comment explaining why the binding must not be
+widened, since this file will be read on a server eventually.
+
+Also documented how to generate `AUTH_SECRET` and noted that the API will refuse to boot
+in production on the placeholder (CR-073).
+
+Files: `.env.example`, `docker-compose.yml`.
+Decisions: none (security hygiene, not architecture).
+Follow-up: CR-073 implements the startup validation this comment promises.
+
+## 2026-09-11 — ADR-011 — API contract fixed before the first endpoint
+
+Summary: Three contract decisions taken while there are zero clients: all application
+endpoints move under `/v1` (`/health` stays unversioned, it is consumed by the deployment
+platform); every collection endpoint is cursor-paginated (`?limit=`/`?cursor=` →
+`{ items, nextCursor }`, default 20, max 100); every error is RFC 9457
+`application/problem+json` with a stable machine-readable `code` and per-field `errors[]`
+for Zod failures.
+
+Cursor rather than offset because the ride feed is sorted by start date and rides publish
+continuously — offset pagination silently skips and duplicates rows whenever the set
+shifts between requests, which is exactly what happens on the two lists that grow without
+bound (discovery and a popular ride's participant list).
+
+All three were markdown edits today; after forty endpoints exist they would each be a
+breaking change for every client.
+
+Files: `docs/decisions.md` (ADR-011), `docs/api.md` (rewritten with `/v1`, Pagination and
+Errors sections), `.claude/rules/backend.md` (links to ADR-011 so the acting agent reads
+it).
+Decisions: ADR-011.
+Follow-up: none — the rule applies to every endpoint task from CR-011 onward.
+
+## 2026-09-11 — ADR-012 — time storage fixed before the schema exists
+
+Summary: Every timestamp column is `timestamptz`; bare `timestamp` is not used anywhere.
+Additionally, `Ride` stores the IANA timezone of its start location.
+
+Russia spans eleven offsets, so "the ride starts at 08:00" is meaningless without knowing
+where. The instant answers "has it started yet"; the zone answers "what did the organizer
+mean and what should each participant see" — a participant in Moscow must not be shown
+04:00 for an 08:00 Krasnoyarsk ride. Store the identifier, never a fixed `+07:00` offset:
+offsets expire, zone identifiers survive tzdata updates.
+
+Deciding this before `packages/db` exists is the entire point — converting a populated
+`timestamp` column later means guessing, per row, which zone it was written in, and that
+information no longer exists by then.
+
+Files: `docs/decisions.md` (ADR-012), `docs/database.md` (new Time section),
+`.claude/rules/database.md`.
+Decisions: ADR-012.
+Follow-up: CR-004 implements it in the schema.
+
+## 2026-09-11 — ADR-013 — session store and origin topology decided
+
+Summary: Resolves the part of ADR-006 that had been Pending since it was written (backlog
+CR-062), and the deployment topology it depends on — the cookie policy is only decidable
+once the origin layout is known, so both were decided together after discussion with the
+user.
+
+Sessions are database-backed: the cookie carries an opaque token, the `Session` row stores
+its SHA-256 hash (a database dump must not hand over working sessions). Cookie is
+httpOnly/Secure/SameSite=Lax, 30 days, extended at most once per day. Logout deletes the
+row; a password change revokes every session of that user. The deciding argument over JWT
+was revocation, not performance: this platform holds participant contact and emergency
+data, so "log out everywhere" and "block this account" must take effect immediately, and a
+JWT would need a revocation list — reintroducing server-side state in a second store.
+
+Topology: one origin — `example.com` serves Next.js, `example.com/api/*` is proxied to
+Fastify. Consequences, all deliberate: no CORS at all; `SameSite=Lax` needs no
+`SameSite=None` exception; CSRF protection is `SameSite=Lax` plus an `Origin`/`Referer`
+check on unsafe methods, which is the concrete mechanism `.claude/rules/security.md`
+required to be recorded rather than left implicit.
+
+ADR-006's own text was left untouched per the append-only rule; only its `Status:` line now
+points at ADR-013.
+
+Files: `docs/decisions.md` (ADR-013 + ADR-006 status line), `.claude/rules/security.md`
+(session and CSRF/CORS rules), `docs/auth.md` (session shape + "before production"
+checklist items now resolved), `docs/tasks.md` (CR-062 checked off).
+Decisions: ADR-013.
+Follow-up: CR-012 implements it. A future mobile client cannot use browser cookies the
+same way — that gets its own ADR when it actually exists, not now.
+
+## 2026-09-11 — Audit follow-up — repository has never matched its own Prettier config
+
+Summary: While validating the changes above, `prettier --check .` failed on 37 files —
+and failed identically on the initial commit, so this predates all current work. CI's
+`Format check` step therefore fails before reaching lint or typecheck, for reasons
+unrelated to whatever is being tested. The differences are purely cosmetic (blank lines
+after headings and before lists) but rewrite every markdown file end to end, so they were
+deliberately NOT folded into today's content changes — `.claude/rules/git.md` forbids
+mixing unrelated refactors with substantive work, and a few hundred lines of whitespace
+churn would have buried the actual diff.
+Files: none changed for this entry; recorded as CR-087 and KI-011.
+Decisions: none.
+Follow-up: CR-087 — run Prettier over the repository as one formatting-only commit.

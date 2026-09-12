@@ -1,13 +1,31 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": ["CI"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "S3_*",
+        "AUTH_SECRET",
+        "MAPS_2GIS_API_KEY"
+      ]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": [
+        "NEXT_PUBLIC_*",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "S3_*",
+        "AUTH_SECRET",
+        "MAPS_2GIS_API_KEY"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -16,10 +34,26 @@
       "dependsOn": ["^typecheck"]
     },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": ["^test"],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "S3_*",
+        "AUTH_SECRET",
+        "MAPS_2GIS_API_KEY"
+      ]
     },
     "test:e2e": {
-      "cache": false
+      "cache": false,
+      "env": [
+        "NEXT_PUBLIC_*",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "S3_*",
+        "AUTH_SECRET",
+        "MAPS_2GIS_API_KEY"
+      ]
     }
   }
 }

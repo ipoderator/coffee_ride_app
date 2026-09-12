@@ -4,13 +4,25 @@
 MVP / Foundation
 
 ## Current task
-None yet.
+None active. Pre-foundation hardening (CR-067..CR-072) completed 2026-09-11.
 
 ## Implemented
-Harness and project specification only. Application implementation has not started.
+Harness, project specification, and pre-foundation decisions. Application implementation
+has not started — no `apps/*` or `packages/*` exist.
 
-Version control is live: git repository initialized on branch `main`, entire harness
-committed, remote `origin` = `https://github.com/ipoderator/coffee_ride_app` (public).
+Version control is live: git repository on branch `main`, remote `origin` =
+`https://github.com/ipoderator/coffee_ride_app` (public).
+
+Hardened 2026-09-11 before CR-001 (see `docs/changelog.md`):
+- Node 24 LTS, `pnpm@10.34.5` pinned exactly; CI runs the root ESLint config and has a
+  restricted token;
+- `turbo.json` declares its environment (Turborepo 2 strict env mode);
+- API contract fixed: `/v1`, cursor pagination, RFC 9457 errors (ADR-011);
+- time model fixed: `timestamptz` everywhere + ride-local IANA timezone (ADR-012);
+- sessions and origin topology decided: database-backed sessions, single origin with
+  `/api` behind the proxy (ADR-013);
+- 2GIS keys split into public MapGL and server-only Geocoder/Directions;
+- local infrastructure ports bound to `127.0.0.1`.
 
 ## In progress
 None.
@@ -23,48 +35,50 @@ See `docs/decisions.md`. Notably:
 - ADR-008: modular monolith, not microservices — failure isolation via
   `.claude/rules/resilience.md`, not via service boundaries.
 - ADR-009: feature-module architecture for organizer/participant cabinets — see
-  `.claude/rules/extensibility.md`. Both cabinets will keep growing; new features
-  register into shared surfaces rather than branching into them.
-- ADR-006: email+password auth, capability-based authorization (not a rigid role enum).
-  Full checklist in `.claude/rules/security.md`.
+  `.claude/rules/extensibility.md`.
+- ADR-006 + ADR-013: email+password, capability-based authorization, database-backed
+  sessions, single-origin deployment with `SameSite=Lax` + `Origin` check for CSRF and no
+  CORS. Full checklist in `.claude/rules/security.md`.
 - ADR-010: maps provider (2GIS) accessed only through `packages/maps-core` /
-  `packages/maps-2gis` adapter split, so the provider can be swapped later.
-- Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette, no
-  neon/vivid accents, warm neutral base with one muted teal-green accent; metric
-  presentation modeled on Strava/TrainingPeaks/Rouvy information design. One deliberate
-  exception: `danger` is a bright red (`#D42B20` / `#FF5A4F`), reserved for cancellation
-  and failure, allowed as a filled badge.
+  `packages/maps-2gis` adapter split.
+- ADR-011: `/v1` prefix, cursor pagination on every collection, RFC 9457 error envelope.
+- ADR-012: `timestamptz` everywhere; `Ride` also stores its start location's IANA zone.
+- Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
+  warm neutral base with one muted teal-green accent; metric presentation modeled on
+  Strava/TrainingPeaks/Rouvy. One exception: `danger` is a bright red (`#D42B20` /
+  `#FF5A4F`), reserved for cancellation and failure, allowed as a filled badge.
 
 ## Known limitations
-- Production map provider (2GIS) credentials/configuration are not present.
-- Concrete session store (database-backed vs JWT) is the remaining open part of ADR-006.
-- Production notification provider is pending.
-- Production S3 provider is deployment-specific.
-- `packages/maps-core`/`packages/maps-2gis` adapter split not yet implemented (CR-053).
-- Security/extensibility rules are documented but not yet enforced by code — CR-057
-  through CR-062 and CR-053 through CR-056 are the implementation tasks.
-- `docs/api.md` now lists auth endpoints (verify-email, forgot/reset-password) and a
-  `/health` endpoint that have no implementation yet — contract-first, per usual.
-- CI fails at `pnpm install --frozen-lockfile` until CR-001 creates `pnpm-lock.yaml` and
-  the workspace packages — expected until Foundation lands, not a regression.
-- Redis has no healthcheck in `docker-compose.yml` (postgres and minio do).
-- CR-056's lint rule against direct 2GIS SDK imports is not implemented yet, so the
-  ADR-010 boundary is currently held by review discipline only.
-- `docs/design.md` exists but nothing implements it yet — CR-063..CR-066 are the
-  implementation tasks, and CR-063/CR-064 block the first UI screen (CR-011).
-- Design open questions: cover-image aspect ratio, discovery-map clustering, wordmark
-  (`docs/design.md` §15).
+Full list with IDs and next actions: `.claude/context/known-issues.md`. In short:
+- nothing exists for deployment — no Dockerfile, manifest, proxy config, backups,
+  observability (KI-001, KI-002, KI-006; CR-074..CR-079);
+- Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
+- MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
+- CI cannot test uploads and does not run e2e (KI-007, CR-080); it stays red at
+  `pnpm install --frozen-lockfile` until CR-001 (KI-008, expected);
+- contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
+  the event loop, cover image pipeline (KI-009, CR-083..CR-086);
+- the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);
+- production 2GIS credentials, notification provider (ADR-007 Pending) and S3 provider are
+  still absent;
+- `docs/api.md` describes auth and `/health` endpoints that have no implementation
+  (contract-first, deliberate);
+- `docs/design.md` exists but nothing implements it — CR-063/CR-064 block CR-011.
 
 ## Do not break
 - documented stack;
 - domain terminology;
 - API/database boundaries;
+- the API contract shape: `/v1`, cursor pagination, RFC 9457 errors (ADR-011);
+- `timestamptz` + ride-local timezone (ADR-012);
+- session revocation semantics and the single-origin/no-CORS posture (ADR-013);
 - server-side registration invariants;
 - server-side authorization checks (never UI-only — `.claude/rules/security.md`);
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
   `packages/maps-2gis` — `.claude/rules/maps.md`);
+- the loopback binding of infrastructure ports in `docker-compose.yml`;
 - feature-module isolation between organizer/participant cabinet features
   (`.claude/rules/extensibility.md`).
 
 ## Last updated
-2026-09-10
+2026-09-11

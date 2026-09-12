@@ -8,8 +8,9 @@ Quick orientation:
 - Authentication answers "who". Authorization answers "what they can do". They are
   enforced separately, server-side — see `.claude/rules/security.md`.
 - Target architecture: email + password, Auth.js-compatible sessions (ADR-006, Accepted).
-  The one remaining open piece is the concrete session store (database-backed vs JWT) —
-  see `docs/decisions.md` ADR-006 and `docs/tasks.md` CR-062.
+  The session store question is settled: database-backed sessions, single origin with
+  `/api` behind the proxy, `SameSite=Lax` + `Origin` check for CSRF, no CORS —
+  see `docs/decisions.md` ADR-013 and `.claude/rules/security.md`.
 - Organizer mutations require server-side ownership/permission checks, not just a UI gate.
 
 Do not re-add authentication/authorization requirements here — add them to

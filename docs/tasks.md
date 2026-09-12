@@ -1,5 +1,22 @@
 # MVP Backlog
 
+## Pre-foundation hardening
+Decisions and config that are cheap now and a breaking change once code exists — done
+2026-09-11 before CR-001, see `docs/changelog.md`.
+- [x] CR-067 Node 24 LTS, exact `packageManager` version, CI token permissions, root lint
+      actually running in CI
+- [x] CR-068 Declare environment in `turbo.json` (Turborepo 2 strict env mode)
+- [x] CR-069 API contract: `/v1` prefix, cursor pagination, RFC 9457 errors — ADR-011
+- [x] CR-070 `timestamptz` everywhere + ride-local IANA timezone — ADR-012
+- [x] CR-071 Split 2GIS keys: public MapGL vs server-side Geocoder/Directions
+- [x] CR-072 Bind local infrastructure ports to `127.0.0.1`
+- [ ] CR-087 Run Prettier over the whole repository as one isolated commit — nothing
+      in it has ever matched `.prettierrc`, so CI's `Format check` step fails on 37
+      files independently of any feature work. Keep it a formatting-only commit
+      (`.claude/rules/git.md`: no mixing).
+- [ ] CR-073 Zod environment validation at API startup; refuse to boot in production on
+      placeholder/missing values (implemented inside CR-003)
+
 ## Foundation
 - [ ] CR-001 Initialize pnpm/Turborepo monorepo
 - [ ] CR-002 Configure Next.js web
@@ -102,4 +119,35 @@ is not done (`docs/definition-of-done.md`).
 - [ ] CR-059 Email verification flow (gates organizer publish action)
 - [ ] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
 - [ ] CR-061 Security headers (helmet-equivalent) + CSRF mechanism for cookie sessions
-- [ ] CR-062 Session store decision (database-backed vs JWT) — resolves remaining part of ADR-006
+- [x] CR-062 Session store decision — database-backed sessions + single-origin `/api`,
+      decided 2026-09-11 in ADR-013; implemented by CR-012
+
+## Deployment
+Deliberately deferred until there is something to deploy (see `docs/changelog.md`,
+2026-09-11). These are not "nice to have" — nothing ships to a server without them.
+- [ ] CR-074 `Dockerfile` for `apps/web` and `apps/api` + `.dockerignore` (multi-stage,
+      non-root user, Next.js standalone output)
+- [ ] CR-075 Production manifest: reverse proxy serving the web app and `/api` on one
+      origin (ADR-013), TLS, resource limits, restart policy
+- [ ] CR-076 Migrations as an explicit deploy step — safe when several API instances start
+      at once (never on application boot)
+- [ ] CR-077 Redis hardening: password, AOF persistence (the notification queue lives
+      there — CR-050), healthcheck
+- [ ] CR-078 PostgreSQL backups + a restore actually verified, not just scheduled
+- [ ] CR-079 Structured logging (pino + request id) and error reporting; background job
+      failures must be visible (`.claude/rules/resilience.md`)
+- [ ] CR-080 CI gaps: MinIO service, migration step, Playwright e2e job
+- [ ] CR-081 Full production environment variable set in `.env.example` + deployment
+      documentation
+- [ ] CR-082 Pin `minio/minio` to a release tag; review base image versions
+
+## Contract & model follow-ups
+Found during the 2026-09-11 audit, cheaper before the related feature is built.
+- [ ] CR-083 Idempotency for `POST /v1/rides/:id/register` (network retry must not create
+      a second registration; the DB constraint is the backstop, not the design)
+- [ ] CR-084 Decide the geo query approach for map discovery (bbox/radius): PostGIS vs
+      built-in types + index strategy — needed by CR-026
+- [ ] CR-085 GPX parsing must not block the event loop: size limit, streaming or worker —
+      needed by CR-027
+- [ ] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
+      (direct S3 vs proxy) — needed by CR-017

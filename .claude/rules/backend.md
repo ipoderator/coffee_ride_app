@@ -22,5 +22,11 @@ Registration must atomically:
 - prevent duplicate active registration;
 - create/update waitlist state when applicable.
 
-Use consistent errors.
-Never leak stack traces or database internals.
+Every endpoint follows the contract fixed in `docs/decisions.md` → ADR-011:
+- versioned path (`/v1/...`); `/health` is the one unversioned exception;
+- collections are paginated (`?limit=`/`?cursor=`, `{ items, nextCursor }`) — a new
+  collection endpoint without pagination is a contract bug;
+- errors use `application/problem+json` (RFC 9457) with a stable machine-readable
+  `code`, and `errors[]` for Zod validation failures.
+
+Never leak stack traces or database internals in `detail` or anywhere else.

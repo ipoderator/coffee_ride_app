@@ -28,15 +28,18 @@ else's, using the same login.
 - **Logout**: invalidates the current session.
 - **Password reset**: request by email → single-use, time-limited token → set new
   password. Same generic response whether or not the email exists.
-- **Session**: httpOnly/Secure/SameSite cookie; explicit expiry/refresh policy (defined
-  during CR-012, recorded in `docs/changelog.md` once decided — the exact session store,
-  database-backed vs JWT, is still open, see ADR-006).
+- **Session**: database-backed (ADR-013). The cookie is httpOnly/Secure/SameSite=Lax and
+  carries an opaque token; the `Session` row stores its hash. 30 days, extended at most
+  once a day. Logout deletes the session; a password change revokes all of the user's
+  sessions.
 
 ## Before production
 
-- select the concrete session store (database-backed sessions vs JWT) — currently open;
-- define cookie/security settings and CSRF mechanism (see `security.md`);
-- define session expiry/refresh policy;
+- ~~select the concrete session store~~ — decided: database-backed sessions (ADR-013);
+- ~~define cookie/security settings and CSRF mechanism~~ — decided: single origin,
+  `SameSite=Lax` + `Origin` check on unsafe methods, no CORS (ADR-013);
+- ~~define session expiry/refresh policy~~ — decided: 30 days, rolling, extended at
+  most once per day (ADR-013);
 - confirm password hashing parameters (Argon2id/bcrypt) against current guidance;
 - define email verification and password-reset email delivery (ties to ADR-007
   notifications decision, still Pending);

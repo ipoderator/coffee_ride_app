@@ -40,10 +40,15 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
 - Password reset tokens are single-use and time-limited (e.g. 15–30 min), invalidated
   after use/expiry. Requesting a reset for a non-existent email returns the same response
   as for an existing one (no account enumeration).
-- Rate-limit `/auth/login`, `/auth/register`, `/auth/forgot-password` specifically, per IP
+- Rate-limit `/v1/auth/login`, `/v1/auth/register`, `/v1/auth/forgot-password`, per IP
   and per account, more aggressively than general API rate limits.
-- Sessions use httpOnly, Secure, SameSite cookies with explicit expiry/refresh behavior —
-  not eternally valid, not silently refreshed on every request without a policy.
+- Sessions are database-backed (ADR-013): the cookie carries an opaque token, the
+  `Session` row stores its SHA-256 hash — never the token itself. Cookie is
+  httpOnly, Secure, SameSite=Lax, Path=/. Lifetime 30 days, rolling: `expiresAt` is
+  extended at most once per day, not silently on every request.
+- Revocation must actually revoke: logout deletes the row, a password change revokes
+  every session of that user, a block takes effect on the next request. Any session
+  cache (Redis) is invalidated on revocation — Postgres stays the source of truth.
 - OAuth providers can be added later (Auth.js-compatible architecture) but are not
   required for MVP — don't block CR-011/CR-012 on selecting one.
 - 2FA is out of scope for MVP; the auth/session design should not preclude adding it
@@ -68,9 +73,13 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
 - Apply standard security headers on API responses (e.g. `@fastify/helmet` or
   equivalent): CSP, X-Content-Type-Options, frame-ancestors/X-Frame-Options,
   Referrer-Policy.
-- Cookie-based sessions need CSRF protection (double-submit token, or SameSite sized to
-  the actual risk) — the concrete mechanism is decided and recorded (`docs/changelog.md`)
-  when CR-012 is implemented, not left implicit.
+- CSRF (decided in ADR-013, not left implicit): single origin — `example.com` serves
+  the web app, `example.com/api/*` is proxied to the API — so protection is
+  `SameSite=Lax` plus an `Origin`/`Referer` check on every unsafe method
+  (POST/PATCH/DELETE). A double-submit token is not required under one origin.
+- No CORS: cross-origin browser access is not a supported configuration. Do not add a
+  permissive CORS policy "just in case" — if a genuine second origin appears, that is
+  an ADR, not a config tweak.
 
 ## Dependencies
 

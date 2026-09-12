@@ -22,4 +22,14 @@ Important invariants:
 - capacity is server-side and atomic;
 - private participant data is restricted.
 
+## Time
+
+See `docs/decisions.md` → ADR-012.
+
+- every timestamp column is `timestamptz`, never bare `timestamp`;
+- `Ride` additionally stores the IANA timezone of its start location
+  (`Europe/Moscow`, `Asia/Krasnoyarsk`, …) — the instant answers "has it started",
+  the zone answers "what does the organizer's 08:00 mean". Store the identifier,
+  never a fixed offset.
+
 Use migrations for every schema change.

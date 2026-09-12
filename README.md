@@ -66,7 +66,7 @@ email/password auth (ADR-006).
   `.claude/rules/resilience.md`, not deployment topology.
 - **Feature-module cabinets** (ADR-009) — organizer and participant dashboards are built
   as independently-extensible feature modules; see `.claude/rules/extensibility.md`.
-- **Capability-based authorization** (ADR-006) — no rigid role enum; a user can be both
+- **Capability-based authorization** (ADR-006, sessions/topology in ADR-013) — no rigid role enum; a user can be both
   organizer and participant. Full checklist in `.claude/rules/security.md`.
 - **Provider-swappable maps** (ADR-003, ADR-010) — 2GIS is the chosen provider, accessed
   only through `packages/maps-core`'s interface; `packages/maps-2gis` is the only package
@@ -74,7 +74,8 @@ email/password auth (ADR-006).
 
 ## Still open (see `docs/decisions.md` for full status)
 
-- concrete session store: database-backed vs JWT (rest of ADR-006, resolved at CR-062/CR-012);
+- deployment: nothing exists yet — no Dockerfile, manifest, proxy config, backups or
+  observability (`docs/tasks.md` → Deployment, `.claude/context/known-issues.md`);
 - production notification provider (ADR-007, Pending);
 - production S3 provider (ADR-005 accepted as capability; concrete provider is
   deployment-specific);

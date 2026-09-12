@@ -1,3 +1,12 @@
+# Local development infrastructure only.
+#
+# Every port is bound to 127.0.0.1 deliberately: on a machine with a public IP a bare
+# "5432:5432" publishes Postgres/Redis/MinIO to the internet. Do not widen these
+# bindings — if a service must be reachable from another host, put it behind the
+# reverse proxy instead.
+#
+# This file is not a production manifest — see docs/tasks.md → Deployment.
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -6,7 +15,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +27,7 @@ services:
   redis:
     image: redis:8-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -29,8 +38,8 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio12345
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     healthcheck:
