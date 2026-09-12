@@ -34,7 +34,10 @@ Decisions and config that are cheap now and a breaking change once code exists �
       scaffolded (Drizzle + drizzle-kit + `postgres` driver), zero domain
       tables by design (first table lands with CR-011). See
       `docs/changelog.md`.
-- [ ] CR-005 Configure Redis
+- [x] CR-005 Configure Redis — done 2026-09-12: `ioredis` client factory added
+      to `apps/api` (`src/redis.ts`), no consumer yet (ADR-004: only when
+      justified — CR-050/CR-058). Live connection not verified this session
+      (KI-014). See `docs/changelog.md`.
 - [ ] CR-006 Configure MinIO/S3 adapter
 - [ ] CR-007 Configure shared packages
 - [ ] CR-008 Configure Vitest/Playwright

@@ -6,133 +6,94 @@ done
 
 ## Task ID
 
-CR-004 — Configure PostgreSQL + Drizzle
+CR-005 — Configure Redis
 
 ## Goal
 
-Scaffold `packages/db`: Drizzle ORM + Postgres driver, migration tooling
-(`drizzle-kit`), a connection-factory client. Tooling only — zero domain tables.
-Asked the user directly (one focused question, not a full `/grill-me` round):
-empty schema (packages/db owns client + migrations, no tables) vs shipping a first
-`users` table now. User picked the recommended option: **empty schema**. The
-`users` table (and every other domain table) is added later via the
-`db-migration` skill, at the point a real feature (starting CR-011, User
-registration) actually needs it — mirrors how CR-002/CR-003 shipped zero domain
-routes/screens.
+Add a Redis client factory to `apps/api`. Tooling only, mirroring CR-004's
+scope: ADR-004 ("Use for caching, rate limiting, and jobs only when
+justified") means there is no justified consumer yet — the notification queue
+is CR-050, rate limiting is CR-058. No separate `packages/redis`:
+`.claude/rules/architecture.md`'s package list doesn't call one out (unlike
+`packages/db`, which architecture.md explicitly assigns "schema/migrations/
+client"), and Redis here is a plain connection, not a schema-owning store —
+so it lives directly in `apps/api`, the only consumer per the fixed stack.
 
 ## Requirements
 
-1. `packages/db` matches `pnpm-workspace.yaml` (`packages/*`).
-2. Versions checked against npm registry: `drizzle-orm@^0.45.2`,
-   `drizzle-kit@^0.31.10` (dev), Postgres driver `postgres@^3.4.9` (postgres.js —
-   Drizzle's currently favored driver for plain Postgres, lighter than `pg`),
-   `typescript` pinned exactly `6.0.3` (same ceiling as `apps/web`/`apps/api`),
-   `tsx` (for the migrate script), `@types/node`, `eslint` + own flat config
-   (mirrors `apps/api`'s pattern — `packages/config` doesn't exist yet, CR-007).
-3. `src/schema/index.ts`: empty schema module (documents the per-entity-file
-   convention for when tables are added), `src/client.ts`: `createDbClient(
-connectionString)` factory (a factory, not a global singleton reading
-   `process.env` itself — `packages/db` is a library, `apps/api` owns env
-   validation per `.claude/rules/architecture.md`'s dependency direction).
-   `src/migrate.ts`: standalone script applying pending migrations (used by
-   CR-076's deploy step later, and to validate this task now).
-4. `drizzle.config.ts` — dialect `postgresql`, schema path, migrations output
-   folder, reads `DATABASE_URL` from the environment only for drizzle-kit's own
-   CLI invocation (not committed anywhere as a value).
-5. Every migration is a real generated file (`drizzle-kit generate`), never
-   `drizzle-kit push` (`.claude/rules/database.md`: "every schema change requires
-   a migration").
-6. `apps/api`/`apps/web` are NOT wired to depend on `packages/db` in this task —
-   that starts when a real route needs it (CR-011). Keeps this task's diff scoped
-   to the package itself, like CR-002/CR-003 didn't touch each other.
-7. Validate the full pipeline for real, not just typecheck: since the committed
-   schema has zero tables, temporarily add one scratch table, run `docker compose
-up postgres`, `drizzle-kit generate`, apply via the migrate script, confirm via
-   `psql` that the table exists, then remove the scratch table, its generated
-   migration file(s)/journal, and drop it from the live DB — committed state ends
-   with zero tables/migrations, same discipline as CR-002/CR-003's temporary test
-   routes.
+1. `ioredis@^6.0.0` as the client — chosen over the official `redis` package
+   because CR-050 ("Async notification delivery via Redis queue") will almost
+   certainly use BullMQ, which requires `ioredis`; picking it now avoids a
+   client swap later.
+2. `apps/api/src/redis.ts`: `createRedisClient(url: string)` factory, same
+   shape as `packages/db`'s `createDbClient` (factory, not a singleton reading
+   `process.env` itself).
+3. Not wired into `app.ts`/any route in this task — same discipline as CR-004
+   not wiring `packages/db` into `apps/api` yet. `REDIS_URL` stays optional in
+   `src/env.ts` (already added in CR-003; nothing consumes it yet).
+4. Validate for real if at all possible (self-correction protocol) — attempted
+   `docker compose up redis`, Docker's daemon did not come up in this
+   environment (same issue as CR-004). Unlike CR-004, there was no
+   already-running local Redis to fall back to; the user explicitly declined
+   installing one via Homebrew for this session. Live connectivity is
+   therefore NOT verified this time — recorded honestly rather than skipped
+   silently. `pnpm format:check`/`lint:root`/`turbo lint|typecheck|build` are
+   still the checks that did run.
 
 ## Acceptance criteria
 
-- `packages/db` builds/typechecks/lints cleanly via `turbo`;
-- `drizzle-kit generate` runs cleanly against the empty schema (no error, no
-  spurious migration);
-- proven live: a scratch table can be generated, migrated onto the real
-  docker-compose Postgres, and queried — then fully removed before commit;
-- `pnpm lint:root` / `format:check` still pass at the repo root; `apps/web`/
-  `apps/api` stay green (regression check);
-- `docs/database.md` still accurately describes reality (still true — no tables
-  changed);
-- `docs/tasks.md`, `project-state.md`, `known-issues.md`, `architecture-map.md`,
-  `docs/changelog.md` updated;
-- `git diff` reviewed — no scratch migration/table artifacts, no `dist`/
-  `node_modules`/`.env` committed.
+- `apps/api` still builds/typechecks/lints cleanly via `turbo` with the new file;
+- `apps/web`/`packages/db` stay green (regression check);
+- `docs/tasks.md`, `project-state.md`, `known-issues.md` (new KI for the
+  unverified live connection), `architecture-map.md`, `docs/changelog.md`
+  updated, honestly reflecting the validation gap;
+- `git diff` reviewed.
 
 ## Planned files
 
-`packages/db/package.json`, `tsconfig.json`, `eslint.config.mjs`, `.gitignore`,
-`drizzle.config.ts`, `src/schema/index.ts`, `src/client.ts`, `src/migrate.ts`;
+`apps/api/package.json` (`ioredis`), `apps/api/src/redis.ts`;
 `.claude/context/{project-state,architecture-map,known-issues,current-task}.md`,
 `docs/tasks.md`, `docs/changelog.md`.
 
 ## Implementation progress
 
-- [x] asked scope question, user picked empty-schema (recommended)
-- [x] scaffold `packages/db` files
+- [x] researched scope/versions, decided no separate package
+- [x] add `src/redis.ts`, `ioredis` dependency
 - [x] `pnpm install`
-- [x] validate live against a real Postgres (scratch table, then removed) —
-      Docker daemon didn't come up in this environment, used local Homebrew
-      Postgres 14 instead (same protocol/dialect, sufficient to prove the
-      pipeline)
+- [x] validate: turbo lint/typecheck/build (live connection NOT verified —
+      see Requirements §4, recorded as KI-014)
 - [x] update context/docs
 
 ## Validation
 
-- [x] `turbo run lint|typecheck|build` — all exit 0 for `db`; `web`/`api` stay green
+- [x] `turbo run lint|typecheck|build` — all exit 0 for `api`; `web`/`db` stay green
 - [x] `pnpm format:check` / root `eslint .` — still pass
-- [x] `drizzle-kit generate` on the empty (committed) schema: "0 tables", no
-      spurious migration file, only the initial empty
-      `migrations/meta/_journal.json`
-- [x] scratch validation: added a throwaway table → `drizzle-kit generate`
-      produced a real SQL migration → applied via `src/migrate.ts` → confirmed
-      via `psql` (`\d`, insert, select) AND via `createDbClient` + Drizzle
-      query (proves the client factory + schema typing, not just raw SQL) →
-      removed the table from schema, deleted the scratch migration file, and
-      dropped the scratch database
-- [x] `git status` reviewed — no `dist`/scratch migration/`.env` staged
-- [n/a] `turbo test` — no test runner in `packages/db` yet (CR-008)
+- [x] tried live validation twice (before and after implementation) — Docker
+      daemon never came up; no local Redis fallback; user declined a Homebrew
+      install for this session — genuinely NOT verified, recorded as KI-014
+      rather than silently skipped
+- [x] `git status` reviewed
+- [n/a] `turbo test` — no test runner in `apps/api` yet (CR-008)
 
 ## Discovered issues
 
-- Docker Desktop's daemon did not come up within several minutes in this
-  environment (`docker compose up postgres` failed to connect; `open -a
-Docker` + waiting didn't help). Used the machine's existing local Homebrew
-  PostgreSQL 14 instance with a scratch database instead — real Postgres, same
-  wire protocol, sufficient to validate Drizzle/drizzle-kit end-to-end. Not
-  filed as a KI: this is an environment quirk of this session, not a defect in
-  the repo's `docker-compose.yml`.
-- TypeScript's automatic `@types` inclusion did not pick up Node's ambient
-  globals (`process`/`console`/`URL`/`import.meta.url`) in `src/migrate.ts`
-  despite `@types/node` being correctly installed — needed an explicit
-  `"types": ["node"]` in `packages/db/tsconfig.json`. `apps/api` never hit this
-  because every file there already imports something from `fastify` (which
-  references Node builtin types), incidentally pulling `@types/node` in;
-  `migrate.ts` uses only bare globals, no `node:`-prefixed import. Filed as
-  KI-013 — CR-007 should centralize this into the shared Node tsconfig
-  fragment `packages/config` will own.
-- `drizzle.config.ts` can't live in the same `tsc` program as `src/**` (its
-  `rootDir: "src"` conflicts with a file outside `src/`) — removed it from
-  `tsconfig.json`'s `include`; `drizzle-kit` transpiles/runs its own config
-  file independently, so it doesn't need our program to include it, and ESLint
-  still lints it separately (not tied to the tsconfig's `include`).
+- `ioredis@6.0.0`'s default export has no construct signature under this
+  project's `esModuleInterop`/`moduleResolution: NodeNext` settings (`TS2351`),
+  despite working fine at runtime (confirmed via a quick `import()` probe that
+  both `default` and the named `Redis` export are functions). Fixed by
+  importing the named `{ Redis }` export instead, which is properly typed as
+  constructable.
+- Docker's daemon still hadn't come up on a second check after implementation
+  (checked before starting and again after) — not an intermittent issue,
+  genuinely unavailable for the whole session.
 
 ## Final result
 
-Done. `packages/db` exists with zero domain tables (by design, confirmed with
-the user); the full Drizzle/drizzle-kit/Postgres pipeline was proven live with a
-scratch table, then fully cleaned up. `apps/api`/`apps/web` are untouched —
-`packages/db` isn't consumed anywhere yet, deliberately (CR-011 wires it in).
-`docs/tasks.md` (CR-004), `known-issues.md` (KI-013), `project-state.md`,
-`architecture-map.md`, `docs/changelog.md`, `.prettierignore` all updated. Next
-logical task: CR-005 (Configure Redis).
+Done, with one honestly-recorded gap. `apps/api` has a Redis client factory
+(`ioredis`, matching `packages/db`'s factory shape) that typechecks/lints/builds
+cleanly but was never connected to a live Redis in this session (KI-014) — no
+Docker, no local fallback, user declined installing one. Not wired into any
+route yet, consistent with ADR-004 ("only when justified") and CR-004's
+precedent. `docs/tasks.md` (CR-005), `known-issues.md` (KI-014),
+`project-state.md`, `architecture-map.md`, `docs/changelog.md` all updated.
+Next logical task: CR-006 (Configure MinIO/S3 adapter).

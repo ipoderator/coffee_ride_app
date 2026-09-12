@@ -150,6 +150,23 @@ Next action: CR-007 ("Configure shared packages") should put this in the shared
 Node-target tsconfig fragment `packages/config` will own, so every future
 Node package gets it by default instead of rediscovering this per package.
 
+### KI-014 — `apps/api`'s Redis client was never connected to a live Redis
+
+Status: open. Discovered: 2026-09-12 (CR-005).
+Problem: Docker's daemon did not come up in this environment (same issue as
+CR-004's Postgres validation), and unlike CR-004 there was no already-running
+local Redis to fall back to — installing one via Homebrew for this session was
+explicitly declined. `src/redis.ts` (`createRedisClient`) was therefore only
+typechecked/linted/built, never actually connected to a running Redis.
+Impact: low — the file is a thin, well-known-library wrapper (construct
+`ioredis.Redis` with a URL and `maxRetriesPerRequest`), and it isn't consumed
+by any running code path yet (ADR-004: no justified use until CR-050/CR-058).
+Still, "never actually connected" is a real gap, not a formality.
+Workaround: none needed yet — nothing calls this code.
+Next action: verify a real connection (e.g. `docker compose up redis` +
+`redis-cli ping`, or exercise it from whichever of CR-050/CR-058 consumes it
+first) before or during whichever CR wires this client into a real code path.
+
 ---
 
 ## Resolved

@@ -38,8 +38,15 @@ genuine drizzle-kit-initialized empty state. TypeScript pinned to `6.0.3` (same
 ceiling as `apps/web`/`apps/api`); needed an explicit `"types": ["node"]` in its
 tsconfig — see KI-013.
 
+`apps/api` also gained a Redis client factory (CR-005, 2026-09-12,
+`src/redis.ts`): `ioredis` (chosen for future BullMQ compatibility — CR-050's
+notification queue), same factory shape as `createDbClient`. Not wired into
+any route (ADR-004: only when justified — CR-050/CR-058). Live connection not
+verified this session — Docker's daemon didn't come up and no local Redis was
+available; see KI-014.
+
 `packages/types`, `packages/ui`, `packages/config`, `packages/maps-core`,
-`packages/maps-2gis` still do not exist — created by CR-005..CR-007 and later.
+`packages/maps-2gis` still do not exist — created by CR-006..CR-007 and later.
 
 ## Target structure
 

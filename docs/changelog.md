@@ -642,3 +642,46 @@ Decisions: none new at the ADR level.
 Follow-up: CR-005 (Configure Redis) is next. CR-011 adds the first real table
 (`users`) and wires `apps/api` to depend on `packages/db`, exercising this
 scaffold for real.
+
+## 2026-09-12 — CR-005 — Redis client factory added to apps/api
+
+Summary: Adds a Redis client factory directly to `apps/api` — no separate
+`packages/redis`, since `.claude/rules/architecture.md`'s package list doesn't
+call one out (unlike `packages/db`, which architecture.md explicitly assigns
+"schema/migrations/client"); Redis here is a plain connection with no schema to
+own, and `apps/api` is the only consumer per the fixed stack (`apps/web` never
+touches it). `src/redis.ts` exports `createRedisClient(url, options?)` — same
+factory shape as `packages/db`'s `createDbClient` — using `ioredis@^6.0.0`
+rather than the official `redis` package, because CR-050 ("Async notification
+delivery via Redis queue") will almost certainly use BullMQ, which requires
+`ioredis`; picking it now avoids a client swap later.
+
+Not wired into `app.ts` or any route in this task: ADR-004 ("Use for caching,
+rate limiting, and jobs only when justified") means there is no justified
+consumer yet — the notification queue is CR-050, rate limiting is CR-058.
+`REDIS_URL` stays optional in `src/env.ts` (already added in CR-003; still
+nothing reads it). Same "factory exists, not consumed yet" discipline CR-004
+used for `packages/db`.
+
+Honest gap, not silently skipped: attempted live validation the same way as
+CR-004 (`docker compose up redis`), but Docker's daemon did not come up in this
+environment — and unlike CR-004, there was no already-running local Redis to
+fall back to. Installing one via Homebrew for this session was explicitly
+declined by the user, so `src/redis.ts` was only typechecked/linted/built, never
+actually connected to a live Redis. Recorded as KI-014, to be closed once
+whichever of CR-050/CR-058 first wires this client into a real code path (or
+sooner, if Docker becomes available).
+
+One typing fix along the way: `ioredis@6.0.0`'s default export isn't
+constructable under this project's `esModuleInterop`/`moduleResolution:
+NodeNext` settings (`TS2351`), even though it works fine at runtime — switched
+to the named `{ Redis }` export, which does carry a proper construct signature.
+
+Files: `apps/api/package.json` (`ioredis`), `apps/api/src/redis.ts` (new);
+`docs/tasks.md` (CR-005 checked off); `.claude/context/{architecture-map,
+project-state,known-issues,current-task}.md` (KI-014).
+Dependencies: `ioredis` (runtime).
+Decisions: none new at the ADR level — the driver choice is an implementation
+detail of the capability ADR-004 already accepted.
+Follow-up: CR-006 (Configure MinIO/S3 adapter) is next. CR-050/CR-058 are the
+first real consumers of this client and should close KI-014 when they land.

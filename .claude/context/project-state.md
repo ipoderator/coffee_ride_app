@@ -8,8 +8,9 @@ MVP / Foundation
 
 None active. Pre-foundation hardening (CR-067..CR-072), CR-087 (repository-wide
 Prettier formatting), CR-001 (monorepo tooling initialized), CR-002 (`apps/web`
-scaffolded), CR-003 (`apps/api` scaffolded, includes CR-073), and CR-004
-(`packages/db` scaffolded) all completed 2026-09-12.
+scaffolded), CR-003 (`apps/api` scaffolded, includes CR-073), CR-004
+(`packages/db` scaffolded), and CR-005 (Redis client factory) all completed
+2026-09-12.
 
 ## Implemented
 
@@ -18,9 +19,12 @@ operational (CR-001). `apps/web` exists (CR-002): Next.js 15 + Tailwind v4 + sha
 foundation, builds/typechecks/lints clean, placeholder home page smoke-tested.
 `apps/api` exists (CR-003): Fastify 5 + Zod (`@fastify/type-provider-zod`) + RFC 9457
 errors + OpenAPI, boots and was smoke-tested (health/404/validation/production
-placeholder-rejection all verified live, not just typechecked). `packages/db` exists
-(CR-004): Drizzle + `drizzle-kit`, zero domain tables by design, validated live
-against a real Postgres. No other `packages/*` exist yet — starts with CR-005.
+placeholder-rejection all verified live, not just typechecked); it also has a Redis
+client factory now (CR-005, `src/redis.ts`, `ioredis`), not yet consumed
+(ADR-004: only when justified) and not live-verified this session (KI-014).
+`packages/db` exists (CR-004): Drizzle + `drizzle-kit`, zero domain tables by
+design, validated live against a real Postgres. No other `packages/*` exist yet —
+starts with CR-006.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -92,13 +96,22 @@ tsconfig for bare Node globals to resolve (KI-013 — apps/api never hit this
 because every file there already imports something from `fastify`, which
 pulls in `@types/node` incidentally).
 
+Redis client factory added 2026-09-12 (CR-005, see `docs/changelog.md`):
+`apps/api/src/redis.ts`, `ioredis@^6.0.0` (chosen for future BullMQ
+compatibility — CR-050's notification queue needs it), same factory shape as
+`createDbClient`. Not wired into any route (ADR-004: "only when justified" —
+no consumer until CR-050/CR-058). Docker's daemon did not come up in this
+environment and, unlike CR-004, there was no already-running local Redis to
+fall back to — installing one via Homebrew for this session was declined, so
+the live connection is genuinely unverified (KI-014, not silently skipped).
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-005 — Configure Redis.
+CR-006 — Configure MinIO/S3 adapter.
 
 ## Important decisions
 
@@ -132,12 +145,15 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   (KI-008) and the Format check step (KI-011) are both resolved; `apps/web`
   (CR-002), `apps/api` (CR-003), and `packages/db` (CR-004) are workspace members
   CI can lint/typecheck/build, but none has a test runner yet (CR-008) and
-  `packages/types`/`ui`/`config`/`maps-*` still don't exist (CR-005..CR-007);
+  `packages/types`/`ui`/`config`/`maps-*` still don't exist (CR-006..CR-007);
 - lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
   files — only `turbo lint` in CI does (KI-012, CR-010);
 - a Node package whose entry file uses only bare Node globals (no `node:` import)
   needs an explicit `"types": ["node"]` in its tsconfig or `tsc` silently fails to
   see `process`/`console`/etc. (KI-013, CR-007 centralizes the fix);
+- `apps/api`'s Redis client (CR-005) has never been connected to a live Redis —
+  Docker unavailable this session, no local fallback (KI-014, verify before
+  CR-050/CR-058 consume it);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);
