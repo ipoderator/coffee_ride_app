@@ -22,7 +22,7 @@ Read first: `.claude/rules/database.md`, `docs/database.md`.
    - uniqueness/partial-unique constraints where duplicates must be impossible (e.g. one
      active registration per user per ride);
    - `NOT NULL` and check constraints for required/bounded fields (e.g. capacity ≥ 0).
-   Application-level checks are a UX nicety on top of these, not a substitute.
+     Application-level checks are a UX nicety on top of these, not a substitute.
 
 4. **Indexes** based on actual query patterns you can point to (a filter, a join, a sort
    used in real code) — not speculative indexing.

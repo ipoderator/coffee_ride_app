@@ -4,6 +4,7 @@ Read persistent context (including the last 5-10 entries of `docs/changelog.md`)
 inspect the repository.
 
 Report:
+
 1. current branch;
 2. working tree;
 3. recent commits;

@@ -13,6 +13,7 @@ Participant: discover → inspect → register → receive updates → participa
 The repository is the persistent source of truth.
 
 Do not rely on chat history as the only project context. Before every non-trivial task, inspect:
+
 1. `.claude/CLAUDE.md`
 2. `.claude/context/project-state.md`
 3. `.claude/context/architecture-map.md`
@@ -75,6 +76,7 @@ For non-trivial work:
 `.claude/skills/` holds project-specific skills that encode the recurring workflows below
 as step-by-step procedures (triggered automatically by task description, same mechanism
 as any other Claude skill — no need to invoke them by name):
+
 - `new-cabinet-feature` — adding a feature to the organizer/participant dashboard (ADR-009).
 - `new-api-endpoint` — adding/changing a REST endpoint (layering, authz, validation).
 - `db-migration` — schema changes with invariant-protecting constraints.
@@ -90,12 +92,14 @@ rules file in full for anything the skill doesn't cover.
 Claude MUST verify its own work.
 
 After implementation, run the narrowest relevant:
+
 - tests;
 - typecheck;
 - lint;
 - build when relevant.
 
 Then inspect:
+
 - test output;
 - type errors;
 - lint errors;
@@ -104,6 +108,7 @@ Then inspect:
 - acceptance criteria.
 
 If an error is found:
+
 1. Diagnose the root cause.
 2. Fix the root cause, not merely the symptom.
 3. Re-run the failed check.
@@ -111,6 +116,7 @@ If an error is found:
 5. Repeat.
 
 Never:
+
 - ignore a failing check;
 - disable or weaken a test just to pass;
 - remove functionality to hide an error;
@@ -120,6 +126,7 @@ Never:
 ### Stop conditions
 
 Stop and report a blocker when:
+
 - the failure depends on an unavailable external service/credential;
 - requirements conflict and cannot be resolved from repository docs;
 - fixing one issue would require an unapproved architectural/product change;
@@ -130,6 +137,7 @@ Before stopping, preserve the current state and document the blocker in `.claude
 ## Context preservation protocol
 
 After every non-trivial completed task, update:
+
 - `.claude/context/project-state.md` (overwrite — it is a snapshot of current state)
 - `docs/changelog.md` (append a new entry — never edit/delete past entries)
 - `.claude/context/architecture-map.md` when structure changed
@@ -138,6 +146,7 @@ After every non-trivial completed task, update:
 - `.claude/context/known-issues.md` if issues were discovered or resolved
 
 Record:
+
 - what changed;
 - why;
 - important decisions;
@@ -164,6 +173,7 @@ entries need to be read for routine work.
 `.claude/context/current-task.md` is temporary working memory for the active task.
 
 It must contain:
+
 - task ID;
 - goal;
 - requirements;
@@ -210,6 +220,7 @@ Keep HTTP handlers thin.
 Server-side validation and authorization are mandatory.
 
 Never expose:
+
 - secrets;
 - tokens;
 - passwords;
@@ -226,6 +237,7 @@ Every schema change requires a migration.
 Important invariants should be enforced at the database level where practical.
 
 Registration must atomically protect:
+
 - registration availability;
 - participant capacity;
 - duplicate registration.
@@ -233,6 +245,7 @@ Registration must atomically protect:
 ## Quality gate
 
 A task is complete only if:
+
 - requested behavior is implemented;
 - acceptance criteria are satisfied;
 - relevant tests pass;

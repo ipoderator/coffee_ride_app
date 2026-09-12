@@ -3,6 +3,7 @@
 Do not implement.
 
 Read:
+
 - `.claude/context/project-state.md`;
 - `.claude/context/architecture-map.md`;
 - `.claude/context/known-issues.md`;
@@ -14,6 +15,7 @@ Read:
 Select the single smallest logical next task.
 
 Prefer tasks that:
+
 - unblock other work;
 - close known issues;
 - follow dependencies;

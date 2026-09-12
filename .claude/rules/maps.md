@@ -3,6 +3,7 @@
 Primary provider: 2GIS (MapGL JS API + Geocoder API + Directions/Routing API).
 
 Initial use cases:
+
 - map-based ride discovery;
 - start/finish markers;
 - route visualization;
@@ -11,6 +12,7 @@ Initial use cases:
 - geocoding where needed.
 
 Use provider-neutral internal concepts:
+
 - latitude;
 - longitude;
 - geometry;
@@ -49,17 +51,17 @@ export interface LatLng {
 
 export interface GeocodeResult {
   point: LatLng;
-  label: string;         // human-readable resolved address/place
+  label: string; // human-readable resolved address/place
   confidence?: number;
 }
 
 export interface RouteRequest {
-  points: LatLng[];      // ordered waypoints
+  points: LatLng[]; // ordered waypoints
   profile: 'cycling' | 'driving' | 'walking';
 }
 
 export interface RouteResult {
-  geometry: LatLng[];    // provider-neutral polyline as points, or GeoJSON LineString
+  geometry: LatLng[]; // provider-neutral polyline as points, or GeoJSON LineString
   distanceMeters: number;
   durationSeconds: number;
 }

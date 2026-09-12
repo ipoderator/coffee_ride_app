@@ -6,6 +6,7 @@ file operationalizes.
 Treat all client input as untrusted.
 
 Never:
+
 - expose secrets in browser bundles;
 - commit credentials;
 - trust client-provided userId/organizerId;
@@ -14,6 +15,7 @@ Never:
 - log passwords/tokens/private contact data.
 
 Protect:
+
 - auth endpoints;
 - organizer mutations;
 - participant contact/emergency data;

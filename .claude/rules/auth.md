@@ -5,6 +5,7 @@ Superseded by `.claude/rules/security.md` (Authentication + Authorization sectio
 pointer, not a second source of truth, so it can't silently drift from them again.
 
 Quick orientation:
+
 - Authentication answers "who". Authorization answers "what they can do". They are
   enforced separately, server-side — see `.claude/rules/security.md`.
 - Target architecture: email + password, Auth.js-compatible sessions (ADR-006, Accepted).

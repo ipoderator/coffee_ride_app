@@ -29,6 +29,7 @@ Keep server state separate from local UI state.
 ## Forms
 
 Important forms require:
+
 - runtime validation;
 - loading state;
 - server error handling;

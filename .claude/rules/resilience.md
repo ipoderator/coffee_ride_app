@@ -13,6 +13,7 @@ by async/sync split, not by process/deployment split.
 ## External integrations (2GIS, S3/MinIO, future notification provider)
 
 Every external call must have:
+
 - an explicit timeout (never rely on the default/no timeout);
 - a bounded number of retries with backoff, only for idempotent operations;
 - a circuit breaker (or equivalent short-circuit) so a degraded provider doesn't cascade
@@ -31,6 +32,7 @@ same transaction as a registration insert).
 Notification delivery, ride-update fan-out, and any other "nice to have but not required
 for the core action to succeed" side effect must run outside the request/response cycle
 and outside the critical transaction:
+
 - the triggering action (e.g. registration) commits first;
 - the side effect (e.g. sending a confirmation) is queued (Redis) and processed separately;
 - a failure in the queued job must be retried/logged, and must never roll back or block the

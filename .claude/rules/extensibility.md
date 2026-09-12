@@ -6,6 +6,7 @@ exist so adding feature N+1 does not risk breaking features 1..N.
 ## Feature modules, not shared mega-components
 
 Each cabinet feature is a self-contained module:
+
 ```
 apps/web/src/features/organizer/<feature-name>/
 apps/web/src/features/participant/<feature-name>/
@@ -34,6 +35,7 @@ render.
 ## Contracts change additively
 
 `packages/types` (shared types/DTOs) and the REST API (`docs/api.md`):
+
 - prefer adding new optional fields/params/endpoints over changing existing ones;
 - if an existing field's meaning or an endpoint's behavior must change in a
   backward-incompatible way, that is a breaking change and needs:

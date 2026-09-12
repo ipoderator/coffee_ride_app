@@ -15,6 +15,7 @@ this skill is the checklist, not a replacement for reading it).
    between both, it likely belongs in `packages/ui` as a component, not duplicated.
 
 2. **Scaffold the module**, not loose files:
+
    ```
    apps/web/src/features/<cabinet>/<feature-name>/
      components/
@@ -23,6 +24,7 @@ this skill is the checklist, not a replacement for reading it).
      types.ts     # feature-local types only — shared ones import from packages/types
      <feature>.test.tsx
    ```
+
    Do not import another feature module's internals directly. If logic must be shared,
    put it in `packages/ui` or a cross-cutting hook, not a feature-to-feature import.
 
@@ -34,7 +36,7 @@ this skill is the checklist, not a replacement for reading it).
 4. **Contracts stay additive.** If the feature needs a new API endpoint, follow the
    `new-api-endpoint` skill. If it needs a new shared type or a new `packages/ui` prop,
    add it as new/optional — do not change or remove an existing field/prop without
-   checking every current usage in *both* cabinets first.
+   checking every current usage in _both_ cabinets first.
 
 5. **Authorization.** If the feature exposes organizer-only or participant-only data,
    confirm the underlying API endpoint enforces that server-side

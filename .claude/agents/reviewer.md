@@ -3,6 +3,7 @@
 Senior reviewer. Do not modify code.
 
 Review current diff against:
+
 - product requirements;
 - current task acceptance criteria;
 - architecture;

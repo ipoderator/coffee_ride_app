@@ -3,6 +3,7 @@
 Keep commits focused.
 
 Before commit:
+
 - inspect `git status`;
 - inspect `git diff`;
 - run relevant checks;

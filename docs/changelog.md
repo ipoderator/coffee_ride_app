@@ -13,7 +13,7 @@ Newest entries at the bottom.
 When this file exceeds ~40 entries, move all but the most recent ~15 into
 `docs/changelog-archive/YYYY.md` (one file per year), preserving order and content exactly.
 Leave a one-line pointer at the top of this file's history section noting the archive exists.
-Commands (`/next`, `/status`) only need to read the last 5-10 entries of the *live* file —
+Commands (`/next`, `/status`) only need to read the last 5-10 entries of the _live_ file —
 the archive exists for humans and for deep audits, not for routine agent context.
 
 ## Format
@@ -380,3 +380,18 @@ churn would have buried the actual diff.
 Files: none changed for this entry; recorded as CR-087 and KI-011.
 Decisions: none.
 Follow-up: CR-087 — run Prettier over the repository as one formatting-only commit.
+
+## 2026-09-12 — CR-087 — repository reformatted to match Prettier config
+
+Summary: Ran `prettier --write .` across the whole repository as one isolated,
+formatting-only commit, closing KI-011. `prettier --check .` now passes on all 37
+previously-failing files (every markdown rules/skills/docs file, `docker-compose.yml`,
+`.github/dependabot.yml`). Changes are purely cosmetic: blank lines around headings and
+fenced code blocks, `*emphasis*` → `_emphasis_` markdown style, and YAML double quotes →
+single quotes (semantically identical, no escape sequences involved). No content, rule,
+or decision text changed; verified with `git diff -w` and manual review before commit.
+Files: 37 files reformatted; no content changes. `docs/tasks.md` (CR-087 checked off),
+`.claude/context/known-issues.md` (KI-011 resolved).
+Decisions: none.
+Follow-up: CI's `Format check` step should now pass once CI can run at all (still blocked
+on CR-001 per KI-008). Next task: CR-001.

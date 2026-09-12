@@ -15,6 +15,7 @@
 ## Dependency direction
 
 Allowed:
+
 - web → types/ui/maps-core
 - api → db/types/maps-core
 - db → types only when needed
@@ -22,6 +23,7 @@ Allowed:
   wire the concrete adapter behind the maps-core interface
 
 Forbidden:
+
 - web → db
 - db → web
 - ui → database
@@ -39,6 +41,7 @@ HTTP handlers should be thin.
 ## Feature boundaries
 
 Organize backend by capability where practical:
+
 - auth
 - users
 - organizers
@@ -53,6 +56,7 @@ Avoid giant cross-domain services.
 ## Change control
 
 For a significant architecture change:
+
 1. update `docs/architecture.md`;
 2. append an ADR to `docs/decisions.md`;
 3. explain migration/rollback implications;

@@ -1,28 +1,34 @@
 # Architecture Decision Log
 
 ## ADR-001 — Monorepo
+
 Status: Accepted.
 pnpm workspaces + Turborepo.
 
 ## ADR-002 — PostgreSQL + Drizzle
+
 Status: Accepted.
 Relational model and registration invariants.
 
 ## ADR-003 — 2GIS Maps
+
 Status: Accepted for initial Russian-market integration (superseded 2026-09-09: switched
 from Yandex Maps to 2GIS — see changelog).
 Credentials, quotas, APIs and terms must be verified during implementation. Use the 2GIS
 MapGL JS API for the web map, plus 2GIS Geocoder and Directions/Routing APIs as needed.
 
 ## ADR-004 — Redis
+
 Status: Accepted as capability.
 Use for caching, rate limiting, and jobs only when justified.
 
 ## ADR-005 — S3-compatible storage
+
 Status: Accepted.
 Local MinIO; production provider is deployment-specific.
 
 ## ADR-006 — Authentication & Authorization
+
 Status: Accepted (architecture and requirements). The session-store question left
 Pending here was resolved 2026-09-11 by ADR-013 (database-backed sessions) — the
 text below stands as written.
@@ -33,6 +39,7 @@ without a rewrite, but OAuth is not required for MVP.
 
 Full requirements are in `.claude/rules/security.md` — this ADR fixes the shape, not the
 implementation details:
+
 - authentication (who you are) and authorization (what you can do) are separate concerns,
   enforced separately, server-side, on every request;
 - authorization is capability-based, not a rigid role enum: every `User` is a participant
@@ -47,10 +54,12 @@ implementation details:
   must be made in a follow-up ADR before CR-012 ships.
 
 ## ADR-007 — Notifications
+
 Status: Pending.
 Start with in-app notifications; external provider later behind an adapter.
 
 ## ADR-008 — Modular monolith, not microservices (for MVP)
+
 Status: Accepted.
 
 The application ships as a modular monolith (`apps/web`, `apps/api`, single Postgres
@@ -58,10 +67,11 @@ database) rather than a distributed set of microservices, for as long as it rema
 MVP-stage / single small team.
 
 Rationale:
+
 - Core invariants (registration availability, capacity, duplicate protection, waitlist —
   see `docs/database.md` / `rules/database.md`) require atomic, transactional guarantees.
   Splitting these across service boundaries would trade one DB transaction for a
-  distributed transaction/saga, which is a *harder* reliability problem, not an easier one.
+  distributed transaction/saga, which is a _harder_ reliability problem, not an easier one.
 - At MVP scale, the operational surface of real microservices (service discovery,
   inter-service auth, distributed tracing, N independent deployments, contract
   versioning) is itself a common source of outages, not a way to avoid them.
@@ -70,9 +80,10 @@ Rationale:
   `.claude/rules/resilience.md`.
 
 What this does NOT mean:
+
 - Internal code must still be organized into strict domain modules with clear boundaries
   (auth, users, organizers, rides, routes, registrations, notifications, reviews — see
-  `rules/backend.md` / `rules/architecture.md`), designed so any of them *could* be
+  `rules/backend.md` / `rules/architecture.md`), designed so any of them _could_ be
   extracted into a standalone service later if load/ownership genuinely requires it.
 - High-risk, naturally-async components (notification delivery, file/GPX processing) are
   built behind an interface and a queue from day one specifically so they can be extracted
@@ -83,6 +94,7 @@ scaling/on-call ownership, or the team splits across multiple services, or a com
 requirement forces isolation. Any such change must be a new ADR, not a silent drift.
 
 ## ADR-009 — Feature-module architecture for the organizer and participant cabinets
+
 Status: Accepted.
 
 Both cabinets (organizer dashboard, participant dashboard) will receive continuous new
@@ -91,6 +103,7 @@ organized as independent feature modules, not as shared mega-components with gro
 branching logic.
 
 Decision:
+
 - each cabinet feature (e.g. "manage waitlist", "ride updates composer", "saved rides")
   lives in its own folder with its own components, data-fetching hooks, and tests;
 - features register themselves into shared surfaces (dashboard navigation, widget areas)
@@ -110,6 +123,7 @@ Full mechanics are in `.claude/rules/extensibility.md`. See also ADR-008: this i
 inside the monolith, rather than to deployment topology.
 
 ## ADR-010 — Map provider behind a swappable adapter interface
+
 Status: Accepted.
 
 Even though 2GIS (ADR-003) is expected to remain the provider for the foreseeable future,
@@ -125,6 +139,7 @@ new adapter package and wiring it in, not a rewrite of ride/route/discovery feat
 The full interface contract is defined in `.claude/rules/maps.md`.
 
 ## ADR-011 — REST API contract: versioning, pagination, error format
+
 Status: Accepted.
 
 Three contract-level decisions taken together, before the first endpoint exists, because
@@ -210,6 +225,7 @@ how long `/v1` is kept alive and record the deprecation policy as its own ADR. U
 there is exactly one version and no deprecation machinery to maintain.
 
 ## ADR-012 — Time is stored as `timestamptz`, and a ride carries its own IANA timezone
+
 Status: Accepted.
 
 Two rules, fixed before `packages/db` exists because both are painful to retrofit — the
@@ -235,6 +251,7 @@ starts at 08:00" is only meaningful together with where it starts.
 The instant (`startsAt`, `timestamptz`) answers "has it started yet"; the zone answers
 "what does the organizer's 08:00 mean, and what should each participant see". Both are
 needed:
+
 - an organizer in Krasnoyarsk sets 08:00 local — that is the intent, and it must survive a
   future change to offset rules (Russia has changed them before, and per-region);
 - a participant browsing from Moscow must see the ride's local start time labelled as
@@ -259,6 +276,7 @@ If the product ever adds multi-day rides crossing a zone boundary, revisit wheth
 finish-side zone is also needed. Not a concern for MVP.
 
 ## ADR-013 — Database-backed sessions, single origin with `/api` behind the proxy
+
 Status: Accepted.
 
 Resolves the part of ADR-006 left Pending (backlog item CR-062) and fixes the deployment
@@ -311,7 +329,7 @@ all of them deliberate:
 - It does not mean the API may only ever be reached through the web app's origin. It means
   that today there is exactly one browser origin, so CORS has nothing to permit.
 - It does not preclude splitting web and API onto separate hosts later: the split that
-  would hurt is the *origin* split (cookies, CSRF), not the machine split. Two machines
+  would hurt is the _origin_ split (cookies, CSRF), not the machine split. Two machines
   behind the same proxy hostname keep every property above.
 
 ### When to revisit

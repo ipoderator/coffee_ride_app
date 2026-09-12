@@ -17,6 +17,7 @@ Conceptual model. Exact columns and indexes evolve through migrations.
 - Review — participant feedback.
 
 Important invariants:
+
 - ride has organizer;
 - active duplicate registration is forbidden;
 - capacity is server-side and atomic;

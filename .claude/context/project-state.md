@@ -1,12 +1,16 @@
 # Project State
 
 ## Phase
+
 MVP / Foundation
 
 ## Current task
-None active. Pre-foundation hardening (CR-067..CR-072) completed 2026-09-11.
+
+None active. Pre-foundation hardening (CR-067..CR-072) completed 2026-09-11; CR-087
+(repository-wide Prettier formatting) completed 2026-09-12.
 
 ## Implemented
+
 Harness, project specification, and pre-foundation decisions. Application implementation
 has not started — no `apps/*` or `packages/*` exist.
 
@@ -14,6 +18,7 @@ Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
 Hardened 2026-09-11 before CR-001 (see `docs/changelog.md`):
+
 - Node 24 LTS, `pnpm@10.34.5` pinned exactly; CI runs the root ESLint config and has a
   restricted token;
 - `turbo.json` declares its environment (Turborepo 2 strict env mode);
@@ -24,14 +29,22 @@ Hardened 2026-09-11 before CR-001 (see `docs/changelog.md`):
 - 2GIS keys split into public MapGL and server-only Geocoder/Directions;
 - local infrastructure ports bound to `127.0.0.1`.
 
+Reformatted 2026-09-12 (CR-087): whole repository now matches `.prettierrc`
+(`prettier --check .` passes); formatting-only, no content changed (see
+`docs/changelog.md`).
+
 ## In progress
+
 None.
 
 ## Next
+
 CR-001 — Initialize pnpm/Turborepo monorepo.
 
 ## Important decisions
+
 See `docs/decisions.md`. Notably:
+
 - ADR-008: modular monolith, not microservices — failure isolation via
   `.claude/rules/resilience.md`, not via service boundaries.
 - ADR-009: feature-module architecture for organizer/participant cabinets — see
@@ -49,13 +62,16 @@ See `docs/decisions.md`. Notably:
   `#FF5A4F`), reserved for cancellation and failure, allowed as a filled badge.
 
 ## Known limitations
+
 Full list with IDs and next actions: `.claude/context/known-issues.md`. In short:
+
 - nothing exists for deployment — no Dockerfile, manifest, proxy config, backups,
   observability (KI-001, KI-002, KI-006; CR-074..CR-079);
 - Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
 - MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
 - CI cannot test uploads and does not run e2e (KI-007, CR-080); it stays red at
-  `pnpm install --frozen-lockfile` until CR-001 (KI-008, expected);
+  `pnpm install --frozen-lockfile` until CR-001 (KI-008, expected); the Format check
+  step itself is now clean (KI-011 resolved by CR-087);
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);
@@ -66,6 +82,7 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 - `docs/design.md` exists but nothing implements it — CR-063/CR-064 block CR-011.
 
 ## Do not break
+
 - documented stack;
 - domain terminology;
 - API/database boundaries;
@@ -81,4 +98,5 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   (`.claude/rules/extensibility.md`).
 
 ## Last updated
-2026-09-11
+
+2026-09-12

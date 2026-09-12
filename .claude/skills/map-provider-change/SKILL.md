@@ -16,7 +16,7 @@ full `MapProvider` interface contract).
    if so, that change must work for every implemented provider, not just the new one.
 
 2. **New provider = new package**, `packages/maps-<provider>`, implementing the
-   `MapProvider` interface from `packages/maps-core`. This is the *only* package allowed
+   `MapProvider` interface from `packages/maps-core`. This is the _only_ package allowed
    to import that provider's SDK.
 
 3. **Implement resilience at the adapter level**, not in callers: timeout, bounded retry

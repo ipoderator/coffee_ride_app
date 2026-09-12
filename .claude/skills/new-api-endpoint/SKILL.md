@@ -15,9 +15,11 @@ Read first: `.claude/rules/backend.md`, `.claude/rules/security.md`, `docs/api.m
    the contract, not just documentation written after the fact.
 
 2. **Layer it correctly**, handlers stay thin:
+
    ```
    route/controller → validation (Zod) → use case/service → repository/db
    ```
+
    Business logic and ownership checks live in the service layer, not the route handler.
 
 3. **Validate all external input at runtime with Zod** — path/query/body. Reject before

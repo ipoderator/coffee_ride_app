@@ -1,10 +1,13 @@
 # Coffee Ride — Product Specification
 
 ## Goal
+
 A Russian platform for organized cycling rides.
 
 ## Participant
+
 Can:
+
 - sign up/login;
 - browse/filter rides;
 - view ride details;
@@ -16,7 +19,9 @@ Can:
 - review completed rides.
 
 ## Organizer
+
 Can:
+
 - create organizer profile;
 - create/edit/publish/cancel/finish rides;
 - manage registrations and waitlist;
@@ -24,21 +29,26 @@ Can:
 - define route/stops/services/requirements.
 
 ## Ride fields
+
 title, description, cover image, start, finish, date/time, participant limit, price, distance, duration, group pace, elevation gain, difficulty, bicycle type, age/experience requirements, helmet requirement, what to bring, route, stops, services, organizer, registration status.
 
 ## Bicycle types
+
 road, gravel, MTB, any.
 
 ## Services
+
 food, water, coffee, support vehicle, mechanic, medical support, transfer, bicycle transport, parking, changing room/shower.
 
 ## Lifecycle
+
 `draft → published → registration_open → registration_closed → started → finished`
 
 Cancellation:
 `published/registration_open/registration_closed → cancelled`
 
 ## MVP
+
 1. auth
 2. organizer profile
 3. ride creation/edit/publish
@@ -52,6 +62,7 @@ Cancellation:
 11. review
 
 ## Out of scope unless explicitly requested
+
 - full Strava replacement;
 - live GPS tracking;
 - social feed;

@@ -3,12 +3,14 @@
 Review only. Do not modify code.
 
 Read:
+
 - current task;
 - product requirements;
 - relevant architecture/rules;
 - git diff.
 
 Check:
+
 - correctness;
 - acceptance criteria;
 - architecture;

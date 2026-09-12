@@ -12,6 +12,7 @@ A backward-incompatible change introduces `/v2` for the affected endpoints and k
 alive until every client is migrated (`.claude/rules/extensibility.md`).
 
 ## Auth
+
 POST `/v1/auth/register`
 POST `/v1/auth/login`
 POST `/v1/auth/logout`
@@ -21,6 +22,7 @@ POST `/v1/auth/forgot-password`
 POST `/v1/auth/reset-password`
 
 ## Rides
+
 GET `/v1/rides` — collection, paginated
 GET `/v1/rides/:id`
 POST `/v1/rides`
@@ -31,6 +33,7 @@ POST `/v1/rides/:id/cancel`
 POST `/v1/rides/:id/finish`
 
 ## Registration
+
 POST `/v1/rides/:id/register`
 DELETE `/v1/rides/:id/register`
 GET `/v1/rides/:id/participants` — collection, paginated
@@ -38,6 +41,7 @@ POST `/v1/rides/:id/waitlist`
 DELETE `/v1/rides/:id/waitlist`
 
 ## Route
+
 POST `/v1/rides/:id/route`
 PATCH `/v1/rides/:id/route`
 DELETE `/v1/rides/:id/route`
@@ -46,14 +50,17 @@ PATCH `/v1/rides/:id/stops/:stopId`
 DELETE `/v1/rides/:id/stops/:stopId`
 
 ## Updates
+
 POST `/v1/rides/:id/updates`
 GET `/v1/rides/:id/updates` — collection, paginated
 
 ## Reviews
+
 POST `/v1/rides/:id/reviews`
 GET `/v1/rides/:id/reviews` — collection, paginated
 
 ## Health
+
 GET `/health` — reports DB/Redis/S3 status; must not fail hard if one dependency is
 degraded (CR-051, `.claude/rules/resilience.md`). Unversioned by design (ADR-011).
 
@@ -95,6 +102,7 @@ Every non-2xx response is `application/problem+json` per RFC 9457:
 - `detail` never leaks a stack trace, SQL, or driver internals (`.claude/rules/backend.md`).
 
 ## Rules
+
 - protected endpoints require auth;
 - organizer mutations require ownership;
 - input is runtime validated;
