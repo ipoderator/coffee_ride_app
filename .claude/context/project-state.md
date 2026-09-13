@@ -19,8 +19,8 @@ Foundation phase (CR-001..CR-010) is now fully done. CR-063 (Design tokens),
 CR-064 (Russian formatters + UI terminology mapping), CR-065 (Metric
 presentation components), and CR-066 (Shared state primitives) also completed
 2026-09-13 — Design-foundations phase (CR-063..CR-066) is now fully done.
-CR-011 (User registration) also completed 2026-09-13. CR-012 (Login/logout/
-session) is next.
+CR-011 (User registration) and CR-012 (Login/logout/session) also completed
+2026-09-13. CR-013 (Profile) is next.
 
 ## Implemented
 
@@ -221,6 +221,40 @@ is an architecture/tooling decision deferred pending an ADR, not fixed inside
 this ticket). Added a CI migration step (`.github/workflows/ci.yml`) so the new
 auth tests have real tables to run against in CI's fresh `postgres` service.
 
+Login/logout/session landed 2026-09-13 (CR-012, see `docs/changelog.md`):
+`POST /v1/auth/login`, `POST /v1/auth/logout`, `GET /v1/auth/me` on top of
+CR-011's `users` table. `packages/db` gained its second domain table,
+`sessions` (ADR-013's exact column list — `tokenHash`, `userId`, `createdAt`,
+`expiresAt`, `lastUsedAt`, `revokedAt`), migrated and live-verified against
+the same local scratch Postgres (Docker still unreachable, KI-019). Sessions
+are database-backed per ADR-013: opaque cookie token, only its SHA-256 hash
+persisted, 30-day rolling expiry extended at most once/day (unit-tested with
+an injected fake `now`, not a real wait). Login returns the identical
+`invalid_credentials` 401 for an unknown email and a wrong password — no
+account enumeration — including a dummy Argon2id verify on the unknown-email
+path. `apps/api` gained two new cross-cutting plugins: `plugins/auth.ts`
+(`requireAuth` preHandler, opt-in per route) and `plugins/csrf.ts` — ADR-013's
+CSRF mechanism's first real implementation, an `Origin`/`Referer` preHandler
+on every unsafe `/v1` method (register/verify-email now behind it too),
+allowing the request through when neither header is present. New required
+env var `WEB_ORIGIN`. `@fastify/cookie` added (no signing secret — the cookie
+carries only an opaque token, checked only against its DB-stored hash). 17
+new `apps/api` tests (32 total, up from 15), all green and stable across
+repeated runs — a real deadlock bug was found and fixed along the way (two
+Vitest test files running `TRUNCATE ... CASCADE` concurrently against
+overlapping tables took conflicting Postgres `ACCESS EXCLUSIVE` locks; fixed
+by switching every such `beforeEach` to `DELETE FROM users`, relying on the
+existing `ON DELETE CASCADE` foreign keys — row-level locks only, no more
+deadlock, verified stable across 3 repeated full-suite runs). `npx turbo run
+lint/typecheck/build/test` (run separately) and `format:check`/`lint:root`
+all green. Live-verified end to end against a real local Postgres + a real
+running `apps/api`: register → login (200 + cookie) → `GET /me` (200) →
+logout (204, cookie cleared, row hard-deleted — verified via a direct DB
+query) → `GET /me` with the same cookie (401) → login with a mismatched
+`Origin` (403 `csrf_origin_mismatch`), all via curl. KI-022's CSRF gap is now
+closed; its rate-limiting (CR-058) and `@fastify/helmet` (CR-061,
+now headers-only) gaps remain open.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -318,14 +352,11 @@ None.
 
 ## Next
 
-CR-012 — Login/logout/session. `users` now exists (CR-011) with a `passwordHash`
-column ready to check against; this ticket adds the database-backed session store
-(ADR-013), the login/logout/`GET /v1/auth/me` endpoints, and the cookie itself
-(httpOnly/Secure/SameSite=Lax, opaque token, `Session.tokenHash`). Read
-`.claude/rules/security.md`'s Authentication section (generic login-failure
-message — no account enumeration) and ADR-013 in `docs/decisions.md` before
-starting. CR-011's register response does NOT create a session by design — this
-ticket is where that starts mattering.
+CR-013 — Profile (`docs/tasks.md` has no detail beyond the title yet — scope it
+against `docs/product.md` before planning). `requireAuth` (CR-012,
+`apps/api/src/plugins/auth.ts`) and a real session cookie now exist, so this is
+the first ticket that can build an authenticated "my account" surface on top of
+them rather than the session infrastructure itself.
 
 ## Important decisions
 
@@ -378,10 +409,12 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   as of CR-011 (`node dist/server.js` crashes under `NODE_ENV=production`
   once `apps/api` has a real runtime — not type-only — consumer of `db`);
   resolving it is an architecture/tooling decision deferred pending an ADR;
-- KI-022 (new, CR-011): auth endpoints ship with an interim posture —
-  in-memory per-IP-only rate limiting (no Redis, no per-account limiting;
-  CR-058), no `@fastify/helmet`/CSRF check yet (CR-061). Low risk until CR-012
-  ships a real session, but do not deploy publicly before CR-061 lands;
+- KI-022 (CR-011, narrowed CR-012): auth endpoints still ship with an interim
+  posture — in-memory per-IP-only rate limiting (no Redis, no per-account
+  limiting; CR-058), no `@fastify/helmet` yet (CR-061, now headers-only).
+  The CSRF gap this entry originally tracked is closed as of CR-012
+  (`apps/api/src/plugins/csrf.ts`). Do not deploy publicly before CR-061
+  lands;
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);
@@ -421,4 +454,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-13 (CR-011)
+2026-09-13 (CR-012)

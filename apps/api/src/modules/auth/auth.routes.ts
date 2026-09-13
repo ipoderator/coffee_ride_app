@@ -1,8 +1,19 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
-import { registerRequestSchema, verifyEmailRequestSchema } from 'types';
+import {
+  loginRequestSchema,
+  registerRequestSchema,
+  verifyEmailRequestSchema,
+} from 'types';
 import type { Env } from '../../env.js';
-import { registerUser, verifyEmail } from './auth.service.js';
+import { requireAuth, SESSION_COOKIE_NAME } from '../../plugins/auth.js';
+import {
+  loginUser,
+  registerUser,
+  toPublicUser,
+  verifyEmail,
+} from './auth.service.js';
+import { createSession, revokeSession } from './session.js';
 
 const userResponseSchema = z.object({
   id: z.string(),
@@ -22,6 +33,14 @@ const registerResponseSchema = z.object({
 });
 
 const verifyEmailResponseSchema = z.object({
+  user: userResponseSchema,
+});
+
+const loginResponseSchema = z.object({
+  user: userResponseSchema,
+});
+
+const meResponseSchema = z.object({
   user: userResponseSchema,
 });
 
@@ -45,6 +64,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
   opts,
 ) => {
   const { env } = opts;
+  const isProd = env.NODE_ENV === 'production';
 
   app.post(
     '/register',
@@ -86,6 +106,66 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     },
     async (request, reply) => {
       const user = await verifyEmail(app.db, request.body.token);
+      return reply.status(200).send({ user });
+    },
+  );
+
+  app.post(
+    '/login',
+    {
+      schema: {
+        body: loginRequestSchema,
+        response: { 200: loginResponseSchema },
+      },
+      config: { rateLimit: AUTH_RATE_LIMIT },
+    },
+    async (request, reply) => {
+      // Generic `invalid_credentials` for both "no such account" and "wrong
+      // password" is enforced inside `loginUser` itself, not here
+      // (`.claude/rules/security.md`: no account enumeration).
+      const user = await loginUser(
+        app.db,
+        request.body.email,
+        request.body.password,
+      );
+
+      const session = await createSession(app.db, user.id);
+
+      reply.setCookie(SESSION_COOKIE_NAME, session.token, {
+        httpOnly: true,
+        // Plain HTTP in local dev (ADR-013 / this ticket's requirements) —
+        // `Secure` would silently drop the cookie over http://localhost.
+        secure: isProd,
+        sameSite: 'lax',
+        path: '/',
+        expires: session.expiresAt,
+      });
+
+      return reply.status(200).send({ user });
+    },
+  );
+
+  app.post('/logout', { preHandler: requireAuth }, async (request, reply) => {
+    const token = request.cookies[SESSION_COOKIE_NAME];
+    // `requireAuth` already 401s when the cookie is missing/invalid, so a
+    // valid raw token is guaranteed to be present here.
+    if (token) {
+      await revokeSession(app.db, token);
+    }
+
+    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+    return reply.status(204).send();
+  });
+
+  app.get(
+    '/me',
+    {
+      schema: { response: { 200: meResponseSchema } },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      // `requireAuth` guarantees `request.user` is set (401s otherwise).
+      const user = toPublicUser(request.user!);
       return reply.status(200).send({ user });
     },
   );

@@ -28,3 +28,23 @@ export type VerifyEmailRequest = z.infer<typeof verifyEmailRequestSchema>;
 export interface VerifyEmailResponse {
   user: User;
 }
+
+// CR-012 (`docs/decisions.md` ADR-013). Deliberately no password-length check
+// here unlike `registerRequestSchema` — a login attempt against an account
+// created before a policy tightened must still be checked against its real
+// hash, not rejected by client-side shape before it reaches the service
+// layer. `.claude/rules/security.md`: the generic `invalid_credentials`
+// error is what actually prevents account enumeration, not request shape.
+export const loginRequestSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(1),
+});
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+
+export interface LoginResponse {
+  user: User;
+}
+
+export interface MeResponse {
+  user: User;
+}

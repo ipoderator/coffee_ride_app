@@ -318,10 +318,10 @@ relevant to this issue either way. Still open; next action unchanged.
 
 ### KI-022 — Auth endpoints ship with an interim, weaker security posture than `.claude/rules/security.md`'s full checklist
 
-Status: open — tracked, not a regression. Discovered: 2026-09-13 (CR-011).
+Status: open — narrowed, not a regression. Discovered: 2026-09-13 (CR-011).
 Problem: CR-011 is the first ticket to add real auth endpoints
 (`POST /v1/auth/register`, `POST /v1/auth/verify-email`), but three items
-`.claude/rules/security.md` calls for are deliberately not yet in place,
+`.claude/rules/security.md` calls for were deliberately not yet in place,
 per the CR-011 plan's own documented scope boundaries (not oversights):
 (1) rate limiting on `/v1/auth/*` uses `@fastify/rate-limit`'s in-memory
 store, per-IP only (5/min) — no per-account limiting, and the counter resets
@@ -329,19 +329,21 @@ on every process restart / isn't shared across multiple `apps/api` instances;
 (2) no `@fastify/helmet` security headers (CSP, X-Content-Type-Options,
 frame-ancestors) on any response yet; (3) no `Origin`/`Referer` CSRF check
 on unsafe methods yet.
-Impact: low today — CR-012 (login/session) hasn't shipped a cookie-bearing
-session yet, so there is nothing for a CSRF check to protect and no session
-to attack via a missing security header. But `/v1/auth/register` is live and
-publicly reachable the moment `apps/api` is deployed, with only IP-based
-in-memory rate limiting standing between it and abuse.
-Workaround: none needed before CR-012 ships a real session. Do not deploy
-`apps/api` publicly before at least CR-061 (headers + CSRF) lands, even
-though nothing in CR-011/CR-012's own acceptance criteria blocks on it.
+Update 2026-09-13 (CR-012): item (3) is resolved — `apps/api/src/plugins/
+csrf.ts` now rejects a mismatched `Origin`/`Referer` on every unsafe `/v1`
+method (`403 csrf_origin_mismatch`), live-verified with curl against a real
+Postgres + running `apps/api`. Items (1) and (2) remain open.
+Impact: lower than at CR-011 time — the CSRF gap that mattered most once a
+real cookie session existed (CR-012) is now closed. `/v1/auth/register` and
+the new session-bearing endpoints are still reachable with only IP-based
+in-memory rate limiting and no security-header hardening standing between
+them and abuse.
+Workaround: none needed for CSRF. Still do not deploy `apps/api` publicly
+before CR-061 (security headers) lands.
 Next action: CR-058 (`docs/tasks.md`) upgrades auth rate limiting to a
 Redis-backed, per-IP-and-per-account limiter once KI-014 (Redis unverified in
-this environment) is resolved; CR-061 adds `@fastify/helmet` + the
-`Origin`/`Referer` CSRF check ADR-013 already specifies. Revisit this entry
-once both land.
+this environment) is resolved; CR-061 (now headers-only, see `docs/tasks.md`)
+adds `@fastify/helmet`. Revisit this entry once both land.
 
 ---
 

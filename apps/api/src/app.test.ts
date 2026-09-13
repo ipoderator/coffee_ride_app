@@ -12,6 +12,7 @@ const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
   DATABASE_URL: 'postgresql://test:test@localhost:5432/unused',
+  WEB_ORIGIN: 'http://localhost:3000',
 });
 
 describe('GET /health', () => {

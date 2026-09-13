@@ -18,6 +18,11 @@ const envSchema = z.object({
   // module). Redis/S3 stay optional: still no route consumes either yet
   // (CR-005/CR-006/CR-053+).
   DATABASE_URL: z.string().url(),
+  // Required as of CR-012: the CSRF preHandler (`plugins/csrf.ts`) needs a
+  // real value to compare `Origin`/`Referer` against in every environment,
+  // not just production — an optional/defaulted value would mean local dev
+  // silently runs with no real CSRF check.
+  WEB_ORIGIN: z.string().url(),
   REDIS_URL: z.string().url().optional(),
   S3_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().optional(),
@@ -71,6 +76,11 @@ const PRODUCTION_PLACEHOLDER_CHECKS: ReadonlyArray<{
     key: 'S3_ENDPOINT',
     isPlaceholder: isLocalhost,
     message: 'S3_ENDPOINT still points at localhost.',
+  },
+  {
+    key: 'WEB_ORIGIN',
+    isPlaceholder: isLocalhost,
+    message: 'WEB_ORIGIN still points at localhost.',
   },
 ];
 

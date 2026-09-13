@@ -112,7 +112,12 @@ rewrite, not a polish pass.
       tables (`packages/db`), `POST /v1/auth/register` + `POST /v1/auth/verify-email`
       (`apps/api/src/modules/auth`), `/register` screen (`apps/web`). See
       `docs/changelog.md`.
-- [ ] CR-012 Login/logout/session
+- [x] CR-012 Login/logout/session — done 2026-09-13: `sessions` table
+      (`packages/db`), `POST /v1/auth/login` + `POST /v1/auth/logout` +
+      `GET /v1/auth/me` (`apps/api/src/modules/auth`), database-backed
+      sessions per ADR-013 (opaque cookie, SHA-256 hash at rest, rolling
+      30-day expiry), and ADR-013's Origin/Referer CSRF check on every unsafe
+      `/v1` method (`apps/api/src/plugins/csrf.ts`). See `docs/changelog.md`.
 - [ ] CR-013 Profile
 
 ## Organizer
@@ -200,7 +205,10 @@ is not done (`docs/definition-of-done.md`).
       the token issue/verify mechanism itself (`POST /v1/auth/verify-email`); gating
       organizer publish on `emailVerified` is still open (no publish action exists yet).
 - [ ] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
-- [ ] CR-061 Security headers (helmet-equivalent) + CSRF mechanism for cookie sessions
+- [ ] CR-061 Security headers (`@fastify/helmet`-equivalent) — the CSRF half of this
+      ticket's original scope (Origin/Referer check for cookie sessions) was
+      implemented by CR-012 (`apps/api/src/plugins/csrf.ts`, ADR-013); this ticket is
+      now headers-only
 - [x] CR-062 Session store decision — database-backed sessions + single-origin `/api`,
       decided 2026-09-11 in ADR-013; implemented by CR-012
 

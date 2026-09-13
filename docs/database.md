@@ -13,6 +13,15 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   null means unused, single-use once set), `createdAt`. Not one of the fixed
   domain entities in `.claude/CLAUDE.md` — an auth implementation detail, not
   a product concept.
+- Session — one row per active login (CR-012, ADR-013): `id`, `userId` (FK →
+  User, cascade delete), `tokenHash` (SHA-256 of the opaque cookie token —
+  same never-store-the-raw-value pattern as `EmailVerificationToken`),
+  `createdAt`, `expiresAt` (30-day lifetime, rolling — extended at most once
+  per day on use, not on every request), `lastUsedAt`, `revokedAt` (nullable;
+  part of ADR-013's fixed column list, unused by any CR-012 code path — no
+  admin "block" feature exists yet). Logout hard-deletes the row rather than
+  setting `revokedAt`. Also not one of the fixed domain entities — an auth
+  implementation detail.
 - OrganizerProfile — public organizer data linked to User.
 - Ride — cycling event owned by OrganizerProfile.
 - Route — route geometry and metadata.

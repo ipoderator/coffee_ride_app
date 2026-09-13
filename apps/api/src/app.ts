@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import {
   serializerCompiler,
@@ -43,6 +44,12 @@ export async function buildApp(env: Env) {
   registerErrorHandler(app);
   await registerOpenApi(app);
   registerDb(app, env);
+
+  // CR-012: the session cookie carries only an opaque token — its value is
+  // never trusted on its own, only looked up against `sessions.tokenHash`
+  // (`plugins/auth.ts`) — so no `secret` option (Fastify's signed-cookie
+  // support) is needed here.
+  await app.register(cookie);
 
   // Lenient global default (in-memory store — see auth.routes.ts's own comment
   // on why not Redis yet); auth routes override it with a stricter per-route

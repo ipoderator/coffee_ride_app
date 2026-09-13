@@ -21,15 +21,27 @@ ADR-007, still Pending; see `docs/decisions.md`). `409 email_already_registered`
 on a duplicate email (case-insensitive). Rate-limited (5/min/IP,
 `.claude/context/known-issues.md` KI-022 for the interim-hardening caveats).
 
-POST `/v1/auth/login`
-POST `/v1/auth/logout`
-GET `/v1/auth/me`
-
 POST `/v1/auth/verify-email` — **implemented (CR-011)**. Body: `{ token }`.
 `200` → `{ user }` with `emailVerified: true`. `400` with code
 `invalid_verification_token` / `verification_token_already_used` /
 `verification_token_expired` as appropriate — single-use, 24h expiry. Same
 rate-limit tier as register.
+
+POST `/v1/auth/login` — **implemented (CR-012)**. Body: `{ email, password }`.
+`200` → `{ user }` + `Set-Cookie: session=<opaque token>` (httpOnly, `Secure`
+in production only, `SameSite=Lax`, `Path=/`, 30-day rolling expiry —
+ADR-013). `401 invalid_credentials` for both an unknown email and a wrong
+password — identical body/status, no account enumeration
+(`.claude/rules/security.md`). Does not require `emailVerified` (that gate is
+organizer-action-specific, not a login precondition). Same rate-limit tier as
+register.
+
+POST `/v1/auth/logout` — **implemented (CR-012)**. Requires a valid session
+cookie (`401` otherwise). Hard-deletes the `Session` row (ADR-013 — not a
+soft-revoke), clears the cookie. `204`.
+
+GET `/v1/auth/me` — **implemented (CR-012)**. Requires a valid session cookie
+(`401` otherwise). `200` → `{ user }`.
 
 POST `/v1/auth/forgot-password`
 POST `/v1/auth/reset-password`
@@ -126,3 +138,16 @@ Every non-2xx response is `application/problem+json` per RFC 9457:
   a stricter rate limit than the general API (`.claude/rules/security.md`);
 - `/v1/auth/forgot-password` and `/v1/auth/verify-email` responses do not reveal whether
   the target email exists — a uniform error envelope does not mean a more informative one.
+
+## CSRF (CR-012, ADR-013)
+
+Every `POST`/`PUT`/`PATCH`/`DELETE` under `/v1` is checked against the `Origin` header
+(falling back to `Referer` when `Origin` is absent): a mismatch against the configured
+`WEB_ORIGIN` returns `403 csrf_origin_mismatch`. When **neither** header is present the
+request is allowed through — `SameSite=Lax` is the primary defense, this header check is
+defense in depth for what Lax doesn't cover. `GET`/`HEAD` are never affected.
+
+Consequence for manual/curl testing: a state-changing request against a real deployment
+needs an `Origin: <WEB_ORIGIN>` header, including `/v1/auth/register` and
+`/v1/auth/verify-email` (unaffected in shape, but now behind this check like every other
+unsafe `/v1` method).

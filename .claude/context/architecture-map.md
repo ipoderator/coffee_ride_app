@@ -158,6 +158,23 @@ compiled `dist/server.js` cannot boot under plain `node` once a package like
 blocker rather than a predicted risk, deferred pending an ADR (dist-based
 package exports vs. bundling `apps/api`'s own build).
 
+`packages/db` gained its **second domain table** (CR-012, 2026-09-13):
+`sessions` (`src/schema/session.ts` — `userId` FK cascade, `tokenHash`
+unique, `expiresAt`/`lastUsedAt`/`revokedAt`, per ADR-013's fixed column
+list), migrated and live-applied against the same local scratch Postgres.
+`apps/api`'s `modules/auth/` gained `session.ts` (create/validate/revoke,
+rolling expiry) and `loginUser` in `auth.service.ts`; two new cross-cutting
+plugins landed alongside the existing `db`/`error-handler`/`openapi` ones:
+`plugins/auth.ts` (`requireAuth` preHandler + `request.user`/`sessionId`
+module augmentation — opt-in per route, not global) and `plugins/csrf.ts`
+(Origin/Referer preHandler, registered as `v1Routes`'s own hook so it scopes
+to exactly `/v1`, `/health` unaffected). `app.ts` gained `@fastify/cookie`
+(no signing secret — the cookie carries only an opaque token, checked only
+via its DB-stored hash). New required env var `WEB_ORIGIN` (the CSRF check's
+comparison value). Three new `/v1/auth` routes: `POST /login`, `POST
+/logout`, `GET /me`. KI-022's CSRF/cookie gap is now closed; its rate-limiting
+and `@fastify/helmet` gaps remain open (CR-058/CR-061).
+
 ## Target structure
 
 apps/

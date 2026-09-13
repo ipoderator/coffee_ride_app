@@ -1542,3 +1542,62 @@ decisions. KI-021 (`RideService`/registration-state terminology keys) unaffected
 here touches those.
 
 Follow-up: CR-012 (login/logout/session) is next.
+
+## 2026-09-13 — CR-012 — Login/logout/session
+
+Summary: `POST /v1/auth/login`, `POST /v1/auth/logout`, `GET /v1/auth/me` — the
+database-backed session store `docs/decisions.md` ADR-013 already decided (Postgres
+`Session` row, opaque cookie token, SHA-256 hash at rest, 30-day rolling expiry extended
+at most once/day). Also where ADR-013's CSRF mechanism gets its first real
+implementation: an `Origin`/`Referer` preHandler rejecting a mismatched origin on every
+unsafe method under `/v1` (not just the new routes — `/v1/auth/register`/`verify-email`
+are now behind it too), allowing the request through when neither header is present
+(`SameSite=Lax` is the primary defense; this is defense in depth). Login returns the same
+generic `invalid_credentials` 401 for an unknown email and a wrong password — no account
+enumeration — including a dummy Argon2id verify on the unknown-email path so the two
+branches don't differ meaningfully in latency. Login does NOT require `emailVerified`
+(that gate is organizer-action-specific, not a login precondition).
+Files: `packages/db/src/schema/session.ts` (new) + migration
+`0001_sparkling_toro.sql`, `packages/types/src/api/auth.ts` (added
+`loginRequestSchema`/`LoginResponse`/`MeResponse`), `apps/api/src/modules/auth/`
+(new: `session.ts` — create/validate/revoke + rolling expiry, `session.test.ts`; extended:
+`auth.service.ts` — `loginUser`+`toPublicUser` exported, `auth.routes.ts` — three new
+routes, `auth.routes.test.ts` — login/logout/me/CSRF suites), `apps/api/src/plugins/`
+(new: `auth.ts` — `requireAuth` preHandler + `request.user`/`sessionId` module
+augmentation, `csrf.ts` — the Origin/Referer preHandler, registered as `v1Routes`'s own
+hook so it scopes to exactly `/v1`), `apps/api/src/app.ts` (`@fastify/cookie` registered,
+no signing secret needed — the cookie carries only an opaque token checked against its DB
+hash), `apps/api/src/routes/v1.ts` (wires `registerCsrf`), `apps/api/src/env.ts` (new
+required `WEB_ORIGIN`, plus its own production-placeholder localhost check),
+`apps/api/package.json` (added `@fastify/cookie`), `.env.example` (+`WEB_ORIGIN`),
+`docs/{api,database,tasks}.md`, `.claude/context/{known-issues,architecture-map}.md`.
+
+A real bug was found and fixed along the way: once `session.test.ts` became a second
+Vitest file touching `users`/`email_verification_tokens`/`sessions` concurrently (Vitest
+parallelizes test files by default), the existing `TRUNCATE TABLE ... RESTART IDENTITY
+CASCADE` `beforeEach` pattern from CR-011 started deadlocking intermittently (Postgres
+`ACCESS EXCLUSIVE` locks from two concurrent `TRUNCATE`s on overlapping tables). Fixed by
+switching every such `beforeEach` (across both test files) to `DELETE FROM users`, relying
+on the existing `ON DELETE CASCADE` foreign keys to clear the child tables — `DELETE`
+takes row-level locks, not a table-level exclusive one, so it doesn't deadlock under
+parallel file execution. Verified stable across 3 consecutive full `vitest run` passes
+after the fix.
+
+Decisions: none new at the ADR level — ADR-013 already fully specified this design;
+CR-012 implements it. `docs/decisions.md` unchanged.
+
+Known limitations: KI-022 updated — its CSRF gap is now closed (this ticket); the
+rate-limiting (CR-058) and `@fastify/helmet` (CR-061, now headers-only) gaps remain open.
+`revokedAt` on `sessions` is part of ADR-013's fixed column list but unused by any CR-012
+code path (no admin "block" feature exists yet) — logout is a hard delete, not a
+soft-revoke.
+
+Validation: `turbo run lint/typecheck/build/test` (run separately) all green;
+`format:check`/`lint:root` clean. 32 `apps/api` tests pass (was 15 before this ticket),
+stable across repeated runs. Live-verified end to end against a real local Postgres
+(`coffee_ride_dev`, Docker still unreachable in this environment — KI-019) and a running
+`apps/api`: register → login (200 + `Set-Cookie` with `HttpOnly`/`SameSite=Lax`/`Path=/`)
+→ `GET /me` (200) → logout (204, cookie cleared) → `GET /me` with the same cookie (401) →
+`POST /login` with a mismatched `Origin` (403 `csrf_origin_mismatch`), all via curl.
+
+Follow-up: CR-013 (Profile) is next per `docs/tasks.md`'s Auth section order.

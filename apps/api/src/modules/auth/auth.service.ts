@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { emailVerificationTokens, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type { User } from 'types';
-import { hashPassword } from './password.js';
+import { hashPassword, verifyPassword } from './password.js';
 import {
   EMAIL_VERIFICATION_TOKEN_TTL_MS,
   generateVerificationToken,
@@ -25,7 +25,10 @@ export class AuthServiceError extends Error {
   }
 }
 
-function toPublicUser(row: typeof users.$inferSelect): User {
+// Exported: `auth.routes.ts`'s `GET /me` handler converts `request.user` (the
+// raw row `plugins/auth.ts` attaches from the session lookup) the same way,
+// rather than duplicating this mapping.
+export function toPublicUser(row: typeof users.$inferSelect): User {
   return {
     id: row.id,
     email: row.email,
@@ -169,6 +172,59 @@ export async function verifyEmail(
 
   return toPublicUser(updatedUser);
 }
+
+// CR-012, `.claude/rules/security.md`: one generic error, same status/body/
+// title for "no such account" and "wrong password" — a distinct message for
+// either would let a client enumerate registered emails.
+const INVALID_CREDENTIALS = () =>
+  new AuthServiceError(
+    'invalid_credentials',
+    401,
+    'Invalid credentials',
+    'Incorrect email or password.',
+  );
+
+/**
+ * Verifies email+password and returns the public user on success. Does NOT
+ * check `emailVerified` — that gate is organizer-action-specific
+ * (`docs/auth.md`), not a login precondition. Deliberately does the same
+ * amount of work (an Argon2id verify) whether or not the account exists, via
+ * a dummy hash, so a timing difference doesn't itself leak account existence.
+ */
+export async function loginUser(
+  db: DbClient,
+  email: string,
+  password: string,
+): Promise<User> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, normalizedEmail))
+    .limit(1);
+
+  if (!row) {
+    // Still hash against something so the branch's latency stays close to the
+    // real-account path (the dummy hash is a valid Argon2id hash of an
+    // unrelated fixed value, never a real password).
+    await verifyPassword(DUMMY_PASSWORD_HASH, password);
+    throw INVALID_CREDENTIALS();
+  }
+
+  const valid = await verifyPassword(row.passwordHash, password);
+  if (!valid) {
+    throw INVALID_CREDENTIALS();
+  }
+
+  return toPublicUser(row);
+}
+
+// A real Argon2id hash of an arbitrary fixed value — used only as the
+// constant-time-ish decoy in the unknown-email branch above, never checked
+// against a real credential.
+const DUMMY_PASSWORD_HASH =
+  '$argon2id$v=19$m=65536,p=4,t=3$H85KxcI2cY7gixskIZfJeA$IzOmi13jMDss9XG4hxW3gC/X3zxDIwEsRKdSegFAQeo';
 
 function isUniqueViolation(error: unknown): boolean {
   // postgres-js / node-postgres both surface Postgres's unique_violation as

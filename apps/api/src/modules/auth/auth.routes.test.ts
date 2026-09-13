@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { sql } from 'drizzle-orm';
-import { emailVerificationTokens } from 'db/schema';
+import { eq, sql } from 'drizzle-orm';
+import { emailVerificationTokens, sessions } from 'db/schema';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv, type Env } from '../../env.js';
+import { hashSessionToken } from './session.js';
 
 // These tests exercise the real service/repository layers against a live
 // Postgres database (`.claude/rules/testing.md` — behavior, not mocks, for
@@ -18,22 +19,29 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+const WEB_ORIGIN = 'http://localhost:3000';
+
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
   DATABASE_URL: process.env.DATABASE_URL,
+  WEB_ORIGIN,
 });
 
 function uniqueEmail() {
   return `${randomUUID()}@example.test`;
 }
 
+// `DELETE FROM users`, not `TRUNCATE ... CASCADE`: `email_verification_tokens`
+// and `sessions` both cascade-delete via their FK (`onDelete: 'cascade'`), so
+// a plain DELETE clears everything this suite needs without TRUNCATE's
+// table-level ACCESS EXCLUSIVE lock — which deadlocked once this became a
+// second test file touching the same tables concurrently (Vitest runs test
+// files in parallel by default; CR-012 added `session.test.ts`).
 describe('POST /v1/auth/register', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
-    await app.db.execute(
-      sql`TRUNCATE TABLE email_verification_tokens, users RESTART IDENTITY CASCADE`,
-    );
+    await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
 
@@ -174,9 +182,7 @@ describe('POST /v1/auth/register', () => {
 describe('POST /v1/auth/verify-email', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
-    await app.db.execute(
-      sql`TRUNCATE TABLE email_verification_tokens, users RESTART IDENTITY CASCADE`,
-    );
+    await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
 
@@ -266,6 +272,313 @@ describe('POST /v1/auth/verify-email', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json().code).toBe('verification_token_expired');
+
+    await app.close();
+  });
+});
+
+const PASSWORD = 'a-strong-password-123';
+
+async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
+  const email = uniqueEmail();
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/auth/register',
+    payload: { email, password: PASSWORD },
+  });
+  return {
+    email,
+    password: PASSWORD,
+    userId: response.json().user.id as string,
+  };
+}
+
+function sessionCookie(
+  response: Awaited<ReturnType<Awaited<ReturnType<typeof buildApp>>['inject']>>,
+) {
+  return response.cookies.find((c) => c.name === 'session');
+}
+
+describe('POST /v1/auth/login', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  it('logs in with correct credentials: 200 + session cookie + user', async () => {
+    const app = await buildApp(testEnv);
+    const { email, password } = await registerTestUser(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.user.email).toBe(email);
+    expect(JSON.stringify(body)).not.toContain('passwordHash');
+
+    const cookie = sessionCookie(response);
+    expect(cookie).toBeDefined();
+    expect(cookie?.httpOnly).toBe(true);
+    expect(cookie?.sameSite).toBe('Lax');
+    expect(cookie?.path).toBe('/');
+    // Local dev (NODE_ENV=test here, same as development): plain HTTP, so
+    // `Secure` must NOT be set or the cookie would never reach the browser.
+    expect(cookie?.secure).toBeFalsy();
+
+    await app.close();
+  });
+
+  it('rejects a wrong password with 401 invalid_credentials', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: 'the-wrong-password-123' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json().code).toBe('invalid_credentials');
+
+    await app.close();
+  });
+
+  it('rejects an unknown email with the identical 401 invalid_credentials shape', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email: uniqueEmail(), password: 'irrelevant-password-123' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    const body = response.json();
+    expect(body.code).toBe('invalid_credentials');
+    expect(body.title).toBe('Invalid credentials');
+    expect(body.detail).toBe('Incorrect email or password.');
+
+    await app.close();
+  });
+
+  it('rejects a missing/malformed body with 400', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email: 'not-an-email' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('validation_error');
+
+    await app.close();
+  });
+});
+
+describe('POST /v1/auth/logout', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  async function loginAndGetCookie(app: Awaited<ReturnType<typeof buildApp>>) {
+    const { email, password } = await registerTestUser(app);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password },
+    });
+    const cookie = sessionCookie(response);
+    if (!cookie) throw new Error('No session cookie set by login');
+    return cookie.value;
+  }
+
+  it('deletes the session row, clears the cookie, and 204s — reusing the cookie afterward 401s', async () => {
+    const app = await buildApp(testEnv);
+    const rawToken = await loginAndGetCookie(app);
+
+    const logoutResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout',
+      cookies: { session: rawToken },
+    });
+
+    expect(logoutResponse.statusCode).toBe(204);
+
+    // Verified via a direct DB query, not just the HTTP response.
+    const [row] = await app.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.tokenHash, hashSessionToken(rawToken)));
+    expect(row).toBeUndefined();
+
+    const clearedCookie = sessionCookie(logoutResponse);
+    expect(clearedCookie).toBeDefined();
+    expect(clearedCookie?.expires?.getTime()).toBeLessThan(Date.now());
+
+    const meAfterLogout = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: rawToken },
+    });
+    expect(meAfterLogout.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('rejects a request with no cookie with 401', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout',
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+});
+
+describe('GET /v1/auth/me', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  async function login(app: Awaited<ReturnType<typeof buildApp>>) {
+    const { email, password } = await registerTestUser(app);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password },
+    });
+    return { email, rawToken: sessionCookie(response)!.value };
+  }
+
+  it('returns the current user for a valid cookie', async () => {
+    const app = await buildApp(testEnv);
+    const { email, rawToken } = await login(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: rawToken },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().user.email).toBe(email);
+    expect(JSON.stringify(response.json())).not.toContain('passwordHash');
+
+    await app.close();
+  });
+
+  it('rejects a request with no cookie with 401', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({ method: 'GET', url: '/v1/auth/me' });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('rejects an expired session cookie with 401', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken } = await login(app);
+
+    await app.db
+      .update(sessions)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(sessions.tokenHash, hashSessionToken(rawToken)));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: rawToken },
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('rejects a tampered cookie value with 401', async () => {
+    const app = await buildApp(testEnv);
+    await login(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: 'not-a-real-session-token' },
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+});
+
+describe('CSRF: Origin/Referer check on /v1 unsafe methods', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  it('rejects a state-changing request with a mismatched Origin with 403', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/register',
+      headers: { origin: 'http://evil.example' },
+      payload: { email: uniqueEmail(), password: PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().code).toBe('csrf_origin_mismatch');
+
+    await app.close();
+  });
+
+  it('allows a state-changing request with a matching Origin through to the route', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/register',
+      headers: { origin: WEB_ORIGIN },
+      payload: { email: uniqueEmail(), password: PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(201);
+
+    await app.close();
+  });
+
+  it('never blocks a GET regardless of Origin', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      headers: { origin: 'http://evil.example' },
+    });
+
+    // No session cookie either way, but the point is it's a 401 (reached the
+    // route/preHandler), never a 403 from the CSRF check.
+    expect(response.statusCode).toBe(401);
 
     await app.close();
   });
