@@ -6,6 +6,7 @@ import {
   REGISTRATION_ACTION_TERMS,
   RIDE_SERVICE_TERMS,
   RIDE_STATUS_TERMS,
+  UI_TERMS,
 } from './terminology';
 
 describe('RIDE_STATUS_TERMS', () => {
@@ -116,5 +117,11 @@ describe('REGISTRATION_ACTION_TERMS', () => {
       waitlisted: 'В списке ожидания',
       full: 'Мест не осталось',
     });
+  });
+});
+
+describe('UI_TERMS', () => {
+  it('provides the generic retry label used by ErrorState (docs/design.md §10)', () => {
+    expect(UI_TERMS.retry).toBe('Повторить');
   });
 });

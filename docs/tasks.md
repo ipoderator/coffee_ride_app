@@ -102,8 +102,9 @@ rewrite, not a polish pass.
 - [x] CR-065 Metric presentation components: `MetricTile`, `MetricRow`, `StatusBadge`,
       `DifficultyScale` — done 2026-09-13: `packages/ui/src/components/`. See
       `docs/changelog.md`.
-- [ ] CR-066 Shared state primitives: `Skeleton`, `EmptyState`, `ErrorState` + the
-      degraded-state pattern used by CR-052 — `docs/design.md` §10
+- [x] CR-066 Shared state primitives: `Skeleton`, `EmptyState`, `ErrorState` + the
+      degraded-state pattern used by CR-052 — done 2026-09-13:
+      `packages/ui/src/components/`. See `docs/changelog.md`.
 
 ## Auth
 

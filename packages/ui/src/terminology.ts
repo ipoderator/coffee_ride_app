@@ -120,3 +120,14 @@ export const REGISTRATION_ACTION_TERMS: Record<RegistrationActionKey, string> =
     waitlisted: 'В списке ожидания',
     full: 'Мест не осталось',
   };
+
+/**
+ * Generic, screen-independent UI strings (`docs/design.md` §10, CR-066) — e.g. the
+ * retry affordance every `ErrorState` optionally offers. Screen-specific copy (an
+ * `EmptyState`'s explanation of *why* it's empty, a particular error's message) is
+ * deliberately NOT here: §10 requires that text to explain the specific situation,
+ * which a generic label can't do, so it's always supplied by the caller instead.
+ */
+export const UI_TERMS = {
+  retry: 'Повторить',
+} as const;

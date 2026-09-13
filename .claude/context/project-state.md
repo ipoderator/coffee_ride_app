@@ -16,9 +16,10 @@ maps-core, maps-2gis), and CR-008 (Vitest wired for `apps/api`/
 completed 2026-09-12. CR-009 (Configure Docker Compose) and CR-010 (Configure
 CI + Git hooks, lint-staged made workspace-aware) both completed 2026-09-13.
 Foundation phase (CR-001..CR-010) is now fully done. CR-063 (Design tokens),
-CR-064 (Russian formatters + UI terminology mapping), and CR-065 (Metric
-presentation components) also completed 2026-09-13 — CR-066 is the one
-remaining Design-foundations task before CR-011.
+CR-064 (Russian formatters + UI terminology mapping), CR-065 (Metric
+presentation components), and CR-066 (Shared state primitives) also completed
+2026-09-13 — Design-foundations phase (CR-063..CR-066) is now fully done.
+CR-011 (User registration) is next.
 
 ## Implemented
 
@@ -158,6 +159,31 @@ deliberately not composed from a separate generic `Badge`, to avoid pulling that
 still-open question in early. No cabinet screens exist yet — these four components'
 first real consumer is CR-011.
 
+Shared state primitives landed 2026-09-13 (CR-066, see `docs/changelog.md`):
+`packages/ui/src/components/{Skeleton,EmptyState,ErrorState}.tsx` — `docs/design.md`
+§10's remaining three of the five required per-screen states (loading/empty/error/
+degraded/success), completing the Design-foundations phase. `Skeleton` is a decorative
+shimmer block, animation gated behind `motion-safe:` for `prefers-reduced-motion`
+(§12); it's a real shadcn-registry primitive (unlike CR-065's four), hand-vendored
+directly against our own tokens rather than via the shadcn CLI — a scoped, not
+general, resolution of KI-020 (updated, still open for a structurally complex future
+primitive). `EmptyState` requires a caller-supplied `title` (§10: never a bare "Нет
+данных") plus optional `description`/`action`/`icon`. `ErrorState` covers both the
+Error and Degraded states (§10 points 3-4, the latter being CR-052/
+`.claude/rules/resilience.md`'s pattern) from one component via `tone`/`variant`
+instead of a second component: `tone="danger"`+`variant="block"` (default,
+`role="alert"`) for an outright failure, `tone="warning"`+`variant="inline"`
+(`role="status"`) for a non-interrupting degraded notice next to still-usable content.
+`terminology.ts` gained `UI_TERMS.retry` ("Повторить") so the retry button's default
+label isn't a literal inside the component (`.claude/rules/frontend.md`). A live
+visual check (temporary showcase in `apps/web`, reverted after) caught a real bug:
+`ErrorState` needed `'use client'` — its own `onClick` handler can't be wired by a
+Server Component passing `onRetry` through it, confirmed by the Next.js App Router
+build actually failing until added. Confirmed live in both themes: pulse animation
+present normally, `animation-name: none` under emulated
+`prefers-reduced-motion: reduce`; 0 console errors/failed requests.
+Design-foundations phase (CR-063..CR-066) is now complete — CR-011 is next.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -255,11 +281,13 @@ None.
 
 ## Next
 
-CR-066 — Shared state primitives: `Skeleton`, `EmptyState`, `ErrorState` + the
-degraded-state pattern used by CR-052 (`docs/design.md` §10) — the last
-Design-foundations task before CR-011 (User registration). Note KI-020 (shadcn CLI's
-component-vendoring target) is still open and unresolved; check whether any of these
-three is a shadcn-registry primitive (`Skeleton` likely is) before vendoring it.
+CR-011 — User registration. Design-foundations phase (CR-063..CR-066) is complete:
+tokens, Russian formatters/terminology, metric presentation components, and the
+loading/empty/error/degraded state primitives all exist in `packages/ui`. CR-011 is
+the first real screen and first consumer of all of it, and also the first task to add
+a real domain table to `packages/db` (currently zero domain tables) — read
+`.claude/rules/database.md`/`.claude/rules/security.md` (email+password, Argon2id/
+bcrypt hashing, generic login-failure message, rate limiting) before starting.
 
 ## Important decisions
 
@@ -316,12 +344,14 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   still absent;
 - `docs/api.md` describes auth and `/health` endpoints that have no implementation
   (contract-first, deliberate);
-- `docs/design.md` exists and CR-063/CR-064/CR-065 now implement its tokens,
-  formatters, and metric components — CR-066 (shared state primitives) is the last
-  prerequisite before CR-011;
-- KI-020: `apps/web/components.json`'s shadcn alias needs pointing at `packages/ui`
-  (or a manual-vendor workaround decided) before a shadcn-registry primitive (e.g.
-  CR-066's `Skeleton`) is vendored — CR-065's four components didn't trigger this;
+- `docs/design.md` exists and CR-063..CR-066 now implement its tokens, formatters,
+  metric components, and state primitives in full — Design-foundations phase is
+  complete, CR-011 is next;
+- KI-020: `apps/web/components.json`'s shadcn alias still points into `apps/web`, not
+  `packages/ui` — CR-066 hand-vendored `Skeleton` (trivial enough to not need the
+  CLI), a scoped workaround, not a resolution; the alias/CLI-targeting question stays
+  open for the first structurally complex primitive (`Dialog`/`Select`/...) a future
+  CR needs;
 - KI-021: `RideService`/registration-state keys in `packages/ui/src/terminology.ts` are
   provisional pending the real `RideService` DB enum (not yet scheduled with a CR
   number) — ride status/bicycle type are unaffected, already sourced from
@@ -345,4 +375,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-13 (CR-065)
+2026-09-13 (CR-066)

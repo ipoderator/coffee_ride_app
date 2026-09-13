@@ -274,6 +274,18 @@ none are shadcn-registry primitives, and `StatusBadge` was deliberately built
 self-contained (not composed from a separate generic `Badge`) specifically to avoid
 pulling this question into that task's scope. Stays open for whichever CR vendors an
 actual shadcn primitive (`Button`, `Card`, `Badge`, ...) into `packages/ui`.
+Update 2026-09-13 (CR-066): `Skeleton` _is_ a real shadcn-registry primitive — this
+task chose to hand-vendor it directly against `packages/ui`'s own tokens/`cn` instead
+of resolving the CLI-targeting question, since the upstream component is trivial (one
+`div`, two classes: `animate-pulse rounded-md bg-muted`, re-themed here to
+`motion-safe:animate-pulse rounded-md bg-text-muted/15`). This is a reasonable
+per-component escape hatch for anything this simple, but does not resolve the general
+question — a structurally complex primitive (`Dialog`, `Select`, `DatePicker`, ...)
+would be real, error-prone work to hand-roll and should either repoint
+`components.json` at `packages/ui` (confirming the CLI can target a non-root workspace
+package first) or make a deliberate one-time call to keep hand-vendoring everything.
+Still open; next action unchanged until whichever CR needs the first non-trivial
+primitive.
 
 ---
 

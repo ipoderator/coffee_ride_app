@@ -1354,3 +1354,64 @@ list is unchanged.
 Follow-up: CR-066 (Shared state primitives — `Skeleton`, `EmptyState`, `ErrorState` +
 the degraded-state pattern used by CR-052, `docs/design.md` §10) is next — the last
 Design-foundations prerequisite before CR-011.
+
+## 2026-09-13 — CR-066 — Shared state primitives
+
+Summary: Added `packages/ui`'s last three Design-foundations components —
+`Skeleton`, `EmptyState`, `ErrorState` (`docs/design.md` §10) — the final prerequisite
+before CR-011's first real screen. `Skeleton` is a decorative (`aria-hidden`) shimmer
+block, animation gated behind `motion-safe:animate-pulse` so `prefers-reduced-motion`
+users get a static placeholder instead (§12); it is a real shadcn-registry primitive
+(unlike any of CR-065's four components — see KI-020), hand-vendored directly against
+`packages/ui`'s own tokens/`cn` rather than through the shadcn CLI, since the upstream
+component is one `div`/two classes and `packages/ui` isn't a CLI-detectable app target
+— recorded as a scoped, not general, resolution of KI-020. `EmptyState` requires a
+caller-supplied `title` (never defaults to a bare "Нет данных" per §10) plus optional
+`description`/`action`/`icon`, announced via `role="status"`. `ErrorState` covers both
+of §10's remaining states with one component via `tone`/`variant` instead of a second
+one: `tone="danger"` + `variant="block"` (default, `role="alert"`) is the plain Error
+state; `tone="warning"` + `variant="inline"` (`role="status"`) is the Degraded state
+from CR-052/`.claude/rules/resilience.md` — a failing dependency notice that sits next
+to still-usable content instead of blanking the page. `message` is always
+caller-supplied (never a raw server string, `.claude/rules/backend.md`); the retry
+button's default label routes through a new `terminology.ts` export (`UI_TERMS.retry`
+= "Повторить") rather than a literal in the component, per
+`.claude/rules/frontend.md`'s "no hard-coded user-visible Russian strings in a
+component" rule.
+
+A live visual check (temporary showcase in `apps/web`, `browser-automation` skill,
+reverted afterward) caught a real bug beyond what jsdom could: `ErrorState` defines its
+own `onClick` (the retry button), so a Next.js App Router Server Component cannot pass
+its `onRetry` prop through it without `'use client'` on the component itself — the
+build failed with "Event handlers cannot be passed to Client Component props" until
+this was added. `Skeleton`/`EmptyState` needed no directive (they wire no handlers of
+their own). Confirmed live in both themes: the pulse animation's computed
+`animation-name` is `pulse` normally and `none` under emulated
+`prefers-reduced-motion: reduce`; 0 console errors, 0 failed requests on the real page
+loads.
+
+No database migration, no API route change, no new runtime dependency.
+
+Files: `packages/ui/src/components/{Skeleton,EmptyState,ErrorState}.tsx` (new) +
+colocated `.test.tsx` each, `packages/ui/src/terminology.ts` (`UI_TERMS` added) +
+`terminology.test.ts`, `packages/ui/src/index.ts` (re-exports),
+`.claude/context/known-issues.md` (KI-020 updated, scoped resolution for `Skeleton`),
+`docs/tasks.md` (CR-066 checked off), `.claude/context/{project-state,
+current-task}.md`.
+
+Decisions: none new at the ADR level. One judgment call, documented in-code rather
+than as an ADR (component-level): `ErrorState` implements both the Error and Degraded
+states from a single component via `tone`/`variant` rather than a second
+`DegradedNotice` component, since `docs/design.md` §9's shared-component inventory
+lists no separate degraded-state primitive and the two states share the same
+plain-language-message-plus-optional-retry shape — only urgency (`role`) and visual
+weight (`block` vs `inline`) differ.
+
+Known limitations: KI-020 partially addressed — `Skeleton`'s hand-vendor resolves it
+for this component only; the general shadcn-CLI-targeting question stays open for the
+first structurally complex primitive (`Dialog`/`Select`/`DatePicker`/...) a future CR
+vendors. Everything else from CR-065's known-limitations list is unchanged.
+
+Follow-up: Design-foundations phase (CR-063..CR-066) is now complete. CR-011 (User
+registration) is next — the first real screen and first consumer of every token/
+formatter/component this phase built.
