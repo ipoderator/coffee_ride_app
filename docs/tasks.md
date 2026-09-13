@@ -108,7 +108,10 @@ rewrite, not a polish pass.
 
 ## Auth
 
-- [ ] CR-011 User registration
+- [x] CR-011 User registration — done 2026-09-13: `users`/`email_verification_tokens`
+      tables (`packages/db`), `POST /v1/auth/register` + `POST /v1/auth/verify-email`
+      (`apps/api/src/modules/auth`), `/register` screen (`apps/web`). See
+      `docs/changelog.md`.
 - [ ] CR-012 Login/logout/session
 - [ ] CR-013 Profile
 
@@ -188,9 +191,14 @@ is not done (`docs/definition-of-done.md`).
 
 ## Security foundations
 
-- [ ] CR-057 Password hashing (Argon2id/bcrypt) + minimum password policy
-- [ ] CR-058 Auth rate limiting (login/register/forgot-password, per IP + per account)
-- [ ] CR-059 Email verification flow (gates organizer publish action)
+- [x] CR-057 Password hashing (Argon2id/bcrypt) + minimum password policy — delivered
+      as part of CR-011 (Argon2id via the `argon2` package, 12+ char minimum).
+- [ ] CR-058 Auth rate limiting (login/register/forgot-password, per IP + per account) —
+      CR-011 shipped an interim in-memory, per-IP-only tier on register/verify-email;
+      this ticket is the Redis-backed, per-account upgrade (KI-022, blocked on KI-014).
+- [ ] CR-059 Email verification flow (gates organizer publish action) — CR-011 shipped
+      the token issue/verify mechanism itself (`POST /v1/auth/verify-email`); gating
+      organizer publish on `emailVerified` is still open (no publish action exists yet).
 - [ ] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
 - [ ] CR-061 Security headers (helmet-equivalent) + CSRF mechanism for cookie sessions
 - [x] CR-062 Session store decision — database-backed sessions + single-origin `/api`,

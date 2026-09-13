@@ -19,7 +19,8 @@ Foundation phase (CR-001..CR-010) is now fully done. CR-063 (Design tokens),
 CR-064 (Russian formatters + UI terminology mapping), CR-065 (Metric
 presentation components), and CR-066 (Shared state primitives) also completed
 2026-09-13 — Design-foundations phase (CR-063..CR-066) is now fully done.
-CR-011 (User registration) is next.
+CR-011 (User registration) also completed 2026-09-13. CR-012 (Login/logout/
+session) is next.
 
 ## Implemented
 
@@ -184,6 +185,42 @@ present normally, `animation-name: none` under emulated
 `prefers-reduced-motion: reduce`; 0 console errors/failed requests.
 Design-foundations phase (CR-063..CR-066) is now complete — CR-011 is next.
 
+User registration landed 2026-09-13 (CR-011, see `docs/changelog.md`): first real
+screen, first `packages/db` domain tables (`users`, `email_verification_tokens`,
+migrated and live-verified against a local scratch Postgres — Docker still
+unreachable, KI-019), first `apps/api` capability module (`src/modules/auth/`:
+Argon2id hashing via `argon2`, crypto-random verification tokens hashed with
+SHA-256, transactional register/verify-email service, `FastifyPluginAsyncZod`
+routes), and first consumer of every `packages/ui`/`packages/types` piece
+CR-063..CR-066 built. `POST /v1/auth/register` and `POST /v1/auth/verify-email`
+live under `/v1`, both behind a 5/min/IP `@fastify/rate-limit` tier (in-memory
+store — KI-014, Redis unverified). `packages/types` gained its first domain type
+(`User`) and first real runtime dependency (`zod`, for the shared
+register/verify-email contract both `apps/api` and `apps/web` validate against).
+`packages/ui` gained its first form primitives (`Button`/`Input`/`FormField`/
+`Card`, hand-vendored like `Skeleton` — KI-020 updated). `apps/web` gained its
+first real screen (`/register`, `src/features/auth/register/`) and its first
+`next.config.ts` customization (`rewrites()` for the single-origin `/api/v1/*`
+proxy, ADR-013; a webpack `resolve.extensionAlias` so it can bundle
+`packages/types`' NodeNext-style `.js`-suffixed imports). 30 new tests across
+`apps/api`/`packages/ui`/`apps/web` (116 total in those three packages), all
+green; found and fixed a real gap along the way — `apps/web/vitest.setup.ts`
+never registered React Testing Library's cleanup, so multi-test component files
+leaked renders between tests. Live-verified end to end this session: register →
+duplicate-email (409) → verify-email (200 → already-used 400 / unknown 400) over
+real HTTP with curl; `/register` exercised in a real browser in both themes (dark
+via the `.dark` class — this app's dark mode is class-based, not
+`prefers-color-scheme`) with 0 console errors. `npx turbo run lint/typecheck/
+build/test` (run separately — see known limitations) and `format:check`/
+`lint:root` all green. Also confirmed, live, a real production-blocking bug
+predicted but never exercised since CR-007: `NODE_ENV=production node
+dist/server.js` crashes immediately because `packages/db` (and almost certainly
+`packages/types`) export raw TS source that plain `node` can't resolve the way
+`tsx`/`tsc` do (KI-017, now confirmed rather than hypothetical — resolving it
+is an architecture/tooling decision deferred pending an ADR, not fixed inside
+this ticket). Added a CI migration step (`.github/workflows/ci.yml`) so the new
+auth tests have real tables to run against in CI's fresh `postgres` service.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -281,13 +318,14 @@ None.
 
 ## Next
 
-CR-011 — User registration. Design-foundations phase (CR-063..CR-066) is complete:
-tokens, Russian formatters/terminology, metric presentation components, and the
-loading/empty/error/degraded state primitives all exist in `packages/ui`. CR-011 is
-the first real screen and first consumer of all of it, and also the first task to add
-a real domain table to `packages/db` (currently zero domain tables) — read
-`.claude/rules/database.md`/`.claude/rules/security.md` (email+password, Argon2id/
-bcrypt hashing, generic login-failure message, rate limiting) before starting.
+CR-012 — Login/logout/session. `users` now exists (CR-011) with a `passwordHash`
+column ready to check against; this ticket adds the database-backed session store
+(ADR-013), the login/logout/`GET /v1/auth/me` endpoints, and the cookie itself
+(httpOnly/Secure/SameSite=Lax, opaque token, `Session.tokenHash`). Read
+`.claude/rules/security.md`'s Authentication section (generic login-failure
+message — no account enumeration) and ADR-013 in `docs/decisions.md` before
+starting. CR-011's register response does NOT create a session by design — this
+ticket is where that starts mattering.
 
 ## Important decisions
 
@@ -334,24 +372,32 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   either (KI-014, KI-015; verify before CR-050/CR-058/CR-027/CR-086 consume
   them);
 - `packages/maps-2gis`'s Geocoder/Routing response parsing is unverified
-  against a live 2GIS account (KI-016), and it (plus `packages/db`) export raw
-  TS source rather than compiled `dist` output — harmless until either gets a
-  real runtime consumer under plain `node`, not `tsx` (KI-017);
+  against a live 2GIS account (KI-016);
+- KI-017: `packages/db`/`packages/types`/`packages/maps-2gis` export raw TS
+  source rather than compiled `dist` output — **confirmed live and blocking**
+  as of CR-011 (`node dist/server.js` crashes under `NODE_ENV=production`
+  once `apps/api` has a real runtime — not type-only — consumer of `db`);
+  resolving it is an architecture/tooling decision deferred pending an ADR;
+- KI-022 (new, CR-011): auth endpoints ship with an interim posture —
+  in-memory per-IP-only rate limiting (no Redis, no per-account limiting;
+  CR-058), no `@fastify/helmet`/CSRF check yet (CR-061). Low risk until CR-012
+  ships a real session, but do not deploy publicly before CR-061 lands;
 - contract/model follow-ups: registration idempotency, geo query approach, GPX parsing off
   the event loop, cover image pipeline (KI-009, CR-083..CR-086);
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);
 - production 2GIS credentials, notification provider (ADR-007 Pending) and S3 provider are
   still absent;
-- `docs/api.md` describes auth and `/health` endpoints that have no implementation
-  (contract-first, deliberate);
+- `docs/api.md` describes login/logout/`me`/forgot-password/reset-password endpoints
+  that have no implementation yet (contract-first, deliberate) — register/verify-email
+  are implemented as of CR-011;
 - `docs/design.md` exists and CR-063..CR-066 now implement its tokens, formatters,
-  metric components, and state primitives in full — Design-foundations phase is
-  complete, CR-011 is next;
+  metric components, and state primitives in full; CR-011 is the first real screen
+  built on top of them;
 - KI-020: `apps/web/components.json`'s shadcn alias still points into `apps/web`, not
-  `packages/ui` — CR-066 hand-vendored `Skeleton` (trivial enough to not need the
-  CLI), a scoped workaround, not a resolution; the alias/CLI-targeting question stays
-  open for the first structurally complex primitive (`Dialog`/`Select`/...) a future
-  CR needs;
+  `packages/ui` — `Skeleton` (CR-066) and `Button`/`Input`/`Card` (CR-011) are real
+  shadcn primitives hand-vendored directly instead (structurally trivial enough not
+  to need the CLI); the alias/CLI-targeting question stays open for the first
+  structurally complex primitive (`Dialog`/`Select`/...) a future CR needs;
 - KI-021: `RideService`/registration-state keys in `packages/ui/src/terminology.ts` are
   provisional pending the real `RideService` DB enum (not yet scheduled with a CR
   number) — ride status/bicycle type are unaffected, already sourced from
@@ -375,4 +421,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-13 (CR-066)
+2026-09-13 (CR-011)

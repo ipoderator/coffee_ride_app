@@ -2,7 +2,17 @@
 
 Conceptual model. Exact columns and indexes evolve through migrations.
 
-- User — account.
+- User — account. First real table (CR-011): `id`, `email` (unique, stored
+  lowercased by the service layer), `passwordHash` (Argon2id), `emailVerified`
+  (default `false`, flipped by verify-email), `createdAt`/`updatedAt`
+  (`timestamptz`). No `passwordHash` ever leaves `apps/api` in a response.
+- EmailVerificationToken — one row per issued verification token for a User
+  (CR-011): `id`, `userId` (FK → User, cascade delete), `tokenHash` (SHA-256 of
+  the raw token — the raw value is never persisted, same pattern as ADR-013's
+  `Session.tokenHash`), `expiresAt` (24h, `timestamptz`), `usedAt` (nullable —
+  null means unused, single-use once set), `createdAt`. Not one of the fixed
+  domain entities in `.claude/CLAUDE.md` — an auth implementation detail, not
+  a product concept.
 - OrganizerProfile — public organizer data linked to User.
 - Ride — cycling event owned by OrganizerProfile.
 - Route — route geometry and metadata.

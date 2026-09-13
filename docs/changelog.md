@@ -1415,3 +1415,130 @@ vendors. Everything else from CR-065's known-limitations list is unchanged.
 Follow-up: Design-foundations phase (CR-063..CR-066) is now complete. CR-011 (User
 registration) is next — the first real screen and first consumer of every token/
 formatter/component this phase built.
+
+## 2026-09-13 — CR-011 — User registration
+
+Summary: first real screen, first `packages/db` domain tables, first `apps/api` capability
+module, and first consumer of every `packages/ui`/`packages/types` piece CR-063..CR-066
+built. Implements `POST /v1/auth/register` and `POST /v1/auth/verify-email` (full
+verification cycle; real email delivery stays out of scope pending ADR-007) plus the
+`/register` web screen. Login/session is CR-012, not this ticket.
+
+`packages/db`: `users` (`id`, `email` unique/lowercased, `passwordHash`, `emailVerified`
+default `false`, `createdAt`/`updatedAt` `timestamptz` per ADR-012) and
+`email_verification_tokens` (`id`, `userId` FK cascade-delete, `tokenHash` unique — the
+raw token is never persisted, same pattern as ADR-013's `Session.tokenHash` — `expiresAt`
+24h, `usedAt` nullable/single-use, `createdAt`). Migration generated via
+`drizzle-kit generate` and live-applied against a local scratch Postgres database
+(`coffee_ride_dev`, Homebrew Postgres 14 — Docker still unreachable in this environment,
+KI-019); schema live-verified with `\d users`/`\d email_verification_tokens`.
+
+`packages/types`: `User` (public-safe: no `passwordHash`) and the shared
+`registerRequestSchema`/`verifyEmailRequestSchema` Zod contract (`api/auth.ts`) — the
+same schema validates on both `apps/api` (server) and `apps/web` (client-side inline
+validation), so the two can't drift. Added `zod` as a real dependency of `packages/types`.
+
+`apps/api`: `DATABASE_URL` is now required in `env.ts` (first real DB consumer);
+`src/plugins/db.ts` decorates the Fastify instance with a `db` client, mirroring
+`redis.ts`/`s3.ts`'s factory shape. First capability module,
+`src/modules/auth/` (`.claude/rules/architecture.md`): `password.ts` (Argon2id via the
+`argon2` package — user's explicit choice over bcrypt), `tokens.ts` (crypto-random raw
+token + its SHA-256 hash for storage), `auth.service.ts` (`registerUser`/`verifyEmail`,
+transactional inserts/updates, a unique-violation race guard on top of the pre-check,
+domain errors carrying `code`/`statusCode`/`title` that the shared error handler now
+prefers over a bare `error.name`), `auth.routes.ts` (thin `FastifyPluginAsyncZod`
+handlers — needed for `request.body` to type correctly through the Zod provider chain;
+response schemas built from an explicit Zod object, not just the `User` type, so the
+serializer strips any unlisted field as a second line of defense against ever leaking
+`passwordHash`). `@fastify/rate-limit` registered globally (lenient 100/min default) with
+a stricter 5/min/IP tier on both auth routes via per-route `config.rateLimit` — in-memory
+store, not Redis (KI-014: Redis unverified in this environment; scope boundary, not an
+oversight — see `.claude/context/known-issues.md` KI-022 for what's still interim).
+`verificationUrl` (a `/v1/auth/verify-email?token=...` path, not a clickable page — none
+exists yet) is present in the register response only outside production. 15 new Vitest
+tests (`app.test.ts` updated for the now-required `DATABASE_URL`; new
+`auth.routes.test.ts` against a real live Postgres database — register happy path,
+production hides `verificationUrl`, duplicate email 409 (incl. case-insensitivity),
+validation 400, rate-limit 429, verify-email happy/unknown/already-used/expired).
+
+`packages/ui`: first form primitives — `Button` (variant/`isLoading`, 44px touch target,
+visible focus ring), `Input`, `FormField` (clones its child control to wire
+`id`/`aria-describedby`/`aria-invalid` — real `<label>`+linked error text per
+`.claude/rules/frontend.md`/§12), `Card` — hand-vendored against existing tokens, same
+precedent as `Skeleton` (KI-020, updated: these are real shadcn primitives but
+structurally trivial, same reasoning). `AUTH_TERMS` added to `terminology.ts` (register
+screen's Russian copy — no hard-coded string in the component). 82 `packages/ui` tests
+passing (was 54). Fixed a real bug found while writing these: `vitest.setup.ts` never
+registered React Testing Library's cleanup (no `test.globals`, so RTL's own auto-cleanup
+never self-registers) — every multi-test component file was leaking renders into the next
+test's DOM; added an explicit `afterEach(cleanup)`.
+
+`apps/web`: `next.config.ts` gains `rewrites()` (`/api/v1/*` → `API_INTERNAL_URL`, new env
+var, single-origin per ADR-013) and a webpack `resolve.extensionAlias` (`.js` → `.ts`/
+`.tsx`/`.js`) — `packages/types` is written for `tsc`'s NodeNext resolution (explicit
+`.js`-suffixed relative imports pointing at `.ts` files), which webpack doesn't understand
+by default; `apps/web` is `types`' first bundler-based consumer. `src/features/auth/
+register/` (`.claude/rules/extensibility.md` feature-module shape): `api.ts` (typed
+client, `ApiError` carrying the full `ProblemDetails`), `components/RegisterForm.tsx`
+(client-side Zod validation, pending state, duplicate-submit guard against a second
+Enter-key submit, server-error mapping — `email_already_registered` → field error,
+`validation_error` → field errors, anything else → generic message — success state with
+the dev-only verification note). `src/app/register/page.tsx` is the route. 8 new tests.
+
+Live check (this session): both servers run against the real scratch Postgres database;
+register → duplicate-email (409) → verify-email (200, then already-used 400, then unknown 400) → validation failure (400) all exercised over real HTTP with curl, matching the RFC
+9457 envelope and rate-limit headers exactly. `/register` screenshotted via the
+browser-automation skill in both themes (dark via the `.dark` class — this app's dark mode
+is class-based, not `prefers-color-scheme`, per CR-063), then the full form flow (fill,
+submit, success state incl. the dev-only link) driven live in the browser: 0 console
+errors, 0 failed requests throughout.
+
+`npx turbo run lint typecheck build test` all green (run separately per task — a combined
+`lint typecheck build test` invocation raced `web:typecheck` against `web:build` over the
+same `.next` directory and produced a spurious `.next/types` failure; not a real bug, just
+an ordering hazard from running them concurrently against one package). `pnpm format:check`
+/ `pnpm lint:root` clean.
+
+A real, previously-only-predicted bug was confirmed live and is now blocking (not part of
+this ticket's own acceptance criteria, which don't execute compiled output): running
+`NODE_ENV=production node dist/server.js` (mirroring CR-003's original smoke test) crashes
+immediately — `packages/db` (and, untested but almost certainly, `packages/types`) export
+raw TS source via their `package.json`, which plain `node` cannot resolve the way `tsx`/
+`tsc` do. See `.claude/context/known-issues.md` KI-017 (updated, now confirmed) — resolving
+it is an architecture/tooling decision (dist-based exports + a dev-time build step, or a
+bundler for `apps/api`'s own build) that needs its own ADR, not a fix folded into this
+feature ticket.
+
+Added `.github/workflows/ci.yml`: a "Run database migrations" step
+(`pnpm --filter db db:migrate`) before Format/Lint/Test — CI's `postgres` service starts
+empty and the new auth tests need the real schema.
+
+Files: `packages/db/src/schema/{user,email-verification-token,index}.ts`,
+`packages/db/migrations/0000_majestic_silver_fox.sql`, `packages/types/src/{domain/user,
+api/auth,index}.ts`, `packages/types/package.json` (added `zod`), `apps/api/src/env.ts`,
+`apps/api/src/app.ts`, `apps/api/src/plugins/db.ts` (new), `apps/api/src/routes/v1.ts`,
+`apps/api/src/modules/auth/` (new: `password.ts`, `tokens.ts`, `auth.service.ts`,
+`auth.routes.ts`, `auth.routes.test.ts`), `apps/api/src/app.test.ts`,
+`apps/api/src/plugins/error-handler.ts` (title fallback), `apps/api/package.json` (added
+`argon2`, `@fastify/rate-limit`, `db`, `drizzle-orm`, moved `types` to dependencies),
+`packages/ui/src/components/{Button,Input,FormField,Card}.tsx` + tests,
+`packages/ui/src/{index,terminology}.ts`, `packages/ui/vitest.setup.ts`,
+`apps/web/next.config.ts`, `apps/web/.env.example`/`.env.example` (`API_INTERNAL_URL`),
+`apps/web/package.json` (added `types`), `apps/web/src/features/auth/register/`,
+`apps/web/src/app/register/page.tsx`, `.github/workflows/ci.yml`, `docs/{database,api,
+tasks}.md`, `.claude/context/known-issues.md` (KI-017 updated, KI-020 updated, KI-022
+new).
+
+Decisions: none new at the ADR level. `packages/types` now carries a real runtime
+dependency (`zod`) for the first time, not just types — consistent with ADR-011's contract
+already being "the two packages share a schema," just not exercised until now.
+
+Known limitations: KI-022 (new) — auth endpoints ship without `@fastify/helmet`/CSRF
+(CR-061) or Redis-backed per-account rate limiting (CR-058) yet, per this ticket's
+documented scope boundaries; low risk until CR-012 ships a real session. KI-017 (updated)
+— `apps/api`'s compiled production boot is confirmed broken until `db`/`types` switch to
+`dist` exports or `apps/api`'s build switches to a bundler; both are deferred, ADR-worthy
+decisions. KI-021 (`RideService`/registration-state terminology keys) unaffected — nothing
+here touches those.
+
+Follow-up: CR-012 (login/logout/session) is next.

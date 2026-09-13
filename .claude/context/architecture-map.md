@@ -133,6 +133,31 @@ fragment (`tsconfig/node-library.json`) no longer extends
 `tsconfig.base.json` itself — see KI-018 — every consumer now extends both
 directly as a TS 5+ array.
 
+`packages/db` gained its **first domain tables** (CR-011, 2026-09-13): `users`
+and `email_verification_tokens` (`src/schema/`), migrated via
+`drizzle-kit generate` and live-applied against a local scratch Postgres
+database. `apps/api` gained its **first capability module**,
+`src/modules/auth/` (`.claude/rules/architecture.md`'s feature-boundary list —
+`password.ts`/`tokens.ts`/`auth.service.ts`/`auth.routes.ts`), its first real
+`/v1` routes (`POST /v1/auth/register`, `POST /v1/auth/verify-email`), a `db`
+plugin decorating the Fastify instance (mirroring `redis.ts`/`s3.ts`), and
+`@fastify/rate-limit` (global lenient default + a stricter per-route tier on
+auth). `packages/types` gained its **first domain type** (`User`) and **first
+real runtime dependency** (`zod`, for the shared register/verify-email
+contract — previously pure erased `interface`s). `packages/ui` gained its
+**first form primitives** (`Button`/`Input`/`FormField`/`Card`). `apps/web`
+gained its **first real screen** (`/register`, `src/features/auth/register/`
+— `.claude/rules/extensibility.md`'s feature-module shape) and its first
+`next.config.ts` customization: `rewrites()` (`/api/v1/*` → `API_INTERNAL_URL`,
+ADR-013 single-origin) and a webpack `resolve.extensionAlias` (`packages/types`
+is `apps/web`'s first bundler-bundled workspace package written for `tsc`'s
+NodeNext `.js`-suffixed-imports-of-`.ts`-files convention, which webpack
+doesn't understand without this). Confirmed live this session: `apps/api`'s
+compiled `dist/server.js` cannot boot under plain `node` once a package like
+`db` has a real runtime (not type-only) consumer — KI-017, now a confirmed
+blocker rather than a predicted risk, deferred pending an ADR (dist-based
+package exports vs. bundling `apps/api`'s own build).
+
 ## Target structure
 
 apps/

@@ -7,11 +7,10 @@
 //
 // Russian number/unit formatters and UI terminology mapping (CR-064, docs/design.md
 // §7/§13), the shared `cn` class-name helper, the metric presentation components
-// (`MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale`, CR-065, §6), and the
-// shared state primitives (`Skeleton`/`EmptyState`/`ErrorState`, CR-066, §10) are this
-// entry point's exports so far — the last Design-foundations task before apps/web has
-// a real screen to put any of this on (CR-011). Read `docs/design.md` before adding to
-// any of these.
+// (`MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale`, CR-065, §6), the
+// shared state primitives (`Skeleton`/`EmptyState`/`ErrorState`, CR-066, §10), and
+// the form primitives (`Button`/`Input`/`FormField`/`Card`, CR-011, §9) are this
+// entry point's exports so far. Read `docs/design.md` before adding to any of these.
 export * from './format';
 export * from './terminology';
 export * from './lib/cn';
@@ -22,3 +21,7 @@ export * from './components/DifficultyScale';
 export * from './components/Skeleton';
 export * from './components/EmptyState';
 export * from './components/ErrorState';
+export * from './components/Button';
+export * from './components/Input';
+export * from './components/FormField';
+export * from './components/Card';

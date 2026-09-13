@@ -131,3 +131,24 @@ export const REGISTRATION_ACTION_TERMS: Record<RegistrationActionKey, string> =
 export const UI_TERMS = {
   retry: 'Повторить',
 } as const;
+
+/**
+ * Register screen copy (CR-011, `.claude/rules/frontend.md`: no hard-coded
+ * user-visible Russian string in a component). `emailAlreadyRegistered` maps
+ * the API's `email_already_registered` domain code (`docs/api.md`) to a
+ * field-level message; other server errors fall back to `genericError`.
+ */
+export const AUTH_TERMS = {
+  emailLabel: 'Email',
+  passwordLabel: 'Пароль',
+  passwordHint: 'Минимум 12 символов.',
+  registerSubmit: 'Зарегистрироваться',
+  registerSubmitPending: 'Регистрация…',
+  registerSuccessTitle: 'Аккаунт создан',
+  registerSuccessBody:
+    'Проверьте почту, чтобы подтвердить адрес и активировать аккаунт.',
+  registerSuccessDevNote:
+    'Только для этого окружения — ссылка для подтверждения:',
+  emailAlreadyRegistered: 'Аккаунт с таким email уже существует.',
+  genericError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
+} as const;

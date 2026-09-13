@@ -147,34 +147,57 @@ call, inspect the actual response) before CR-026 (map discovery), CR-028
 (route rendering), or CR-084 (geo query approach) wires this adapter into a
 real route.
 
-### KI-017 — `packages/maps-2gis` (and `packages/db`) export raw TS source, not compiled `dist`
+### KI-017 — `packages/maps-2gis`/`packages/db`/`packages/types` export raw TS source, not compiled `dist`
 
-Status: open. Discovered: 2026-09-12 (CR-007).
-Problem: both packages' `package.json` `main`/`types`/`exports` point at
-`./src/*.ts`, not `./dist/*.js`. `tsx` (dev) and `tsc` (typecheck, and
-build-time type resolution) both handle that fine — confirmed live for the
-`packages/types` case, which is pure types and therefore never needs runtime
-resolution at all (`import type` is fully erased, verified by inspecting
-compiled `apps/api` output). But `packages/maps-2gis`'s
-`create2GisMapProvider` and `packages/db`'s `createDbClient` are real
-runtime values, not types — a plain `node dist/server.js` (no `tsx`) trying
-to `import` either package at runtime would fail to resolve a `.ts` file,
-since Node doesn't understand that extension without a loader.
-Impact: none today — neither package has a real consumer yet (`apps/api`
-doesn't import `db` until CR-011, doesn't import `maps-2gis` until CR-026/
-CR-028/CR-084), so this has never actually been exercised end to end.
-`packages/maps-core` and `packages/types` are unaffected by construction:
-both are 100% type-only (`interface`s only), so they can never have a
-runtime resolution question regardless of what their `exports` field says.
-Workaround: none needed yet.
-Next action: before wiring `maps-2gis` or `db` into any code path `apps/api`
-actually runs via `node dist/server.js` (not `tsx`), switch that package to
-declaration-based `dist` exports (`"types": "./dist/index.d.ts"`, `"main":
-"./dist/index.js"`, `"exports"` pointing at `dist`, `"declaration": true` in
-its `tsconfig.json` — the root `tsconfig.base.json` sets `declaration:
-false` for application entry points, which is correct for `apps/*` but not
-for a library package meant to be imported elsewhere) and confirm `node
-dist/server.js` actually boots with a real cross-package import.
+Status: open — **confirmed live and now blocking** (CR-011; was previously a
+predicted-but-unverified risk). Discovered: 2026-09-12 (CR-007).
+Problem: `packages/db`, `packages/types`, and `packages/maps-2gis`'s
+`package.json` `main`/`types`/`exports` all point at `./src/*.ts`, not
+`./dist/*.js`. `tsx` (dev, `vitest`) and `tsc` (typecheck, and build-time type
+resolution) both handle that fine. But `packages/db`'s `createDbClient` and
+`packages/types`' `registerRequestSchema`/`verifyEmailRequestSchema` (real
+runtime values, not types — unlike `ProblemDetails`/`Paginated<T>`, which are
+`import type` and fully erased) are not: a plain `node` process resolving
+either package's package.json `main`/`exports` lands on a `.ts` file, and
+Node has no loader registered to understand that extension outside `tsx`.
+`packages/maps-core` is unaffected by construction (100% type-only
+interfaces).
+Impact: **confirmed this session (CR-011)**, not hypothetical — `apps/api`
+got its first real runtime consumer of `db` (the auth module) and of `types`'
+Zod schemas (`auth.routes.ts`). Live-tested `NODE_ENV=production node
+dist/server.js` (mirroring CR-003's original compiled-boot smoke test) after
+`pnpm --filter api build`: it crashes immediately —
+`ERR_MODULE_NOT_FOUND: Cannot find module '.../packages/db/src/schema/
+index.js' imported from '.../packages/db/src/client.ts'` (Node's native
+`.ts` type-stripping loads `client.ts` itself, since that's the literal file
+`db`'s `exports` names, but does not rewrite `client.ts`'s own `.js`-suffixed
+relative import of its NodeNext-style sibling `schema/index.ts`). `types`
+would very likely fail the identical way immediately after (untested past the
+first crash — `db` resolves first in `apps/api`'s import graph).
+`apps/web`'s equivalent problem (webpack, not plain `node`, trying to bundle
+`types`' `.js`-suffixed relative imports) was fixed differently and does not
+need this: a `resolve.extensionAlias` entry in `next.config.ts` teaches
+webpack the same `.js`→`.ts` mapping `tsc`/`tsx` already understand. That
+fix is scoped to webpack/`apps/web` only — it does nothing for `apps/api`'s
+compiled output running under plain `node`.
+Workaround: none for production. `apps/api`'s actual CR-011 acceptance
+criteria (dev-mode live check via `tsx`, all four `vitest` suites, `tsc`
+typecheck/build) are unaffected — none of them execute `dist/server.js`
+under plain `node`. This is a real, separate gap from any of those, on the
+production-boot path only.
+Next action: before `apps/api` is ever deployed for real (CR-074+), resolve
+this — either (a) switch `db`/`types` to declaration-based `dist` exports
+(`"types": "./dist/index.d.ts"`, `"main"/"exports"` pointing at `dist`,
+`"declaration": true` in their `tsconfig.json`) and add a `predev`/watch
+build step so `apps/api`'s `tsx watch` dev flow keeps working without a
+manual build first, or (b) switch `apps/api`'s own `build` script to a
+bundler (esbuild/tsup) that inlines workspace-package source instead of
+leaving cross-package `import`s for Node to resolve at runtime — either is an
+architecture/tooling decision (`.claude/rules/architecture.md`'s change
+control) that needs an explicit ADR, not a silent fix inside a feature
+ticket, which is why CR-011 documents this rather than resolving it
+unilaterally. Re-run the same `NODE_ENV=production node dist/server.js`
+smoke test after whichever fix lands.
 
 ### KI-018 — `packages/config`'s shared tsconfig fragment broke under Vite 8's oxc transform
 
@@ -286,6 +309,39 @@ would be real, error-prone work to hand-roll and should either repoint
 package first) or make a deliberate one-time call to keep hand-vendoring everything.
 Still open; next action unchanged until whichever CR needs the first non-trivial
 primitive.
+Update 2026-09-13 (CR-011): `Button`/`Input`/`Card` are real shadcn-registry
+primitives too (unlike CR-065's four) but, like `Skeleton`, structurally trivial
+— hand-vendored directly against `packages/ui`'s tokens/`cn` rather than
+resolving the CLI-targeting question. `FormField` has no shadcn equivalent
+(this project's own composition of label + control + error/hint), so it isn't
+relevant to this issue either way. Still open; next action unchanged.
+
+### KI-022 — Auth endpoints ship with an interim, weaker security posture than `.claude/rules/security.md`'s full checklist
+
+Status: open — tracked, not a regression. Discovered: 2026-09-13 (CR-011).
+Problem: CR-011 is the first ticket to add real auth endpoints
+(`POST /v1/auth/register`, `POST /v1/auth/verify-email`), but three items
+`.claude/rules/security.md` calls for are deliberately not yet in place,
+per the CR-011 plan's own documented scope boundaries (not oversights):
+(1) rate limiting on `/v1/auth/*` uses `@fastify/rate-limit`'s in-memory
+store, per-IP only (5/min) — no per-account limiting, and the counter resets
+on every process restart / isn't shared across multiple `apps/api` instances;
+(2) no `@fastify/helmet` security headers (CSP, X-Content-Type-Options,
+frame-ancestors) on any response yet; (3) no `Origin`/`Referer` CSRF check
+on unsafe methods yet.
+Impact: low today — CR-012 (login/session) hasn't shipped a cookie-bearing
+session yet, so there is nothing for a CSRF check to protect and no session
+to attack via a missing security header. But `/v1/auth/register` is live and
+publicly reachable the moment `apps/api` is deployed, with only IP-based
+in-memory rate limiting standing between it and abuse.
+Workaround: none needed before CR-012 ships a real session. Do not deploy
+`apps/api` publicly before at least CR-061 (headers + CSRF) lands, even
+though nothing in CR-011/CR-012's own acceptance criteria blocks on it.
+Next action: CR-058 (`docs/tasks.md`) upgrades auth rate limiting to a
+Redis-backed, per-IP-and-per-account limiter once KI-014 (Redis unverified in
+this environment) is resolved; CR-061 adds `@fastify/helmet` + the
+`Origin`/`Referer` CSRF check ADR-013 already specifies. Revisit this entry
+once both land.
 
 ---
 

@@ -96,10 +96,17 @@ export function registerErrorHandler(app: FastifyInstance) {
     }
 
     request.log.warn({ err: error }, 'Request error');
+    // Domain errors (e.g. `AuthServiceError`) may carry a human-readable
+    // `title` alongside the RFC 9457-required `code` — falls back to
+    // `error.name` for plain thrown errors that don't set one.
+    const title =
+      (error as FastifyError & { title?: string }).title ||
+      error.name ||
+      'Request Error';
     return sendProblem(reply, {
       status,
       code: error.code ? error.code.toLowerCase() : 'request_error',
-      title: error.name || 'Request Error',
+      title,
       detail: error.message,
       instance: request.url,
     });

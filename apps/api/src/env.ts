@@ -14,10 +14,10 @@ const envSchema = z.object({
   // even before CR-012 wires up sessions that actually sign/verify with it.
   AUTH_SECRET: z.string().min(1, 'AUTH_SECRET is required'),
 
-  // Not consumed by any code yet (CR-004/CR-005/CR-006/CR-053+) — optional so a
-  // bare bootstrap boots, but still typed and still checked for known-unsafe
-  // production values below once something does read them.
-  DATABASE_URL: z.string().url().optional(),
+  // Required as of CR-011 (first real DB consumer — `src/plugins/db.ts`, auth
+  // module). Redis/S3 stay optional: still no route consumes either yet
+  // (CR-005/CR-006/CR-053+).
+  DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().optional(),
   S3_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().optional(),

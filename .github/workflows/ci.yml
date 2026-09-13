@@ -54,6 +54,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # First real DB consumer (CR-011) — the `postgres` service above starts
+      # empty; apps/api's auth tests need the real schema applied, the same
+      # way a real deploy would (`packages/db/src/migrate.ts`, CR-076's
+      # eventual deploy-time step).
+      - name: Run database migrations
+        run: pnpm --filter db db:migrate
+
       - name: Format check
         run: pnpm format:check
 

@@ -4,10 +4,14 @@ import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 
 // buildApp() never binds a real port (see its own comment) — every test here
-// drives the instance through Fastify's `.inject()` instead.
+// drives the instance through Fastify's `.inject()` instead. DATABASE_URL is
+// required since CR-011 but never actually queried by these routes — the
+// `postgres` driver connects lazily, so a syntactically valid, unreachable URL
+// is enough (see `auth.routes.test.ts` for tests against a real database).
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
+  DATABASE_URL: 'postgresql://test:test@localhost:5432/unused',
 });
 
 describe('GET /health', () => {

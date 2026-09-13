@@ -1,10 +1,12 @@
 import Fastify from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import {
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
 } from '@fastify/type-provider-zod';
 import type { Env } from './env.js';
+import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerOpenApi } from './plugins/openapi.js';
 import { healthRoutes } from './routes/health.js';
@@ -40,9 +42,15 @@ export async function buildApp(env: Env) {
 
   registerErrorHandler(app);
   await registerOpenApi(app);
+  registerDb(app, env);
+
+  // Lenient global default (in-memory store — see auth.routes.ts's own comment
+  // on why not Redis yet); auth routes override it with a stricter per-route
+  // tier via `config.rateLimit` (`.claude/rules/security.md`).
+  await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 
   await app.register(healthRoutes);
-  await app.register(v1Routes, { prefix: '/v1' });
+  await app.register(v1Routes, { prefix: '/v1', env });
 
   return app;
 }

@@ -13,11 +13,24 @@ alive until every client is migrated (`.claude/rules/extensibility.md`).
 
 ## Auth
 
-POST `/v1/auth/register`
+POST `/v1/auth/register` — **implemented (CR-011)**. Body: `{ email, password }`
+(`password` min 12 chars, `.claude/rules/security.md`). `201` →
+`{ user: { id, email, emailVerified, createdAt }, verificationUrl? }` —
+`verificationUrl` is present only outside production (real email delivery is
+ADR-007, still Pending; see `docs/decisions.md`). `409 email_already_registered`
+on a duplicate email (case-insensitive). Rate-limited (5/min/IP,
+`.claude/context/known-issues.md` KI-022 for the interim-hardening caveats).
+
 POST `/v1/auth/login`
 POST `/v1/auth/logout`
 GET `/v1/auth/me`
-POST `/v1/auth/verify-email`
+
+POST `/v1/auth/verify-email` — **implemented (CR-011)**. Body: `{ token }`.
+`200` → `{ user }` with `emailVerified: true`. `400` with code
+`invalid_verification_token` / `verification_token_already_used` /
+`verification_token_expired` as appropriate — single-use, 24h expiry. Same
+rate-limit tier as register.
+
 POST `/v1/auth/forgot-password`
 POST `/v1/auth/reset-password`
 
