@@ -15,7 +15,8 @@ maps-core, maps-2gis), and CR-008 (Vitest wired for `apps/api`/
 `packages/maps-2gis`/`apps/web`, Playwright wired for `apps/web` e2e) all
 completed 2026-09-12. CR-009 (Configure Docker Compose) and CR-010 (Configure
 CI + Git hooks, lint-staged made workspace-aware) both completed 2026-09-13.
-Foundation phase (CR-001..CR-010) is now fully done.
+Foundation phase (CR-001..CR-010) is now fully done. CR-063 (Design tokens in
+`packages/ui`) also completed 2026-09-13 — the first Design-foundations task.
 
 ## Implemented
 
@@ -97,6 +98,25 @@ the old config, correctly caught under the new one. `.github/workflows/ci.yml`
 reviewed and left unchanged — its Foundation-phase shape was already sound;
 KI-007's remaining gaps (MinIO/migrations/Playwright in CI) stay CR-080's job.
 Foundation phase (CR-001..CR-010) is complete.
+
+Design tokens landed 2026-09-13 (CR-063, see `docs/changelog.md`): the placeholder
+shadcn neutral theme in `apps/web/src/app/globals.css` is replaced by the real
+light/dark palette from `docs/design.md` §3, sourced from a new
+`packages/ui/src/tokens.css` (`:root`/`.dark` CSS custom properties mapped into
+Tailwind v4's `@theme inline`) and consumed via `apps/web`'s first-ever workspace
+dependency on `ui`. Golos Text (UI text) and IBM Plex Mono (tabular/data text) wired
+via `next/font/google` in `layout.tsx`; Cyrillic rendering verified live (not just via
+metadata) with a temporary dev server + the browser-automation skill, in both themes.
+Tailwind v4's default font-size and spacing scales already match `docs/design.md` §4/§5
+exactly, so no parallel tokens were added for either — only radius (8px default, via
+`--radius: 0.5rem`) and one `--shadow-overlay` elevation token were. Added the §14 lint
+rule rejecting raw hex color literals in `apps/web` (`no-restricted-syntax` in
+`apps/web/eslint.config.mjs`), verified live with a staged violation. New open item:
+KI-020 (`apps/web/components.json`'s shadcn alias defaults into `apps/web`, not
+`packages/ui`, as `docs/design.md` §9/§14 requires — must be resolved by CR-065/CR-066
+before vendoring the first component). No shared components exist yet
+(`packages/ui/src/index.ts` is still `export {}`) — that starts with CR-064's formatter
+module, then CR-065/CR-066.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -195,8 +215,8 @@ None.
 
 ## Next
 
-CR-063/CR-064 — Design foundations (tokens + Russian formatters), which must
-land before CR-011 (User registration) per `docs/design.md`.
+CR-064 — Russian formatters + UI terminology mapping (`docs/design.md` §7/§13), the
+other named Design-foundations prerequisite for CR-011 (User registration).
 
 ## Important decisions
 
@@ -253,7 +273,10 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   still absent;
 - `docs/api.md` describes auth and `/health` endpoints that have no implementation
   (contract-first, deliberate);
-- `docs/design.md` exists but nothing implements it — CR-063/CR-064 block CR-011.
+- `docs/design.md` exists and CR-063 now implements its tokens — CR-064 (formatters)
+  still blocks CR-011;
+- KI-020: `apps/web/components.json`'s shadcn alias needs pointing at `packages/ui`
+  (or a manual-vendor workaround decided) before CR-065/CR-066's first component.
 
 ## Do not break
 
@@ -273,4 +296,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-13 (CR-010)
+2026-09-13 (CR-063)

@@ -91,9 +91,10 @@ Must land before the first user-facing screen (CR-011's register form) — see
 `docs/design.md`. Retrofitting tokens, formatters and states after the screens exist is a
 rewrite, not a polish pass.
 
-- [ ] CR-063 Design tokens in `packages/ui` (light + dark palette, typography, spacing,
+- [x] CR-063 Design tokens in `packages/ui` (light + dark palette, typography, spacing,
       radius) exposed via the Tailwind theme; lint rule rejecting raw hex colors in
-      `apps/web`
+      `apps/web` — done 2026-09-13: `packages/ui/src/tokens.css`, Golos Text/IBM Plex
+      Mono wired via `next/font/google` in `apps/web`'s layout. See `docs/changelog.md`.
 - [ ] CR-064 Russian formatters (distance/elevation/pace/duration/date/price/participants)
       and the UI terminology mapping (status, bicycle type, services) as one shared,
       unit-tested module — `docs/design.md` §7, §13

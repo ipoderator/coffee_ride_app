@@ -35,6 +35,25 @@ const eslintConfig = [
   {
     rules: {
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // docs/design.md §14 (CR-063): feature code uses a design token
+      // (`bg-bg-raised`, `text-text-secondary`, ...) from packages/ui's
+      // Tailwind theme, never a raw hex literal — inline style, a Tailwind
+      // arbitrary value (`bg-[#123456]`), or anywhere else. The tokens
+      // themselves live in packages/ui/src/tokens.css, a CSS file this rule
+      // (JS/TS-only) never touches, so it can't flag its own source of truth.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/#[0-9a-fA-F]{3,8}\\b/]',
+          message:
+            'Raw hex colors are not allowed here — use a design token from packages/ui (docs/design.md §3).',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]',
+          message:
+            'Raw hex colors are not allowed here — use a design token from packages/ui (docs/design.md §3).',
+        },
+      ],
     },
   },
 ];

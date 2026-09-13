@@ -1115,3 +1115,112 @@ environment) is unrelated to and unaffected by this task.
 Follow-up: no more Foundation-phase tooling CRs remain unassigned before CR-011 (User
 registration) — CR-001..CR-010 are now all done. Design foundations (CR-063/CR-064) are
 the actual blocker for CR-011 per `docs/design.md`.
+
+## 2026-09-13 — CR-063 — Design tokens in `packages/ui`
+
+`docs/design.md` §14 names CR-063/CR-064 as hard prerequisites for CR-011 — the first
+real screen. CR-063 replaces `apps/web`'s placeholder shadcn neutral theme with the real
+light/dark palette, typography and radius tokens from `docs/design.md` §3-§5/§12, sourced
+from `packages/ui` as the spec requires, not from `apps/web` itself.
+
+Added `packages/ui/src/tokens.css`: the full light + dark palette (`bg`, `bg-raised`,
+`text`, `text-secondary`, `text-muted`, `primary`, `on-primary`, `success`, `warning`,
+`danger`, `on-danger`, `info`, `border`, `border-input`, plus the data-viz
+`chart-secondary` clay tone) as `:root`/`.dark` CSS custom properties, mapped into
+Tailwind v4's `@theme inline` so feature code gets `bg-bg-raised`/`text-text-secondary`/
+`border-border-input` utility classes instead of a hex literal. Dark theme lands with
+this task, not deferred, per §3. Exposed via `packages/ui`'s `exports` field
+(`"./tokens.css": "./src/tokens.css"`) and consumed from `apps/web/src/app/globals.css`
+via `@import 'ui/tokens.css'` — `apps/web` now depends on `ui` as a workspace package for
+the first time.
+
+Radius: base `--radius` changed from the shadcn default (0.625rem/10px) to 0.5rem/8px so
+the existing `radius-sm/md/lg/xl` derivation (already in the scaffold) lands on §5's 8px
+default / 12px large-surface values without inventing a new derivation scheme.
+
+Typography (§4): did **not** add a custom Tailwind font-size scale — checked Tailwind
+v4's default `text-xs`..`text-4xl` scale against §4's 12/14/16/18/20/24/30/36px spec
+first and it already matches exactly, so introducing parallel tokens would only
+duplicate it. Same check for spacing (§5): Tailwind's default spacing scale is 4px
+multiples, already matching §5's 4/8/12/16/24/32/48/64 scale — no override added. Golos
+Text (UI text) and IBM Plex Mono (tabular/data text) wired via `next/font/google` in
+`apps/web/src/app/layout.tsx`, binding to `--font-golos`/`--font-plex-mono` CSS
+variables that `tokens.css`'s `--font-sans`/`--font-mono` theme keys read via a nested
+`var(..., fallback)` — verified Cyrillic coverage two ways before adopting either face
+(§4's explicit requirement): (1) checked the installed `next@15.5.25`'s bundled Google
+Fonts metadata directly — both faces list `cyrillic`/`cyrillic-ext` subsets; (2) live
+render via a temporary `next dev` server + the browser-automation skill — screenshot and
+`getComputedStyle` both confirmed Golos Text actually applied and rendering the
+placeholder page's Russian text correctly, in both light and dark (`.dark` class toggled
+live; computed `background-color`/`color` matched the token hex values exactly in both
+modes).
+
+Focus ring (§12 — "visible focus ring on every interactive element, 2px `primary`, 2px
+offset"): added as a global `:focus-visible` base style now rather than left for CR-045,
+since CR-045 is explicitly an audit of existing usage, not the place new tokens are
+introduced.
+
+Elevation (§5): added one `--shadow-overlay` theme token (soft, low shadow) for
+popover/modal/sheet use; resting cards get no shadow token at all — a hairline border via
+the existing `@apply border-border` base rule is the whole treatment, per §5's "at most
+two levels" rule.
+
+Lint rule (§14 — "reject raw hex colors in apps/web"): added to `apps/web/eslint.config.mjs`
+as a scoped `no-restricted-syntax` rule matching a hex-color pattern in string literals and
+template elements — deliberately JS/TS-only (ESLint doesn't parse `packages/ui/src/tokens.css`
+under this ruleset, so it can't flag its own source of truth) and deliberately scoped to
+`apps/web` only, matching §14's exact wording rather than added to the shared
+`packages/config` ESLint factory. Verified live: staged a real `'#123abc'` string literal
+in `apps/web/src/app/page.tsx`, confirmed `pnpm --filter web exec eslint` reported it,
+then reverted the test edit (`git diff`/`git status` confirmed clean afterward, along with
+the genuine `text-muted-foreground` → `text-text-secondary` fix that page needed anyway
+now that the old shadcn token no longer exists).
+
+Also reverted, before starting this task: an unrelated, undocumented change to
+`.vscode/extensions.json` (removed the `ms-playwright.playwright` recommendation) found
+sitting in the working tree from before this session, with no changelog entry
+attributing it to CR-009 or CR-010 and no relation to either task's actual scope —
+confirmed with the user rather than guessed at, then discarded.
+
+Also committed, at the start of this session, the CR-009/CR-010 work that had been
+completed but not yet committed (`0e54dc2`) — both bundled into one commit rather than
+split, since `current-task.md`/`project-state.md` are overwritten snapshots and the
+intermediate "CR-009 done, CR-010 not yet" state no longer exists in the working tree to
+commit separately without fabricating it.
+
+Validation: `turbo run lint typecheck build test --force` — 24/24 tasks green (`apps/web`
+gained a `test` task's worth of coverage from its existing Vitest suite, now actually
+exercised against the new tokens — the placeholder page's smoke test still passes
+unmodified, since it asserts on text content, not classes). `apps/web`'s Playwright e2e
+suite (`home.spec.ts`) passes against a real `next build`. `pnpm format:check`/
+`lint:root` clean. One stale-`.next` gotcha hit and resolved along the way: an interim
+`next dev` session (used for the live font/token render check) left `apps/web/.next` in a
+dev-mode state missing the route type-stub files `web:typecheck` expects
+(`.next/types/app/*.ts`) — `next build` (production) regenerates these upfront; `next
+dev` does not for unvisited routes. Deleting `apps/web/.next` before the final validation
+pass resolved it; not a token/tooling bug, just an artifact of manually running the dev
+server mid-task.
+
+No database migration, no API route change. New dependency: `apps/web` now depends on
+`ui` (`workspace:*`) for the first time — its first real cross-package dependency inside
+`apps/web` (`packages/types`'s only current consumer is `apps/api`).
+
+Files: `packages/ui/src/tokens.css` (new), `packages/ui/package.json` (`exports` entry),
+`packages/ui/src/index.ts` (comment updated), `apps/web/package.json` (`ui` dependency),
+`apps/web/src/app/globals.css` (rewritten), `apps/web/src/app/layout.tsx` (next/font
+wiring), `apps/web/src/app/page.tsx` (token class fix), `apps/web/eslint.config.mjs`
+(hex-color rule), `pnpm-lock.yaml`, `.claude/context/known-issues.md` (KI-020 added),
+`docs/tasks.md` (CR-063 checked off), `.claude/context/{project-state,current-task}.md`.
+
+Decisions: none new at the ADR level — this implements `docs/design.md`'s already-decided
+token spec; no palette/typography value was changed from what §3/§4 already specifies.
+
+Known limitations: KI-020 (new) — `apps/web/components.json`'s shadcn alias defaults to
+generating vendored components inside `apps/web`, not `packages/ui`, which
+`docs/design.md` §9/§14 requires; must be resolved before CR-065/CR-066 vendors the first
+real component, not after. Everything else from CR-010's known-limitations list is
+unchanged.
+
+Follow-up: CR-064 (Russian formatters + UI terminology mapping) is next — the other
+named prerequisite for CR-011, and the last remaining item before `docs/design.md`'s
+component work (CR-065/CR-066) and the first real screen (CR-011) can start.

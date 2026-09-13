@@ -1,0 +1,102 @@
+/*
+ * Coffee Ride design tokens (CR-063, docs/design.md §3-§5, §12).
+ *
+ * Semantic CSS custom properties for the light/dark palette, typography and
+ * radius, plus the Tailwind v4 `@theme` mapping that turns them into utility
+ * classes (`bg-bg-raised`, `text-text-secondary`, `border-border-input`, ...).
+ *
+ * Consumed by apps/web/src/app/globals.css via `@import 'ui/tokens.css'`
+ * (resolved through this package's `exports` field — see package.json).
+ *
+ * Feature code never hard-codes these hex values (docs/design.md §14) — it
+ * uses the generated utility classes. `apps/web`'s ESLint config enforces this
+ * with a rule rejecting raw hex literals.
+ */
+
+:root {
+  /* Light theme (docs/design.md §3) */
+  --bg: #faf9f7;
+  --bg-raised: #ffffff;
+  --text: #23211e;
+  --text-secondary: #5f5952;
+  --text-muted: #767068;
+  --primary: #35635a;
+  --on-primary: #ffffff;
+  --success: #3f6b4e;
+  --warning: #8a6520;
+  --danger: #d42b20;
+  --on-danger: #ffffff;
+  --info: #3d5f85;
+  --border: #e4e0d9;
+  --border-input: #8c857d;
+
+  /* Data visualization (§3) — the primary series reuses `primary` at low
+     opacity in the component itself; this is only the second-series tone. */
+  --chart-secondary: #a8705a;
+
+  /* Radius (§5): 8px default, 12px large surfaces/sheets, full for pills
+     (Tailwind's built-in `rounded-full` already covers the pill case). */
+  --radius: 0.5rem;
+
+  /* Typography (§4). Golos Text / IBM Plex Mono are loaded via
+     `next/font/google` in apps/web's layout.tsx, which binds the actual
+     webfont to the `--font-golos`/`--font-plex-mono` custom properties below.
+     The nested `var(..., fallback)` keeps this stylesheet safe to use
+     wherever that wiring is absent (e.g. a future non-Next consumer, or a
+     test environment that doesn't render layout.tsx). */
+  --font-golos-fallback: -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-plex-mono-fallback: ui-monospace, 'SFMono-Regular', monospace;
+}
+
+.dark {
+  --bg: #171614;
+  --bg-raised: #201f1c;
+  --text: #edeae4;
+  --text-secondary: #aba49b;
+  --text-muted: #8c857c;
+  --primary: #7fb3a6;
+  --on-primary: #171614;
+  --success: #84ae8f;
+  --warning: #c6a063;
+  --danger: #ff5a4f;
+  --on-danger: #171614;
+  --info: #8cacce;
+  --border: #302d29;
+  --border-input: #736e66;
+
+  --chart-secondary: #c29580;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-raised: var(--bg-raised);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-border-input: var(--border-input);
+  --color-chart-secondary: var(--chart-secondary);
+}
+
+@theme {
+  --font-sans: var(--font-golos, 'Golos Text'), var(--font-golos-fallback);
+  --font-mono:
+    var(--font-plex-mono, 'IBM Plex Mono'), var(--font-plex-mono-fallback);
+
+  /* 8px default / 12px large surfaces, matching docs/design.md §5. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Elevation (§5): resting cards use a hairline border, no shadow — only
+     overlays (popover/modal/sheet) get this one soft, low shadow. */
+  --shadow-overlay: 0 8px 24px -8px rgb(0 0 0 / 0.18);
+}

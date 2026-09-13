@@ -225,6 +225,25 @@ compose up -d` followed by `docker compose ps` (confirm all three reach `healthy
 not just `running`) before trusting this file for CR-050/CR-058/CR-027/CR-086's live
 verification work (KI-014/KI-015/KI-016).
 
+### KI-020 — shadcn CLI's default alias writes components into `apps/web`, not `packages/ui`
+
+Status: open. Discovered: 2026-09-13 (CR-063).
+Problem: `apps/web/components.json` (scaffolded in CR-002) sets `aliases.ui` to
+`@/components/ui` — shadcn's own CLI default, which generates vendored components
+directly inside `apps/web`. `docs/design.md` §9/§14 requires shared components
+(`Button`, `Card`, `MetricTile`, ...) to be vendored into `packages/ui` instead, so both
+cabinets consume one copy and `.claude/rules/extensibility.md`'s regression discipline
+applies to them.
+Impact: none yet — no components are vendored (`packages/ui/src/index.ts` is still
+`export {}`). Running `npx shadcn add <component>` as-is today would generate into the
+wrong package.
+Workaround: none needed until a component is actually vendored.
+Next action: CR-065/CR-066 (first shared components) must either point
+`components.json` at `packages/ui` (and confirm shadcn's CLI can target a different
+workspace package) or vendor manually and re-theme by hand, per docs/design.md §14's
+"vendored ... and re-themed to these tokens" framing. Decide before writing the first
+component, not after several have already landed in the wrong place.
+
 ---
 
 ## Resolved
