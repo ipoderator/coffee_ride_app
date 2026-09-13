@@ -1224,3 +1224,59 @@ unchanged.
 Follow-up: CR-064 (Russian formatters + UI terminology mapping) is next — the other
 named prerequisite for CR-011, and the last remaining item before `docs/design.md`'s
 component work (CR-065/CR-066) and the first real screen (CR-011) can start.
+
+## 2026-09-13 — CR-064 — Russian formatters + UI terminology mapping
+
+Summary: Added `packages/ui/src/format.ts` and `packages/ui/src/terminology.ts` — the
+second (and last) `docs/design.md`-mandated prerequisite for CR-011, after CR-063's
+tokens. `format.ts` covers every row of §7's table (distance, elevation, speed/pace,
+duration, date, time, price, participants): comma decimal separator, NBSP thousands
+grouping, value+unit always NBSP-joined, and a missing/`null`/`undefined` numeric input
+renders as an em dash rather than `0` (`.claude/rules/frontend.md`/§6's "no elevation
+data" vs. "flat route" distinction) — handled once here so CR-065's `MetricTile` and
+friends get it for free. `terminology.ts` covers §13: ride status (7 values, with tone)
+and bicycle type (4 values) use enum keys copied verbatim from `docs/product.md`'s
+already-fixed lifecycle/bicycle-type strings; services (10 values) and registration
+action/state labels (4 values) had no authoritative enum to copy from (`packages/db` has
+zero domain tables, `docs/product.md` §Services is free-text English only) so their
+snake_case keys are provisional — flagged in-code and as KI-021.
+
+`packages/ui` got its first real Vitest suite (`node` environment, same
+`config/vitest/node-library` fragment `packages/maps-2gis` uses — no DOM needed for pure
+formatting/lookup logic): 31 tests, one per documented example plus a missing-value case
+per formatter. `packages/ui/src/index.ts` re-exports both modules (its first real exports
+— was `export {}` since CR-007).
+
+No database migration, no API route change, no new runtime dependency (`vite`/`vitest`
+were already resolvable from the existing `maps-2gis`/`apps/web` dependency tree, so
+`pnpm install` added zero new packages — just new `packages/ui` devDependency entries in
+the lockfile).
+
+Files: `packages/ui/src/{format,terminology}.ts` (new), `packages/ui/src/{format,
+terminology}.test.ts` (new), `packages/ui/src/index.ts` (first real exports),
+`packages/ui/vitest.config.ts` (new), `packages/ui/package.json` (`test` script,
+`vitest`/`vite`/`config` devDependencies), `pnpm-lock.yaml`,
+`.claude/context/known-issues.md` (KI-021 added), `docs/tasks.md` (CR-064 checked off),
+`.claude/context/{project-state,current-task}.md`.
+
+Decisions: none new at the ADR level — this implements `docs/design.md` §7/§13, already
+decided; no formatting rule or Russian label was changed from what those sections specify.
+The one real judgment call (documented in-code, not an ADR): `formatDuration` omits a
+zero-minutes remainder (`2 ч`, not `2 ч 0 мин`) — not spelled out by a design.md example,
+decided by analogy to the missing-value em-dash rule ("don't show a zero that isn't
+information").
+
+Known limitations: KI-021 (new) — `RideService`/registration-state keys in
+`terminology.ts` are provisional pending the real `RideService` DB enum (not yet
+scheduled with a CR number); ride status and bicycle type are unaffected (already sourced
+from `docs/product.md`). The ride-start timezone-hint decoration mentioned in §7 (an
+explicit city/timezone label when it differs from the viewer's) is deliberately deferred,
+not implemented here — it needs a viewer-timezone source and a place name that don't
+exist as data yet; basic 24-hour time formatting against an explicit IANA zone (§7's Time
+row itself) is implemented and tested. Everything else from CR-063's known-limitations
+list is unchanged.
+
+Follow-up: CR-065 (Metric presentation components: `MetricTile`, `MetricRow`,
+`StatusBadge`, `DifficultyScale`, `docs/design.md` §6) is next — the first consumer of
+both this task's formatters and CR-063's tokens, and it must also resolve KI-020 (shadcn
+CLI's component-vendoring target) before vendoring its first component.

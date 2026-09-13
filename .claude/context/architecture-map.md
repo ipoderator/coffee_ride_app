@@ -79,10 +79,15 @@ consumer already wired in: `apps/api`'s error handler imports
 `ProblemDetails` from here (`import type`, confirmed erased in the compiled
 `dist` output) instead of declaring its own copy.
 
-`packages/ui` (CR-007): intentionally empty (`export {}`). Design tokens
-(CR-063), the Russian formatter module (CR-064), and the first shared
-components (CR-065/CR-066) are its first real content; not wired into
-`apps/web` (`transpilePackages`) until then.
+`packages/ui` (CR-007, content since CR-063/CR-064): design tokens
+(`src/tokens.css`, CSS custom properties consumed by `apps/web` via a real
+package `exports` entry) and Russian number/unit formatters + UI terminology
+mapping (`src/format.ts`/`src/terminology.ts`, `docs/design.md` §7/§13, its
+first real Vitest suite — `node` environment, 31 tests) are its content so
+far; re-exported from `src/index.ts` (was `export {}` through CR-007). Not
+yet wired into `apps/web`'s `transpilePackages` (no React component exists
+there yet — first shared components are CR-065/CR-066, which also must
+resolve KI-020's shadcn-vendoring-target question first).
 
 `packages/maps-core` (CR-007): the `MapProvider` interface (`geocode`,
 `reverseGeocode`, `getRoute`) plus `LatLng`/`GeocodeResult`/`RouteRequest`/

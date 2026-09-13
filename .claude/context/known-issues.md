@@ -225,6 +225,31 @@ compose up -d` followed by `docker compose ps` (confirm all three reach `healthy
 not just `running`) before trusting this file for CR-050/CR-058/CR-027/CR-086's live
 verification work (KI-014/KI-015/KI-016).
 
+### KI-021 — `RideService`/registration-state keys in the terminology module are provisional
+
+Status: open. Discovered: 2026-09-13 (CR-064).
+Problem: `docs/design.md` §13 lists the Russian labels for 10 services and 4 registration
+action/state strings, but `docs/product.md` §Services only names the services in free-text
+English (`food, water, coffee, support vehicle, mechanic, medical support, transfer,
+bicycle transport, parking, changing room/shower`), not as enum keys — no `RideService` DB
+enum exists yet (`packages/db` has zero domain tables), and no `Registration` status enum
+exists either. `packages/ui/src/terminology.ts`'s `RIDE_SERVICE_TERMS`/
+`REGISTRATION_ACTION_TERMS` therefore had to mint snake_case keys (`support_vehicle`,
+`medical_support`, `bicycle_transport`, `changing_room`; `register`/`cancel`/`waitlisted`/
+`full`) rather than reuse an authoritative source.
+Impact: low today (nothing consumes these keys yet). Real risk: whichever CR defines the
+actual `RideService` DB enum (routes/stops/services work, not yet scheduled with a CR
+number in `docs/tasks.md`) could pick different key spellings, silently breaking this
+lookup table (a missing key renders as `undefined`, not a caught error, unless the
+consumer guards it).
+Workaround: none needed yet — no consumer.
+Next action: when the `RideService` DB enum (and any `Registration` status enum) is
+defined, either match these exact keys or update `terminology.ts` to match — do not let
+the two drift apart silently. Ride status (`draft`/`published`/`registration_open`/
+`registration_closed`/`started`/`finished`/`cancelled`) and bicycle type
+(`road`/`gravel`/`mtb`/`any`) are NOT affected — both already have an authoritative source
+in `docs/product.md`.
+
 ### KI-020 — shadcn CLI's default alias writes components into `apps/web`, not `packages/ui`
 
 Status: open. Discovered: 2026-09-13 (CR-063).

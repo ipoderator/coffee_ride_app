@@ -16,7 +16,9 @@ maps-core, maps-2gis), and CR-008 (Vitest wired for `apps/api`/
 completed 2026-09-12. CR-009 (Configure Docker Compose) and CR-010 (Configure
 CI + Git hooks, lint-staged made workspace-aware) both completed 2026-09-13.
 Foundation phase (CR-001..CR-010) is now fully done. CR-063 (Design tokens in
-`packages/ui`) also completed 2026-09-13 — the first Design-foundations task.
+`packages/ui`) and CR-064 (Russian formatters + UI terminology mapping) also
+completed 2026-09-13 — both Design-foundations prerequisites for CR-011 are
+now done.
 
 ## Implemented
 
@@ -40,7 +42,8 @@ closes KI-013/KI-R06 forward — not itself in `.claude/rules/architecture.md`'s
 package list); `packages/types` (`ProblemDetails` + `Paginated<T>`, the two
 ADR-011 contract shapes, already wired into `apps/api`'s error handler as a
 real consumer — `import type`, fully erased, confirmed in compiled output);
-`packages/ui` (intentionally empty, `export {}` — first content is CR-063);
+`packages/ui` (intentionally empty at the time, `export {}` — first content
+landed with CR-063/CR-064);
 `packages/maps-core` (the full `MapProvider` interface from
 `.claude/rules/maps.md`, verbatim, pure types); `packages/maps-2gis`
 (implements `MapProvider` by calling 2GIS's Geocoder/Routing REST APIs
@@ -114,9 +117,26 @@ rule rejecting raw hex color literals in `apps/web` (`no-restricted-syntax` in
 `apps/web/eslint.config.mjs`), verified live with a staged violation. New open item:
 KI-020 (`apps/web/components.json`'s shadcn alias defaults into `apps/web`, not
 `packages/ui`, as `docs/design.md` §9/§14 requires — must be resolved by CR-065/CR-066
-before vendoring the first component). No shared components exist yet
-(`packages/ui/src/index.ts` is still `export {}`) — that starts with CR-064's formatter
-module, then CR-065/CR-066.
+before vendoring the first component). No shared components exist yet — that
+starts with CR-065/CR-066.
+
+Russian formatters + UI terminology mapping landed 2026-09-13 (CR-064, see
+`docs/changelog.md`): `packages/ui/src/format.ts` (every row of `docs/design.md` §7 —
+distance, elevation, speed/pace, duration, date, time, price, participants; comma
+decimal separator, NBSP thousands grouping and NBSP value-unit join throughout; a
+missing/`null`/`undefined` numeric input renders as an em dash rather than `0`, per
+`.claude/rules/frontend.md`/§6) and `packages/ui/src/terminology.ts` (§13 — ride status
+with tone, bicycle type, services, registration action/state labels). Ride status and
+bicycle type enum keys are copied verbatim from `docs/product.md`'s already-fixed
+lifecycle/bicycle-type strings; services and registration labels have no authoritative
+enum yet (`packages/db` has zero domain tables), so their keys are provisional —
+recorded as KI-021. `packages/ui`'s first real Vitest suite (31 tests, `node`
+environment, same `config/vitest/node-library` fragment as `packages/maps-2gis`).
+`packages/ui/src/index.ts` now has its first real exports (was `export {}` since
+CR-007). Deliberately deferred: the ride-start timezone-hint decoration mentioned in §7
+(needs a viewer-timezone source and a place name that don't exist as data yet) — basic
+24-hour time formatting against an explicit IANA zone (§7's Time row itself) is
+implemented.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -215,8 +235,10 @@ None.
 
 ## Next
 
-CR-064 — Russian formatters + UI terminology mapping (`docs/design.md` §7/§13), the
-other named Design-foundations prerequisite for CR-011 (User registration).
+CR-065 — Metric presentation components: `MetricTile`, `MetricRow`, `StatusBadge`,
+`DifficultyScale` (`docs/design.md` §6) — the first consumer of CR-063's tokens and
+CR-064's formatters/terminology, and must also resolve KI-020 (shadcn CLI's
+component-vendoring target) before vendoring its first component.
 
 ## Important decisions
 
@@ -273,10 +295,14 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   still absent;
 - `docs/api.md` describes auth and `/health` endpoints that have no implementation
   (contract-first, deliberate);
-- `docs/design.md` exists and CR-063 now implements its tokens — CR-064 (formatters)
-  still blocks CR-011;
+- `docs/design.md` exists and CR-063/CR-064 now implement its tokens and formatters —
+  CR-065/CR-066 (shared components) are the last prerequisites before CR-011;
 - KI-020: `apps/web/components.json`'s shadcn alias needs pointing at `packages/ui`
-  (or a manual-vendor workaround decided) before CR-065/CR-066's first component.
+  (or a manual-vendor workaround decided) before CR-065/CR-066's first component;
+- KI-021: `RideService`/registration-state keys in `packages/ui/src/terminology.ts` are
+  provisional pending the real `RideService` DB enum (not yet scheduled with a CR
+  number) — ride status/bicycle type are unaffected, already sourced from
+  `docs/product.md`.
 
 ## Do not break
 
@@ -296,4 +322,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-13 (CR-063)
+2026-09-13 (CR-064)

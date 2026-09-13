@@ -6,139 +6,155 @@ done
 
 ## Task ID
 
-CR-063 — Design tokens in `packages/ui`
+CR-064 — Russian formatters + UI terminology mapping
 
 ## Goal
 
-Foundation phase (CR-001..CR-010) is done. `docs/design.md` §14 names CR-063/CR-064 as
-hard prerequisites for CR-011 (User registration) — the first real screen. CR-063 puts
-the light/dark color palette, typography, radius, and focus-ring tokens from
-`docs/design.md` §3-§5/§12 into `packages/ui` as CSS custom properties, exposes them
-through the Tailwind v4 theme so feature code writes `bg-bg-raised`/`text-text-secondary`
-instead of a hex literal, replaces the placeholder shadcn neutral theme currently in
-`apps/web/src/app/globals.css`, and adds the lint rule (§14) that rejects raw hex color
-literals in `apps/web`.
+`docs/design.md` §14 names CR-063/CR-064 as hard prerequisites for CR-011 (User
+registration) — the first real screen. CR-063 (design tokens) is done. CR-064 puts the
+Russian number/unit formatters (§7) and the Russian UI terminology mapping (§13) into
+`packages/ui` as one shared, unit-tested module, so every future screen formats numbers
+and status/type labels the same way instead of re-deriving Russian formatting rules per
+component.
 
 ## Requirements
 
-- Tokens live in `packages/ui` (`docs/design.md` §14), not `apps/web` — `apps/web`
-  imports them.
-- Full light + dark palette from §3: `bg`, `bg-raised`, `text`, `text-secondary`,
-  `text-muted`, `primary`, `on-primary`, `success`, `warning`, `danger`, `on-danger`,
-  `info`, `border`, `border-input`, plus the data-viz `chart-secondary` clay tone. Dark
-  theme is part of this task, not deferred (§3).
-- Typography (§4): Golos Text (Cyrillic-first) over the system stack, IBM Plex Mono for
-  tabular/data text. Verify Cyrillic coverage before adopting (§4).
-- Font-size scale, weights, line-heights (§4) and spacing (§5): confirm Tailwind v4's
-  defaults already match before adding new tokens.
-- Radius (§5): 8px default, 12px large surfaces, full for pills.
-- Focus ring (§12): visible 2px `primary` ring, 2px offset, on every interactive element.
-- Elevation (§5): hairline border for resting cards, one soft low shadow for overlays.
-- Lint rule (§14): reject raw hex color literals in `apps/web`.
-- No unrelated changes: don't touch `packages/db`/`maps-*`/`types`/`config`, don't start
-  CR-064/065/066 content beyond what CR-063 itself requires.
+- Lives in `packages/ui` (confirmed by `project-state.md`/`architecture-map.md`/
+  `docs/decisions.md` ADR-012, all already naming CR-064's output as `packages/ui`'s
+  next real content after tokens), unit-tested with Vitest — `packages/ui` had no test
+  script; this task added one (mirrors `packages/maps-2gis`'s Vitest setup, `node`
+  environment — no DOM needed for pure formatting logic).
+- Formatters (§7), value+unit always joined by NBSP, decimal separator is a comma,
+  thousands separator is NBSP:
+  - distance: 1 decimal — `42,3 км`
+  - elevation: whole meters, NBSP-grouped — `1 250 м`
+  - speed/pace: 1 decimal — `24,5 км/ч`
+  - duration: `< 1h` → minutes (`45 мин`); `>= 1h` → hours + minutes (`2 ч 30 мин`)
+  - date: day + genitive month, year only if not the reference year — `12 мая`,
+    `12 мая 2027`
+  - time: 24-hour — `07:30`
+  - price: whole rubles, NBSP-grouped — `1 500 ₽`; zero/free = `Бесплатно`
+  - participants: `12 из 20`
+  - missing/`null`/`undefined` numeric input renders as `—` (em dash), never `0`
+    (`.claude/rules/frontend.md` §Metrics / `docs/design.md` §6) — a formatter-level
+    concern so every future consumer (CR-065's `MetricTile`, etc.) gets it for free
+    instead of re-implementing the check.
+- Terminology (§13), one lookup per domain enum, tone included for status:
+  - ride status (7 values, matches `docs/product.md`'s lifecycle enum keys exactly:
+    `draft`/`published`/`registration_open`/`registration_closed`/`started`/`finished`/
+    `cancelled`) with tone (`neutral`/`success`/`warning`/`info`/`danger`)
+  - bicycle type (`road`/`gravel`/`mtb`/`any`)
+  - services (10 values) — **no DB enum exists yet** (`packages/db` has zero domain
+    tables); `docs/product.md` §Services only gives free-text English names, not enum
+    keys. Provisional snake_case keys minted here; recorded as KI-021 since whichever CR
+    defines the real `RideService` DB enum must match these keys or this map needs
+    updating.
+  - registration action/state labels (`Зарегистрироваться` / `Отменить регистрацию` /
+    `В списке ожидания` / `Мест не осталось`) — same provisional-key caveat, no
+    `Registration` status enum exists yet either.
+- Out of scope for this task (not started): §6's `MetricTile`/`DifficultyScale`
+  components (CR-065), difficulty-scale words (also CR-065/§6, not §13), the
+  ride-start timezone-hint _decoration_ mentioned in §7 (needs a viewer-timezone source
+  and a place name that don't exist as data yet — deferred to whichever CR first
+  renders a ride's start time, e.g. CR-011/CR-026). Basic 24h time formatting against an
+  explicit IANA zone _is_ in scope (§7's Time row; low-risk, fully testable) — done.
 
 ## Acceptance criteria
 
-- `packages/ui` exports a token stylesheet consumed by `apps/web` via its package
-  `exports` field — met (`ui/tokens.css`).
-- `apps/web/src/app/globals.css` no longer contains the placeholder shadcn palette —
-  met.
-- Placeholder home page still renders correctly against the new tokens — met, verified
-  live (screenshot + computed styles, light and dark).
-- A raw hex literal added to `apps/web` is caught by its `eslint` script — met, verified
-  live with a real staged violation, then reverted.
-- Golos Text + IBM Plex Mono actually render Cyrillic in the browser — met, verified via
-  a live `next dev` render (browser-automation skill): correct font family, exact token
-  hex values in both themes, no console errors.
-- `turbo run lint typecheck build test --force` green — met, 24/24.
-- `docs/tasks.md`, `docs/changelog.md`, `project-state.md` updated — met. CR-064 named
+- `packages/ui` exports formatters + terminology maps from its package entry point —
+  met (`export * from './format'`/`'./terminology'` in `src/index.ts`).
+- Every formatter has unit tests covering the documented example plus a missing-value
+  (`—`) case where applicable — met, 31 tests total.
+- Ride status / bicycle type keys match `docs/product.md` exactly — met, verified by a
+  dedicated "exactly these seven keys" test.
+- Services/registration provisional keys documented as provisional in-code and recorded
+  in `known-issues.md` — met (KI-021).
+- `packages/ui` gets a real `test` script wired into `turbo test` — met.
+- `turbo run lint typecheck build test --force` green — met, 25/25.
+- `docs/tasks.md`, `docs/changelog.md`, `project-state.md` updated — met. CR-065 named
   as next.
 
 ## Planned files
 
-- `packages/ui/src/tokens.css` (new) — the token source
-- `packages/ui/package.json` — `exports` entry for `./tokens.css`
-- `apps/web/package.json` — `ui` workspace dependency
-- `apps/web/src/app/globals.css` — tokens import, shadcn placeholder removed
-- `apps/web/src/app/layout.tsx` — Golos Text / IBM Plex Mono via `next/font/google`
-- `apps/web/src/app/page.tsx` — fixed a class referencing a now-removed token name
-- `apps/web/eslint.config.mjs` — no-raw-hex-colors rule
-- `pnpm-lock.yaml`, `.claude/context/{current-task,project-state,known-issues}.md`,
-  `docs/{changelog,tasks}.md`
+- `packages/ui/src/format.ts` (new) — the formatter module
+- `packages/ui/src/format.test.ts` (new)
+- `packages/ui/src/terminology.ts` (new) — the terminology maps
+- `packages/ui/src/terminology.test.ts` (new)
+- `packages/ui/src/index.ts` — re-export both modules
+- `packages/ui/package.json` — `test` script, `vitest`/`vite`/`config` devDependencies
+- `packages/ui/vitest.config.ts` (new)
+- `pnpm-lock.yaml`, `.claude/context/{current-task,project-state,known-issues,
+architecture-map}.md`, `docs/{changelog,tasks}.md`
 
 ## Implementation progress
 
-- [x] Read `docs/design.md` in full (§1-§15)
-- [x] Inspected current `packages/ui`/`apps/web` state
-- [x] Confirmed Golos Text and IBM Plex Mono in `next/font/google`'s bundled metadata
-      with `cyrillic`/`cyrillic-ext` subsets
-- [x] Wrote `packages/ui/src/tokens.css` (light/dark palette, radius, font/shadow theme
-      keys)
-- [x] Wired `packages/ui` package exports for the stylesheet
-- [x] Updated `apps/web` globals.css/layout.tsx/page.tsx/package.json; `pnpm install`
-- [x] Added the hex-color lint rule; verified live with a real violation, reverted
-- [x] Visually verified Cyrillic rendering in light + dark via browser-automation
-- [x] Validated: `turbo run lint typecheck build test --force` (24/24), Playwright e2e,
-      `format:check`/`lint:root`
-- [x] Updated project context + docs (this file, project-state.md, known-issues.md
-      KI-020, changelog.md, tasks.md)
-- [x] Reviewed `git diff`/`git status` — only intended files changed
+- [x] Read `docs/design.md` §6/§7/§13/§14, `docs/product.md` (lifecycle, services,
+      bicycle type), `docs/decisions.md` ADR-012, `.claude/rules/frontend.md`
+- [x] Confirmed target package (`packages/ui`) from `project-state.md`/
+      `architecture-map.md`/ADR-012 cross-references
+- [x] Wrote `format.ts` (distance/elevation/speed/duration/date/time/price/participants,
+      NBSP joining/grouping, comma decimals, em-dash missing-value handling) + tests
+- [x] Wrote `terminology.ts` (ride status+tone, bicycle type, services, registration
+      labels) + tests
+- [x] Wired `packages/ui`'s Vitest (`node` environment via `config/vitest/node-library`,
+      same fragment as `packages/maps-2gis`) + `package.json` `test` script/deps
+- [x] `pnpm install` (zero new packages downloaded — vite/vitest already resolvable from
+      the existing dependency tree; only new lockfile entries for `packages/ui`)
+- [x] Fixed a real bug found during validation: two doc comments in `format.ts`
+      contained a literal NBSP character instead of a regular space (copy-paste from
+      thinking about the NBSP constant), tripping ESLint's `no-irregular-whitespace` —
+      fixed by replacing those two comment occurrences with plain text
+- [x] Fixed a real test bug found during validation: the IANA-timezone `formatDate` test
+      crossed a year boundary (Dec 31 → Jan 1) while asserting "same year", which is
+      simply wrong once the timezone shift is applied — rewritten to cross a day
+      boundary within the same month instead, isolating what the test actually checks
+- [x] Ran `prettier --write` on the four new/changed source files after they failed
+      `format:check` (line-wrapping only, no logic change)
+- [x] Validated: `turbo run lint typecheck build test --force` (25/25),
+      `pnpm --filter ui test` (31/31), `format:check`/`lint:root`
+- [x] Updated project context + docs (this file, project-state.md, architecture-map.md,
+      known-issues.md KI-021, changelog.md, tasks.md)
+- [x] Reviewed `git diff`/`git status` — only intended files changed (plus the
+      pre-existing untracked `skills-lock.json`, unrelated to this task, left alone)
 
 ## Validation
 
-- [x] `next/font/google` metadata check (Node script against installed `next@15.5.25`) —
-      both faces list `cyrillic`/`cyrillic-ext`
-- [x] Live browser render (browser-automation skill against a temporary `next dev`
-      server): title/body text correct, 0 console errors, 0 failed requests,
-      `body`/`h1` font-family resolves to `"Golos Text"`, computed `background-color`/
-      `color` match the light-theme token hex exactly; toggling `.dark` on
-      `documentElement` matched the dark-theme token hex exactly too
-- [x] Live ESLint violation test: staged `'#123abc'` in `page.tsx`, confirmed
-      `pnpm --filter web exec eslint` reported it, reverted
-- [x] `npx turbo run lint typecheck build test --force` — 24/24 green
-- [x] `pnpm --filter web exec playwright test` — 1/1 passing
+- [x] `npx turbo run lint typecheck build test --force` — 25/25 green (all 9 workspace
+      members)
+- [x] `pnpm --filter ui test` — 31/31 passing (`format.test.ts` 25, `terminology.test.ts` 6)
+- [x] `pnpm --filter ui exec eslint .` — clean, after fixing the irregular-whitespace
+      finding above
 - [x] `pnpm format:check` / `pnpm lint:root` — clean
 - [x] `git status`/`git diff` reviewed — only intended files changed
 
 ## Discovered issues
 
-- An unrelated, undocumented change to `.vscode/extensions.json` (removed the
-  `ms-playwright.playwright` recommendation) was sitting in the working tree from before
-  this session, attributed to neither CR-009 nor CR-010 in the changelog. Confirmed with
-  the user rather than guessed at; user chose to revert it. Reverted before starting
-  CR-063's own work.
-- CR-009 and CR-010 had been completed in a prior session but never committed. Committed
-  both together as one commit (`0e54dc2`) at the start of this session — splitting them
-  would have required fabricating the intermediate "CR-009 done, CR-010 not yet" state of
-  `current-task.md`/`project-state.md`, which no longer exists (both files are
-  overwritten snapshots, not append-only).
-- KI-020 (new, recorded in `known-issues.md`): `apps/web/components.json`'s shadcn CLI
-  alias defaults to vendoring components inside `apps/web`, not `packages/ui`, which
-  `docs/design.md` §9/§14 requires. Not a CR-063 blocker (no components vendored yet) but
-  must be resolved before CR-065/CR-066 vendors the first one.
-- An interim `next dev` session (started to verify font rendering live) left
-  `apps/web/.next` in a dev-mode state missing files `web:typecheck` expects
-  (`.next/types/app/*.ts`, only fully generated by `next build`). Not a bug in this
-  task's changes — deleting `.next` before the final validation pass resolved it.
-  Worth remembering for future tasks that spin up a dev server mid-session.
+- KI-021 (new, recorded in `known-issues.md`): `RideService`/registration-state keys in
+  `terminology.ts` are provisional — no DB enum exists yet to source them from. Ride
+  status/bicycle type are unaffected (already sourced from `docs/product.md`).
+- Two doc-comment NBSP characters and one test's year-boundary logic error, both found
+  and fixed during this session's own validation pass (see Implementation progress
+  above) — not carried over as known issues since both were fixed before completion.
 
 ## Final result
 
-Done. `packages/ui/src/tokens.css` now holds the full light/dark palette, radius, and
-font/shadow theme tokens from `docs/design.md` §3-§5, exposed to `apps/web` via a real
-package `exports` entry (`apps/web`'s first-ever workspace dependency on `ui`) rather
-than a relative path. The placeholder shadcn neutral theme in `globals.css` is gone.
-Golos Text/IBM Plex Mono are wired via `next/font/google` and verified live (not just
-via metadata) to actually render Russian text correctly in both themes. Tailwind v4's
-default font-size and spacing scales were checked against `docs/design.md` §4/§5 first
-and already match exactly, so no redundant parallel tokens were added — real,
-design.md-mandated additions were limited to radius, the focus ring, one overlay-shadow
-token, and the hex-color lint rule, which was verified live with a real staged
-violation. `turbo run lint typecheck build test --force` 24/24 green; Playwright e2e
-passing; `format:check`/`lint:root` clean. Also cleaned up two pre-existing loose ends
-found at the start of this session (an unrelated uncommitted `.vscode/extensions.json`
-edit, reverted after user confirmation; CR-009/CR-010's completed-but-uncommitted work,
-committed as `0e54dc2`) before starting CR-063 itself. One new known issue recorded
-(KI-020, shadcn CLI's component-vendoring target) for CR-065/CR-066 to resolve. Next
-logical task: CR-064 (Russian formatters + UI terminology mapping).
+Done. `packages/ui/src/format.ts` implements every row of `docs/design.md` §7 (distance,
+elevation, speed/pace, duration, date, time, price, participants) with the comma
+decimal/NBSP-grouping/NBSP-unit-join rules applied uniformly, plus the missing-value
+em-dash rule from `.claude/rules/frontend.md`/§6 handled once at the formatter level.
+`packages/ui/src/terminology.ts` implements §13's ride-status (with tone), bicycle-type,
+services, and registration-label lookups; ride status and bicycle type use enum keys
+copied verbatim from `docs/product.md`, while services/registration-state keys are
+provisional (no DB enum exists yet) and flagged both in-code and as KI-021.
+`packages/ui` gained its first real Vitest suite (31 tests, `node` environment) and its
+first real exports (`src/index.ts`, previously `export {}` since CR-007). Two real bugs
+(an irregular-whitespace lint violation from stray NBSP characters in doc comments, and
+a self-contradictory test crossing a year boundary) were found and fixed during this
+session's own validation, not left for a later pass. `turbo run lint typecheck build
+test --force` 25/25 green; `format:check`/`lint:root` clean. Deliberately deferred: the
+§7 ride-start timezone-hint decoration (needs a viewer-timezone source and a place name
+that don't exist as data yet). Both `docs/design.md` §14-named prerequisites for CR-011
+(CR-063 tokens, CR-064 formatters/terminology) are now done. Next logical task: CR-065
+(Metric presentation components — `MetricTile`, `MetricRow`, `StatusBadge`,
+`DifficultyScale`, `docs/design.md` §6), which also needs to resolve KI-020 (shadcn
+CLI's vendoring target) before its first component.
