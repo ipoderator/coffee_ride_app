@@ -9,12 +9,13 @@
 // `apps/**`/`packages/**` are deliberately ignored here: each workspace member
 // gets its own richer `eslint.config.mjs` (Next/React rules, etc.) run via
 // `turbo lint`, which invokes each package's own "lint" script with CWD inside
-// that package — that's where its local config is actually picked up. The
-// practical gap this creates: lint-staged's pre-commit step does NOT run
-// workspace-specific ESLint on staged `apps/*`/`packages/*` files (Prettier
-// still does, via the broader glob below) — see KI-012. Real fix belongs to
-// CR-010 ("Configure CI + Git hooks"), not to whichever task is currently
-// adding a workspace member.
+// that package — that's where its local config is actually picked up.
+// lint-staged's pre-commit step (root `package.json`) mirrors this exactly: it
+// has one glob entry per workspace member, each running `pnpm --filter <name>
+// exec eslint --fix` (which sets CWD to that package, resolving its own config
+// correctly) instead of a single blanket rule that would only ever hit this
+// root file — see KI-012 (CR-010, resolved) for why a single rule couldn't
+// work here.
 //
 // Do not silently replace this file's intent (flag real problems, don't block on
 // style — Prettier owns style) without recording the change in docs/decisions.md.

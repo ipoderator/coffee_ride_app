@@ -13,7 +13,9 @@ scaffolded), CR-003 (`apps/api` scaffolded, includes CR-073), CR-004
 client factory), CR-007 (five shared packages: config, types, ui,
 maps-core, maps-2gis), and CR-008 (Vitest wired for `apps/api`/
 `packages/maps-2gis`/`apps/web`, Playwright wired for `apps/web` e2e) all
-completed 2026-09-12.
+completed 2026-09-12. CR-009 (Configure Docker Compose) and CR-010 (Configure
+CI + Git hooks, lint-staged made workspace-aware) both completed 2026-09-13.
+Foundation phase (CR-001..CR-010) is now fully done.
 
 ## Implemented
 
@@ -69,6 +71,32 @@ the way: KI-018 (`packages/config`'s shared tsconfig fragment's chained
 `extends` broke under Vite 8's oxc transform; fixed by having every consumer
 extend both `tsconfig.base.json` and the fragment directly as a TS 5+ array,
 resolved in the same session).
+
+`docker-compose.yml` brought to a correct, verified-as-possible state 2026-09-13
+(CR-009, see `docs/changelog.md`): fixed two real, previously-open bugs
+(KI-004: MinIO's healthcheck used `curl`, which the server image doesn't ship
+— replaced with `mc ready local`, MinIO's own documented healthcheck; KI-005:
+`minio/minio:latest` was unpinned — pinned to `quay.io/minio/minio:
+RELEASE.2025-09-07T16-13-09Z`, switching registries since MinIO's docs now
+point at quay.io exclusively, both verified live against MinIO's official
+example/registry API before use), added a missing Redis healthcheck, and
+added `pnpm infra:up`/`infra:down` root scripts. Docker's daemon is still
+unreachable in this environment (KI-019, same standing constraint as
+KI-014/KI-015) — validated via `docker compose config` only, no live boot.
+KI-003's Redis auth/persistence gap is unchanged, deliberately deferred to
+CR-077.
+
+Git hooks made workspace-aware 2026-09-13 (CR-010, see `docs/changelog.md`):
+resolved KI-012 — root `package.json`'s `lint-staged` config now has one glob
+entry per workspace member (`pnpm --filter <name> exec eslint --fix`) instead
+of a single blanket root-CWD rule, so a staged file inside any of the 8
+workspace members is actually ESLint-checked (not just Prettier-formatted) at
+commit time, using that package's own `eslint.config.mjs`. Verified live with
+a real unused-variable violation staged in `apps/web`: silently skipped under
+the old config, correctly caught under the new one. `.github/workflows/ci.yml`
+reviewed and left unchanged — its Foundation-phase shape was already sound;
+KI-007's remaining gaps (MinIO/migrations/Playwright in CI) stay CR-080's job.
+Foundation phase (CR-001..CR-010) is complete.
 
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
@@ -167,7 +195,8 @@ None.
 
 ## Next
 
-CR-009 — Configure Docker Compose.
+CR-063/CR-064 — Design foundations (tokens + Russian formatters), which must
+land before CR-011 (User registration) per `docs/design.md`.
 
 ## Important decisions
 
@@ -195,8 +224,12 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 - nothing exists for deployment — no Dockerfile, manifest, proxy config, backups,
   observability (KI-001, KI-002, KI-006; CR-074..CR-079);
-- Redis is unauthenticated, without persistence or healthcheck (KI-003, CR-077);
-- MinIO healthcheck probably never turns green, image unpinned (KI-004, KI-005);
+- Redis is unauthenticated and without persistence (a basic `redis-cli ping`
+  healthcheck was added in CR-009; KI-003, CR-077);
+- `docker-compose.yml` (all three services) has never been booted live in this
+  environment — Docker's daemon is unreachable here (KI-019); MinIO's
+  healthcheck/image-pinning bugs were fixed in CR-009 (KI-004/KI-005, resolved
+  as KI-R07/KI-R08) but only config-validated, not live-verified;
 - CI cannot test uploads and does not run e2e (KI-007, CR-080 — Vitest now
   runs in CI via the existing `Test` step, but Playwright does not); the
   install step (KI-008) and the Format check step (KI-011) are both resolved;
@@ -205,8 +238,6 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   `turbo`; three of them (`apps/api`, `apps/web`, `packages/maps-2gis`) now
   have real passing Vitest suites (CR-008), the other five intentionally
   don't yet (nothing real to test);
-- lint-staged's pre-commit `eslint --fix` does not cover `apps/*`/`packages/*` staged
-  files — only `turbo lint` in CI does (KI-012, CR-010);
 - `apps/api`'s Redis and S3 clients (CR-005, CR-006) have never been connected
   to a live service — Docker unavailable all session, no local fallback for
   either (KI-014, KI-015; verify before CR-050/CR-058/CR-027/CR-086 consume
@@ -242,4 +273,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-12
+2026-09-13 (CR-010)

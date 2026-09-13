@@ -16,14 +16,37 @@
     "test:e2e": "turbo test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "eslint --fix --no-warn-ignored"
-    ],
     "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
       "prettier --write"
+    ],
+    "apps/web/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter web exec eslint --fix --no-warn-ignored"
+    ],
+    "apps/api/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter api exec eslint --fix --no-warn-ignored"
+    ],
+    "packages/config/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter config exec eslint --fix --no-warn-ignored"
+    ],
+    "packages/types/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter types exec eslint --fix --no-warn-ignored"
+    ],
+    "packages/ui/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter ui exec eslint --fix --no-warn-ignored"
+    ],
+    "packages/maps-core/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter maps-core exec eslint --fix --no-warn-ignored"
+    ],
+    "packages/maps-2gis/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter maps-2gis exec eslint --fix --no-warn-ignored"
+    ],
+    "packages/db/**/*.{ts,tsx,js,jsx}": [
+      "pnpm --filter db exec eslint --fix --no-warn-ignored"
     ]
   },
   "devDependencies": {

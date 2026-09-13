@@ -36,20 +36,6 @@ silently drops queued notification jobs (CR-050), which contradicts
 Workaround: ports are now bound to `127.0.0.1`, which contains the exposure locally.
 Next action: CR-077.
 
-### KI-004 — MinIO healthcheck likely never turns green
-
-Status: open (unverified). Discovered: 2026-09-11.
-Problem: the healthcheck shells out to `curl`, which current `minio/minio` images do not
-ship; MinIO documents `mc ready local` instead.
-Impact: the container may sit `unhealthy` forever, making the signal useless.
-Next action: verify with `docker compose ps`, then fix alongside CR-077/CR-082.
-
-### KI-005 — `minio/minio:latest` is unpinned
-
-Status: open. Discovered: 2026-09-11.
-Impact: development and server environments drift apart silently.
-Next action: CR-082.
-
 ### KI-006 — No observability
 
 Status: open. Discovered: 2026-09-11.
@@ -106,29 +92,6 @@ Status: open. Discovered: earlier; restated 2026-09-11.
 Problem: the lint rule forbidding direct 2GIS SDK imports outside `packages/maps-2gis`
 does not exist yet.
 Next action: CR-056.
-
-### KI-012 — Pre-commit ESLint does not cover `apps/*`/`packages/*` staged files
-
-Status: open, accepted for now. Discovered: 2026-09-12 (CR-002).
-Problem: ESLint's flat config has no automatic directory cascading — one config
-file wins per invocation, chosen by the process's working directory (verified
-empirically while wiring `apps/web`'s own `eslint.config.mjs`), not by the linted
-file's own location. `turbo lint` runs each workspace's `lint` script with CWD
-inside that package, so it correctly picks up that package's own config. But
-lint-staged's pre-commit `eslint --fix` runs with CWD at the repo root, so it
-always uses the root config — which now deliberately ignores `apps/**`/
-`packages/**` (so it doesn't wrongly lint Next/JSX files with the bare root
-rules; see `eslint.config.mjs`'s comment). Net effect: staged `apps/*`/
-`packages/*` files are not ESLint-checked at commit time (only Prettier, via the
-broader lint-staged glob, still runs on them).
-Impact: a commit can introduce an ESLint violation in `apps/web` (or any future
-package) that only surfaces later, in CI's `turbo lint`/`pnpm lint` — not blocked
-at commit time the way root-level file violations are.
-Workaround: none needed for correctness (CI still catches it before merge); this
-is a coverage gap in the fast local feedback loop, not a broken check.
-Next action: CR-010 ("Configure CI + Git hooks") — make lint-staged
-workspace-aware (e.g. group staged files by workspace and invoke each package's
-own `eslint` from its own directory) rather than a single flat `eslint --fix`.
 
 ### KI-014 — `apps/api`'s Redis client was never connected to a live Redis
 
@@ -238,6 +201,30 @@ Resolution: `packages/config/tsconfig/node-library.json` no longer extends
 build`/`typecheck` still green for all three (unaffected by construction),
 and `packages/maps-2gis`'s Vitest suite now collects and passes.
 
+### KI-019 — `docker-compose.yml` has never been booted live in this environment
+
+Status: open. Discovered: 2026-09-13 (CR-009).
+Problem: the Docker daemon does not come up in this Claude Code environment (same
+standing constraint already hit in CR-004/CR-005/CR-006 — see
+`docker-desktop-unavailable` in Claude's project memory; `docker info` fails,
+`docker compose up -d` fails with "Cannot connect to the Docker daemon"). CR-009
+brought the compose file itself to a correct state (KI-004/KI-005 fixed below) and
+validated it with `docker compose -f docker-compose.yml config`, which parses/
+resolves the file but does not pull images, run healthchecks, or prove the services
+actually start and become healthy together.
+Impact: low today (no application code connects to these services yet — `apps/api`'s
+Redis/S3 clients are separately tracked as unverified in KI-014/KI-015, and
+`packages/db`'s Postgres connection was verified in CR-004 against a local Homebrew
+Postgres instead, not compose). But the compose file as a whole — three services,
+their healthchecks, and the new MinIO image/registry from this task — has literally
+never been started end to end by any session.
+Workaround: `docker compose -f docker-compose.yml config` is a reasonable syntax/
+interpolation check and was run clean after every change in CR-009.
+Next action: the first session with a working Docker daemon should run `docker
+compose up -d` followed by `docker compose ps` (confirm all three reach `healthy`,
+not just `running`) before trusting this file for CR-050/CR-058/CR-027/CR-086's live
+verification work (KI-014/KI-015/KI-016).
+
 ---
 
 ## Resolved
@@ -292,3 +279,67 @@ extends, so it can't be silently rediscovered per package again.
 `apps/web`/`apps/api` were not retrofitted onto the shared fragment (neither
 is currently failing; see the CR-007 changelog entry for why they're left
 alone).
+
+### KI-R07 — MinIO healthcheck used `curl`, which the server image does not ship
+
+Resolved: 2026-09-13 (CR-009). Discovered: 2026-09-11.
+Problem: the healthcheck shelled out to `curl -f http://localhost:9000/minio/health/
+live`, but current `minio`/`quay.io` MinIO server images do not bundle `curl`, so the
+container likely sat `unhealthy` forever regardless of whether the server itself was
+fine.
+Resolution: replaced with `mc ready local` — verified against MinIO's own official
+`docker-compose.yaml` example (`minio/minio` GitHub repo,
+`docs/orchestration/docker-compose/docker-compose.yaml`), which uses exactly this
+healthcheck with no separate `mc` container, confirming `mc` is bundled in the server
+image itself. Not live-verified in this environment (Docker's daemon is unreachable —
+see KI-019); `docker compose config` confirms the healthcheck definition is syntactically
+valid.
+
+### KI-R08 — `minio/minio:latest` was unpinned
+
+Resolved: 2026-09-13 (CR-009). Discovered: 2026-09-11.
+Problem: `:latest` lets development/CI/server images drift apart silently.
+Resolution: pinned to `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`. Switched the
+registry too, not just added a tag to the Docker Hub image: MinIO's current official
+docs (`docs/docker/README.md`, checked live) reference `quay.io/minio/minio`
+exclusively now. The tag itself was verified to actually resolve via quay.io's registry
+v2 manifest API (HTTP 200) before being used — the newest tag GitHub's releases API
+reports (`RELEASE.2025-10-15T17-29-55Z`) returned 404 on quay's registry (not yet
+mirrored there at the time of this task), so the newest tag that is actually resolvable
+was pinned instead of the newest tag that merely exists upstream.
+
+### KI-R09 — Pre-commit ESLint did not cover `apps/*`/`packages/*` staged files
+
+Resolved: 2026-09-13 (CR-010). Discovered: 2026-09-12 (CR-002).
+Problem: ESLint's flat config has no automatic directory cascading — one config file
+wins per invocation, chosen by the process's working directory, not by the linted
+file's own location. `turbo lint` runs each workspace's `lint` script with CWD inside
+that package, so it correctly picks up that package's own config. But lint-staged's
+pre-commit `eslint --fix` ran with CWD at the repo root, so it always used the root
+config — which deliberately ignores `apps/**`/`packages/**` (so it doesn't wrongly lint
+Next/JSX files with the bare root rules). Net effect: staged `apps/*`/`packages/*`
+files were not ESLint-checked at commit time, only Prettier-formatted.
+Resolution: root `package.json`'s `lint-staged` config now has one glob entry per
+workspace member (`apps/web/**/*.{ts,tsx,js,jsx}`, `apps/api/**/*...`, one per
+`packages/*`), each running `pnpm --filter <name> exec eslint --fix --no-warn-ignored`
+instead of a single blanket rule. `pnpm --filter <name> exec` sets CWD to that
+package's directory, which is what makes flat config resolve the package's own
+`eslint.config.mjs` — confirmed lint-staged 15.5.2 passes **absolute** file paths to
+task commands by default (its own docs), so this works regardless of which directory
+the command's CWD is changed to. The old single-glob generic root entry was removed
+(redundant once every workspace has its own scoped entry; there are zero non-workspace
+top-level `.ts`/`.js` files in this repo).
+Verified live, not just reasoned about: staged a real file in `apps/web` with an
+intentional unused-variable violation. Before the fix (`eslint --fix` run from repo
+root against the same absolute path): zero output, file silently skipped (ignored by
+the root config's `apps/**` pattern). After the fix
+(`pnpm --filter web exec eslint --no-warn-ignored`): the violation was correctly
+reported by `apps/web`'s own Next.js-derived ruleset (`@typescript-eslint/
+no-unused-vars`, a rule the generic root config also has, but crucially this proves the
+_workspace-specific_ config — the one with Next/React rules the root config doesn't
+carry at all — is now actually being applied to staged files). Test file reverted
+immediately after; no test artifacts left in the working tree.
+Two eslint.config.mjs files (root and `apps/web`) had comments explicitly describing
+the old, now-incorrect behavior ("lint-staged does NOT reach this file") — updated
+both rather than leaving a stale comment next to the code it used to accurately
+describe.

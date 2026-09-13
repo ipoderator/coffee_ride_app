@@ -959,3 +959,159 @@ Follow-up: CR-009 (Configure Docker Compose) is next. CR-080 wires
 Playwright (and MinIO/migrations) into CI. KI-016 (2GIS response shapes
 unverified against a live account) is unaffected by this task's unit
 tests — they verify this adapter's own logic, not 2GIS's real API.
+
+## 2026-09-13 — CR-009 — Configure Docker Compose
+
+`docker-compose.yml` predated CR-001 (it shipped with the initial harness scaffold) and
+had only been touched once since, by CR-071/CR-072's port-binding/secrets hardening —
+it had never itself been treated as its own completed, verified task, and two real bugs
+against it had sat open since the 2026-09-11 pre-foundation audit (KI-004, KI-005).
+CR-009 closes those out rather than leaving them for whichever later CR happened to touch
+the file next.
+
+Fixed KI-004 (MinIO healthcheck): the healthcheck shelled out to `curl -f http://
+localhost:9000/minio/health/live`, but the MinIO server image does not bundle `curl`.
+Replaced with `mc ready local` — verified live against MinIO's own official
+`docker-compose.yaml` example (`minio/minio` GitHub repo,
+`docs/orchestration/docker-compose/docker-compose.yaml`), which uses exactly this
+healthcheck with no separate `mc` container, confirming `mc` is bundled in the server
+image itself.
+
+Fixed KI-005 (unpinned MinIO image): `minio/minio:latest` let dev/CI/server drift apart
+silently. Pinned to `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` — switching the
+registry too, not just adding a tag to the Docker Hub image, because MinIO's current
+official docs (`docs/docker/README.md`, checked live) reference `quay.io/minio/minio`
+exclusively now. Verified the chosen tag actually resolves via quay.io's registry v2
+manifest API (HTTP 200) before using it: GitHub's releases API reports a newer tag
+(`RELEASE.2025-10-15T17-29-55Z`) as latest, but that tag returned 404 against quay's
+registry (not mirrored there yet) — pinned the newest tag that is actually resolvable
+instead of the newest tag that merely exists upstream.
+
+Added a Redis healthcheck (`redis-cli ping`) — it had none at all, unlike postgres/minio.
+Deliberately did NOT touch KI-003's Redis password/persistence/AOF gap here; that stays
+its own decision, deferred to CR-077.
+
+Added `pnpm infra:up`/`infra:down` root scripts (`docker compose up -d`/`docker compose
+down`) so the compose file is operable the same way as `pnpm test`/`pnpm build`, and
+updated `README.md`'s "Local infrastructure" section to mention them alongside the
+existing raw `docker compose up -d` (kept, for anyone without the repo's scripts
+memorized).
+
+Validation: `docker compose -f docker-compose.yml config` parses/resolves cleanly after
+every change. Docker's daemon is still unreachable in this environment — same standing
+constraint as CR-004/CR-005/CR-006 (`docker info` fails; `docker compose up -d` fails
+with "Cannot connect to the Docker daemon"; see `docker-desktop-unavailable` in Claude's
+project memory) — so this task could not live-boot the services or confirm the
+healthchecks actually turn `healthy`, only that the file itself is now correct and
+parses. Recorded honestly as KI-019 rather than silently assumed working. `turbo run
+lint typecheck build --force` — 21/21 tasks green (this task touched no workspace
+package; confirms nothing broke). `pnpm format:check`/`lint:root` clean.
+
+No database migration, no API change, no new runtime dependency (root `package.json`
+scripts only, no new package).
+
+Files: `docker-compose.yml` (MinIO image + healthcheck, Redis healthcheck + a comment
+explaining the registry/healthcheck change), `package.json` (root — `infra:up`/
+`infra:down` scripts), `README.md` (mentions the new scripts), `.claude/context/
+known-issues.md` (KI-004/KI-005 resolved as KI-R07/KI-R08, KI-019 added for the
+still-unverified live boot), `docs/tasks.md` (CR-009 checked off), `.claude/context/
+{project-state,current-task}.md`.
+
+Decisions: none new at the ADR level — this operationalizes/corrects the existing
+compose file, it doesn't change the local-infra architecture (still Postgres + Redis +
+MinIO, still loopback-only, still "local development infrastructure only" per the file's
+own top comment).
+
+Known limitations: KI-019 (this compose file has never been booted live in this
+environment — next session with a working Docker daemon should run `docker compose up
+-d` + `docker compose ps` and confirm all three reach `healthy`, not just `running`,
+before CR-050/CR-058/CR-027/CR-086 rely on it for their own live verification). KI-003
+(Redis auth/persistence/healthcheck-of-substance) and KI-004's sibling MinIO concerns
+beyond the healthcheck itself stay open, unchanged, deferred to CR-077/CR-082 as before.
+
+Follow-up: CR-010 (Configure CI + Git hooks) is next.
+
+## 2026-09-13 — CR-010 — Configure CI + Git hooks
+
+Like `docker-compose.yml` (CR-009), `.github/workflows/ci.yml` and the Husky/lint-staged
+setup shipped with the initial harness scaffold and were hardened once (CR-067: root
+lint actually running in CI, restricted token) but never themselves closed out as a
+task. Exactly one real bug was already tracked against this area — KI-012, whose own
+"next action" line named this CR by number — so CR-010 closed it rather than leaving it
+for whichever later task happened to touch the file next.
+
+Fixed KI-012 (pre-commit ESLint didn't cover workspace files): ESLint's flat config has
+no directory cascading — the config file used is chosen by the invoking process's CWD,
+not the linted file's location. `turbo lint` runs each workspace's own `lint` script
+with CWD inside that package, so it always picked up the right config; lint-staged's
+pre-commit `eslint --fix`, though, ran with CWD at the repo root, so it always used the
+root config, which deliberately ignores `apps/**`/`packages/**`. Net effect: a staged
+file inside any of the 8 workspace members was Prettier-formatted at commit time but
+never actually ESLint-checked — a real violation would only surface later, in CI.
+
+Root `package.json`'s `lint-staged` config now has one glob entry per workspace member
+(`apps/web/**/*.{ts,tsx,js,jsx}`, `apps/api/**/*...`, one per `packages/*`), each
+running `pnpm --filter <name> exec eslint --fix --no-warn-ignored` instead of a single
+blanket rule. `pnpm --filter <name> exec` sets CWD to that package's own directory,
+which is what makes flat config resolve its `eslint.config.mjs` correctly; this works
+because lint-staged 15.5.2 passes **absolute** file paths to task commands by default
+(confirmed against its own docs), so the command's CWD can differ from the paths'
+origin without breaking anything. The old generic root-level entry was removed —
+redundant once every workspace has its own scoped entry, and there are zero
+non-workspace top-level `.ts`/`.js` files in this repo to lose coverage on.
+
+Considered lint-staged's own documented "one `.lintstagedrc` per package" monorepo
+pattern and rejected it: lint-staged does not merge configs across directories, so each
+of the 8 new per-package config files would need its own duplicated copy of the
+Prettier rule too — more files, more duplication, no behavioral benefit here since
+nothing package-specific is needed beyond directory scoping. A single root config with
+8 explicit glob entries stays one source of truth.
+
+Verified live, not just reasoned about: staged a real file in `apps/web` with an
+intentional unused-variable violation, then ran the exact command `.husky/pre-commit`
+invokes (`pnpm exec lint-staged`). Before the fix (`eslint --fix` from repo root against
+the same absolute path): zero output — the file was silently skipped, ignored by the
+root config's `apps/**` pattern. After the fix: `apps/web`'s own Next.js-derived
+ruleset correctly reported the violation — proof the workspace-specific config (which
+carries Next/React rules the root config doesn't have at all) is now genuinely applied
+to staged files, not just that some eslint process ran. Test file reverted immediately
+after; confirmed clean via `git diff`/`git status`.
+
+Two `eslint.config.mjs` files (root, `apps/web`) had comments explicitly documenting
+the old bypass behavior as current fact — updated both rather than leaving a stale
+comment next to code it no longer accurately describes.
+
+Reviewed the rest of the CI/hooks setup rather than touching it blindly: `ci.yml`'s
+shape (checkout → pnpm/node setup → install → format check → lint:root → lint →
+typecheck → test → build, with postgres+redis services) is sound and was left
+unchanged. Confirmed `core.hooksPath` is correctly wired to `.husky/_` in this checkout
+(the `prepare` script's job). Deliberately did NOT take on KI-007 (MinIO service /
+migration step / Playwright job in CI) — that issue's own next action names CR-080, a
+separate task, and folding it in here would have been an unrequested scope expansion.
+Also deliberately did NOT add a commit-msg hook/commitlint: `.claude/rules/git.md`'s
+commit-style section says "Preferred", not enforced, and adding enforcement tooling is
+a decision this task wasn't asked to make.
+
+Validation: `turbo run lint typecheck build --force` — 21/21 tasks green; `turbo run
+test --force` — all passing (5 api + 1 web unit tests; unaffected by this task, run to
+confirm nothing broke); `pnpm format:check`/`lint:root` clean.
+
+No database migration, no API change, no new runtime or dev dependency (existing
+`lint-staged`/`husky`/`eslint` versions, reconfigured only).
+
+Files: `package.json` (root — `lint-staged` config rewritten), `eslint.config.mjs`
+(root — comment updated), `apps/web/eslint.config.mjs` (comment updated),
+`.claude/context/known-issues.md` (KI-012 resolved as KI-R09), `docs/tasks.md` (CR-010
+checked off), `.claude/context/{project-state,current-task}.md`.
+
+Decisions: none new at the ADR level — this closes a tooling gap that was already
+diagnosed and assigned to this CR; it doesn't change CI/git-hooks architecture.
+
+Known limitations: KI-007 (CI still can't test uploads or run e2e — MinIO service,
+migration step, Playwright job all still absent from `ci.yml`) is unchanged, still
+explicitly CR-080's job. KI-019 (docker-compose.yml never booted live in this
+environment) is unrelated to and unaffected by this task.
+
+Follow-up: no more Foundation-phase tooling CRs remain unassigned before CR-011 (User
+registration) — CR-001..CR-010 are now all done. Design foundations (CR-063/CR-064) are
+the actual blocker for CR-011 per `docs/design.md`.

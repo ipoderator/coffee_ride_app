@@ -30,9 +30,20 @@ services:
       - '127.0.0.1:6379:6379'
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  # Image comes from quay.io, not Docker Hub's minio/minio: MinIO's own docs
+  # (docs/docker/README.md in minio/minio) reference quay.io/minio/minio exclusively now.
+  # Pinned to a specific RELEASE tag rather than :latest so dev/CI/server don't drift
+  # (KI-005). The healthcheck uses `mc ready local`, not curl: the server image does not
+  # ship curl, and `mc` is bundled — this is MinIO's own documented healthcheck, taken
+  # verbatim from their official docker-compose example (KI-004).
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minio
@@ -43,7 +54,7 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
       timeout: 5s
       retries: 10

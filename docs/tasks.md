@@ -64,8 +64,26 @@ Decisions and config that are cheap now and a breaking change once code exists �
       plain-Node consumers. Fixed a real tsconfig `extends`-chain bug surfaced by Vite 8's oxc transform
       (KI-018, resolved same session) along the way. Not wired into CI
       (KI-007 stays open — CR-080's job). See `docs/changelog.md`.
-- [ ] CR-009 Configure Docker Compose
-- [ ] CR-010 Configure CI + Git hooks
+- [x] CR-009 Configure Docker Compose — done 2026-09-13: fixed two real bugs in the
+      compose file that predated this CR (KI-004 MinIO healthcheck used `curl`, which
+      the image doesn't ship — switched to `mc ready local`; KI-005 `minio/minio:latest`
+      unpinned — pinned to `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`, also
+      switching registries since MinIO's own docs now point at quay.io only), added a
+      missing Redis healthcheck, and added `pnpm infra:up`/`infra:down` root scripts.
+      Docker's daemon is still unreachable in this environment (KI-019, same standing
+      constraint as KI-014/KI-015) — validated via `docker compose config` only, not a
+      live boot. See `docs/changelog.md`.
+- [x] CR-010 Configure CI + Git hooks — done 2026-09-13: fixed the one real bug
+      already tracked against this area (KI-012 — lint-staged's pre-commit ESLint
+      step ran with CWD at the repo root, so staged `apps/*`/`packages/*` files were
+      never actually ESLint-checked at commit time, only Prettier-formatted). Root
+      `package.json`'s `lint-staged` config now has one glob entry per workspace
+      member, each running `pnpm --filter <name> exec eslint --fix` so the package's
+      own `eslint.config.mjs` resolves correctly. Verified live: staged a real
+      unused-variable violation in `apps/web`, confirmed it went undetected under the
+      old config and correctly caught under the new one. CI (`ci.yml`) reviewed and
+      left unchanged — its remaining gaps (MinIO/migrations/Playwright, KI-007) are
+      explicitly CR-080's scope, not this task's. See `docs/changelog.md`.
 
 ## Design foundations
 

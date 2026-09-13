@@ -47,9 +47,13 @@ non-trivial work; see `.claude/CLAUDE.md` → Context preservation protocol.
 ## Local infrastructure
 
 ```bash
-docker compose up -d
+docker compose up -d   # or: pnpm infra:up
 pnpm install
 ```
+
+`pnpm infra:up`/`pnpm infra:down` are equivalent shortcuts for `docker compose up -d`/
+`docker compose down`, kept alongside the raw command so the workflow reads the same
+whether or not you have this repo's scripts memorized.
 
 Node version is pinned in `.nvmrc`. `pnpm install` also sets up the Husky pre-commit hook
 (`prepare` script) which runs lint-staged.

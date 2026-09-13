@@ -1,12 +1,14 @@
 // apps/web ESLint config.
 //
-// Resolved and used only when ESLint runs with this directory as its working
-// directory (i.e. `turbo lint` / CI, which run each workspace's own `lint`
-// script from inside that workspace) — flat config has no automatic directory
-// cascading, so this file is NOT picked up by the repo-root `pnpm lint:root` or
-// by lint-staged's pre-commit `eslint --fix` (both run with CWD at the repo
-// root and use ../../eslint.config.mjs instead, which ignores apps/**/packages/**
-// for exactly this reason). See docs/changelog.md (CR-002) and KI-012.
+// Resolved and used whenever ESLint runs with this directory as its working
+// directory — flat config has no automatic directory cascading, so CWD decides
+// which config file applies. That's `turbo lint`/CI (runs this package's own
+// `lint` script from inside this directory) and, since CR-010, lint-staged's
+// pre-commit hook too (root `package.json`'s `apps/web/**/*.{ts,tsx,js,jsx}`
+// entry runs `pnpm --filter web exec eslint --fix`, which sets CWD here for
+// exactly this reason). The repo-root `pnpm lint:root` still uses
+// ../../eslint.config.mjs instead, which ignores apps/**/packages/** so it
+// doesn't double-cover this file. See docs/changelog.md (CR-002, CR-010).
 //
 // eslint-config-next does not yet ship a prebuilt flat config export, so we
 // bridge its legacy-style shareable configs via FlatCompat, per Next's own
