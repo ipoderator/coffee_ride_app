@@ -6,8 +6,15 @@
 // through this JS entry point — CSS has no TS module to re-export).
 //
 // Russian number/unit formatters and UI terminology mapping (CR-064, docs/design.md
-// §7/§13) are this entry point's first real exports. The first shared components
-// (`MetricTile`, `StatusBadge`, ..., CR-065/CR-066) land next, before apps/web has a
-// real screen to put them on (CR-011). Read `docs/design.md` before adding to either.
+// §7/§13), the shared `cn` class-name helper, and the first shared components —
+// `MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale` (CR-065, §6) — are this
+// entry point's exports so far. `Skeleton`/`EmptyState`/`ErrorState` (CR-066, §10)
+// land next, before apps/web has a real screen to put any of this on (CR-011). Read
+// `docs/design.md` before adding to any of these.
 export * from './format';
 export * from './terminology';
+export * from './lib/cn';
+export * from './components/MetricTile';
+export * from './components/MetricRow';
+export * from './components/StatusBadge';
+export * from './components/DifficultyScale';

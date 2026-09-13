@@ -99,8 +99,9 @@ rewrite, not a polish pass.
       participants) and the UI terminology mapping (status, bicycle type, services) as
       one shared, unit-tested module — done 2026-09-13:
       `packages/ui/src/{format,terminology}.ts`. See `docs/changelog.md`.
-- [ ] CR-065 Metric presentation components: `MetricTile`, `MetricRow`, `StatusBadge`,
-      `DifficultyScale` — `docs/design.md` §6
+- [x] CR-065 Metric presentation components: `MetricTile`, `MetricRow`, `StatusBadge`,
+      `DifficultyScale` — done 2026-09-13: `packages/ui/src/components/`. See
+      `docs/changelog.md`.
 - [ ] CR-066 Shared state primitives: `Skeleton`, `EmptyState`, `ErrorState` + the
       degraded-state pattern used by CR-052 — `docs/design.md` §10
 

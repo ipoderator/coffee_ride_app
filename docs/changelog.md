@@ -1280,3 +1280,77 @@ Follow-up: CR-065 (Metric presentation components: `MetricTile`, `MetricRow`,
 `StatusBadge`, `DifficultyScale`, `docs/design.md` §6) is next — the first consumer of
 both this task's formatters and CR-063's tokens, and it must also resolve KI-020 (shadcn
 CLI's component-vendoring target) before vendoring its first component.
+
+## 2026-09-13 — CR-065 — Metric presentation components
+
+Summary: Added `packages/ui`'s first four shared components — `MetricTile`,
+`MetricRow`, `StatusBadge`, `DifficultyScale` (`docs/design.md` §6, §9's shared
+component inventory) — on top of CR-063's tokens and CR-064's formatters/terminology.
+`MetricTile` renders a label/value/unit triple (unit inline, 0.6em, never bold), backed
+by new additive `*Parts` helpers in `format.ts` (`formatDistanceParts`, etc.) that
+split a formatter's output into `{ value, unit }` instead of one NBSP-joined string —
+the existing joined `format*` functions are now implemented in terms of these rather
+than duplicated, and their original 31 tests were re-run unchanged before anything new
+was added, to confirm the refactor was behavior-preserving. `MetricRow` lays out its
+children as a 2-column grid on mobile and a flex row from `md` up. `StatusBadge` renders
+a `{label, tone}` pair from `terminology.ts`; per §1's "one exception," `danger` is the
+only tone rendered as a solid fill, every other tone (including a new `neutral` case) is
+a low-weight tinted/outlined chip — deliberately self-contained rather than composed
+from a separate generic `Badge` primitive, to avoid pulling KI-020's still-open
+shadcn-vendoring question into this task. `DifficultyScale` adds the five difficulty
+words (§6) to `terminology.ts` and renders a 1-5 segment scale plus the word, with an
+`sr-only` numeric qualifier for screen readers. `packages/ui` gained its first
+jsdom + Testing Library Vitest setup (54 tests across 6 files, explicit
+`afterEach(cleanup)` since this config doesn't use Vitest's `globals: true`) and a
+shared `cn` helper (`clsx` + `tailwind-merge`, its own copy — `packages/ui` cannot
+depend on `apps/web`).
+
+A live visual check (a temporary component showcase rendered in `apps/web`, screenshot
+light + dark via the browser-automation skill, both reverted afterward) caught a real,
+previously-invisible bug: Tailwind v4's automatic content detection never scanned
+`packages/ui` at all — every one of its own Tailwind classes (`rounded-full`,
+`bg-bg-raised`, the value/unit `gap`, `StatusBadge`'s tint classes) silently generated
+no CSS, present in the DOM's `class` attribute but with zero visual effect. Fixed
+permanently (not part of the reverted showcase) with an `@source` directive in
+`apps/web/src/app/globals.css` pointing at `packages/ui/src` — recorded as KI-R10,
+resolved same-session. This is exactly why `docs/design.md`'s prerequisite ordering
+insists design-foundation work be verified live, not just unit-tested: a jsdom test has
+no layout/paint step and could never have caught this.
+
+No database migration, no API route change. New dependencies: `packages/ui` now depends
+on `clsx`/`tailwind-merge` (matching `apps/web`'s own versions) and gained
+`@testing-library/react`/`@testing-library/jest-dom`/`@vitejs/plugin-react`/`jsdom`/
+`react-dom` as devDependencies (plus `react-dom` as a new peerDependency, alongside the
+existing `react` one); the `config` workspace devDependency CR-064 added (for the
+now-removed `node`-environment Vitest fragment) was dropped as unused.
+
+Files: `packages/ui/src/components/{MetricTile,MetricRow,StatusBadge,
+DifficultyScale}.tsx` (new) + colocated `.test.tsx` each, `packages/ui/src/lib/cn.ts`
+(new), `packages/ui/src/format.ts` (additive `*Parts` helpers), `packages/ui/src/
+terminology.ts` (`DifficultyLevel`/`DIFFICULTY_LEVEL_TERMS`), `packages/ui/src/index.ts`
+(re-exports), `packages/ui/vitest.config.ts`/`vitest.setup.ts` (jsdom + React, replacing
+CR-064's `node`-environment fragment), `packages/ui/tsconfig.json` (includes
+`vitest.setup.ts` so `tsc --noEmit` sees jest-dom's matcher types), `packages/ui/
+eslint.config.mjs` (hex-literal restriction, mirroring `apps/web`'s), `packages/ui/
+package.json`, `apps/web/src/app/globals.css` (`@source` fix), `pnpm-lock.yaml`,
+`.claude/context/known-issues.md` (KI-R10 added, KI-020 updated), `docs/tasks.md`
+(CR-065 checked off), `.claude/context/{project-state,architecture-map,
+current-task}.md`.
+
+Decisions: none new at the ADR level. Two judgment calls, both documented in-code
+rather than as ADRs (component-level, not architectural): `StatusBadge`'s tone-styling
+scheme (danger = solid fill, every other tone = tinted chip, `neutral` = plain
+bordered surface) is inferred from `tokens.css` only defining `--on-danger`/
+`--on-primary` foregrounds and from §1's explicit "one exception" framing, not from an
+exact CSS spec in `docs/design.md`; `MetricRow`'s grid/flex breakpoint cutover uses
+`md` (768px) by analogy to §11's breakpoint table, since §6 itself names no exact
+pixel value.
+
+Known limitations: KI-R10 (new, resolved) — see above. KI-020 (shadcn CLI's vendoring
+target) stays open, confirmed untouched by this task. KI-021 (provisional
+service/registration keys) unaffected. Everything else from CR-064's known-limitations
+list is unchanged.
+
+Follow-up: CR-066 (Shared state primitives — `Skeleton`, `EmptyState`, `ErrorState` +
+the degraded-state pattern used by CR-052, `docs/design.md` §10) is next — the last
+Design-foundations prerequisite before CR-011.

@@ -5,10 +5,11 @@
   // consumed as raw TSX source by apps/web's own bundler (Next's
   // `transpilePackages`) — the standard pattern for a shared React package in
   // a Next.js monorepo, avoiding a second build step that would just be
-  // recompiled again by webpack/Turbopack anyway. `transpilePackages: ['ui']`
-  // is added to apps/web's next.config once there is a real component to
-  // import (CR-063/CR-065) — wiring it in now, against an empty package,
-  // would be untestable.
+  // recompiled again by webpack/Turbopack anyway. Real components exist now
+  // (CR-065), but `transpilePackages: ['ui']` still isn't wired into
+  // apps/web's next.config — nothing there imports one yet, that starts with
+  // CR-011's first real screen (same "wire it when there's a real consumer"
+  // discipline CR-005/CR-006 used for the still-unconnected Redis/S3 clients).
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -17,6 +18,11 @@
     "jsx": "react-jsx",
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  // vitest.setup.ts (root, not under src/) is included too — it's what pulls in
+  // @testing-library/jest-dom/vitest's ambient module augmentation
+  // (`toBeInTheDocument`, etc. on Vitest's `Assertion`); without it in the
+  // program, `tsc --noEmit` doesn't see those matchers on `expect(...)` in the
+  // component tests under src/, even though vitest itself runs them fine.
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vitest.setup.ts"],
   "exclude": ["node_modules", "dist"]
 }

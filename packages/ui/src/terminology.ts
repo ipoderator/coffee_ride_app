@@ -91,6 +91,22 @@ export const METRIC_TERMS = {
 } as const;
 
 /**
+ * Difficulty scale (`docs/design.md` §6, CR-065). A plain 1-5 integer, not a DB enum —
+ * no provisional-key concern like {@link RideServiceKey}'s. Rendered as filled/empty
+ * segments **plus** this word, never a color gradient and never color alone
+ * (`DifficultyScale`).
+ */
+export type DifficultyLevel = 1 | 2 | 3 | 4 | 5;
+
+export const DIFFICULTY_LEVEL_TERMS: Record<DifficultyLevel, string> = {
+  1: 'Лёгкий',
+  2: 'Ниже среднего',
+  3: 'Средний',
+  4: 'Сложный',
+  5: 'Очень сложный',
+};
+
+/**
  * Registration call-to-action/state labels. No `Registration` status enum exists yet
  * either — same provisional-key caveat as {@link RideServiceKey}.
  */

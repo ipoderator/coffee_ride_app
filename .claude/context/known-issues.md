@@ -268,10 +268,44 @@ Next action: CR-065/CR-066 (first shared components) must either point
 workspace package) or vendor manually and re-theme by hand, per docs/design.md §14's
 "vendored ... and re-themed to these tokens" framing. Decide before writing the first
 component, not after several have already landed in the wrong place.
+Update 2026-09-13 (CR-065): still open, but CR-065's four components
+(`MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale`) did NOT trigger this —
+none are shadcn-registry primitives, and `StatusBadge` was deliberately built
+self-contained (not composed from a separate generic `Badge`) specifically to avoid
+pulling this question into that task's scope. Stays open for whichever CR vendors an
+actual shadcn primitive (`Button`, `Card`, `Badge`, ...) into `packages/ui`.
 
 ---
 
 ## Resolved
+
+### KI-R10 — Tailwind v4 never scanned `packages/ui` for utility classes
+
+Resolved: 2026-09-13 (CR-065, same session it was discovered in). Discovered:
+2026-09-13 (CR-065's live visual check).
+Problem: Tailwind v4's automatic content detection only walks `apps/web`'s own
+directory tree — it never crosses into a sibling monorepo package like `packages/ui`,
+symlinked into `node_modules` or not. Every Tailwind utility class used exclusively
+inside `packages/ui`'s components (`rounded-full`, `bg-bg-raised`, a flex `gap-*`
+between a metric's value and unit, the tint/opacity classes on `StatusBadge`, ...) was
+silently never generated: present correctly in the DOM's `class` attribute, but
+`getComputedStyle` showed plain browser defaults (`border-radius: 0`,
+`display: block` instead of `inline-flex`, etc.) — a class string in the markup with
+zero effect.
+Impact: would have made every one of `packages/ui`'s own Tailwind classes a silent
+no-op the moment `apps/web` actually imported a real component (starting CR-011) —
+exactly the kind of thing a jsdom unit test can't catch (no real layout/paint step).
+Only found because CR-065's live visual check rendered a temporary showcase and
+compared it against `docs/design.md`'s spec instead of trusting the DOM structure
+alone.
+Resolution: added `@source '../../../../packages/ui/src';` to
+`apps/web/src/app/globals.css`, right after the existing `@import` lines. Re-verified
+live (browser-automation skill, light + dark) after the fix — every component now
+matches its `docs/design.md` spec exactly.
+Next action: none — but worth remembering for any _future_ shared package
+(`packages/maps-2gis`'s render layer, if one is ever added) that ships Tailwind
+classes consumed by `apps/web`: it needs the same `@source` treatment, not just a
+workspace `package.json` dependency.
 
 ### KI-R01 — Node 20 was end-of-life; toolchain versions inconsistent
 

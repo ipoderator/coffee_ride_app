@@ -9,6 +9,11 @@
 //   `.claude/rules/frontend.md` / `docs/design.md` §6: "no elevation data" and "flat
 //   route" are different facts. This is intentionally handled once here rather than in
 //   every future consumer (CR-065's `MetricTile`, etc.).
+//
+// Each formatter also has a `*Parts` counterpart (CR-065) returning `{ value, unit }`
+// instead of one joined string, for a consumer that needs to style the unit
+// differently (`MetricTile`). The joined `format*` functions are implemented in terms
+// of these, not a parallel copy.
 
 const NBSP = ' ';
 const EM_DASH = '—';
@@ -38,40 +43,84 @@ function formatWholeGrouped(value: number): string {
   return groupThousands(String(Math.round(value)));
 }
 
+/**
+ * A formatted metric split into its numeric/text value and unit, instead of one
+ * NBSP-joined string. `unit` is `''` when the metric has no separate unit (e.g.
+ * `formatParticipantsParts`'s `12 из 20`, or any missing-value result) — a falsy
+ * check is enough for a consumer to decide whether to render a unit at all.
+ *
+ * Exists for CR-065's `MetricTile`, which renders the value and unit as two visually
+ * distinct inline elements (`docs/design.md` §6 — the unit is never the same size or
+ * weight as the number). The plain joined `format*` functions below stay the public
+ * contract for every other context (plain text, `aria-label`s, logs) and are now
+ * implemented in terms of these — one rule, not two copies of it.
+ */
+export interface MetricParts {
+  value: string;
+  unit: string;
+}
+
+const MISSING_PARTS: MetricParts = { value: EM_DASH, unit: '' };
+
+function joinParts({ value, unit }: MetricParts): string {
+  return unit === '' ? value : `${value}${NBSP}${unit}`;
+}
+
+/** Distance in kilometers, split: 1 decimal, comma separator — `{ value: "42,3", unit: "км" }`. */
+export function formatDistanceParts(km: Maybe<number>): MetricParts {
+  if (isMissing(km)) return MISSING_PARTS;
+  return { value: toFixedComma(km, 1), unit: 'км' };
+}
+
 /** Distance in kilometers: 1 decimal, comma separator — `42,3 км`. */
 export function formatDistance(km: Maybe<number>): string {
-  if (isMissing(km)) return EM_DASH;
-  return `${toFixedComma(km, 1)}${NBSP}км`;
+  return joinParts(formatDistanceParts(km));
+}
+
+/** Elevation gain in meters, split: whole meters, NBSP-grouped thousands. */
+export function formatElevationParts(meters: Maybe<number>): MetricParts {
+  if (isMissing(meters)) return MISSING_PARTS;
+  return { value: formatWholeGrouped(meters), unit: 'м' };
 }
 
 /** Elevation gain in meters: whole meters, NBSP-grouped thousands — `1 250 м`. */
 export function formatElevation(meters: Maybe<number>): string {
-  if (isMissing(meters)) return EM_DASH;
-  return `${formatWholeGrouped(meters)}${NBSP}м`;
+  return joinParts(formatElevationParts(meters));
+}
+
+/** Average speed/pace in km/h, split: 1 decimal, comma separator. */
+export function formatSpeedParts(kmh: Maybe<number>): MetricParts {
+  if (isMissing(kmh)) return MISSING_PARTS;
+  return { value: toFixedComma(kmh, 1), unit: 'км/ч' };
 }
 
 /** Average speed/pace in km/h: 1 decimal, comma separator — `24,5 км/ч`. */
 export function formatSpeed(kmh: Maybe<number>): string {
-  if (isMissing(kmh)) return EM_DASH;
-  return `${toFixedComma(kmh, 1)}${NBSP}км/ч`;
+  return joinParts(formatSpeedParts(kmh));
 }
 
 /**
- * Duration in whole minutes. Under an hour: minutes only (`45 мин`). An hour or more:
- * hours + minutes (`2 ч 30 мин`), with the minutes part omitted when it's exactly zero
- * (`2 ч`, not `2 ч 0 мин`) — not spelled out by a `docs/design.md` example, but reads as
- * the same "don't show a zero that isn't information" principle behind the missing-value
- * em dash rule above.
+ * Duration in whole minutes, split. Under an hour: minutes only (`{ value: "45",
+ * unit: "мин" }`). An hour or more: hours + minutes as the value, with the minutes
+ * part omitted from the value (and the unit becoming `"ч"` instead of `"мин"`) when
+ * it's exactly zero (`{ value: "2", unit: "ч" }`, not `"2 ч 0 мин"`) — not spelled
+ * out by a `docs/design.md` example, but reads as the same "don't show a zero that
+ * isn't information" principle behind the missing-value em dash rule above.
  */
-export function formatDuration(totalMinutes: Maybe<number>): string {
-  if (isMissing(totalMinutes)) return EM_DASH;
+export function formatDurationParts(totalMinutes: Maybe<number>): MetricParts {
+  if (isMissing(totalMinutes)) return MISSING_PARTS;
   const minutes = Math.round(totalMinutes);
-  if (minutes < 60) return `${minutes}${NBSP}мин`;
+  if (minutes < 60) return { value: String(minutes), unit: 'мин' };
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return remainder === 0
-    ? `${hours}${NBSP}ч`
-    : `${hours}${NBSP}ч${NBSP}${remainder}${NBSP}мин`;
+    ? { value: String(hours), unit: 'ч' }
+    : { value: `${hours}${NBSP}ч${NBSP}${remainder}`, unit: 'мин' };
+}
+
+/** Duration in whole minutes: `< 1h` -> minutes (`45 мин`); `>= 1h` -> `2 ч 30 мин`. */
+export function formatDuration(totalMinutes: Maybe<number>): string {
+  return joinParts(formatDurationParts(totalMinutes));
 }
 
 // Genitive month names for date formatting ("12 мая", not the nominative "май").
@@ -162,10 +211,34 @@ export function formatTime(
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+/**
+ * Whole rubles, split: NBSP-grouped thousands, `unit: '₽'`. Zero/missing is free —
+ * `{ value: 'Бесплатно', unit: '' }`, not `{ value: '0', unit: '₽' }`.
+ */
+export function formatPriceParts(rubles: Maybe<number>): MetricParts {
+  if (isMissing(rubles) || rubles === 0)
+    return { value: 'Бесплатно', unit: '' };
+  return { value: formatWholeGrouped(rubles), unit: '₽' };
+}
+
 /** Whole rubles, NBSP-grouped thousands — `1 500 ₽`; zero/missing is free — `Бесплатно`. */
 export function formatPrice(rubles: Maybe<number>): string {
-  if (isMissing(rubles) || rubles === 0) return 'Бесплатно';
-  return `${formatWholeGrouped(rubles)}${NBSP}₽`;
+  return joinParts(formatPriceParts(rubles));
+}
+
+/**
+ * Registered participants vs. capacity, split. `unit` is always `''` — `12 из 20` is a
+ * ratio, not a number-plus-unit, so the whole phrase is the `value`.
+ */
+export function formatParticipantsParts(
+  current: Maybe<number>,
+  limit: Maybe<number>,
+): MetricParts {
+  if (isMissing(current) || isMissing(limit)) return MISSING_PARTS;
+  return {
+    value: `${Math.round(current)}${NBSP}из${NBSP}${Math.round(limit)}`,
+    unit: '',
+  };
 }
 
 /** Registered participants vs. capacity — `12 из 20`. */
@@ -173,6 +246,5 @@ export function formatParticipants(
   current: Maybe<number>,
   limit: Maybe<number>,
 ): string {
-  if (isMissing(current) || isMissing(limit)) return EM_DASH;
-  return `${Math.round(current)}${NBSP}из${NBSP}${Math.round(limit)}`;
+  return joinParts(formatParticipantsParts(current, limit));
 }

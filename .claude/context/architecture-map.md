@@ -79,15 +79,25 @@ consumer already wired in: `apps/api`'s error handler imports
 `ProblemDetails` from here (`import type`, confirmed erased in the compiled
 `dist` output) instead of declaring its own copy.
 
-`packages/ui` (CR-007, content since CR-063/CR-064): design tokens
+`packages/ui` (CR-007, content since CR-063/CR-064/CR-065): design tokens
 (`src/tokens.css`, CSS custom properties consumed by `apps/web` via a real
-package `exports` entry) and Russian number/unit formatters + UI terminology
-mapping (`src/format.ts`/`src/terminology.ts`, `docs/design.md` §7/§13, its
-first real Vitest suite — `node` environment, 31 tests) are its content so
-far; re-exported from `src/index.ts` (was `export {}` through CR-007). Not
-yet wired into `apps/web`'s `transpilePackages` (no React component exists
-there yet — first shared components are CR-065/CR-066, which also must
-resolve KI-020's shadcn-vendoring-target question first).
+package `exports` entry), Russian number/unit formatters + UI terminology
+mapping (`src/format.ts`/`src/terminology.ts`, `docs/design.md` §7/§13), and
+its first four real components (`src/components/{MetricTile,MetricRow,
+StatusBadge,DifficultyScale}.tsx`, §6) plus a shared `cn` helper
+(`src/lib/cn.ts`). Vitest switched from CR-064's `node`-environment fragment
+to a package-local jsdom + Testing Library config once components needed
+real DOM rendering (54 tests across 6 files). All re-exported from
+`src/index.ts` (was `export {}` through CR-007). `apps/web` doesn't import
+any of these yet (`transpilePackages` still unset — no real screen exists
+before CR-011), but Tailwind now scans `packages/ui/src` regardless, via an
+`@source` directive added to `apps/web/src/app/globals.css` (KI-R10) — found
+because Tailwind v4's automatic content detection never crosses into a
+sibling monorepo package on its own, which silently dropped every one of
+`packages/ui`'s own Tailwind classes until fixed. Next: CR-066's `Skeleton`/
+`EmptyState`/`ErrorState`, which will likely finally force KI-020's
+shadcn-vendoring-target question (`Skeleton` is a real shadcn primitive,
+unlike any of CR-065's four).
 
 `packages/maps-core` (CR-007): the `MapProvider` interface (`geocode`,
 `reverseGeocode`, `getRoute`) plus `LatLng`/`GeocodeResult`/`RouteRequest`/

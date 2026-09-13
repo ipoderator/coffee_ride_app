@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BICYCLE_TYPE_TERMS,
+  DIFFICULTY_LEVEL_TERMS,
   METRIC_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_SERVICE_TERMS,
@@ -91,6 +92,18 @@ describe('METRIC_TERMS', () => {
       duration: 'Длительность',
       difficulty: 'Сложность',
       participants: 'Участники',
+    });
+  });
+});
+
+describe('DIFFICULTY_LEVEL_TERMS', () => {
+  it('matches docs/design.md §6, in level order', () => {
+    expect(DIFFICULTY_LEVEL_TERMS).toEqual({
+      1: 'Лёгкий',
+      2: 'Ниже среднего',
+      3: 'Средний',
+      4: 'Сложный',
+      5: 'Очень сложный',
     });
   });
 });

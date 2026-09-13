@@ -1,8 +1,18 @@
-// packages/ui's formatters/terminology (CR-064) are plain TS logic, no DOM — same
-// `node` environment as packages/maps-2gis's Vitest setup (`config/vitest/node-library`),
-// not apps/web's jsdom + React config. If a future component test needs jsdom/RTL
-// (CR-065/CR-066), that's a separate concern to add then, not to anticipate now.
 import { defineConfig } from 'vitest/config';
-import { nodeLibraryVitestConfig } from 'config/vitest/node-library';
+import react from '@vitejs/plugin-react';
 
-export default defineConfig(nodeLibraryVitestConfig());
+// Package-local config, not `config/vitest/node-library` (CR-064's original choice) —
+// CR-065 added real components, and rendering/asserting on them needs jsdom + a React
+// plugin, not the plain-Node `environment: 'node'` that fragment provides. Same shape
+// as apps/web's own vitest.config.mts, which explicitly documents this same split.
+// format.ts/terminology.ts's plain-logic tests are unaffected by the environment
+// change — jsdom is a strict superset for code that never touches the DOM.
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    restoreMocks: true,
+  },
+});

@@ -2,6 +2,19 @@
 @import 'tw-animate-css';
 @import 'ui/tokens.css';
 
+/*
+ * Tailwind v4's automatic content detection only walks this app's own directory tree
+ * (apps/web) — it never crosses into a sibling monorepo package, symlinked into
+ * node_modules or not. Without this, every Tailwind utility class used exclusively
+ * inside packages/ui's components (`rounded-full`, `bg-bg-raised`, a flex `gap-*`
+ * between a metric's value and unit, ...) is silently never generated: it shows up
+ * correctly in the DOM's `class` attribute but produces no CSS rule at all. Found
+ * live (CR-065, a temporary showcase of the new MetricTile/StatusBadge/
+ * DifficultyScale components rendered completely unstyled) rather than caught by any
+ * unit test — jsdom has no layout/paint step to catch a missing utility class.
+ */
+@source '../../../../packages/ui/src';
+
 @custom-variant dark (&:is(.dark *));
 
 @layer base {

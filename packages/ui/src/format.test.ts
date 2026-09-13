@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   formatDate,
   formatDistance,
+  formatDistanceParts,
   formatDuration,
+  formatDurationParts,
   formatElevation,
+  formatElevationParts,
   formatParticipants,
+  formatParticipantsParts,
   formatPrice,
+  formatPriceParts,
   formatSpeed,
+  formatSpeedParts,
   formatTime,
 } from './format';
 
@@ -143,5 +149,60 @@ describe('formatParticipants', () => {
   it('renders missing data as an em dash', () => {
     expect(formatParticipants(null, 20)).toBe(EM_DASH);
     expect(formatParticipants(12, undefined)).toBe(EM_DASH);
+  });
+});
+
+describe('*Parts helpers (CR-065)', () => {
+  it('formatDistanceParts splits value and unit', () => {
+    expect(formatDistanceParts(42.3)).toEqual({ value: '42,3', unit: 'км' });
+    expect(formatDistanceParts(null)).toEqual({ value: EM_DASH, unit: '' });
+  });
+
+  it('formatElevationParts splits value and unit', () => {
+    expect(formatElevationParts(1250)).toEqual({
+      value: `1${NBSP}250`,
+      unit: 'м',
+    });
+    expect(formatElevationParts(undefined)).toEqual({
+      value: EM_DASH,
+      unit: '',
+    });
+  });
+
+  it('formatSpeedParts splits value and unit', () => {
+    expect(formatSpeedParts(24.5)).toEqual({ value: '24,5', unit: 'км/ч' });
+  });
+
+  it('formatDurationParts splits value and unit, including the zero-remainder case', () => {
+    expect(formatDurationParts(45)).toEqual({ value: '45', unit: 'мин' });
+    expect(formatDurationParts(150)).toEqual({
+      value: `2${NBSP}ч${NBSP}30`,
+      unit: 'мин',
+    });
+    expect(formatDurationParts(120)).toEqual({ value: '2', unit: 'ч' });
+  });
+
+  it('formatPriceParts splits value and unit, free as a unit-less value', () => {
+    expect(formatPriceParts(1500)).toEqual({ value: `1${NBSP}500`, unit: '₽' });
+    expect(formatPriceParts(0)).toEqual({ value: 'Бесплатно', unit: '' });
+  });
+
+  it('formatParticipantsParts has no separate unit — the ratio is the whole value', () => {
+    expect(formatParticipantsParts(12, 20)).toEqual({
+      value: `12${NBSP}из${NBSP}20`,
+      unit: '',
+    });
+    expect(formatParticipantsParts(null, 20)).toEqual({
+      value: EM_DASH,
+      unit: '',
+    });
+  });
+
+  it('every joined format* function equals its Parts counterpart re-joined by NBSP', () => {
+    // Guards the refactor: the public joined contract must stay byte-identical to
+    // what it was before *Parts existed.
+    expect(formatDistance(42.3)).toBe('42,3' + NBSP + 'км');
+    expect(formatElevation(1250)).toBe(`1${NBSP}250${NBSP}м`);
+    expect(formatPrice(1500)).toBe(`1${NBSP}500${NBSP}₽`);
   });
 });
