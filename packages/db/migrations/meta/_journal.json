@@ -15,6 +15,13 @@
       "when": 1789324366115,
       "tag": "0001_sparkling_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789375209369,
+      "tag": "0002_nebulous_nebula",
+      "breakpoints": true
     }
   ]
 }

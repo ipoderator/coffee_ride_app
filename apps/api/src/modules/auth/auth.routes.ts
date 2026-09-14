@@ -7,6 +7,7 @@ import {
 } from 'types';
 import type { Env } from '../../env.js';
 import { requireAuth, SESSION_COOKIE_NAME } from '../../plugins/auth.js';
+import { userResponseSchema } from '../users/user-response.schema.js';
 import {
   loginUser,
   registerUser,
@@ -15,18 +16,12 @@ import {
 } from './auth.service.js';
 import { createSession, revokeSession } from './session.js';
 
-const userResponseSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  emailVerified: z.boolean(),
-  createdAt: z.string(),
-});
-
 // Response is built from an explicit Zod schema (not just the `User` TS type)
 // so Fastify's serializer actually strips any unlisted field before it leaves
 // the process — a second line of defense, on top of `auth.service.ts`'s own
 // `toPublicUser`, against ever returning `passwordHash`
-// (`.claude/rules/security.md`).
+// (`.claude/rules/security.md`). Shared with `modules/users` (CR-013) so
+// there's exactly one "user over the wire" shape, not two that can drift.
 const registerResponseSchema = z.object({
   user: userResponseSchema,
   verificationUrl: z.string().optional(),

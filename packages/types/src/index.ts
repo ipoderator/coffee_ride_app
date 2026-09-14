@@ -6,4 +6,5 @@
 export * from './api/problem.js';
 export * from './api/pagination.js';
 export * from './api/auth.js';
+export * from './api/users.js';
 export * from './domain/user.js';

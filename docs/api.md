@@ -41,10 +41,24 @@ cookie (`401` otherwise). Hard-deletes the `Session` row (ADR-013 — not a
 soft-revoke), clears the cookie. `204`.
 
 GET `/v1/auth/me` — **implemented (CR-012)**. Requires a valid session cookie
-(`401` otherwise). `200` → `{ user }`.
+(`401` otherwise). `200` → `{ user }`. As of CR-013, `user` includes
+`displayName`/`phone`/`bio` (all `null` until set via `PATCH /v1/users/me`) —
+an additive field change, not a new endpoint (`.claude/rules/extensibility.md`).
 
 POST `/v1/auth/forgot-password`
 POST `/v1/auth/reset-password`
+
+## Users
+
+PATCH `/v1/users/me` — **implemented (CR-013)**. Requires a valid session
+cookie (`401` otherwise). Body: `{ displayName?, phone?, bio? }`, each
+independently omittable (leaves the stored value unchanged) or `null`
+(clears it) — `displayName` 1-80 chars, `phone` a loose 7-20 char format
+check, `bio` ≤500 chars. `200` → `{ user }` (same shape as `GET /v1/auth/me`
+— no separate `GET /v1/users/me`, `.claude/CLAUDE.md`: no duplicate
+concepts). `400 validation_error` on an invalid field. `phone`/`bio` are
+private — returned only to the profile's own owner; no endpoint exposes
+another user's row yet (`.claude/rules/security.md`).
 
 ## Rides
 

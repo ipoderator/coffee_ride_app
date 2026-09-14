@@ -1601,3 +1601,92 @@ stable across repeated runs. Live-verified end to end against a real local Postg
 `POST /login` with a mismatched `Origin` (403 `csrf_origin_mismatch`), all via curl.
 
 Follow-up: CR-013 (Profile) is next per `docs/tasks.md`'s Auth section order.
+
+## 2026-09-14 — CR-013 — Profile
+
+Summary: a logged-in user can view and edit their own profile (`docs/design.md` §8:
+`/me/profile` "Profile settings"). Neither `docs/product.md` nor `docs/design.md`
+enumerated profile fields yet, so this session decided a minimal scope: `displayName`
+(≤80 chars), `phone` (private, loose format check), `bio` (≤500 chars) — all
+nullable/optional. Avatar/photo upload is explicitly out of scope (needs the S3
+pipeline — KI-015, CR-086); recorded as a new known issue rather than silently
+dropped. New endpoint: `PATCH /v1/users/me`, in a new `users` capability module
+(`.claude/rules/architecture.md` lists `users` and `auth` as separate backend
+areas) — no new `GET /v1/users/me`, since `GET /v1/auth/me` already returns the
+full `User` shape once `toPublicUser` includes the new fields (CLAUDE.md: no
+duplicate concepts).
+
+This ticket also closed two real prerequisite gaps rather than working around them:
+CR-012 shipped `POST /v1/auth/login` with no web UI, so `/me/profile` would have
+been unreachable from a browser — added the `/login` screen
+(`features/auth/login/`). And no cabinet shell/nav registry existed yet (ADR-009/
+CR-054 still open) — built the minimal real thing (a participant nav-item registry
+features push a descriptor into, a shell that renders from it and gates access on a
+valid session) rather than a full dashboard; `/me` gets a stub page so the route
+isn't a 404, full cabinet-home content stays CR-015/CR-054 scope.
+
+Files: `packages/db/src/schema/user.ts` (+`displayName`/`phone`/`bio` nullable
+columns) + migration `0002_nebulous_nebula.sql`; `packages/types/src/domain/user.ts`
+(`User` gains the three fields, required-but-nullable — 3 pre-existing literals in
+`register.test.tsx` updated to match), new `packages/types/src/api/users.ts`
+(`updateProfileRequestSchema`/`UpdateProfileRequest`/`UpdateProfileResponse`);
+`apps/api/src/modules/users/` (new: `user-response.schema.ts` — the one shared
+"user over the wire" Zod shape, now also imported by `auth.routes.ts` instead of
+its own copy; `users.service.ts`; `users.routes.ts`; `users.routes.test.ts`),
+`apps/api/src/modules/auth/auth.service.ts` (`toPublicUser` extended),
+`apps/api/src/routes/v1.ts` (registers `usersRoutes`); `packages/ui/src/components/
+{Textarea,Textarea.test}.tsx` (new shared primitive — bio's multi-line control),
+`packages/ui/src/terminology.ts` (+login copy in `AUTH_TERMS`, new `CABINET_TERMS`/
+`PROFILE_TERMS`); `apps/web/src/lib/api/{errors,current-user}.ts` (new — `ApiError`
+extracted out of `register/api.ts` so login/profile don't each grow a third copy),
+`apps/web/src/lib/auth/current-user-context.tsx`, `apps/web/src/lib/cabinet/
+{types,participant-nav}.ts`, `apps/web/src/components/cabinet/CabinetShell.tsx`,
+`apps/web/src/features/auth/login/` (new), `apps/web/src/features/participant/
+profile/` (new), `apps/web/src/app/login/page.tsx`, `apps/web/src/app/me/
+{layout,page,profile/page}.tsx`, `apps/web/vitest.config.mts` (+`resolve.alias` for
+`@/*`, needed the moment a Vitest-tested file first used that import form).
+
+Two real bugs were found and fixed along the way, not worked around: (1)
+`apps/api/src/plugins/db.ts` never closed its postgres.js connection pool on
+`app.close()` — invisible with one or two test files, but a genuine resource leak
+that started exhausting Postgres's `max_connections` once this ticket's fourth
+DB-touching Vitest file added enough concurrent `buildApp()` calls, surfacing as
+intermittent `500`s; fixed with an `onClose` hook calling `db.$client.end()`. (2)
+Even after that fix, two test files' concurrent `beforeEach: DELETE FROM users`
+(CR-011/CR-012's TRUNCATE-deadlock fix) still collided with each other's in-flight
+register/login/patch requests often enough to surface as intermittent Postgres
+deadlocks/500s once a fourth file joined — same class of bug as CR-012's, now at
+the file-scheduling level instead of the query level. Fixed by setting
+`fileParallelism: false` in `apps/api/vitest.config.ts` (integration tests against
+one shared real Postgres database don't need file-level parallelism; the suite is
+small enough that serializing costs no meaningful time). Verified stable across 5
+consecutive full `vitest run` passes after both fixes.
+
+Decisions: none new at the ADR level. The profile-field scope decision above is
+product-level, not architectural — recorded here and in `docs/tasks.md`, not
+`docs/decisions.md`.
+
+Known limitations: new — avatar/photo upload is not implemented (needs the S3
+pipeline, KI-015/CR-086); `phone`'s format check is deliberately loose (no real
+E.164 validation); the participant nav registry (`lib/cabinet/participant-nav.ts`)
+currently has exactly one entry and no feature-flag support yet — CR-054 is the
+ticket that generalizes it (widgets, organizer side, flags). KI-022 unaffected —
+`PATCH /v1/users/me` is not an auth endpoint, general rate-limit tier applies.
+
+Validation: `turbo run lint/typecheck/build/test` (run separately) all green;
+`format:check`/`lint:root` clean. 44 `apps/api` tests pass (was 38 before this
+ticket), stable across 5 consecutive full-suite runs. `apps/web` gained 22 tests
+across 2 new files (was 8). Live-verified end to end: curl sequence against a real
+Postgres + running `apps/api` (register → login → `GET /me` showing the new null
+fields → `PATCH /v1/users/me` unauthenticated 401 → authenticated 200 with fields
+persisted and confirmed via a follow-up `GET /me` → invalid payload 400 →
+mismatched-`Origin` 403); and a full browser flow against a real `next dev` server
+(unauthenticated `/me` → redirected to `/login`; login → redirected to `/me`;
+clicked the registry-rendered "Профиль" nav link → `/me/profile` pre-filled with
+the account's existing values; edited `displayName`, saved, saw the success
+message; reloaded the page and confirmed the new value persisted, not just
+optimistic UI) via the `browser-automation` skill — no console errors beyond the
+expected pre-login 401 on `/api/v1/auth/me`.
+
+Follow-up: CR-014 (Organizer profile) is next per `docs/tasks.md`'s Organizer
+section order.

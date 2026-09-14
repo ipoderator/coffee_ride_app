@@ -7,4 +7,13 @@ export interface User {
   email: string;
   emailVerified: boolean;
   createdAt: string;
+  // Profile fields (CR-013). Required-but-nullable, not optional: the server
+  // always includes these keys (`null` when unset) in every response that
+  // returns a `User` (`toPublicUser`) — the type says so. A handful of
+  // pre-existing test fixtures that construct a `User` literal needed a
+  // one-line update for this; that's a smaller, more honest cost than a type
+  // that lies about a field the wire format always sends.
+  displayName: string | null;
+  phone: string | null;
+  bio: string | null;
 }

@@ -34,6 +34,13 @@ export function toPublicUser(row: typeof users.$inferSelect): User {
     email: row.email,
     emailVerified: row.emailVerified,
     createdAt: row.createdAt.toISOString(),
+    // CR-013: always present (null when unset), same reasoning as every other
+    // field here — this is the one place that maps a DB row to the public
+    // shape, so every consumer (register/login/verify-email/me, and
+    // `modules/users`' PATCH) gets these for free.
+    displayName: row.displayName,
+    phone: row.phone,
+    bio: row.bio,
   };
 }
 

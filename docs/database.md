@@ -4,8 +4,11 @@ Conceptual model. Exact columns and indexes evolve through migrations.
 
 - User — account. First real table (CR-011): `id`, `email` (unique, stored
   lowercased by the service layer), `passwordHash` (Argon2id), `emailVerified`
-  (default `false`, flipped by verify-email), `createdAt`/`updatedAt`
-  (`timestamptz`). No `passwordHash` ever leaves `apps/api` in a response.
+  (default `false`, flipped by verify-email), `displayName`/`phone`/`bio`
+  (CR-013, all nullable — profile fields set via `PATCH /v1/users/me`; `phone`
+  is private contact data, returned only to the profile's own owner),
+  `createdAt`/`updatedAt` (`timestamptz`). No `passwordHash` ever leaves
+  `apps/api` in a response.
 - EmailVerificationToken — one row per issued verification token for a User
   (CR-011): `id`, `userId` (FK → User, cascade delete), `tokenHash` (SHA-256 of
   the raw token — the raw value is never persisted, same pattern as ADR-013's

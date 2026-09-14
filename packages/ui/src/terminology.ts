@@ -151,4 +151,38 @@ export const AUTH_TERMS = {
     'Только для этого окружения — ссылка для подтверждения:',
   emailAlreadyRegistered: 'Аккаунт с таким email уже существует.',
   genericError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
+  loginTitle: 'Вход',
+  loginSubmit: 'Войти',
+  loginSubmitPending: 'Вход…',
+  invalidCredentials: 'Неверный email или пароль.',
+} as const;
+
+/**
+ * Cabinet shell (CR-013, `docs/design.md` §8): nav + the shared loading/error
+ * states the shell shows while it resolves who's logged in. Separate from
+ * `AUTH_TERMS` — this is cabinet-shell copy, not the login/register forms.
+ */
+export const CABINET_TERMS = {
+  navLabel: 'Навигация личного кабинета',
+  loadingCurrentUser: 'Загрузка личного кабинета…',
+  loadCurrentUserError: 'Не удалось загрузить данные аккаунта.',
+  homeTitle: 'Личный кабинет',
+  homeEmptyTitle: 'Пока здесь нечего показать',
+  homeEmptyDescription:
+    'Управление профилем доступно в разделе «Профиль». Заезды и регистрации появятся здесь позже.',
+  profileNavLabel: 'Профиль',
+} as const;
+
+/** `/me/profile` (CR-013, `docs/design.md` §8 "Profile settings"). */
+export const PROFILE_TERMS = {
+  pageTitle: 'Профиль',
+  displayNameLabel: 'Имя',
+  displayNameHint: 'Видно другим участникам заезда.',
+  phoneLabel: 'Телефон',
+  phoneHint: 'Виден только вам — не показывается другим участникам.',
+  bioLabel: 'О себе',
+  bioHint: 'До 500 символов.',
+  saveSubmit: 'Сохранить',
+  saveSubmitPending: 'Сохранение…',
+  saveSuccess: 'Изменения сохранены.',
 } as const;

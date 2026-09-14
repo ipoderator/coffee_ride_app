@@ -64,6 +64,9 @@ describe('RegisterForm', () => {
         email: 'rider@example.com',
         emailVerified: false,
         createdAt: '2026-01-01T00:00:00.000Z',
+        displayName: null,
+        phone: null,
+        bio: null,
       },
     });
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
@@ -132,6 +135,9 @@ describe('RegisterForm', () => {
         email: 'rider@example.com',
         emailVerified: false,
         createdAt: '2026-01-01T00:00:00.000Z',
+        displayName: null,
+        phone: null,
+        bio: null,
       },
       verificationUrl: '/v1/auth/verify-email?token=abc123',
     });
@@ -150,6 +156,9 @@ describe('RegisterForm', () => {
         email: 'rider@example.com',
         emailVerified: false,
         createdAt: '2026-01-01T00:00:00.000Z',
+        displayName: null,
+        phone: null,
+        bio: null,
       },
     });
 

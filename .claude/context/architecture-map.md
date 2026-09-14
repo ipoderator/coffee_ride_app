@@ -175,6 +175,45 @@ comparison value). Three new `/v1/auth` routes: `POST /login`, `POST
 /logout`, `GET /me`. KI-022's CSRF/cookie gap is now closed; its rate-limiting
 and `@fastify/helmet` gaps remain open (CR-058/CR-061).
 
+`packages/db`'s `users` table gained three nullable profile columns (CR-013,
+2026-09-14): `displayName`/`phone`/`bio` (additive migration, no new table).
+`apps/api` gained its **second capability module**, `src/modules/users/`
+(`.claude/rules/architecture.md`'s feature-boundary list — `users` is
+distinct from `auth`): `PATCH /v1/users/me` (`users.routes.ts`/
+`users.service.ts`), plus `user-response.schema.ts` — the one shared "user
+over the wire" Zod shape `auth.routes.ts` now imports too, instead of each
+module declaring its own copy. `auth.service.ts`'s `toPublicUser` extended to
+include the new fields everywhere it already runs (register/login/
+verify-email/me), so `GET /v1/auth/me` returns the full profile — no separate
+`GET /v1/users/me` (CLAUDE.md: no duplicate concepts). Found and fixed two
+real bugs surfaced by this session's fourth `apps/api` Vitest file:
+`plugins/db.ts` never closed its postgres.js connection pool on `app.close()`
+(`db.$client.end()` added to an `onClose` hook — a genuine resource leak,
+not just a test artifact); and `apps/api`'s Vitest config now sets
+`fileParallelism: false` (`vitest.config.ts`), since every test file shares
+one real Postgres database and an unscoped `beforeEach: DELETE FROM users`
+across concurrently-running files was intermittently deadlocking/500ing once
+a fourth file added enough concurrent load — same class of bug as CR-012's
+TRUNCATE-deadlock fix, now closed at the file-scheduling level instead.
+`apps/web` gained its first authenticated screens: `/login`
+(`features/auth/login/`, the UI half of CR-012's API-only login) and the
+participant cabinet's first real shell + screen — `/me` (minimal stub),
+`/me/profile` (`features/participant/profile/`). New shared infrastructure
+this required: `components/cabinet/CabinetShell.tsx` (resolves the session,
+redirects to `/login` on 401, provides the user via
+`lib/auth/current-user-context.tsx`), and `lib/cabinet/participant-nav.ts` —
+the first real ADR-009 nav registry (a feature pushes a `CabinetNavItem`
+descriptor via its own `nav.ts`; the shell renders the list, no per-feature
+branch). `packages/ui` gained `Textarea` (bio's multi-line control — same
+tier as `Input`, `docs/design.md` §9 already listed it) and login/profile/
+cabinet terminology (`AUTH_TERMS` additions, new `CABINET_TERMS`/
+`PROFILE_TERMS`). `apps/web/vitest.config.mts` gained a `resolve.alias` for
+`@/*` (mirroring `tsconfig.json`'s path) — never needed before because no
+Vitest-tested file had used the `@/...` import form until this session's new
+components did (`RegisterForm`'s page used it, but pages aren't
+Vitest-tested, only Playwright-tested against a real `next dev` server, which
+resolves it natively).
+
 ## Target structure
 
 apps/

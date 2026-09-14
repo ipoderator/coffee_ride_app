@@ -4,20 +4,14 @@ import {
   type RegisterRequest,
   type RegisterResponse,
 } from 'types';
+import { ApiError } from '@/lib/api/errors';
 
-export { registerRequestSchema };
+export { registerRequestSchema, ApiError };
 export type { RegisterRequest, RegisterResponse };
 
 // Same-origin, relative path (ADR-013, `next.config.ts`'s rewrites()) — never
 // an absolute API host from client code.
 const REGISTER_ENDPOINT = '/api/v1/auth/register';
-
-export class ApiError extends Error {
-  constructor(public readonly problem: ProblemDetails) {
-    super(problem.detail);
-    this.name = 'ApiError';
-  }
-}
 
 /**
  * Typed client for this feature only (`.claude/rules/extensibility.md`'s

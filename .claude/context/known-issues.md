@@ -345,6 +345,22 @@ Redis-backed, per-IP-and-per-account limiter once KI-014 (Redis unverified in
 this environment) is resolved; CR-061 (now headers-only, see `docs/tasks.md`)
 adds `@fastify/helmet`. Revisit this entry once both land.
 
+### KI-023 — Profile avatar/photo upload is not implemented
+
+Status: open. Discovered: 2026-09-14 (CR-013).
+Problem: `docs/design.md` §9 lists `Avatar` in `packages/ui`'s intended
+component inventory, and a profile screen conventionally includes a photo, but
+CR-013 shipped only text fields (`displayName`/`phone`/`bio`) — deliberately,
+not an oversight. Uploading and serving an image needs the S3 pipeline
+(`apps/api/src/s3.ts`), which has never been connected to a live object store
+in this environment (KI-015) and has no consumer yet.
+Impact: low — the profile screen is fully usable without a photo; every other
+profile field works end to end.
+Workaround: none needed — no UI currently expects an avatar to exist.
+Next action: build alongside CR-086 (cover image pipeline: size/type limits,
+resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
+exists — reuse it rather than building a second, avatar-specific upload path.
+
 ---
 
 ## Resolved
@@ -491,3 +507,53 @@ Two eslint.config.mjs files (root and `apps/web`) had comments explicitly descri
 the old, now-incorrect behavior ("lint-staged does NOT reach this file") — updated
 both rather than leaving a stale comment next to the code it used to accurately
 describe.
+
+### KI-R11 — `apps/api` never closed its Postgres connection pool on shutdown
+
+Resolved: 2026-09-14 (CR-013, same session it was discovered in). Discovered:
+2026-09-14 (CR-013's full-suite test run, once a fourth DB-touching Vitest
+file — `users.routes.test.ts` — pushed concurrent `buildApp()` calls high
+enough to surface it).
+Problem: `apps/api/src/plugins/db.ts`'s `registerDb` created a `postgres.js`
+connection pool (`createDbClient`) on every `buildApp()` call but never ended
+it — Fastify's `onClose` hook was never registered for it, unlike every other
+resource the app owns. Invisible with one or two Vitest files (few enough
+concurrent `buildApp()` calls that the local scratch Postgres's
+`max_connections` was never actually threatened), but a genuine, unbounded
+leak: this session's fourth file added enough concurrent connections to
+intermittently exhaust the pool, surfacing as unrelated `500`s on login
+requests mid-suite.
+Fix: `registerDb` now calls `app.addHook('onClose', () => db.$client.end())`
+— `db.$client` is drizzle-orm's postgres-js driver exposing the underlying
+`postgres.js` client instance. Verified live: `pg_stat_activity` connection
+count no longer grows unbounded across repeated `pnpm --filter api test`
+runs.
+Also fixes a real (if previously unnoticed) production concern: a graceful
+`apps/api` shutdown now actually drains its DB connections instead of relying
+on the OS to eventually reclaim leaked sockets.
+
+### KI-R12 — Concurrent Vitest files sharing one Postgres database deadlocked under load
+
+Resolved: 2026-09-14 (CR-013, same session it was discovered in). Discovered:
+2026-09-14 (CR-013's full-suite test run, after KI-R11's fix — still flaky).
+Problem: every `apps/api` Vitest file runs its tests against one real,
+shared local Postgres database, and each file's `beforeEach` does an
+unscoped `DELETE FROM users` (the CR-012 fix for the original TRUNCATE
+deadlock — see KI-R09's sibling entry in `docs/changelog.md`'s CR-012
+section). That's safe within a file (tests run sequentially), but Vitest
+runs different _files_ concurrently by default — this session's fourth
+DB-touching file made two files' concurrent `DELETE FROM users` calls collide
+with each other's in-flight register/login/patch requests often enough to
+surface as intermittent genuine Postgres deadlocks/serialization failures
+(returned to the client as unrelated `500`s), reproducible across 4 of 5
+consecutive full-suite runs before the fix.
+Fix: `apps/api/vitest.config.ts` now sets `test.fileParallelism: false` —
+serializes test _file_ execution (each file's tests still run in whatever
+order Vitest picks internally, sequentially either way) instead of trying to
+scope every test's data by file, which the existing "wipe the whole table"
+pattern isn't designed for. The suite is small enough (4 files, ~40 tests)
+that this costs no meaningful wall-clock time (~5s either way). Verified
+stable across 5 consecutive full-suite runs after the fix.
+Note for future sessions: adding a fifth (or later) `apps/api` test file that
+touches the DB does not reintroduce this risk — `fileParallelism: false` is a
+suite-wide setting, not per-file.

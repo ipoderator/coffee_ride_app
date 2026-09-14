@@ -118,7 +118,13 @@ rewrite, not a polish pass.
       sessions per ADR-013 (opaque cookie, SHA-256 hash at rest, rolling
       30-day expiry), and ADR-013's Origin/Referer CSRF check on every unsafe
       `/v1` method (`apps/api/src/plugins/csrf.ts`). See `docs/changelog.md`.
-- [ ] CR-013 Profile
+- [x] CR-013 Profile — done 2026-09-14: `displayName`/`phone`/`bio` nullable
+      columns on `users` (`packages/db`), `PATCH /v1/users/me`
+      (`apps/api/src/modules/users`, `GET /v1/auth/me` already returns the
+      full profile — no separate GET), `/login` + `/me` + `/me/profile`
+      screens (`apps/web`), first real ADR-009 participant cabinet nav
+      registry. Avatar/photo upload deferred (KI-023, needs CR-086's S3
+      pipeline). See `docs/changelog.md`.
 
 ## Organizer
 

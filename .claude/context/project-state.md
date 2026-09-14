@@ -20,7 +20,10 @@ CR-064 (Russian formatters + UI terminology mapping), CR-065 (Metric
 presentation components), and CR-066 (Shared state primitives) also completed
 2026-09-13 — Design-foundations phase (CR-063..CR-066) is now fully done.
 CR-011 (User registration) and CR-012 (Login/logout/session) also completed
-2026-09-13. CR-013 (Profile) is next.
+2026-09-13. CR-013 (Profile) completed 2026-09-14 — Auth phase (CR-011..CR-013)
+is now fully done except CR-058 (Redis-backed rate limiting)/CR-059 (organizer-
+publish email-verification gate)/CR-060 (password reset), all deliberately
+deferred. CR-014 (Organizer profile) is next.
 
 ## Implemented
 
@@ -255,6 +258,35 @@ query) → `GET /me` with the same cookie (401) → login with a mismatched
 closed; its rate-limiting (CR-058) and `@fastify/helmet` (CR-061,
 now headers-only) gaps remain open.
 
+Profile landed 2026-09-14 (CR-013, see `docs/changelog.md`): a logged-in user can
+view/edit their own profile at `/me/profile`. `users` gained three nullable
+columns (`displayName`/`phone`/`bio` — no product doc had specified profile
+fields yet, scoped minimally this session; avatar/photo upload explicitly
+deferred, needs the S3 pipeline, KI-015/CR-086). New `apps/api` capability
+module `modules/users/` (`PATCH /v1/users/me`, `.claude/rules/architecture.md`
+treats `users` as distinct from `auth`) — no separate `GET /v1/users/me`,
+`GET /v1/auth/me` already returns the full profile once `toPublicUser` includes
+the new fields (no duplicate concepts). Closed two prerequisite gaps rather than
+working around them: CR-012 had shipped login API-only, so added the `/login`
+screen; and built the first real ADR-009 cabinet nav registry (participant side
+only — a feature pushes a `CabinetNavItem` descriptor, `CabinetShell` renders
+the list and gates access on a valid session, redirecting to `/login` on 401)
+rather than hard-coding a single-feature shell, since none existed yet
+(CR-054 still generalizes this to widgets/organizer-side/flags). New shared
+`packages/ui` primitive: `Textarea` (bio's multi-line control). Found and fixed
+two real bugs along the way, not test-only workarounds: `apps/api/src/plugins/
+db.ts` never closed its postgres.js connection pool on `app.close()` (a genuine
+resource leak, fixed with an `onClose` hook); and `apps/api`'s Vitest suite
+needed `fileParallelism: false` once a fourth DB-touching test file made
+concurrent files' `beforeEach: DELETE FROM users` collide with each other's
+in-flight requests (same class of issue as CR-012's TRUNCATE-deadlock fix, now
+closed at file-scheduling level). 44 `apps/api` tests (was 38), 22 new `apps/web`
+tests (was 8, now 30), all green and stable across 5 repeated full-suite runs.
+Live-verified end to end: curl sequence against a real Postgres + running
+`apps/api`, and a full browser flow (login → cabinet → profile → edit → reload
+persists) against a real `next dev` server via the `browser-automation` skill —
+zero console errors beyond the expected pre-login 401.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -352,11 +384,13 @@ None.
 
 ## Next
 
-CR-013 — Profile (`docs/tasks.md` has no detail beyond the title yet — scope it
-against `docs/product.md` before planning). `requireAuth` (CR-012,
-`apps/api/src/plugins/auth.ts`) and a real session cookie now exist, so this is
-the first ticket that can build an authenticated "my account" surface on top of
-them rather than the session infrastructure itself.
+CR-014 — Organizer profile (`docs/tasks.md` Organizer section). `requireAuth`
+(CR-012) and now a real authenticated cabinet shell/nav registry (CR-013) exist,
+so this is the first ticket that adds an `OrganizerProfile` — a second domain
+entity linked to `User` (`.claude/CLAUDE.md`'s fixed entity list) — and the
+first organizer-side cabinet screen, likely the first real exercise of
+ownership-check authorization (`.claude/rules/security.md`) since nothing
+organizer-owned exists in the schema yet.
 
 ## Important decisions
 
@@ -420,9 +454,11 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 - the ADR-010 map boundary is held by review discipline only until CR-056 (KI-010);
 - production 2GIS credentials, notification provider (ADR-007 Pending) and S3 provider are
   still absent;
-- `docs/api.md` describes login/logout/`me`/forgot-password/reset-password endpoints
-  that have no implementation yet (contract-first, deliberate) — register/verify-email
-  are implemented as of CR-011;
+- `docs/api.md` describes `forgot-password`/`reset-password` endpoints that have no
+  implementation yet (contract-first, deliberate; CR-060) — register/verify-email
+  (CR-011), login/logout/`me` (CR-012), and `PATCH /v1/users/me` (CR-013) are all
+  implemented (this line was stale before CR-013 — login/logout/`me` had already
+  shipped in CR-012 without it being corrected here);
 - `docs/design.md` exists and CR-063..CR-066 now implement its tokens, formatters,
   metric components, and state primitives in full; CR-011 is the first real screen
   built on top of them;
@@ -435,6 +471,12 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   provisional pending the real `RideService` DB enum (not yet scheduled with a CR
   number) — ride status/bicycle type are unaffected, already sourced from
   `docs/product.md`.
+- new (CR-013): profile avatar/photo upload is not implemented — deferred to
+  whichever CR wires up the S3 pipeline (KI-015/CR-086); `phone`'s format check
+  is deliberately loose, not real E.164 validation; the participant cabinet nav
+  registry (`apps/web/src/lib/cabinet/participant-nav.ts`) has exactly one entry
+  and no feature-flag support — CR-054 generalizes it (widgets, organizer side,
+  flags) rather than this ticket.
 
 ## Do not break
 
@@ -454,4 +496,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-13 (CR-012)
+2026-09-14 (CR-013)
