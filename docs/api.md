@@ -60,6 +60,33 @@ concepts). `400 validation_error` on an invalid field. `phone`/`bio` are
 private — returned only to the profile's own owner; no endpoint exposes
 another user's row yet (`.claude/rules/security.md`).
 
+## Organizers
+
+POST `/v1/organizers/me` — **implemented (CR-014)**. Requires a valid session
+cookie (`401` otherwise) and a verified email (`403
+email_verification_required` otherwise — `.claude/rules/security.md`:
+"Require a verified email before an account can act as an organizer"). Body:
+`{ name, description? }` — `name` 1-100 chars, `description` ≤500 chars.
+`201` → `{ organizerProfile }`. `409 organizer_profile_already_exists` if the
+caller already has one (at most one `OrganizerProfile` per `User`, ADR-006).
+`400 validation_error` on an invalid field.
+
+GET `/v1/organizers/me` — **implemented (CR-014)**. Requires a valid session
+cookie (`401` otherwise). `200` → `{ organizerProfile }`. `404
+organizer_profile_not_found` if the caller has none yet.
+
+PATCH `/v1/organizers/me` — **implemented (CR-014)**. Requires a valid session
+cookie (`401` otherwise). `404 organizer_profile_not_found` if the caller has
+none yet (create first via `POST`). Body: `{ name?, description? }`, each
+independently omittable (leaves the stored value unchanged) — `description`
+also accepts explicit `null` to clear it; `name` cannot be cleared (`NOT
+NULL`). `200` → `{ organizerProfile }`. `400 validation_error` on an invalid
+field.
+
+No public `GET /v1/organizers/:id` yet — nothing reads organizer data
+publicly until `Ride` exists; deferred to whichever ride ticket first needs
+to embed organizer info in a ride response.
+
 ## Rides
 
 GET `/v1/rides` — collection, paginated

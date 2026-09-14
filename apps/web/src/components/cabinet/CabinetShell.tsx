@@ -8,22 +8,35 @@ import { CABINET_TERMS, ErrorState, Skeleton } from 'ui';
 import { ApiError } from '@/lib/api/errors';
 import { getCurrentUser } from '@/lib/api/current-user';
 import { CurrentUserContext } from '@/lib/auth/current-user-context';
-import { PARTICIPANT_NAV_ITEMS } from '@/lib/cabinet/participant-nav';
+import type { CabinetNavItem } from '@/lib/cabinet/types';
 
 type Status = 'loading' | 'ready' | 'error';
 
 /**
- * Shared shell for every `/me/*` participant screen (`docs/design.md` §8:
+ * Shared shell for every `/me/*` and `/organizer/*` screen (`docs/design.md` §8:
  * "Both cabinets share a shell (nav + header) that renders from the feature
- * registry"). Resolves the session once, gates access on it (redirects to
- * `/login` on a 401 — never renders protected content first), and provides
- * the resolved user to nested pages via context so they don't each re-fetch
- * it (`@/lib/auth/current-user-context`).
+ * registry" — CR-014 generalized this from a participant-only component to take
+ * `navItems`, since the design doc already says it's meant to be the same shell,
+ * not a parallel copy per cabinet, `.claude/rules/extensibility.md`). Resolves the
+ * session once, gates access on it (redirects to `/login` on a 401 — never renders
+ * protected content first), and provides the resolved user to nested pages via
+ * context so they don't each re-fetch it (`@/lib/auth/current-user-context`).
  *
- * Nav renders from `PARTICIPANT_NAV_ITEMS` (ADR-009) — adding a feature means
- * adding its descriptor to that list, not a branch here.
+ * Both cabinets require the same participant-tier session — organizer capability
+ * is a separate, per-action server-side check (`.claude/rules/security.md`), not a
+ * different login, so the redirect target stays `/login` for both.
+ *
+ * Nav renders from the caller-supplied `navItems` (ADR-009) — adding a feature to
+ * either cabinet means adding its descriptor to that cabinet's registry list, not a
+ * branch here.
  */
-export function CabinetShell({ children }: { children: ReactNode }) {
+export function CabinetShell({
+  navItems,
+  children,
+}: {
+  navItems: CabinetNavItem[];
+  children: ReactNode;
+}) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<Status>('loading');
@@ -79,7 +92,7 @@ export function CabinetShell({ children }: { children: ReactNode }) {
           aria-label={CABINET_TERMS.navLabel}
           className="flex gap-4 border-b border-border pb-3"
         >
-          {PARTICIPANT_NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

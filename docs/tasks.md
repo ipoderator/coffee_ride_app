@@ -128,7 +128,13 @@ rewrite, not a polish pass.
 
 ## Organizer
 
-- [ ] CR-014 Organizer profile
+- [x] CR-014 Organizer profile — done 2026-09-14: `organizer_profiles` table
+      (`packages/db`, one per `User`, ADR-006), `POST`/`GET`/`PATCH` under
+      `/v1/organizers/me` (`apps/api/src/modules/organizers`, creation gated
+      on `emailVerified`), `/organizer/profile` screen (`apps/web`,
+      create-or-edit in one form), first real ADR-009 organizer cabinet nav
+      registry (`CabinetShell` generalized to serve both cabinets). See
+      `docs/changelog.md`.
 - [ ] CR-015 Organizer dashboard
 - [ ] CR-016 Organizer authorization
 

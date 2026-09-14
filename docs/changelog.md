@@ -1690,3 +1690,111 @@ expected pre-login 401 on `/api/v1/auth/me`.
 
 Follow-up: CR-014 (Organizer profile) is next per `docs/tasks.md`'s Organizer
 section order.
+
+## 2026-09-14 — CR-014 — Organizer profile
+
+Summary: a logged-in user can create and edit their own `OrganizerProfile`
+(`docs/product.md`: "create organizer profile" is MVP capability #2;
+`docs/design.md` §8: `/organizer/profile`). `docs/database.md` only said
+"public organizer data linked to User" — this session picked a minimal viable
+scope, same discipline as CR-013's `User` profile: `name` (required, 1-100
+chars — the organizer's public identity, deliberately separate from
+`User.displayName` since `docs/product.md` confirms individuals/clubs/shops/
+teams all share this one path) and `description` (optional, ≤500 chars).
+Logo/avatar is explicitly out of scope (needs the S3 pipeline — same KI-023
+gap CR-013 already opened, not a new one). At most one `OrganizerProfile` per
+`User` (ADR-006), enforced with a real unique index, not just application
+logic. Creation is gated on `User.emailVerified`
+(`.claude/rules/security.md`: "Require a verified email before an account
+can act as an organizer" — `packages/db/src/schema/user.ts`'s own comment
+already committed to enforcing this starting here).
+
+Three "me"-scoped endpoints, not a `users.me`-style single `PATCH`, because
+creation is a distinct capability-granting action: `POST`/`GET`/`PATCH
+/v1/organizers/me` — `POST` 403s on an unverified email and 409s on a second
+create for the same user; `GET`/`PATCH` 404 `organizer_profile_not_found`
+before a profile exists. No public `GET /v1/organizers/:id` yet — nothing
+reads organizer data publicly until `Ride` exists, deferred to whichever ride
+ticket first embeds it in a ride response.
+
+`CabinetShell` (CR-013) was hard-coded to the participant nav registry and a
+`/login` redirect — generalized to take a `navItems` prop instead, since
+`docs/design.md` §8 already says both cabinets share one shell rendering from
+the feature registry (ADR-009), not a parallel copy per cabinet. New
+`apps/web/src/lib/cabinet/organizer-nav.ts` registry (one entry:
+`/organizer/profile`). `/organizer/profile` renders one form covering both
+states (`OrganizerProfileForm`: fetches the profile, shows a create form on a
+404, an edit form otherwise) rather than two screens. `/organizer` (bare)
+gets a minimal stub page, same reasoning as CR-013's `/me` stub — full
+dashboard content is CR-015. Without CR-015's dashboard nothing yet links a
+participant into the organizer cabinet, so `/me` gained one small additive
+CTA card linking to `/organizer/profile` (same justification CR-013 used for
+adding `/login`: a screen `docs/design.md` already specifies but that would
+otherwise be unreachable except by typing the URL).
+
+Files: `packages/db/src/schema/organizer-profile.ts` (new) + migration
+`0003_shiny_susan_delgado.sql`, `schema/index.ts` (+export);
+`packages/types/src/domain/organizer-profile.ts` (new),
+`src/api/organizers.ts` (new), `src/index.ts` (+exports); `apps/api/src/
+modules/organizers/` (new: `organizer-profile-response.schema.ts`,
+`organizers.service.ts` — `OrganizerServiceError`, `createOrganizerProfile`/
+`getOwnOrganizerProfile`/`updateOrganizerProfile`, `organizers.routes.ts`,
+`organizers.routes.test.ts`), `apps/api/src/routes/v1.ts` (registers it);
+`apps/web/src/components/cabinet/CabinetShell.tsx` (+`navItems` prop),
+`apps/web/src/app/me/layout.tsx` (passes `PARTICIPANT_NAV_ITEMS` explicitly
+now), `apps/web/src/lib/cabinet/organizer-nav.ts` (new), `apps/web/src/app/
+organizer/{layout,page,profile/page}.tsx` (new), `apps/web/src/features/
+organizer/profile/` (new: `api.ts`, `nav.ts`,
+`components/OrganizerProfileForm.tsx`, `organizer-profile.test.tsx`),
+`apps/web/src/app/me/page.tsx` (+CTA, additive); `packages/ui/src/
+terminology.ts` (+`ORGANIZER_TERMS`, +`CABINET_TERMS` organizer-nav/CTA/
+stub entries); `docs/api.md` (new Organizers section), `docs/database.md`
+(`OrganizerProfile` description), `docs/tasks.md` (CR-014 checked off).
+
+A real bug was found and fixed during this session's own test-writing, not
+left to production: the success-message text for `OrganizerProfileForm` was
+initially derived from the `profile` state variable at render time, but
+`setProfile(response.organizerProfile)` (called right after a successful
+create) already flips that state to non-null before the success message
+renders — so a fresh _create_ was showing the _edit_ success copy
+("Изменения сохранены." instead of "Профиль организатора создан."). Fixed by
+capturing `wasCreate = profile === null` before the request and setting an
+explicit `successMessage` string from that captured value, not by re-deriving
+text from `profile` after the state update. Caught by this ticket's own
+Vitest suite before it ever reached a browser.
+
+Decisions: none new at the ADR level — the field-scope decision above is
+product-level (same tier as CR-013's), recorded here and in
+`.claude/context/current-task.md`, not `docs/decisions.md`.
+
+Known limitations: new — no public organizer-read endpoint yet (nothing
+needs it until `Ride` exists); `/organizer` dashboard content is CR-015;
+organizer capability itself has no server-side authorization check to
+_exercise_ yet (CR-016, "Organizer authorization" — this ticket only builds
+the capability-granting resource; nothing organizer-owned exists in the
+schema to protect until `Ride`, CR-017). No new avatar/logo gap — this is the
+same deferred-to-S3-pipeline gap CR-013's KI-023 already tracks, not a
+second one.
+
+Validation: `turbo run lint/typecheck/build/test` (run separately) all green;
+`format:check`/`lint:root` clean. `apps/api` gained 12 new tests (50 total,
+was 38 — this changelog's prior "44" for CR-013 was itself off; the actual
+pre-CR-014 count was 38, confirmed by a direct count this session).
+`apps/web` gained 9 new tests (31 total, was 22). `next build` compiles
+`/organizer` and `/organizer/profile` as new static routes cleanly. Live-
+verified end to end: curl sequence against a real Postgres + running
+`apps/api` (unauth 401 → unverified-email create 403 → verify email → create
+201 → duplicate create 409 → invalid payload 400 → `GET` 200 → `PATCH`
+rename 200 (description unchanged) → `PATCH` clear description 200 (`null`)
+→ mismatched-`Origin` 403, each confirmed against a direct DB read too); and
+a full browser flow via the `browser-automation` skill against a real `next
+dev` server (unauthenticated `/organizer/profile` → redirected to `/login`;
+login → redirected to `/me`; `/me` showed the new organizer CTA card; visited
+`/organizer/profile` — loaded in edit mode, pre-filled with the account's
+existing `OrganizerProfile`; edited the description, saved, saw the success
+message; reloaded and confirmed the new value persisted, not just optimistic
+UI) — no console errors beyond the expected pre-login 401 on
+`/api/v1/auth/me`.
+
+Follow-up: CR-015 (Organizer dashboard) is next per `docs/tasks.md`'s
+Organizer section order.

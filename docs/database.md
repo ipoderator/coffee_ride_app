@@ -25,7 +25,13 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   admin "block" feature exists yet). Logout hard-deletes the row rather than
   setting `revokedAt`. Also not one of the fixed domain entities — an auth
   implementation detail.
-- OrganizerProfile — public organizer data linked to User.
+- OrganizerProfile — public organizer data linked to User (CR-014): `id`,
+  `userId` (FK → User, cascade delete, unique — at most one per User, ADR-006),
+  `name` (not null, 1-100 chars, the organizer's public identity — separate
+  from `User.displayName` since an individual/club/shop/team all share this
+  one path), `description` (nullable, ≤500 chars), `createdAt`/`updatedAt`
+  (`timestamptz`). Creation is gated on `User.emailVerified`
+  (`.claude/rules/security.md`).
 - Ride — cycling event owned by OrganizerProfile.
 - Route — route geometry and metadata.
 - RoutePoint — start/finish/stop/danger/water/food/technical/other.

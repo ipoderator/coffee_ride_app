@@ -13,3 +13,4 @@
 export * from './user.js';
 export * from './email-verification-token.js';
 export * from './session.js';
+export * from './organizer-profile.js';

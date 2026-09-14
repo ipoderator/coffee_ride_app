@@ -23,7 +23,8 @@ CR-011 (User registration) and CR-012 (Login/logout/session) also completed
 2026-09-13. CR-013 (Profile) completed 2026-09-14 — Auth phase (CR-011..CR-013)
 is now fully done except CR-058 (Redis-backed rate limiting)/CR-059 (organizer-
 publish email-verification gate)/CR-060 (password reset), all deliberately
-deferred. CR-014 (Organizer profile) is next.
+deferred. CR-014 (Organizer profile) also completed 2026-09-14. CR-015
+(Organizer dashboard) is next.
 
 ## Implemented
 
@@ -287,6 +288,48 @@ Live-verified end to end: curl sequence against a real Postgres + running
 persists) against a real `next dev` server via the `browser-automation` skill —
 zero console errors beyond the expected pre-login 401.
 
+Organizer profile landed 2026-09-14 (CR-014, see `docs/changelog.md`): a logged-in
+user can create and edit their own `OrganizerProfile` — the second fixed domain
+entity, second user-owned resource after `User` itself. `packages/db` gained its
+third table, `organizer_profiles` (`userId` FK → `users`, cascade delete, unique —
+at most one per `User`, ADR-006; `name` not null 1-100 chars, `description`
+nullable ≤500 chars), migrated and live-verified against the same local scratch
+Postgres. `apps/api` gained its third capability module, `modules/organizers/`
+(`POST`/`GET`/`PATCH /v1/organizers/me`, all `requireAuth`) — `POST` is gated on
+`users.emailVerified` (`.claude/rules/security.md`: "Require a verified email
+before an account can act as an organizer"), 403s `email_verification_required`
+otherwise, 409s `organizer_profile_already_exists` on a second create. `apps/web`
+gained `/organizer/profile` (one form covering both create and edit state,
+`features/organizer/profile/`) and `/organizer` (minimal stub, same reasoning as
+CR-013's `/me` stub — full dashboard is CR-015). `CabinetShell` (CR-013) was
+generalized to take a `navItems` prop instead of being hard-coded to the
+participant registry — `docs/design.md` §8 already says both cabinets share one
+shell, so this closes that gap rather than duplicating the shell per cabinet; new
+`apps/web/src/lib/cabinet/organizer-nav.ts` registry (ADR-009). `/me` gained a
+small additive CTA card linking into `/organizer/profile` — otherwise nothing
+links a participant into the organizer cabinet until CR-015's dashboard exists.
+A real bug was found and fixed by this ticket's own Vitest suite (not by a
+browser check): `OrganizerProfileForm`'s success-message text was originally
+derived from the `profile` state variable at render time, but `setProfile` (run
+right after a successful create) already flips it to non-null before that render,
+so a fresh create showed the edit-mode success copy — fixed by capturing
+`wasCreate` before the request and setting an explicit success-message string
+from that, not by re-deriving text from `profile` after the update. 12 new
+`apps/api` tests (50 total, was 38 — this file's prior "44" for CR-013 was
+itself stale; 38 is the confirmed pre-CR-014 count), 9 new `apps/web` tests (31
+total, was 22). Live-verified end to end: curl sequence against a real Postgres +
+running `apps/api` (unauth 401 → unverified-email 403 → verify → create 201 →
+duplicate 409 → invalid 400 → GET 200 → PATCH rename/clear 200 → mismatched-
+Origin 403, each cross-checked against a direct DB read); full browser flow via
+`browser-automation` against a real `next dev` server (unauthenticated redirect
+to `/login`, CTA on `/me`, `/organizer/profile` loading in edit mode pre-filled
+with the existing profile, edit → save → success message → reload → persisted) —
+no console errors beyond the expected pre-login 401. New known limitation: no
+public organizer-read endpoint yet (nothing needs it until `Ride` exists, CR-017+)
+and organizer capability itself has no authorization check to protect anything
+with yet — CR-016 ("Organizer authorization") is explicitly about exercising it
+once something organizer-owned exists in the schema.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -384,13 +427,15 @@ None.
 
 ## Next
 
-CR-014 — Organizer profile (`docs/tasks.md` Organizer section). `requireAuth`
-(CR-012) and now a real authenticated cabinet shell/nav registry (CR-013) exist,
-so this is the first ticket that adds an `OrganizerProfile` — a second domain
-entity linked to `User` (`.claude/CLAUDE.md`'s fixed entity list) — and the
-first organizer-side cabinet screen, likely the first real exercise of
-ownership-check authorization (`.claude/rules/security.md`) since nothing
-organizer-owned exists in the schema yet.
+CR-015 — Organizer dashboard (`docs/tasks.md` Organizer section). `CabinetShell`
+now serves both cabinets and `ORGANIZER_NAV_ITEMS` (CR-014) has exactly one entry
+— this ticket fills in `/organizer`'s real dashboard content (the stub page
+CR-014 left behind) with the widgets-from-registry pattern ADR-009/
+`docs/design.md` §8 describe, and is the natural place to add further nav
+entries as they exist. CR-016 ("Organizer authorization") stays the first real
+exercise of ownership-check authorization (`.claude/rules/security.md`) — it
+needs something organizer-owned to protect, which doesn't exist until `Ride`
+(CR-017+).
 
 ## Important decisions
 
@@ -477,6 +522,13 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   registry (`apps/web/src/lib/cabinet/participant-nav.ts`) has exactly one entry
   and no feature-flag support — CR-054 generalizes it (widgets, organizer side,
   flags) rather than this ticket.
+- new (CR-014): no public `GET /v1/organizers/:id` yet — nothing reads
+  organizer data publicly until `Ride` exists; organizer logo/avatar upload is
+  the same S3-pipeline-deferred gap as KI-023, not a new one; organizer
+  capability itself has no server-side authorization check to protect anything
+  with yet (CR-016 is explicitly that, once `Ride`/CR-017+ gives it something
+  organizer-owned); `ORGANIZER_NAV_ITEMS` has exactly one entry, same
+  no-feature-flag-yet caveat as the participant registry (CR-054).
 
 ## Do not break
 
@@ -496,4 +548,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-14 (CR-013)
+2026-09-14 (CR-014)

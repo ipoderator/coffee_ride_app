@@ -214,6 +214,41 @@ components did (`RegisterForm`'s page used it, but pages aren't
 Vitest-tested, only Playwright-tested against a real `next dev` server, which
 resolves it natively).
 
+`packages/db` gained its **third table** (CR-014, 2026-09-14): `organizer_profiles`
+(`src/schema/organizer-profile.ts` — `userId` FK → `users` cascade delete, unique
+index for the one-per-`User` invariant, ADR-006; `name` not null, `description`
+nullable), migrated and live-applied against the same local scratch Postgres.
+`apps/api` gained its **third capability module**, `src/modules/organizers/`
+(`.claude/rules/architecture.md`'s feature-boundary list — `organizers` is
+distinct from `users`/`auth`): `POST`/`GET`/`PATCH /v1/organizers/me`, all
+`requireAuth`. `POST` additionally gates on `request.user`'s current
+`emailVerified` (re-read fresh from the DB, not trusted from the session-
+validation-time value) — 403 `email_verification_required` when unset, 409
+`organizer_profile_already_exists` on a second create (belt-and-suspenders with
+the DB's own unique index against a concurrent-create race, same pattern as
+CR-011's duplicate-email handling). `packages/types` gained its **second domain
+type** (`OrganizerProfile`) and `api/organizers.ts` (create/update request
+schemas + response type aliases).
+
+`apps/web`'s `CabinetShell` (`components/cabinet/CabinetShell.tsx`, CR-013) was
+generalized to take a `navItems` prop instead of being hard-coded to
+`PARTICIPANT_NAV_ITEMS` — `docs/design.md` §8 already states both cabinets share
+one shell rendering from the feature registry (ADR-009), so this closes that gap
+rather than adding a second, parallel `OrganizerCabinetShell`. New
+`lib/cabinet/organizer-nav.ts` registry (one entry: `/organizer/profile`); new
+`app/organizer/{layout,page,profile/page}.tsx` (the bare `/organizer` route is a
+minimal stub, same reasoning as CR-013's `/me` stub — real dashboard content is
+CR-015) and `features/organizer/profile/` (`OrganizerProfileForm` — one
+component covering both the create state, on a `GET` 404, and the edit state, on
+200; loading/error states, duplicate-submit protection, server-validation-error
+mapping, same discipline as `ProfileForm`). `/me` gained one small additive CTA
+card linking into `/organizer/profile` — otherwise nothing in the UI links a
+participant into the organizer cabinet before CR-015's dashboard exists.
+`packages/ui` gained `ORGANIZER_TERMS` and organizer-related `CABINET_TERMS`
+entries (nav label, CTA copy, `/organizer` stub copy) — no new components; this
+screen reuses `Input`/`Textarea`/`FormField`/`Button`/`Card`/`Skeleton`/
+`ErrorState` as-is.
+
 ## Target structure
 
 apps/

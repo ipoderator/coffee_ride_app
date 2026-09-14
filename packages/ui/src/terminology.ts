@@ -171,6 +171,20 @@ export const CABINET_TERMS = {
   homeEmptyDescription:
     'Управление профилем доступно в разделе «Профиль». Заезды и регистрации появятся здесь позже.',
   profileNavLabel: 'Профиль',
+  // CR-014: the organizer cabinet's one nav entry so far, and the CTA on the
+  // participant cabinet home that's currently the only way to reach it
+  // (`/organizer` itself has no dashboard content yet — CR-015).
+  organizerProfileNavLabel: 'Профиль организатора',
+  organizerCtaTitle: 'Организуете заезды?',
+  organizerCtaDescription:
+    'Создайте профиль организатора, чтобы публиковать заезды и управлять регистрациями.',
+  organizerCtaLink: 'Профиль организатора',
+  // `/organizer` stub (CR-014, same reasoning as the participant `homeTitle`
+  // trio) — full dashboard content is CR-015.
+  organizerHomeTitle: 'Кабинет организатора',
+  organizerHomeEmptyTitle: 'Пока здесь нечего показать',
+  organizerHomeEmptyDescription:
+    'Управление профилем организатора доступно в разделе «Профиль организатора». Заезды появятся здесь позже.',
 } as const;
 
 /** `/me/profile` (CR-013, `docs/design.md` §8 "Profile settings"). */
@@ -185,4 +199,26 @@ export const PROFILE_TERMS = {
   saveSubmit: 'Сохранить',
   saveSubmitPending: 'Сохранение…',
   saveSuccess: 'Изменения сохранены.',
+} as const;
+
+/**
+ * `/organizer/profile` (CR-014, `docs/design.md` §8 "Organizer profile"). One screen
+ * covers both states: no profile yet (create) and an existing one (edit) — see
+ * `OrganizerProfileForm`.
+ */
+export const ORGANIZER_TERMS = {
+  pageTitle: 'Профиль организатора',
+  nameLabel: 'Название',
+  nameHint: 'Имя, клуб или магазин — видно всем на странице заезда.',
+  descriptionLabel: 'Описание',
+  descriptionHint: 'До 500 символов.',
+  createSubmit: 'Создать профиль',
+  createSubmitPending: 'Создание…',
+  createSuccess: 'Профиль организатора создан.',
+  saveSubmit: 'Сохранить',
+  saveSubmitPending: 'Сохранение…',
+  saveSuccess: 'Изменения сохранены.',
+  emailVerificationRequired:
+    'Подтвердите email, чтобы создать профиль организатора. Ссылка для подтверждения была отправлена при регистрации.',
+  loadError: 'Не удалось загрузить профиль организатора.',
 } as const;

@@ -347,19 +347,24 @@ adds `@fastify/helmet`. Revisit this entry once both land.
 
 ### KI-023 — Profile avatar/photo upload is not implemented
 
-Status: open. Discovered: 2026-09-14 (CR-013).
+Status: open. Discovered: 2026-09-14 (CR-013). Widened: 2026-09-14 (CR-014, same
+gap on a second entity).
 Problem: `docs/design.md` §9 lists `Avatar` in `packages/ui`'s intended
 component inventory, and a profile screen conventionally includes a photo, but
 CR-013 shipped only text fields (`displayName`/`phone`/`bio`) — deliberately,
 not an oversight. Uploading and serving an image needs the S3 pipeline
 (`apps/api/src/s3.ts`), which has never been connected to a live object store
-in this environment (KI-015) and has no consumer yet.
-Impact: low — the profile screen is fully usable without a photo; every other
-profile field works end to end.
-Workaround: none needed — no UI currently expects an avatar to exist.
+in this environment (KI-015) and has no consumer yet. CR-014's
+`OrganizerProfile` hit the identical gap (a logo/photo would be the natural
+public-facing image) and was scoped out the same way — not a second, separate
+issue.
+Impact: low — both profile screens are fully usable without a photo; every
+other field on each works end to end.
+Workaround: none needed — no UI currently expects an avatar/logo to exist.
 Next action: build alongside CR-086 (cover image pipeline: size/type limits,
 resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
-exists — reuse it rather than building a second, avatar-specific upload path.
+exists — reuse it for both `User` and `OrganizerProfile` rather than building
+a separate upload path per entity.
 
 ---
 

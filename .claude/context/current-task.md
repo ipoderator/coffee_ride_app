@@ -6,218 +6,244 @@ complete
 
 ## Task ID
 
-CR-013 — Profile
+CR-014 — Organizer profile
 
 ## Goal
 
-Let a logged-in user view and edit their own profile (`docs/design.md` §8: `/me/profile`
-"Profile settings"). Next unchecked backlog item after CR-012 (`docs/tasks.md`,
-`.claude/context/project-state.md`: "CR-013 (Profile) is next").
+Let a logged-in user create and edit their own `OrganizerProfile` (`docs/product.md`:
+"create organizer profile" is MVP capability #2; `docs/design.md` §8: `/organizer/profile`
+"Organizer profile"). Next unchecked backlog item after CR-013
+(`docs/tasks.md`/`.claude/context/project-state.md`: "CR-014 (Organizer profile) is next").
+Continuing per the user's explicit instruction to study prior context and continue
+implementing per the established backlog plan — same convention as every prior session
+this backlog has run (no separate `/plan` approval step invoked).
 
-Context read this session: `.claude/CLAUDE.md`, all `.claude/rules/*.md`,
-`docs/tasks.md`, `.claude/context/{project-state,current-task,known-issues}.md`,
-`docs/api.md`, `docs/product.md`, `docs/design.md` (§8 screen inventory, §9 component
-inventory), `docs/decisions.md` ADR-009/ADR-013, `.claude/skills/{new-cabinet-feature,
-new-api-endpoint,db-migration}/SKILL.md`, `packages/db/src/schema/{user,session}.ts`,
-`packages/types/src/{domain/user.ts,api/auth.ts,index.ts}`,
-`apps/api/src/modules/auth/*`, `apps/api/src/{app.ts,env.ts,routes/v1.ts,plugins/auth.ts}`,
-`apps/web/src/{app/**,features/auth/register/**,lib/utils.ts}`,
-`packages/ui/src/{index.ts,components/*}`.
+Context read this session: `.claude/CLAUDE.md`, all `.claude/rules/*.md`, `docs/tasks.md`,
+`.claude/context/{project-state,architecture-map,current-task,known-issues}.md`,
+`docs/{api,product,design,decisions,database}.md`, `.claude/skills/{new-cabinet-feature,
+new-api-endpoint,db-migration}/SKILL.md`, `packages/db/src/schema/{user,index}.ts`,
+`packages/types/src/{index,domain/user,api/users}.ts`, `apps/api/src/modules/{auth/*,
+users/*}`, `apps/api/src/{plugins/auth.ts,routes/v1.ts}`, `apps/web/src/{components/
+cabinet/CabinetShell.tsx,lib/cabinet/*,lib/auth/current-user-context.tsx,lib/api/*,
+app/me/**,features/participant/profile/**}`, `packages/ui/src/{index.ts,terminology.ts,
+components/EmptyState.tsx,components/ErrorState.tsx}`.
 
-## Scoping decisions made this session (no product doc covers these yet)
+## Scoping decisions made this session (no product doc enumerates exact fields yet)
 
-- `docs/product.md`/`docs/design.md` don't enumerate profile fields. Decided: minimal
-  viable profile = `displayName` (≤80 chars), `phone` (private, loose format check —
-  full E.164 validation deferred), `bio` (≤500 chars). All nullable/optional — a user
-  can leave any/all unset.
-- Avatar/photo upload is explicitly OUT of scope: needs the S3 pipeline
-  (KI-015: S3 client never live-verified; CR-086 is the cover-image-pipeline ticket
-  this would piggyback on). Documented as a new gap below, not silently dropped.
-- No web `/login` page existed yet (CR-012 shipped API-only). Building `/me/profile`
-  needs a way to actually authenticate from the browser, so this ticket also adds the
-  `/login` screen (`docs/design.md` §8 already lists it alongside `/register` as one
-  "Auth" screen pair) — necessary prerequisite, not scope creep.
-- No cabinet shell/nav registry exists yet (ADR-009/CR-054 still open). `/me/profile`
-  needs _some_ shell. Built the minimal real thing: a participant nav-item registry
-  (`apps/web/src/lib/cabinet/participant-nav.ts`) that features push a descriptor into,
-  and a shell component rendering from that list — not a full dashboard (widgets,
-  organizer side, feature flags stay CR-054/CR-015 scope). `/me` gets a minimal stub
-  page so the route isn't a 404; full cabinet-home content is CR-015.
-- `GET /v1/auth/me` already returns the full `User` shape — no separate
-  `GET /v1/users/me` added (CLAUDE.md: no duplicate concepts). New endpoint is
-  `PATCH /v1/users/me` only, in a new `users` feature module
-  (`.claude/rules/architecture.md` lists `users` as its own backend feature area,
-  distinct from `auth`).
+- `docs/database.md` only says "OrganizerProfile — public organizer data linked to User."
+  Decided minimal viable fields, same discipline as CR-013's User profile scope: `name`
+  (required, 1-100 chars — the organizer's public-facing identity; `docs/product.md`
+  confirms private individuals/clubs/shops/teams all share this one path, so this is
+  _not_ the same as the user's personal `displayName`) and `description` (optional,
+  ≤500 chars — "about the organizer", shown later on ride detail per §8's ride-detail
+  notes column). Logo/avatar explicitly OUT of scope, same reasoning as CR-013's
+  avatar deferral (KI-023: needs the S3 pipeline/CR-086) — this is a second instance of
+  that same gap, not a new one.
+- One `OrganizerProfile` per `User` (ADR-006: "An `OrganizerProfile` attached to a
+  `User` grants organizer capabilities" — singular). Enforced with a unique index on
+  `organizer_profiles.user_id`, not just application logic
+  (`.claude/rules/database.md`).
+- Email verification gate: `packages/db/src/schema/user.ts`'s own comment already
+  commits to this ("enforced by future tickets ... starting with organizer-profile
+  creation, CR-014") and `.claude/rules/security.md` requires a verified email "before
+  an account can act as an organizer." Enforced at creation only (`POST /v1/organizers/
+me`) — an already-verified-at-creation-time organizer is not re-checked on every
+  subsequent edit (no product requirement to revoke organizer status if email
+  verification is somehow later invalidated — nothing in this codebase does that today).
+- Three endpoints, mirroring `PATCH /v1/users/me`'s "me"-only pattern but as three verbs
+  since creation is a distinct, capability-granting action from an ordinary edit (unlike
+  `users.me`, which never needed a POST): `POST /v1/organizers/me` (create, 409 if one
+  already exists, 403 if email unverified), `GET /v1/organizers/me` (fetch own, 404 if
+  none yet — the web form needs to distinguish "create" vs "edit" mode), `PATCH
+/v1/organizers/me` (update own, 404 if none yet). No public `GET /v1/organizers/:id`
+  yet — nothing reads organizer data publicly until `Ride` exists (CR-017+), so that
+  endpoint is deferred to whichever ride ticket first needs to embed organizer info in a
+  ride response, not built speculatively now.
+- `CabinetShell` (CR-013) was hard-coded to `PARTICIPANT_NAV_ITEMS` and a `/login`
+  redirect. Generalized to take `navItems`/`homeHref`... actually just `navItems` as a
+  prop (redirect target stays `/login` — both cabinets require the same participant-tier
+  session, organizer capability is a separate, per-action check, not a separate login) —
+  `docs/design.md` §8: "Both cabinets share a shell ... that renders from the feature
+  registry," confirming this is meant to be the same shell, not a parallel copy
+  (`.claude/rules/extensibility.md`: registration over branching applies to the shell
+  itself here, not just nav items). New `apps/web/src/lib/cabinet/organizer-nav.ts`
+  registry (ADR-009), one entry so far (`/organizer/profile`).
+- `/organizer` (bare) gets a minimal stub page, same reasoning as CR-013's `/me` stub:
+  the shared layout wraps every `/organizer/*` route, and `docs/design.md` §8 lists
+  `/organizer` as "Dashboard (widgets from the ADR-009 registry)" — that's CR-015's
+  content, this ticket only avoids a dead 404 for the bare route.
+- Discoverability: without CR-015's dashboard, nothing yet links a participant into the
+  organizer cabinet. Added one small, additive CTA on the existing `/me` stub (a new
+  paragraph + link, `CABINET_TERMS` additions only) pointing at `/organizer/profile` —
+  same justification CR-013 used for adding `/login`: a screen `docs/design.md` already
+  specifies but that would otherwise be unreachable by anyone not typing the URL by hand.
 
 ## Requirements
 
-- `packages/db`: add nullable `display_name`, `phone`, `bio` text columns to `users`
-  (additive migration, `.claude/rules/database.md`/db-migration skill).
-- `packages/types`: extend `User` with `displayName/phone/bio: string | null`
-  (required-but-nullable — the server always includes them; 3 pre-existing test
-  fixtures in `register.test.tsx` updated to match); new
-  `updateProfileRequestSchema`/`UpdateProfileRequest`/`UpdateProfileResponse` in
-  `api/users.ts`.
-- `apps/api`: new `modules/users/` (`user-response.schema.ts` shared with `auth.routes.ts`
-  so there's exactly one "user over the wire" shape, `users.service.ts`, `users.routes.ts`
-  registering `PATCH /v1/users/me` under `/v1/users`, requires `requireAuth`, identity
-  from `request.user.id` only — never a client-supplied id). `auth.service.ts`'s
-  `toPublicUser` extended to include the new fields everywhere it's already used
-  (register/login/verify-email/me responses too — additive, not a breaking change).
-- Server-side validation: displayName trimmed 1-80 chars, phone loose regex 7-20 chars,
-  bio ≤500 chars; each field independently omittable (unchanged) or settable to `null`
-  (cleared) via PATCH semantics.
-- `apps/web`: `/login` page + `features/auth/login/` module; participant cabinet shell
-  (`/me` layout + minimal `/me` stub + `/me/profile`) gated on a valid session,
-  redirecting to `/login` on 401; `features/participant/profile/` module (form: view +
-  edit displayName/phone/bio, loading/error/duplicate-submit protection per
-  `.claude/rules/frontend.md`). New shared `Textarea` primitive in `packages/ui`
-  (bio needs a multi-line control; `Input`/`Button`/`Card`/`FormField` already exist,
-  `Textarea` doesn't yet — same tier component, `docs/design.md` §9 already lists it).
-  Small shared `apps/web/src/lib/api/errors.ts` (`ApiError`) extracted from
-  `register/api.ts` so login/profile don't each grow a third copy of the same class.
+- `packages/db`: new `organizer_profiles` table — `id`, `userId` (FK → `users`, cascade
+  delete, unique index for the one-per-user invariant), `name` (not null), `description`
+  (nullable), `createdAt`/`updatedAt` (`timestamptz`, ADR-012).
+- `packages/types`: new `domain/organizer-profile.ts` (`OrganizerProfile`), new
+  `api/organizers.ts` (`createOrganizerProfileRequestSchema`/
+  `updateOrganizerProfileRequestSchema` + response type aliases), `index.ts` exports.
+- `apps/api`: new `modules/organizers/` (`organizer-profile-response.schema.ts` — the one
+  "organizer profile over the wire" shape; `organizers.service.ts` —
+  `OrganizerServiceError`, `createOrganizerProfile`/`getOwnOrganizerProfile`/
+  `updateOrganizerProfile`, `toPublicOrganizerProfile`; `organizers.routes.ts` — `POST
+/me`, `GET /me`, `PATCH /me` under `/v1/organizers`, all `requireAuth`, identity from
+  `request.user.id` only; `organizers.routes.test.ts`). `routes/v1.ts` registers it.
+  General rate-limit tier (not an auth endpoint, same reasoning CR-013 used for
+  `users.me`).
+- Server-side validation: `name` trimmed 1-100 chars (required on create, optional on
+  update — omitting it on PATCH leaves it unchanged); `description` trimmed ≤500 chars,
+  independently omittable or nullable (clear) on both create and update.
+- `apps/web`: generalize `CabinetShell` to accept `navItems`; new `lib/cabinet/
+organizer-nav.ts`; new `app/organizer/{layout.tsx,page.tsx,profile/page.tsx}`; new
+  `features/organizer/profile/` module (`api.ts`, `nav.ts`,
+  `components/OrganizerProfileForm.tsx` — loads existing profile or shows a create form,
+  loading/error/duplicate-submit protection per `.claude/rules/frontend.md`,
+  `organizer-profile.test.tsx`). New `ORGANIZER_TERMS` in `packages/ui/src/
+terminology.ts`. Small additive CTA + new `CABINET_TERMS` entries on the existing `/me`
+  stub page.
 
 ## Acceptance criteria
 
-- Migration applies cleanly against the existing scratch DB; existing rows get
-  `NULL` for all three new columns.
-- `PATCH /v1/users/me`: no cookie → 401; valid cookie + valid partial body → 200 with
-  the updated fields reflected in the response and in a direct DB read; invalid
-  payload (too-long displayName/bio, malformed phone) → 400 `validation_error`;
-  omitted fields stay unchanged; explicit `null` clears a field; response never
-  contains `passwordHash`.
-- `GET /v1/auth/me` (and register/login/verify-email) now includes
-  `displayName`/`phone`/`bio` (null when unset) — existing tests for those routes
-  still pass unmodified (additive fields only).
-- CSRF check already covers `PATCH` under `/v1` (no new plugin needed — verified, not
-  assumed).
-- Web: `/login` — wrong credentials show a generic error, success redirects into `/me`;
-  `/me/profile` — loads current values, edits persist (verified via reload), shows
-  server validation errors per field, duplicate-submit protected; unauthenticated
-  visit to `/me` or `/me/profile` redirects to `/login`.
+- Migration applies cleanly against the existing scratch DB (`coffee_ride_dev`); FK +
+  unique-index invariants hold (verified: a second `POST /v1/organizers/me` for the same
+  user is rejected, not just discouraged by the API).
+- `POST /v1/organizers/me`: no cookie → 401; valid cookie + unverified email → 403
+  `email_verification_required`; valid cookie + verified email + valid body → 201 with
+  the created profile; a second create for the same user → 409
+  `organizer_profile_already_exists`; invalid payload (empty/too-long name, too-long
+  description) → 400 `validation_error`.
+- `GET /v1/organizers/me`: no cookie → 401; no profile yet → 404
+  `organizer_profile_not_found`; profile exists → 200 with the current fields.
+- `PATCH /v1/organizers/me`: no cookie → 401; no profile yet → 404; valid cookie + valid
+  partial body → 200 with updated fields reflected in the response and a direct DB read;
+  omitted fields stay unchanged; `description` explicit `null` clears it; invalid payload
+  → 400.
+- CSRF check already covers `POST`/`PATCH` under `/v1` (verified in tests, not assumed —
+  same as CR-013).
+- Web: `/organizer/profile` — unauthenticated visit redirects to `/login` (shared shell);
+  authenticated with no organizer profile yet shows a create form; submitting creates the
+  profile and the same screen now shows it in edit mode; edits persist (verified via
+  reload); an unverified account sees a clear message instead of a generic error when
+  creation is blocked; duplicate-submit protected. `/organizer` (bare) does not 404 for
+  an authenticated user. `/me` gains a working link into `/organizer/profile`.
 - `turbo run lint/typecheck/build/test` (run separately) all green; `format:check`/
   `lint:root` clean.
-- Live check: real Postgres + both dev servers — curl PATCH sequence (unauth 401,
-  valid patch 200, invalid payload 400) plus a browser-less curl-based login→me
-  round trip confirming the new fields appear.
+- Live check: real Postgres + both dev servers — curl sequence (unauth 401, unverified
+  403, valid create 201, duplicate create 409, invalid payload 400, GET 200, PATCH 200
+  persisted) plus a real-browser walkthrough via the `browser-automation` skill.
 
 ## Planned files
 
-- `packages/db/src/schema/user.ts` (+3 columns), new migration.
-- `packages/types/src/domain/user.ts`, new `packages/types/src/api/users.ts`,
-  `packages/types/src/index.ts` (+export).
-- `apps/api/src/modules/users/{user-response.schema.ts,users.service.ts,users.routes.ts,
-users.routes.test.ts}`, `apps/api/src/modules/auth/{auth.service.ts,auth.routes.ts}`
-  (reuse shared schema, extend `toPublicUser`), `apps/api/src/routes/v1.ts` (register).
-- `apps/web/src/lib/api/errors.ts` (new, extracted), `apps/web/src/lib/api/current-user.ts`
-  (new — `GET /v1/auth/me` client), `apps/web/src/lib/auth/current-user-context.tsx`,
-  `apps/web/src/lib/cabinet/{types.ts,participant-nav.ts}`,
-  `apps/web/src/components/cabinet/CabinetShell.tsx`.
-- `apps/web/src/features/auth/register/api.ts` (import shared `ApiError` instead of
-  its own copy — the one pre-existing file touched for a non-new-feature reason).
-- `apps/web/src/features/auth/login/{api.ts,components/LoginForm.tsx,login.test.tsx}`,
-  `apps/web/src/app/login/page.tsx`.
-- `apps/web/src/features/participant/profile/{api.ts,components/ProfileForm.tsx,
-nav.ts,profile.test.tsx}`, `apps/web/src/app/me/{layout.tsx,page.tsx,profile/page.tsx}`.
-- `packages/ui/src/components/{Textarea.tsx,Textarea.test.tsx}`, `packages/ui/src/index.ts`
-  (+export), `packages/ui/src/terminology.ts` (+`AUTH_TERMS` login/profile copy, or a new
-  `PROFILE_TERMS`/`CABINET_TERMS` block).
-- `.env.example`/`docs/api.md` (new Users section)/`docs/database.md` (new columns).
+- `packages/db/src/schema/organizer-profile.ts` (new), `schema/index.ts` (+export), new
+  migration.
+- `packages/types/src/domain/organizer-profile.ts` (new), `src/api/organizers.ts` (new),
+  `src/index.ts` (+exports).
+- `apps/api/src/modules/organizers/{organizer-profile-response.schema.ts,
+organizers.service.ts,organizers.routes.ts,organizers.routes.test.ts}` (new),
+  `apps/api/src/routes/v1.ts` (register).
+- `apps/web/src/components/cabinet/CabinetShell.tsx` (generalize: `navItems` prop),
+  `apps/web/src/app/me/layout.tsx` (pass `PARTICIPANT_NAV_ITEMS` explicitly now),
+  `apps/web/src/lib/cabinet/organizer-nav.ts` (new).
+- `apps/web/src/app/organizer/{layout.tsx,page.tsx,profile/page.tsx}` (new).
+- `apps/web/src/features/organizer/profile/{api.ts,nav.ts,
+components/OrganizerProfileForm.tsx,organizer-profile.test.tsx}` (new).
+- `apps/web/src/app/me/page.tsx` (+CTA link, additive).
+- `packages/ui/src/terminology.ts` (+`ORGANIZER_TERMS`, +`CABINET_TERMS` CTA entries).
+- `docs/api.md` (new Organizer section), `docs/database.md` (new entity description).
 
 ## Implementation progress
 
-- [x] Plan written (this file) — proceeding per the user's explicit instruction to
-      continue implementing per the established backlog plan, no separate `/plan`
-      approval step invoked this session.
-- [x] `packages/db` schema + migration (`0002_nebulous_nebula.sql`), applied to
-      `coffee_ride_dev`
+- [x] Plan written (this file)
+- [x] `packages/db` schema + migration (`0003_shiny_susan_delgado.sql`), applied
+      to `coffee_ride_dev`
 - [x] `packages/types` contract additions
-- [x] `apps/api` users module + auth module extension + tests
-- [x] `packages/ui` `Textarea`
-- [x] `apps/web` login feature + page
-- [x] `apps/web` cabinet shell/registry + participant profile feature + pages
-- [x] Full validation (`turbo run lint/typecheck/build/test` separately,
+- [x] `apps/api` organizers module + tests
+- [x] `packages/ui` `ORGANIZER_TERMS`/`CABINET_TERMS` additions
+- [x] `apps/web` CabinetShell generalization + organizer cabinet shell/nav + profile
+      feature + pages + `/me` CTA
+- [x] Full validation (`turbo run lint/typecheck/build/test` together,
       `format:check`/`lint:root`)
-- [x] Live check via curl + a full browser flow (`browser-automation` skill)
+- [x] Live check via curl + `browser-automation`
 - [x] Context/docs updated (changelog, project-state, architecture-map,
       known-issues, tasks.md, docs/api.md, docs/database.md)
 - [x] `git diff`/`git status` reviewed
 
 ## Validation
 
-- `turbo run typecheck` (all 8 packages): clean.
-- `turbo run lint` (all 8 packages): clean.
-- `turbo run build` (6 buildable packages): clean, including `apps/web`'s
-  `next build` (new routes `/login`, `/me`, `/me/profile` all statically
-  generated).
-- `pnpm format:check` / `pnpm lint:root`: clean.
-- `turbo run test` against `DATABASE_URL` pointed at the local scratch
-  Postgres: `apps/api` 44 tests (was 38), `apps/web` 30 tests (was 8, +22 new
-  across 2 new files), `packages/ui` 85 tests (was 82, +3 for `Textarea`),
-  `packages/maps-2gis` 11 tests — all green. Re-ran the full `apps/api` suite
-  5 consecutive times to confirm the two real bugs found this session (see
-  below) are stably fixed, not just lucky once — same discipline as CR-012's
-  deadlock fix.
-- Live check via curl against a real `apps/api` + the scratch Postgres:
-  register → login → `GET /me` (shows new null fields) → `PATCH /v1/users/me`
-  unauthenticated (401) → authenticated with valid fields (200, persisted,
-  confirmed via a follow-up `GET /me`) → invalid payload (400
-  `validation_error`) → mismatched `Origin` (403 `csrf_origin_mismatch`). All
-  matched the acceptance criteria exactly.
+- `turbo run typecheck lint test build` (all 8 packages, run together against
+  a real `DATABASE_URL`): clean. `apps/api` 50 tests (was 38, +12), `apps/web`
+  31 tests (was 22, +9), `packages/ui` 85 tests (unchanged — no new component,
+  only terminology data), `packages/maps-2gis` 11 tests (unchanged) — all
+  green. `next build` compiles `/organizer` and `/organizer/profile` as new
+  static routes.
+- `pnpm format:check` / `pnpm lint:root`: clean (after one `prettier --write`
+  pass this session caught by the same command).
+- Live check via curl against a real `apps/api` + the scratch Postgres
+  (`coffee_ride_dev`): no cookie → 401; unverified email → 403
+  `email_verification_required`; verify email → create 201; duplicate create →
+  409 `organizer_profile_already_exists`; empty name → 400 `validation_error`;
+  `GET` → 200; `PATCH` rename (description untouched) → 200; `PATCH` clear
+  description → 200 (`null`); mismatched `Origin` → 403
+  `csrf_origin_mismatch`. Final row cross-checked with a direct
+  `SELECT ... FROM organizer_profiles` — matched the HTTP responses exactly.
 - Live browser check via the `browser-automation` skill against a real
-  `next dev` server + the same `apps/api`: unauthenticated `/me` → redirected
-  to `/login`; login with an existing account → redirected to `/me`, nav
-  showed the registry-rendered "Профиль" link; clicked through to
-  `/me/profile`, form pre-filled with the account's existing
-  displayName/phone/bio; edited displayName, saved, saw the success message;
-  reloaded the page and confirmed the new value persisted (not just
-  optimistic local state). No console errors beyond the expected pre-login
-  401 on `/api/v1/auth/me` (visiting `/me` before authenticating).
+  `next dev` server + the same `apps/api` (both on `localhost` with matching
+  `WEB_ORIGIN`, needed for the CSRF check to pass — the first attempt used
+  mismatched ports and correctly 403'd, confirming the CSRF check itself
+  works rather than being a bug): unauthenticated `/organizer/profile` →
+  redirected to `/login`; login → redirected to `/me`; `/me` showed the new
+  organizer CTA card; navigated into `/organizer/profile` — loaded in edit
+  mode, pre-filled with the account's existing `OrganizerProfile` (created via
+  the curl session above); edited the description, saved, saw
+  "Изменения сохранены."; reloaded and confirmed the new value persisted, not
+  just optimistic local state. No console errors beyond the expected
+  pre-login 401 on `/api/v1/auth/me`.
 - Every acceptance criterion from above is met.
 
 ## Discovered issues
 
 Found and fixed during implementation (not left open):
 
-- `apps/api/src/plugins/db.ts` never closed its postgres.js connection pool
-  on `app.close()` — a genuine resource leak (not just a test artifact),
-  invisible until this session's fourth DB-touching Vitest file pushed
-  concurrent connections high enough to intermittently exhaust the scratch
-  Postgres's `max_connections`, surfacing as unrelated `500`s. Fixed with an
-  `onClose` hook calling `db.$client.end()`. Documented as KI-R11 in
-  `known-issues.md`.
-- Even after that fix, concurrent Vitest _files_ (not just concurrent tests
-  within one file — already handled since CR-012) sharing one real Postgres
-  and each doing an unscoped `beforeEach: DELETE FROM users` still collided
-  with each other's in-flight requests under Vitest's default cross-file
-  parallelism, producing genuine intermittent Postgres deadlocks/500s. Fixed
-  with `fileParallelism: false` in `apps/api/vitest.config.ts` — the suite is
-  small enough (4 files) that serializing costs no meaningful time. Verified
-  stable across 5 consecutive full-suite runs. Documented as KI-R12.
-- `apps/web/vitest.config.mts` had no `resolve.alias` for the `@/*` tsconfig
-  path — never needed before because no Vitest-tested file had used that
-  import form (only page.tsx files did, and those are Playwright-tested
-  against a real `next dev` server, which resolves it natively). Fixed by
-  adding the alias, mirroring `tsconfig.json`.
+- `OrganizerProfileForm`'s success-message text was initially derived from
+  the `profile` state variable at render time (`profile ? saveSuccess :
+createSuccess`), but `setProfile(response.organizerProfile)` — called right
+  after a successful _create_ — already flips `profile` to non-null before
+  that render, so a fresh create showed the edit-mode success copy instead of
+  the create one. Caught by this ticket's own Vitest suite (a test asserting
+  the create-success text failed, showing the edit-success text instead)
+  before it ever reached the browser check. Fixed by capturing
+  `wasCreate = profile === null` before the request and setting an explicit
+  `successMessage` string from that captured value, not by re-deriving text
+  from `profile` after the state update.
+- This changelog/project-state's own prior "44 `apps/api` tests" figure for
+  CR-013 was stale — a direct count this session showed the actual pre-CR-014
+  total was 38. Corrected in this session's changelog/project-state entries
+  rather than silently carried forward.
 
-No open known-issue entries were created by fixing these — all three are
-resolved same-session, same convention as CR-065's KI-R10. One new _open_
-known issue was created deliberately (not a bug): KI-023, avatar/photo
-upload out of scope for this ticket (needs the S3 pipeline, KI-015/CR-086).
+No open known-issue entries were created by fixing these. One existing known
+issue was widened, not duplicated: KI-023 (avatar/photo upload deferred to
+the S3 pipeline) now explicitly covers `OrganizerProfile` too, since CR-014
+hit the identical gap and scoped it out the same way CR-013 did for `User`.
 
 ## Final result
 
-CR-013 complete. `PATCH /v1/users/me` implemented; `GET /v1/auth/me` (and
-register/login/verify-email) now additionally return `displayName`/`phone`/
-`bio`. `/login`, `/me`, `/me/profile` screens built, gated on a valid
-session via the first real ADR-009 participant cabinet nav registry. All
-acceptance criteria met, full validation suite green (stable across repeated
-runs), live-verified end to end over both curl and a real browser session.
-Two real latent bugs (unclosed DB pool, cross-file test races) found and
-fixed as part of this session's validation work, not deferred. `docs/
-tasks.md`, `docs/changelog.md`, `.claude/context/project-state.md`,
+CR-014 complete. `POST`/`GET`/`PATCH /v1/organizers/me` implemented,
+creation gated on a verified email and capped at one profile per user.
+`/organizer/profile` (create-or-edit in one screen) and a minimal `/organizer`
+stub built on a newly-generalized `CabinetShell` shared with the participant
+cabinet, plus the first real ADR-009 organizer nav registry and a discoverability
+CTA on `/me`. All acceptance criteria met, full validation suite green, live-
+verified end to end over both curl and a real browser session. One real bug
+(success-message text picking the wrong branch after `setProfile`) found and
+fixed by this ticket's own tests, not deferred. `docs/tasks.md`,
+`docs/changelog.md`, `.claude/context/project-state.md`,
 `.claude/context/architecture-map.md`, `.claude/context/known-issues.md`,
 `docs/api.md`, `docs/database.md` all updated. Not yet committed — `git
 diff`/`git status` reviewed next; pre-existing unrelated pending changes
-(`docs/product.md`, `skills-lock.json`) again left untouched and out of
-scope, same as at the start of every prior session this backlog has run.
+(`docs/product.md`) and this session's own unrelated `.mcp.json`/
+`skills-lock.json` additions (from earlier in this conversation, not this
+ticket) again left untouched and out of scope.
