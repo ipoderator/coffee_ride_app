@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { organizerProfiles, rides } from 'db/schema';
+import { organizerProfiles, rides, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
@@ -57,6 +57,31 @@ const RIDE_NOT_EDITABLE = () =>
     409,
     'Ride is not editable',
     'Only a draft ride can be edited.',
+  );
+
+// CR-019 ("Publish ride"): a different action from `PATCH`, so a distinct code from
+// `ride_not_editable` — covers both "already published" and any later lifecycle
+// state (`registration_open`/.../`cancelled`).
+const RIDE_NOT_PUBLISHABLE = () =>
+  new RideServiceError(
+    'ride_not_publishable',
+    409,
+    'Ride is not publishable',
+    'Only a draft ride can be published.',
+  );
+
+// `.claude/rules/security.md`: "Require a verified email before an account can act
+// as an organizer (publish a ride)". Same code as `organizers.service.ts`'s own
+// `EMAIL_VERIFICATION_REQUIRED` (that file's local copy, not imported — each module
+// owns its own domain-error factories, same pattern as `RIDE_NOT_FOUND` vs.
+// organizers' `NOT_FOUND`) so `apps/web` can branch on one stable code regardless of
+// which endpoint returned it.
+const EMAIL_VERIFICATION_REQUIRED = () =>
+  new RideServiceError(
+    'email_verification_required',
+    403,
+    'Email verification required',
+    'Verify your email before publishing a ride.',
   );
 
 const INVALID_CURSOR = () =>
@@ -299,6 +324,68 @@ export async function updateRideDraft(
   const [updated] = await db
     .update(rides)
     .set(values)
+    .where(eq(rides.id, rideId))
+    .returning();
+  if (!updated) {
+    throw new Error('Ride update returned no row.');
+  }
+  return toPublicRide(updated);
+}
+
+/**
+ * CR-019 ("Publish ride"): `draft -> published`, the only transition this ticket
+ * implements (`docs/product.md`'s lifecycle has further states —
+ * `registration_open`/.../`cancelled` — but no ticket yet owns entering them; see
+ * KI-025). Same ownership resolution as {@link getRideForOwner}/
+ * {@link updateRideDraft} (404 `ride_not_found` either way, never 403, for a ride
+ * that doesn't exist or isn't the caller's).
+ *
+ * Check order: ownership/existence (404) first — never leak whether a ride exists to
+ * a non-owner — then the caller-level `emailVerified` capability gate (403,
+ * `.claude/rules/security.md`), then the resource-state gate (409
+ * `ride_not_publishable` unless still `draft`). `emailVerified` is read fresh from
+ * `users` here, not trusted from whatever `request.user` captured at
+ * session-validation time — same discipline `organizers.service.ts`'s
+ * `createOrganizerProfile` already uses.
+ */
+export async function publishRide(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [userRow] = await db
+    .select({ emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!userRow) {
+    throw new Error('Authenticated user row not found.');
+  }
+  if (!userRow.emailVerified) {
+    throw EMAIL_VERIFICATION_REQUIRED();
+  }
+
+  if (existing.status !== 'draft') {
+    throw RIDE_NOT_PUBLISHABLE();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({ status: 'published', updatedAt: new Date(), updatedBy: userId })
     .where(eq(rides.id, rideId))
     .returning();
   if (!updated) {

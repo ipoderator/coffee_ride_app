@@ -21,16 +21,19 @@ presentation components), and CR-066 (Shared state primitives) also completed
 2026-09-13 — Design-foundations phase (CR-063..CR-066) is now fully done.
 CR-011 (User registration) and CR-012 (Login/logout/session) also completed
 2026-09-13. CR-013 (Profile) completed 2026-09-14 — Auth phase (CR-011..CR-013)
-is now fully done except CR-058 (Redis-backed rate limiting)/CR-059 (organizer-
-publish email-verification gate)/CR-060 (password reset), all deliberately
-deferred. CR-014 (Organizer profile), CR-015 (Organizer dashboard), and CR-017 (Create
+is now fully done except CR-058 (Redis-backed rate limiting)/CR-060 (password
+reset), still deliberately deferred; CR-059 (organizer-publish email-
+verification gate) closed 2026-09-14 alongside CR-019 (see below). CR-014 (Organizer profile), CR-015 (Organizer dashboard), and CR-017 (Create
 ride) also completed 2026-09-14. CR-088 (Organizer rides list — new ticket,
 added this session per KI-024's own "next action"), CR-016 (Organizer
 authorization), and CR-018 (Edit draft) also completed 2026-09-14, in that
 order, in one session: CR-088 first (so CR-018's edit screen had a real UI
 entry point), then CR-016/CR-018 together (the ownership check only has a
-mutation to protect once CR-018's `PATCH` exists). Rides section now stands
-at CR-017/CR-088/CR-016/CR-018 done, CR-019 (Publish ride) next.
+mutation to protect once CR-018's `PATCH` exists). CR-019 (Publish ride) also
+completed 2026-09-14, together with CR-059's remaining scope (gating organizer
+publish on `emailVerified`, `.claude/rules/security.md`). Rides section now
+stands at CR-017/CR-088/CR-016/CR-018/CR-019 done, CR-020 (Close registration)
+next.
 
 ## Implemented
 
@@ -459,6 +462,28 @@ cross-checked against a direct DB read) and a full browser walkthrough via
 save → reload, including the not-found state for a random id) — no console
 errors beyond the expected pre-login 401 and the not-found check's expected 404. KI-024 is resolved (`.claude/context/known-issues.md`).
 
+Publish ride landed 2026-09-14 (CR-019, together with CR-059's remaining
+scope, see `docs/changelog.md`): `POST /v1/rides/:id/publish`
+(`apps/api/src/modules/rides`), `draft -> published` only — the lifecycle's
+later states have no owning ticket yet (new KI-025). Same ownership rules as
+`GET`/`PATCH /v1/rides/:id` (404 `ride_not_found` either way), plus a new
+caller-level gate this ticket adds: `.claude/rules/security.md` explicitly
+names "publish a ride" as requiring `emailVerified` — 403
+`email_verification_required` (fresh DB read, same code `POST
+/v1/organizers/me` already uses), closing CR-059's one remaining piece.
+Non-draft ride → 409 `ride_not_publishable` (a new code, distinct from
+`PATCH`'s `ride_not_editable`). `apps/web`'s `/organizer/rides/[id]/edit`
+gained a "Опубликовать" button next to Save (draft-only, same duplicate-
+submit-protection discipline) and the same guiding email-verification banner
+pattern `OrganizerProfileForm` already established. Surfaced (not silently
+worked around) a real, growing gap while writing this: no `/verify-email` web
+screen exists at all, so an organizer who hits either gate has no in-app way
+to actually verify — new KI-026. 7 new `apps/api` tests (80 total, was 73); 3
+new `apps/web` tests (59 total, was 56). Live-verified via curl (401/404
+non-existent/404 stranger's-ride/403 unverified-email/409 non-draft/200
+cross-checked against a direct DB read/403 CSRF) and the `browser-automation`
+skill against a real `next dev` server + `apps/api`.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -556,17 +581,15 @@ None.
 
 ## Next
 
-CR-019 — Publish ride (`docs/tasks.md` Rides section, next after CR-017/
-CR-088/CR-016/CR-018). Moves a `draft` ride to `published` — the first real
-ride-lifecycle state transition, likely needs its own validation (e.g. can a
-ride with no route/stops publish yet? `docs/product.md`'s MVP capability list
-separates "ride creation/edit/publish" from "GPX route" and "stops/services/
-requirements" as distinct capabilities, so check `docs/product.md` before
-assuming publish requires a route). CR-020 (Close registration)/CR-021
-(Cancel ride)/CR-022 (Finish ride) are the remaining lifecycle transitions
-after it, then CR-023 (Ride detail, participant-facing) and CR-024 (Ride
-list, public discovery — distinct from this session's CR-088 "My rides",
-which is organizer-scoped and already done).
+CR-020 — Close registration (`docs/tasks.md` Rides section, next after
+CR-017/CR-088/CR-016/CR-018/CR-019). Note KI-025: no ticket currently
+transitions a ride from `published` into `registration_open` at all — decide
+whether CR-020 needs to own that transition too (or a preceding "Open
+registration" ticket is warranted) before assuming `registration_open ->
+registration_closed` is CR-020's whole scope. CR-021 (Cancel ride)/CR-022
+(Finish ride) are the remaining lifecycle transitions after it, then CR-023
+(Ride detail, participant-facing) and CR-024 (Ride list, public discovery —
+distinct from CR-088's "My rides", organizer-scoped and already done).
 
 ## Important decisions
 
@@ -672,6 +695,13 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   unimplemented tickets (CR-019/CR-021/CR-022) — `PATCH /v1/rides/:id`
   deliberately refuses to touch `status` at all. KI-024 (no "My rides" list)
   is resolved.
+- new (CR-019): cancelling/finishing a ride are still unimplemented
+  (CR-021/CR-022); no ticket transitions a ride into `registration_open` at
+  all — new KI-025; no `/verify-email` web screen exists anywhere in
+  `apps/web` (only the API call CR-011 built), so an organizer who hits
+  `email_verification_required` (this ticket or CR-014's) has no in-app way
+  to actually verify — new KI-026, and CR-059 checking off in `docs/tasks.md`
+  only closes its "gate organizer publish" scope, not this gap.
 
 ## Do not break
 
@@ -691,4 +721,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-14 (CR-088/CR-016/CR-018)
+2026-09-14 (CR-019, + CR-059's remaining scope)

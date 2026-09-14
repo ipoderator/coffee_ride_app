@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { organizerProfiles, rides } from 'db/schema';
+import { organizerProfiles, rides, users } from 'db/schema';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
@@ -583,8 +583,9 @@ describe('/v1/rides', () => {
         cookies: { session: rawToken },
         payload: VALID_PAYLOAD,
       });
-      // No publish endpoint exists yet (CR-019) — flip the status directly to
-      // exercise the lifecycle gate.
+      // Flips the status directly (rather than going through CR-019's own
+      // `POST /:id/publish`) to exercise this gate in isolation, independent of
+      // publish's own checks.
       await app.db
         .update(rides)
         .set({ status: 'published' })
@@ -701,6 +702,195 @@ describe('/v1/rides', () => {
         headers: { origin: 'https://evil.example' },
         cookies: { session: rawToken },
         payload: { title: 'Новое название' },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('csrf_origin_mismatch');
+
+      await app.close();
+    });
+  });
+
+  describe('POST /v1/rides/:id/publish', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/publish`,
+        headers: { origin: WEB_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('returns 404 ride_not_found for a non-existent id', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it("returns 404 ride_not_found for another organizer's ride", async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const stranger = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: stranger.rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it('rejects publishing with an unverified email with 403', async () => {
+      const app = await buildApp(testEnv);
+      const { userId, rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      // `registerAndLogin` verifies the email by default (needed for
+      // `withOrganizerProfile` to succeed, since organizer profile creation has its
+      // own `emailVerified` gate) — flip it back off directly to exercise publish's
+      // own gate in isolation.
+      await app.db
+        .update(users)
+        .set({ emailVerified: false })
+        .where(eq(users.id, userId));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('email_verification_required');
+
+      await app.close();
+    });
+
+    it('rejects publishing a non-draft ride with 409 ride_not_publishable', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'published' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_publishable');
+
+      await app.close();
+    });
+
+    it('publishes a draft ride and returns it with status published', async () => {
+      const app = await buildApp(testEnv);
+      const { userId, rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.ride.status).toBe('published');
+      expect(body.ride.updatedBy).toBe(userId);
+
+      // Verified via a direct DB read, not just the HTTP response.
+      const [row] = await app.db
+        .select()
+        .from(rides)
+        .where(eq(rides.id, created.json().ride.id));
+      expect(row?.status).toBe('published');
+      expect(row?.updatedBy).toBe(userId);
+
+      await app.close();
+    });
+
+    it('rejects a mismatched Origin with 403 (CSRF)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/publish`,
+        headers: { origin: 'https://evil.example' },
+        cookies: { session: rawToken },
       });
 
       expect(response.statusCode).toBe(403);

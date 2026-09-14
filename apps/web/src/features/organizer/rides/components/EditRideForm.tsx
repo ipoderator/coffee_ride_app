@@ -23,7 +23,13 @@ import {
   utcIsoToZonedLocalInput,
   zonedTimeToUtcIso,
 } from '@/lib/datetime/zoned-time';
-import { ApiError, getRide, updateRide, updateRideRequestSchema } from '../api';
+import {
+  ApiError,
+  getRide,
+  publishRide,
+  updateRide,
+  updateRideRequestSchema,
+} from '../api';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -96,6 +102,9 @@ export function EditRideForm({ rideId }: { rideId: string }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishVerificationRequired, setPublishVerificationRequired] =
+    useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +195,33 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       }
     } finally {
       setIsPending(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (isPublishing) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setPublishVerificationRequired(false);
+    setIsPublishing(true);
+
+    try {
+      const response = await publishRide(rideId);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.publishSuccess);
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.problem.code === 'email_verification_required'
+      ) {
+        setPublishVerificationRequired(true);
+      } else {
+        setFormError(RIDE_EDIT_TERMS.loadError);
+      }
+    } finally {
+      setIsPublishing(false);
     }
   }
 
@@ -452,22 +488,41 @@ export function EditRideForm({ rideId }: { rideId: string }) {
           </select>
         </FormField>
 
-        {formError && (
+        {publishVerificationRequired && (
+          <p role="alert" className="text-sm text-danger">
+            {RIDE_EDIT_TERMS.publishEmailVerificationRequired}
+          </p>
+        )}
+
+        {formError && !publishVerificationRequired && (
           <p role="alert" className="text-sm text-danger">
             {formError}
           </p>
         )}
 
-        {successMessage && !formError && (
+        {successMessage && !formError && !publishVerificationRequired && (
           <p role="status" className="text-sm text-success">
             {successMessage}
           </p>
         )}
 
         {isDraft && (
-          <Button type="submit" isLoading={isPending} className="self-start">
-            {isPending ? RIDE_EDIT_TERMS.savePending : RIDE_EDIT_TERMS.save}
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" isLoading={isPending} className="self-start">
+              {isPending ? RIDE_EDIT_TERMS.savePending : RIDE_EDIT_TERMS.save}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={isPublishing}
+              onClick={handlePublish}
+              className="self-start"
+            >
+              {isPublishing
+                ? RIDE_EDIT_TERMS.publishPending
+                : RIDE_EDIT_TERMS.publish}
+            </Button>
+          </div>
         )}
       </form>
     </Card>

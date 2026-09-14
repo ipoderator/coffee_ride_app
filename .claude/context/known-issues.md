@@ -369,6 +369,59 @@ resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
 exists — reuse it for `User`, `OrganizerProfile`, and `Ride` rather than
 building a separate upload path per entity.
 
+### KI-025 — No ticket transitions a ride into `registration_open`
+
+Status: open. Discovered: 2026-09-14 (CR-019).
+Problem: `docs/product.md`'s Lifecycle is `draft → published →
+registration_open → registration_closed → started → finished`, but
+`docs/tasks.md`'s Rides section only has tickets for `draft → published`
+(CR-019, this session) and `registration_open/closed → ...` at the closing
+end (CR-020 "Close registration"). No ticket owns entering
+`registration_open` in the first place — CR-019 was deliberately scoped to
+exactly what its name says (`published`), not silently widened to also open
+registration, since neither `docs/design.md` nor `docs/product.md` describes
+that as one combined action.
+Impact: none yet — `registration_open` is unreachable, but nothing consumes
+it yet either (CR-032 "Register" isn't built). Would block CR-032 if it
+assumes rides can already reach that state.
+Workaround: none needed yet.
+Next action: whichever of CR-020 ("Close registration") or CR-032
+("Register") turns out to need it should either get a preceding "Open
+registration" ticket added to `docs/tasks.md` (same pattern CR-088 used for
+its own gap, KI-024) or fold the transition into itself with a documented
+reason — decide when that ticket is actually started, not speculatively now.
+
+### KI-026 — No verify-email web screen exists, and two organizer actions now hard-depend on it
+
+Status: open. Discovered: 2026-09-13 (CR-011, as an accepted scope boundary —
+"not a clickable page ... but enough for the live-check/manual QA path via a
+direct POST"). Widened: 2026-09-14 (CR-019) — a second organizer action now
+gates on the same unreachable-from-the-UI state.
+Problem: `docs/design.md` §8 lists `/verify-email` under "Auth flows" with a
+note pointing at CR-059/CR-060, but CR-059's UI half was never built — only
+`POST /v1/auth/verify-email` (the API call a real screen would make) exists.
+An organizer with an unverified email today has no in-app way to complete
+verification at all. `POST /v1/organizers/me` (CR-014) already 403s
+`email_verification_required` for such a caller; CR-019 (this session) adds
+`POST /v1/rides/:id/publish` as a second endpoint with the identical gate —
+both now show a correct, worded banner in `apps/web`, but neither can link
+anywhere that actually resolves the problem.
+Impact: medium and growing — a real organizer who registers, skips the dev-
+only `verificationUrl` response field (production never returns it; real
+email delivery is ADR-007, still Pending), and later tries to create an
+organizer profile or publish a ride hits a dead end with no recovery path in
+the UI.
+Workaround: manual — call `POST /v1/auth/verify-email` directly (curl/API
+client) with the token from `POST /v1/auth/register`'s dev-only
+`verificationUrl` field, same as this session's and CR-011's own live checks
+already do.
+Next action: CR-059's own remaining scope was narrowed to "gate organizer
+publish" and is now closed by CR-019 — the actual `/verify-email` screen has
+no ticket number of its own in `docs/tasks.md`. Needs one added (same
+"real gap, add a ticket" discipline as KI-024/KI-025) before or alongside
+ADR-007's real email delivery, since a screen with no email pointing at it is
+only marginally more useful than today's curl workaround.
+
 ---
 
 ## Resolved

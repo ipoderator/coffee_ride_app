@@ -319,6 +319,19 @@ inverse conversion, `utcIsoToZonedLocalInput` (UTC instant + zone → local
 `datetime-local` value), needed to prefill the edit form. No `packages/db`
 schema change — every column CR-018 needed already existed from CR-017.
 
+CR-019 (2026-09-14, `docs/changelog.md`): `modules/rides/` gained `POST /v1/
+rides/:id/publish` (`draft -> published` only — the lifecycle's later states
+have no owning ticket yet, KI-025). Same ownership resolution as `GET`/
+`PATCH /v1/rides/:id`, plus a new caller-level gate: `emailVerified` (403
+`email_verification_required`, the same code `POST /v1/organizers/me` already
+uses), closing CR-059's one remaining piece
+(`.claude/rules/security.md`). Non-draft → 409 `ride_not_publishable` (a new
+code, distinct from `PATCH`'s `ride_not_editable`). `apps/web`'s
+`EditRideForm` gained a publish button (draft-only, next to Save) and the
+same `email_verification_required` guiding-banner pattern
+`OrganizerProfileForm` established. No `packages/db` schema change —
+`published` already existed in the `ride_status` enum since CR-017.
+
 ## Target structure
 
 apps/

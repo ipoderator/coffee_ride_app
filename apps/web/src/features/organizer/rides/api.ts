@@ -5,6 +5,7 @@ import {
   type CreateRideResponse,
   type ListRidesResponse,
   type ProblemDetails,
+  type PublishRideResponse,
   type Ride,
   type UpdateRideRequest,
   type UpdateRideResponse,
@@ -16,6 +17,7 @@ export type {
   CreateRideRequest,
   CreateRideResponse,
   ListRidesResponse,
+  PublishRideResponse,
   UpdateRideRequest,
   UpdateRideResponse,
 };
@@ -104,4 +106,24 @@ export async function updateRide(
   }
 
   return body as UpdateRideResponse;
+}
+
+/**
+ * CR-019 ("Publish ride"): `draft -> published`. Throws `ApiError` on any non-2xx
+ * response, including the expected `email_verification_required` 403 —
+ * `EditRideForm` catches that one specifically, same pattern
+ * `OrganizerProfileForm` already established for the same code.
+ */
+export async function publishRide(id: string): Promise<PublishRideResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/publish`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as PublishRideResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as PublishRideResponse;
 }

@@ -4,7 +4,14 @@ import type { Ride } from 'types';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
 import { EditRideForm } from './components/EditRideForm';
-import { ApiError, createRide, getRide, listMyRides, updateRide } from './api';
+import {
+  ApiError,
+  createRide,
+  getRide,
+  listMyRides,
+  publishRide,
+  updateRide,
+} from './api';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -14,6 +21,7 @@ vi.mock('./api', async () => {
     listMyRides: vi.fn(),
     getRide: vi.fn(),
     updateRide: vi.fn(),
+    publishRide: vi.fn(),
   };
 });
 
@@ -21,6 +29,7 @@ const createRideMock = vi.mocked(createRide);
 const listMyRidesMock = vi.mocked(listMyRides);
 const getRideMock = vi.mocked(getRide);
 const updateRideMock = vi.mocked(updateRide);
+const publishRideMock = vi.mocked(publishRide);
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -223,6 +232,7 @@ describe('EditRideForm', () => {
   beforeEach(() => {
     getRideMock.mockReset();
     updateRideMock.mockReset();
+    publishRideMock.mockReset();
   });
 
   it('shows a not-found state for a ride that does not exist or is not owned by the caller', async () => {
@@ -313,5 +323,60 @@ describe('EditRideForm', () => {
     expect(
       await screen.findByText('Title cannot be empty.'),
     ).toBeInTheDocument();
+  });
+
+  it('publishes a draft ride and shows a success message', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+    publishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+    expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+    expect(publishRideMock).toHaveBeenCalledWith('ride-1');
+    // The form flips to read-only immediately once published.
+    expect(
+      screen.getByText('Редактировать можно только черновик заезда.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a guiding message when publishing requires email verification', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+    publishRideMock.mockRejectedValue(
+      new ApiError({
+        type: 'https://coffee-ride.example/errors/email_verification_required',
+        title: 'Email verification required',
+        status: 403,
+        detail: 'Verify your email before publishing a ride.',
+        instance: '/v1/rides/ride-1/publish',
+        code: 'email_verification_required',
+      }),
+    );
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+    expect(
+      await screen.findByText(/Подтвердите email, чтобы опубликовать заезд/),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no publish button for a non-draft ride', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    await screen.findByText('Редактировать можно только черновик заезда.');
+    expect(
+      screen.queryByRole('button', { name: 'Опубликовать' }),
+    ).not.toBeInTheDocument();
   });
 });

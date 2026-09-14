@@ -162,3 +162,10 @@ export type UpdateRideRequest = z.infer<typeof updateRideRequestSchema>;
 export interface UpdateRideResponse {
   ride: Ride;
 }
+
+// CR-019 ("Publish ride"): no request body — `draft -> published` is the only
+// transition this endpoint performs, nothing to validate beyond the `:id` param
+// already covered by `rideIdParamsSchema` in `apps/api`.
+export interface PublishRideResponse {
+  ride: Ride;
+}

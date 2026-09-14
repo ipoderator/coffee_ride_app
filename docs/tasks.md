@@ -142,7 +142,7 @@ rewrite, not a polish pass.
       `GET /v1/organizers/me`). See `docs/changelog.md`.
 - [x] CR-016 Organizer authorization — done 2026-09-14, alongside CR-018: the
       first real ownership check on an _existing_ ride (`GET`/`PATCH /v1/
-    rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
+rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       the caller's — deliberately the same response either way). See
       `docs/changelog.md`.
 
@@ -167,7 +167,12 @@ rewrite, not a polish pass.
       published), `/organizer/rides/[id]/edit` filling in every field CR-017
       left `null`. No migration needed — CR-017's schema already had every
       column. See `docs/changelog.md`.
-- [ ] CR-019 Publish ride
+- [x] CR-019 Publish ride — done 2026-09-14: `POST /v1/rides/:id/publish`
+      (`draft -> published` only — `docs/product.md`'s further lifecycle
+      states have no ticket yet, see `.claude/context/known-issues.md`
+      KI-025), gated on `emailVerified` per `.claude/rules/security.md`
+      (closes CR-059's remaining scope). `/organizer/rides/[id]/edit` gained
+      a "Опубликовать" button next to Save. See `docs/changelog.md`.
 - [ ] CR-020 Close registration
 - [ ] CR-021 Cancel ride
 - [ ] CR-022 Finish ride
@@ -238,9 +243,13 @@ is not done (`docs/definition-of-done.md`).
 - [ ] CR-058 Auth rate limiting (login/register/forgot-password, per IP + per account) —
       CR-011 shipped an interim in-memory, per-IP-only tier on register/verify-email;
       this ticket is the Redis-backed, per-account upgrade (KI-022, blocked on KI-014).
-- [ ] CR-059 Email verification flow (gates organizer publish action) — CR-011 shipped
-      the token issue/verify mechanism itself (`POST /v1/auth/verify-email`); gating
-      organizer publish on `emailVerified` is still open (no publish action exists yet).
+- [x] CR-059 Email verification flow (gates organizer publish action) — CR-011 shipped
+      the token issue/verify mechanism itself (`POST /v1/auth/verify-email`); the
+      remaining scope — gating organizer publish on `emailVerified` — closed 2026-09-14
+      by CR-019 (`publishRide`'s `email_verification_required` 403). No verify-email
+      web screen exists yet (`docs/design.md` §8 lists `/verify-email` under "Auth
+      flows"), a pre-existing gap this ticket doesn't close — see
+      `.claude/context/known-issues.md`.
 - [ ] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
 - [ ] CR-061 Security headers (`@fastify/helmet`-equivalent) — the CSRF half of this
       ticket's original scope (Origin/Referer check for cookie sessions) was

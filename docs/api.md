@@ -127,7 +127,17 @@ not at all), `participantLimit`, `priceRub`, `distanceKm`, `elevationGainMeters`
 creation. `coverImageUrl` stays out (KI-023, deferred to the S3 pipeline). `200`
 → `{ ride }` with the updated fields, `400 validation_error` on an invalid field.
 
-POST `/v1/rides/:id/publish`
+POST `/v1/rides/:id/publish` — **implemented (CR-019)**. Requires a valid session
+cookie (`401` otherwise) and ownership of the ride: `404 ride_not_found` both when the
+id doesn't exist and when it belongs to a different organizer (same rule as `GET`/
+`PATCH`). Also requires `emailVerified` on the caller's account (403
+`email_verification_required`, fresh DB read — `.claude/rules/security.md`: "Require a
+verified email before an account can act as an organizer (publish a ride)"; same code
+`POST /v1/organizers/me` already uses). Draft-only: `409 ride_not_publishable` for any
+non-`draft` status. `200` → `{ ride }` with `status: 'published'`. No request body.
+`draft → published` only — the lifecycle's later states (`registration_open` onward)
+have no owning ticket yet (`.claude/context/known-issues.md` KI-025).
+
 POST `/v1/rides/:id/close-registration`
 POST `/v1/rides/:id/cancel`
 POST `/v1/rides/:id/finish`

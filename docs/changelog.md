@@ -2136,3 +2136,111 @@ rides deleted from the scratch DB afterward.
 
 Follow-up: CR-019 (Publish ride) is next per `docs/tasks.md`'s Rides section
 order.
+
+## 2026-09-14 — CR-019 — Publish ride (+ CR-059's remaining scope)
+
+User asked to continue per the already-documented plan. Next unchecked ticket
+was CR-019 ("Publish ride"): `POST /v1/rides/:id/publish`, `draft ->
+published`. `.claude/rules/security.md` names this exact action — "Require a
+verified email before an account can act as an organizer (publish a ride)" —
+so the one remaining piece of CR-059 ("Email verification flow ... gates
+organizer publish action", `docs/tasks.md`'s own note: "gating organizer
+publish on `emailVerified` is still open, no publish action exists yet")
+landed together with it, same reasoning as CR-016 landing with CR-018 last
+session: the gate only has an action to protect once that action exists.
+
+`apps/api/src/modules/rides/rides.service.ts` gained `publishRide`: same
+ownership resolution as `getRideForOwner`/`updateRideDraft` (404
+`ride_not_found` whether the ride doesn't exist or belongs to a different
+organizer, never disclosed which); a fresh-DB-read `emailVerified` check (403
+`email_verification_required` — the identical code `POST /v1/organizers/me`
+already uses, so `apps/web` branches on one stable code regardless of which
+endpoint returned it); then the lifecycle gate itself (409
+`ride_not_publishable`, a new code distinct from `PATCH`'s
+`ride_not_editable`, for any non-`draft` status). Check order: ownership
+first (never leak existence to a non-owner), then the caller-level
+email-verification gate, then the resource-state gate. Deliberately scoped to
+exactly `draft -> published` — `docs/product.md`'s lifecycle has further
+states (`registration_open`/`registration_closed`/...) but no ticket in
+`docs/tasks.md` owns entering `registration_open` at all (CR-020 only closes
+it); inventing that transition here would have been unrequested scope, so it
+is flagged instead as new known issue KI-025. No `packages/db` migration —
+`published` already existed in the `ride_status` enum since CR-017.
+
+`apps/web/src/features/organizer/rides/components/EditRideForm.tsx` gained an
+"Опубликовать" button next to "Сохранить", visible only while the ride is a
+draft (same screen `docs/design.md` §8 already uses for editing — no separate
+publish screen exists), with the same duplicate-submit-protection/loading-
+state discipline as Save. On `email_verification_required` it shows the same
+guiding-banner pattern `OrganizerProfileForm` already established for the
+identical code, reusing the same Russian wording as a new `RIDE_EDIT_TERMS`
+key. A successful publish updates the ride in place, so the form immediately
+flips to its existing read-only view (`ride.status !== 'draft'`) without a
+reload.
+
+While building this, confirmed a real, growing gap and did not silently work
+around it: no `/verify-email` web screen exists anywhere in `apps/web` (only
+the API call CR-011 built) — an organizer who hits either
+`email_verification_required` gate (this one, or CR-014's) has no in-app way
+to actually complete verification. Recorded as new known issue KI-026, not
+fixed here — out of this ticket's scope, and real email delivery is ADR-007
+(still Pending).
+
+Files: `packages/types/src/api/rides.ts` (+`PublishRideResponse`);
+`apps/api/src/modules/rides/{rides.service.ts,rides.routes.ts,
+rides.routes.test.ts}` (extended — new `RIDE_NOT_PUBLISHABLE`/
+`EMAIL_VERIFICATION_REQUIRED` error factories, `POST /:id/publish`, 7 new
+tests); `apps/web/src/features/organizer/rides/{api.ts,
+components/EditRideForm.tsx,rides.test.tsx}` (extended — `publishRide`
+client, publish button + banner, 3 new tests); `packages/ui/src/
+terminology.ts` (+4 `RIDE_EDIT_TERMS` keys: `publish`/`publishPending`/
+`publishSuccess`/`publishEmailVerificationRequired`); `docs/api.md` (filled in
+the `POST /v1/rides/:id/publish` line); `.claude/context/known-issues.md`
+(+KI-025, +KI-026); `docs/tasks.md` (CR-019 and CR-059 both checked off).
+
+Decisions: none new at the ADR level — the check-order and error-code choices
+are documented in `.claude/context/current-task.md`, applications of
+ADR-006/ADR-011's existing rules to a new endpoint.
+
+Known limitations: KI-025 (no ticket transitions a ride into
+`registration_open`) and KI-026 (no verify-email web screen) are both new,
+see `.claude/context/known-issues.md`.
+
+Validation: `turbo run typecheck lint test build` (all 25 tasks, run twice —
+once after implementation, once again after the live checks below — against a
+real `DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`,
+Docker Desktop still unavailable in this environment) green both times.
+`apps/api` gained 7 new tests (80 total, was 73); `apps/web` gained 3 new
+tests (59 total, was 56). `format:check`/`lint:root` clean (one incidental
+one-line Prettier fix in `docs/tasks.md`, pre-existing drift unrelated to this
+session's own edits, picked up while checking off CR-019/CR-059 in the same
+file). Live-verified via curl against a real Postgres + running `apps/api`:
+401 (no cookie) → 404 (non-existent id) → 404 (another organizer's ride,
+confirmed via a second registered account) → 403 `email_verification_required`
+(a third account, `emailVerified` flipped back to `false` directly in the DB
+to isolate this gate) → 200 happy path (cross-checked against a direct
+`SELECT` — `status`/`updated_by`/`updated_at` all correct) → 409
+`ride_not_publishable` (re-publishing the same now-published ride) → 403 CSRF
+(mismatched `Origin`). Full browser walkthrough via the `browser-automation`
+skill against a real `next dev` server + the pre-existing `apps/api`: logged
+in, opened a draft ride's edit screen, confirmed the "Опубликовать" button,
+clicked it, confirmed the `POST .../publish` response was `200`, the success
+message appeared, the status badge changed to "Опубликован", and the form
+became read-only with no publish/save buttons left — screenshot taken and
+visually confirmed. No console errors or failed requests during the actual
+check. Test accounts/rides deleted from the scratch DB afterward.
+
+Found and fixed one real, self-inflicted environment issue while running the
+live browser check (not a product bug): running `turbo run build` (which
+invokes `next build` for `apps/web`) against the same `.next` directory a
+`next dev` server already had open corrupted that dev server's served chunks
+(404s on `main-app.js`/`layout.css`/etc., a 500 on `/me`) until it was
+restarted — confirmed by killing the stale process, clearing `apps/web/.next`,
+and starting a fresh `next dev`, which immediately resolved it. Not a new
+known issue (a `turbo build`/`next dev` sequencing caveat for whoever runs
+both against the same checkout locally, not a code defect), but worth noting
+here so a future session recognizes the symptom immediately rather than
+re-diagnosing it.
+
+Follow-up: CR-020 (Close registration) is next per `docs/tasks.md`'s Rides
+section order.

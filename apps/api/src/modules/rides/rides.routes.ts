@@ -11,6 +11,7 @@ import {
   createRide,
   getRideForOwner,
   listOwnRides,
+  publishRide,
   updateRideDraft,
 } from './rides.service.js';
 
@@ -106,6 +107,28 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.user!.id,
         request.params.id,
         request.body,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-019 ("Publish ride"): `draft -> published` only — see `rides.service.ts`'s
+  // `publishRide` for the full check order (404 ownership -> 403 email verification
+  // -> 409 not-draft).
+  app.post(
+    '/:id/publish',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await publishRide(
+        app.db,
+        request.user!.id,
+        request.params.id,
       );
       return reply.status(200).send({ ride });
     },

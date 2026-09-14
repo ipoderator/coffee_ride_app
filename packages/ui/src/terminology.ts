@@ -334,4 +334,10 @@ export const RIDE_EDIT_TERMS = {
   save: 'Сохранить',
   savePending: 'Сохранение…',
   saveSuccess: 'Изменения сохранены.',
+  // CR-019 ("Publish ride").
+  publish: 'Опубликовать',
+  publishPending: 'Публикация…',
+  publishSuccess: 'Заезд опубликован.',
+  publishEmailVerificationRequired:
+    'Подтвердите email, чтобы опубликовать заезд. Ссылка для подтверждения была отправлена при регистрации.',
 } as const;
