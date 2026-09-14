@@ -23,8 +23,11 @@ CR-011 (User registration) and CR-012 (Login/logout/session) also completed
 2026-09-13. CR-013 (Profile) completed 2026-09-14 — Auth phase (CR-011..CR-013)
 is now fully done except CR-058 (Redis-backed rate limiting)/CR-059 (organizer-
 publish email-verification gate)/CR-060 (password reset), all deliberately
-deferred. CR-014 (Organizer profile) also completed 2026-09-14. CR-015
-(Organizer dashboard) is next.
+deferred. CR-014 (Organizer profile) and CR-015 (Organizer dashboard) also
+completed 2026-09-14. CR-016 (Organizer authorization) stays blocked on
+`Ride`/CR-017+ (nothing organizer-owned to protect yet — confirmed again this
+session, not started); CR-017 (Create ride) is next per `docs/tasks.md`'s
+Rides section order.
 
 ## Implemented
 
@@ -330,6 +333,32 @@ and organizer capability itself has no authorization check to protect anything
 with yet — CR-016 ("Organizer authorization") is explicitly about exercising it
 once something organizer-owned exists in the schema.
 
+Organizer dashboard landed 2026-09-14 (CR-015, see `docs/changelog.md`):
+`/organizer` renders a real widget grid instead of CR-014's stub `EmptyState`.
+User asked to combine this with CR-016 in one pass; checked the repo and two
+sibling Claude sessions on this machine first — no prior plan for that
+combination existed anywhere, and CR-014's own entry above already documents
+CR-016 as blocked on `Ride`/CR-017+ (nothing organizer-owned to check
+ownership against yet). Per the user's instruction to follow the plan as
+originally documented, did CR-015 alone; CR-016 is untouched. New
+`DashboardWidget` descriptor (`apps/web/src/lib/cabinet/types.ts`, same shape
+as `CabinetNavItem`) and a small organizer-only `ORGANIZER_WIDGETS` registry
+(`lib/cabinet/organizer-widgets.ts`) — no feature flags; `docs/tasks.md`'s
+CR-054 is the ticket that generalizes nav/widgets with flags across both
+cabinets, not this one. One widget registers: `OrganizerProfileWidget`
+(`features/organizer/profile/components/`, alongside the existing nav-item
+descriptor in that feature's `nav.ts`) — a read-only summary of the same
+`OrganizerProfile` CR-014 built, reusing `getOrganizerProfile()` as-is, no new
+API endpoint. No ride widget — `Ride` doesn't exist until CR-017+. 4 new
+`apps/web` tests (35 total, was 31); `apps/api`/`packages/ui` test counts
+unchanged (no files touched in either). Live-verified via the
+`browser-automation` skill against a real `next dev` server + `apps/api`:
+fresh verified account → `/organizer` showed the "not created yet" empty
+state with a working create link → created a profile through the existing
+`/organizer/profile` form → `/organizer` showed the populated summary widget
+with a working edit link — no console errors beyond the widget's own expected
+404 fetch (the not-found case itself) and ordinary dev-server noise.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -529,6 +558,10 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   with yet (CR-016 is explicitly that, once `Ride`/CR-017+ gives it something
   organizer-owned); `ORGANIZER_NAV_ITEMS` has exactly one entry, same
   no-feature-flag-yet caveat as the participant registry (CR-054).
+- new (CR-015): `ORGANIZER_WIDGETS` has exactly one entry and no feature-flag
+  support, same caveat as `ORGANIZER_NAV_ITEMS`/`PARTICIPANT_NAV_ITEMS`
+  (CR-054 generalizes all of these); CR-016 confirmed still blocked on
+  `Ride`/CR-017+, not started this session.
 
 ## Do not break
 
@@ -548,4 +581,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-14 (CR-014)
+2026-09-14 (CR-015)

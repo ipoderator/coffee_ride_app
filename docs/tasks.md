@@ -135,8 +135,14 @@ rewrite, not a polish pass.
       create-or-edit in one form), first real ADR-009 organizer cabinet nav
       registry (`CabinetShell` generalized to serve both cabinets). See
       `docs/changelog.md`.
-- [ ] CR-015 Organizer dashboard
-- [ ] CR-016 Organizer authorization
+- [x] CR-015 Organizer dashboard — done 2026-09-14: `/organizer` renders a real
+      ADR-009 widget registry (`lib/cabinet/organizer-widgets.ts`,
+      `DashboardWidget` descriptor) instead of the CR-014 stub; one widget so
+      far, `OrganizerProfileWidget` (organizer-profile summary, reuses
+      `GET /v1/organizers/me`). See `docs/changelog.md`.
+- [ ] CR-016 Organizer authorization — still blocked on `Ride`/CR-017+ (nothing
+      organizer-owned to protect yet; see `docs/changelog.md` CR-014/CR-015
+      entries)
 
 ## Rides
 

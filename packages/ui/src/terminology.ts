@@ -179,12 +179,16 @@ export const CABINET_TERMS = {
   organizerCtaDescription:
     'Создайте профиль организатора, чтобы публиковать заезды и управлять регистрациями.',
   organizerCtaLink: 'Профиль организатора',
-  // `/organizer` stub (CR-014, same reasoning as the participant `homeTitle`
-  // trio) — full dashboard content is CR-015.
+  // `/organizer` page title (CR-014). Body content is now real widgets
+  // (CR-015, `ORGANIZER_TERMS`'s `dashboardWidget*` entries) — the old stub
+  // empty-state copy that used to fill this page is gone, replaced by the
+  // widget grid's own states.
   organizerHomeTitle: 'Кабинет организатора',
-  organizerHomeEmptyTitle: 'Пока здесь нечего показать',
-  organizerHomeEmptyDescription:
-    'Управление профилем организатора доступно в разделе «Профиль организатора». Заезды появятся здесь позже.',
+  // CR-015: shown only if the widget registry is ever empty (defensive —
+  // currently always has at least the profile summary widget).
+  dashboardNoWidgetsTitle: 'Пока здесь нечего показать',
+  dashboardNoWidgetsDescription:
+    'Виджеты появятся здесь по мере добавления функций.',
 } as const;
 
 /** `/me/profile` (CR-013, `docs/design.md` §8 "Profile settings"). */
@@ -221,4 +225,14 @@ export const ORGANIZER_TERMS = {
   emailVerificationRequired:
     'Подтвердите email, чтобы создать профиль организатора. Ссылка для подтверждения была отправлена при регистрации.',
   loadError: 'Не удалось загрузить профиль организатора.',
+  // CR-015: `/organizer` dashboard widget summarizing the same
+  // `OrganizerProfile` this feature module owns (`OrganizerProfileWidget`) —
+  // distinct copy from the `/organizer/profile` form above since it's a
+  // read-only card, not a form.
+  dashboardWidgetTitle: 'Профиль организатора',
+  dashboardWidgetEmptyTitle: 'Профиль организатора ещё не создан',
+  dashboardWidgetEmptyDescription:
+    'Создайте профиль, чтобы публиковать заезды под своим именем.',
+  dashboardWidgetCreateLink: 'Создать профиль',
+  dashboardWidgetEditLink: 'Редактировать',
 } as const;

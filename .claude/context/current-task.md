@@ -6,244 +6,173 @@ complete
 
 ## Task ID
 
-CR-014 — Organizer profile
+CR-015 — Organizer dashboard
 
 ## Goal
 
-Let a logged-in user create and edit their own `OrganizerProfile` (`docs/product.md`:
-"create organizer profile" is MVP capability #2; `docs/design.md` §8: `/organizer/profile`
-"Organizer profile"). Next unchecked backlog item after CR-013
-(`docs/tasks.md`/`.claude/context/project-state.md`: "CR-014 (Organizer profile) is next").
-Continuing per the user's explicit instruction to study prior context and continue
-implementing per the established backlog plan — same convention as every prior session
-this backlog has run (no separate `/plan` approval step invoked).
+Give `/organizer` (currently a static `EmptyState` stub left by CR-014) real content:
+`docs/design.md` §8 lists it as "Dashboard (widgets from the ADR-009 registry)". Next
+unchecked backlog item after CR-014 (`docs/tasks.md`).
+
+User asked to do CR-015 together with CR-016 ("Organizer authorization") in one pass.
+Checked repository docs first (`.claude/CLAUDE.md` non-negotiable rule: repo is the
+source of truth, not chat history) and two sibling Claude sessions on this machine — no
+prior plan for combining them exists anywhere. CR-016 is explicitly documented
+(`.claude/context/project-state.md`, CR-014's changelog entry) as depending on `Ride`
+(CR-017+): "organizer capability itself has no server-side authorization check to
+protect anything with yet — CR-016 is explicitly that, once Ride/CR-017+ gives it
+something organizer-owned." No organizer-owned resource exists in the schema yet, so
+there is nothing for an ownership check to protect. Per the user's own instruction to
+follow the plan as originally documented, CR-015 proceeds alone; CR-016 stays in
+`docs/tasks.md` unchecked, unchanged, to be picked up once CR-017 exists.
 
 Context read this session: `.claude/CLAUDE.md`, all `.claude/rules/*.md`, `docs/tasks.md`,
 `.claude/context/{project-state,architecture-map,current-task,known-issues}.md`,
-`docs/{api,product,design,decisions,database}.md`, `.claude/skills/{new-cabinet-feature,
-new-api-endpoint,db-migration}/SKILL.md`, `packages/db/src/schema/{user,index}.ts`,
-`packages/types/src/{index,domain/user,api/users}.ts`, `apps/api/src/modules/{auth/*,
-users/*}`, `apps/api/src/{plugins/auth.ts,routes/v1.ts}`, `apps/web/src/{components/
-cabinet/CabinetShell.tsx,lib/cabinet/*,lib/auth/current-user-context.tsx,lib/api/*,
-app/me/**,features/participant/profile/**}`, `packages/ui/src/{index.ts,terminology.ts,
-components/EmptyState.tsx,components/ErrorState.tsx}`.
+`docs/{design.md §8, decisions.md ADR-009}`, `.claude/skills/new-cabinet-feature/SKILL.md`,
+`apps/web/src/{components/cabinet/CabinetShell.tsx, lib/cabinet/*, app/organizer/**,
+app/me/page.tsx, features/organizer/profile/**}`, `packages/ui/src/{index.ts,
+terminology.ts, components/{Card,EmptyState,ErrorState,Skeleton}.tsx}`.
 
-## Scoping decisions made this session (no product doc enumerates exact fields yet)
+## Scoping decisions (design.md doesn't enumerate widget contents)
 
-- `docs/database.md` only says "OrganizerProfile — public organizer data linked to User."
-  Decided minimal viable fields, same discipline as CR-013's User profile scope: `name`
-  (required, 1-100 chars — the organizer's public-facing identity; `docs/product.md`
-  confirms private individuals/clubs/shops/teams all share this one path, so this is
-  _not_ the same as the user's personal `displayName`) and `description` (optional,
-  ≤500 chars — "about the organizer", shown later on ride detail per §8's ride-detail
-  notes column). Logo/avatar explicitly OUT of scope, same reasoning as CR-013's
-  avatar deferral (KI-023: needs the S3 pipeline/CR-086) — this is a second instance of
-  that same gap, not a new one.
-- One `OrganizerProfile` per `User` (ADR-006: "An `OrganizerProfile` attached to a
-  `User` grants organizer capabilities" — singular). Enforced with a unique index on
-  `organizer_profiles.user_id`, not just application logic
-  (`.claude/rules/database.md`).
-- Email verification gate: `packages/db/src/schema/user.ts`'s own comment already
-  commits to this ("enforced by future tickets ... starting with organizer-profile
-  creation, CR-014") and `.claude/rules/security.md` requires a verified email "before
-  an account can act as an organizer." Enforced at creation only (`POST /v1/organizers/
-me`) — an already-verified-at-creation-time organizer is not re-checked on every
-  subsequent edit (no product requirement to revoke organizer status if email
-  verification is somehow later invalidated — nothing in this codebase does that today).
-- Three endpoints, mirroring `PATCH /v1/users/me`'s "me"-only pattern but as three verbs
-  since creation is a distinct, capability-granting action from an ordinary edit (unlike
-  `users.me`, which never needed a POST): `POST /v1/organizers/me` (create, 409 if one
-  already exists, 403 if email unverified), `GET /v1/organizers/me` (fetch own, 404 if
-  none yet — the web form needs to distinguish "create" vs "edit" mode), `PATCH
-/v1/organizers/me` (update own, 404 if none yet). No public `GET /v1/organizers/:id`
-  yet — nothing reads organizer data publicly until `Ride` exists (CR-017+), so that
-  endpoint is deferred to whichever ride ticket first needs to embed organizer info in a
-  ride response, not built speculatively now.
-- `CabinetShell` (CR-013) was hard-coded to `PARTICIPANT_NAV_ITEMS` and a `/login`
-  redirect. Generalized to take `navItems`/`homeHref`... actually just `navItems` as a
-  prop (redirect target stays `/login` — both cabinets require the same participant-tier
-  session, organizer capability is a separate, per-action check, not a separate login) —
-  `docs/design.md` §8: "Both cabinets share a shell ... that renders from the feature
-  registry," confirming this is meant to be the same shell, not a parallel copy
-  (`.claude/rules/extensibility.md`: registration over branching applies to the shell
-  itself here, not just nav items). New `apps/web/src/lib/cabinet/organizer-nav.ts`
-  registry (ADR-009), one entry so far (`/organizer/profile`).
-- `/organizer` (bare) gets a minimal stub page, same reasoning as CR-013's `/me` stub:
-  the shared layout wraps every `/organizer/*` route, and `docs/design.md` §8 lists
-  `/organizer` as "Dashboard (widgets from the ADR-009 registry)" — that's CR-015's
-  content, this ticket only avoids a dead 404 for the bare route.
-- Discoverability: without CR-015's dashboard, nothing yet links a participant into the
-  organizer cabinet. Added one small, additive CTA on the existing `/me` stub (a new
-  paragraph + link, `CABINET_TERMS` additions only) pointing at `/organizer/profile` —
-  same justification CR-013 used for adding `/login`: a screen `docs/design.md` already
-  specifies but that would otherwise be unreachable by anyone not typing the URL by hand.
+- CR-054 ("Feature registry for dashboard nav/widgets ... + feature flags", still open,
+  `docs/tasks.md`) is explicitly the ticket that generalizes nav into a full
+  flag-aware widget system for _both_ cabinets. CR-015 does not anticipate that —
+  same "build the minimal real thing now" discipline CR-013 used for the nav registry
+  before CR-054 existed. This ticket adds a small, organizer-only widget registry
+  (`ORGANIZER_WIDGETS`, mirrors `ORGANIZER_NAV_ITEMS`'s shape: `id`, `order`,
+  `Component`) — no feature flags, no participant-side changes.
+- Only one organizer-owned data source exists in the schema today: `OrganizerProfile`
+  (CR-014). So the only widget this ticket can honestly build is an organizer-profile
+  summary widget (name, description, edit link) sourced from the existing
+  `GET /v1/organizers/me`. No ride-related widgets — `Ride` doesn't exist yet
+  (CR-017+); inventing placeholder ride widgets would be exactly the kind of
+  speculative building CR-014's own scoping notes avoided elsewhere.
+- Widget lives in the feature module that owns the data (`features/organizer/profile/`,
+  ADR-009 "a feature registers itself"), not a new cross-feature component — same
+  pattern `organizerProfileNavItem` already uses in `nav.ts`.
+- No new API endpoint needed — reuses `getOrganizerProfile()` from CR-014's
+  `features/organizer/profile/api.ts` as-is.
+- `/organizer` page: replaces the generic `EmptyState` stub with a widget grid
+  rendered from `ORGANIZER_WIDGETS` (registration over branching, ADR-009); keeps an
+  `EmptyState` fallback for the (currently unreachable, but future-proof) case of an
+  empty registry rather than assuming at least one widget always exists.
 
 ## Requirements
 
-- `packages/db`: new `organizer_profiles` table — `id`, `userId` (FK → `users`, cascade
-  delete, unique index for the one-per-user invariant), `name` (not null), `description`
-  (nullable), `createdAt`/`updatedAt` (`timestamptz`, ADR-012).
-- `packages/types`: new `domain/organizer-profile.ts` (`OrganizerProfile`), new
-  `api/organizers.ts` (`createOrganizerProfileRequestSchema`/
-  `updateOrganizerProfileRequestSchema` + response type aliases), `index.ts` exports.
-- `apps/api`: new `modules/organizers/` (`organizer-profile-response.schema.ts` — the one
-  "organizer profile over the wire" shape; `organizers.service.ts` —
-  `OrganizerServiceError`, `createOrganizerProfile`/`getOwnOrganizerProfile`/
-  `updateOrganizerProfile`, `toPublicOrganizerProfile`; `organizers.routes.ts` — `POST
-/me`, `GET /me`, `PATCH /me` under `/v1/organizers`, all `requireAuth`, identity from
-  `request.user.id` only; `organizers.routes.test.ts`). `routes/v1.ts` registers it.
-  General rate-limit tier (not an auth endpoint, same reasoning CR-013 used for
-  `users.me`).
-- Server-side validation: `name` trimmed 1-100 chars (required on create, optional on
-  update — omitting it on PATCH leaves it unchanged); `description` trimmed ≤500 chars,
-  independently omittable or nullable (clear) on both create and update.
-- `apps/web`: generalize `CabinetShell` to accept `navItems`; new `lib/cabinet/
-organizer-nav.ts`; new `app/organizer/{layout.tsx,page.tsx,profile/page.tsx}`; new
-  `features/organizer/profile/` module (`api.ts`, `nav.ts`,
-  `components/OrganizerProfileForm.tsx` — loads existing profile or shows a create form,
-  loading/error/duplicate-submit protection per `.claude/rules/frontend.md`,
-  `organizer-profile.test.tsx`). New `ORGANIZER_TERMS` in `packages/ui/src/
-terminology.ts`. Small additive CTA + new `CABINET_TERMS` entries on the existing `/me`
-  stub page.
+- `apps/web/src/lib/cabinet/types.ts`: new `DashboardWidget` descriptor type (`id`,
+  `order`, `Component`), alongside the existing `CabinetNavItem`.
+- `apps/web/src/features/organizer/profile/components/OrganizerProfileWidget.tsx`
+  (new): fetches `getOrganizerProfile()`; loading → `Skeleton`; 404
+  `organizer_profile_not_found` → `EmptyState` with a "create profile" link to
+  `/organizer/profile`; other error → `ErrorState`; success → `Card` showing name,
+  description (or nothing if absent — not a metric, no "—" placeholder needed), edit
+  link to `/organizer/profile`.
+- `apps/web/src/features/organizer/profile/nav.ts`: add `organizerProfileWidget: DashboardWidget` export alongside the existing `organizerProfileNavItem`.
+- `apps/web/src/lib/cabinet/organizer-widgets.ts` (new): `ORGANIZER_WIDGETS` registry,
+  same shape/sort convention as `organizer-nav.ts`.
+- `apps/web/src/app/organizer/page.tsx`: render `ORGANIZER_WIDGETS` as a grid instead
+  of the static stub `EmptyState`.
+- `packages/ui/src/terminology.ts`: new widget-specific `ORGANIZER_TERMS` entries
+  (dashboard widget empty/error/edit-link copy); retire the now-unused
+  `CABINET_TERMS.organizerHomeEmptyTitle/organizerHomeEmptyDescription` only if nothing
+  else references them (checked: nothing else does).
+- New test: `apps/web/src/features/organizer/profile/organizer-profile-widget.test.tsx`
+  covering loading/empty(404)/error/success states, same mocking pattern as the
+  existing `organizer-profile.test.tsx`.
 
 ## Acceptance criteria
 
-- Migration applies cleanly against the existing scratch DB (`coffee_ride_dev`); FK +
-  unique-index invariants hold (verified: a second `POST /v1/organizers/me` for the same
-  user is rejected, not just discouraged by the API).
-- `POST /v1/organizers/me`: no cookie → 401; valid cookie + unverified email → 403
-  `email_verification_required`; valid cookie + verified email + valid body → 201 with
-  the created profile; a second create for the same user → 409
-  `organizer_profile_already_exists`; invalid payload (empty/too-long name, too-long
-  description) → 400 `validation_error`.
-- `GET /v1/organizers/me`: no cookie → 401; no profile yet → 404
-  `organizer_profile_not_found`; profile exists → 200 with the current fields.
-- `PATCH /v1/organizers/me`: no cookie → 401; no profile yet → 404; valid cookie + valid
-  partial body → 200 with updated fields reflected in the response and a direct DB read;
-  omitted fields stay unchanged; `description` explicit `null` clears it; invalid payload
-  → 400.
-- CSRF check already covers `POST`/`PATCH` under `/v1` (verified in tests, not assumed —
-  same as CR-013).
-- Web: `/organizer/profile` — unauthenticated visit redirects to `/login` (shared shell);
-  authenticated with no organizer profile yet shows a create form; submitting creates the
-  profile and the same screen now shows it in edit mode; edits persist (verified via
-  reload); an unverified account sees a clear message instead of a generic error when
-  creation is blocked; duplicate-submit protected. `/organizer` (bare) does not 404 for
-  an authenticated user. `/me` gains a working link into `/organizer/profile`.
+- `/organizer` for an authenticated user with no `OrganizerProfile` yet shows a
+  "create profile" empty state linking to `/organizer/profile`, not a blank/generic
+  stub.
+- `/organizer` for an authenticated user with an existing `OrganizerProfile` shows its
+  name/description and a link to edit it.
+- A load failure other than "not found" shows a plain-language error, no stack
+  trace/status code.
+- Unauthenticated visit still redirects to `/login` (unchanged `CabinetShell`
+  behavior, not touched by this ticket).
 - `turbo run lint/typecheck/build/test` (run separately) all green; `format:check`/
   `lint:root` clean.
-- Live check: real Postgres + both dev servers — curl sequence (unauth 401, unverified
-  403, valid create 201, duplicate create 409, invalid payload 400, GET 200, PATCH 200
-  persisted) plus a real-browser walkthrough via the `browser-automation` skill.
+- Live check: real Postgres + both dev servers via the `browser-automation` skill —
+  no-profile state and existing-profile state both visually verified.
+- CR-016 explicitly NOT implemented this session; `docs/tasks.md` line for it stays
+  unchecked and unmodified, no code claims to satisfy it.
 
 ## Planned files
 
-- `packages/db/src/schema/organizer-profile.ts` (new), `schema/index.ts` (+export), new
-  migration.
-- `packages/types/src/domain/organizer-profile.ts` (new), `src/api/organizers.ts` (new),
-  `src/index.ts` (+exports).
-- `apps/api/src/modules/organizers/{organizer-profile-response.schema.ts,
-organizers.service.ts,organizers.routes.ts,organizers.routes.test.ts}` (new),
-  `apps/api/src/routes/v1.ts` (register).
-- `apps/web/src/components/cabinet/CabinetShell.tsx` (generalize: `navItems` prop),
-  `apps/web/src/app/me/layout.tsx` (pass `PARTICIPANT_NAV_ITEMS` explicitly now),
-  `apps/web/src/lib/cabinet/organizer-nav.ts` (new).
-- `apps/web/src/app/organizer/{layout.tsx,page.tsx,profile/page.tsx}` (new).
-- `apps/web/src/features/organizer/profile/{api.ts,nav.ts,
-components/OrganizerProfileForm.tsx,organizer-profile.test.tsx}` (new).
-- `apps/web/src/app/me/page.tsx` (+CTA link, additive).
-- `packages/ui/src/terminology.ts` (+`ORGANIZER_TERMS`, +`CABINET_TERMS` CTA entries).
-- `docs/api.md` (new Organizer section), `docs/database.md` (new entity description).
+- `apps/web/src/lib/cabinet/types.ts` (+`DashboardWidget`)
+- `apps/web/src/lib/cabinet/organizer-widgets.ts` (new)
+- `apps/web/src/features/organizer/profile/nav.ts` (+`organizerProfileWidget`)
+- `apps/web/src/features/organizer/profile/components/OrganizerProfileWidget.tsx` (new)
+- `apps/web/src/features/organizer/profile/organizer-profile-widget.test.tsx` (new)
+- `apps/web/src/app/organizer/page.tsx` (rewrite body)
+- `packages/ui/src/terminology.ts` (+widget terms, -2 now-dead stub terms)
+- `docs/changelog.md`, `.claude/context/project-state.md`,
+  `.claude/context/architecture-map.md`, `docs/tasks.md`, `docs/api.md` (only if
+  contract changes — expected: no contract change)
 
 ## Implementation progress
 
 - [x] Plan written (this file)
-- [x] `packages/db` schema + migration (`0003_shiny_susan_delgado.sql`), applied
-      to `coffee_ride_dev`
-- [x] `packages/types` contract additions
-- [x] `apps/api` organizers module + tests
-- [x] `packages/ui` `ORGANIZER_TERMS`/`CABINET_TERMS` additions
-- [x] `apps/web` CabinetShell generalization + organizer cabinet shell/nav + profile
-      feature + pages + `/me` CTA
-- [x] Full validation (`turbo run lint/typecheck/build/test` together,
-      `format:check`/`lint:root`)
-- [x] Live check via curl + `browser-automation`
+- [x] `apps/web` widget registry + component + page
+- [x] `packages/ui` terminology
+- [x] Tests
+- [x] Full validation
+- [x] Live check
 - [x] Context/docs updated (changelog, project-state, architecture-map,
-      known-issues, tasks.md, docs/api.md, docs/database.md)
+      tasks.md)
 - [x] `git diff`/`git status` reviewed
 
 ## Validation
 
-- `turbo run typecheck lint test build` (all 8 packages, run together against
-  a real `DATABASE_URL`): clean. `apps/api` 50 tests (was 38, +12), `apps/web`
-  31 tests (was 22, +9), `packages/ui` 85 tests (unchanged — no new component,
-  only terminology data), `packages/maps-2gis` 11 tests (unchanged) — all
-  green. `next build` compiles `/organizer` and `/organizer/profile` as new
-  static routes.
+- `turbo run typecheck lint test build` (all 9 packages, run together with a
+  real `DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`
+  — Docker Desktop is unavailable in this environment, same as noted
+  elsewhere; a local Homebrew Postgres with the same `coffee_ride_dev`
+  scratch DB CR-014 used was available instead): all 25 tasks green.
+  `apps/web` 35 tests (was 31, +4, all in the new
+  `organizer-profile-widget.test.tsx`); `apps/api` 50 tests (unchanged, no
+  `apps/api` file touched); `packages/ui` 85 tests (unchanged, terminology
+  data only). `next build` compiles `/organizer` cleanly.
 - `pnpm format:check` / `pnpm lint:root`: clean (after one `prettier --write`
-  pass this session caught by the same command).
-- Live check via curl against a real `apps/api` + the scratch Postgres
-  (`coffee_ride_dev`): no cookie → 401; unverified email → 403
-  `email_verification_required`; verify email → create 201; duplicate create →
-  409 `organizer_profile_already_exists`; empty name → 400 `validation_error`;
-  `GET` → 200; `PATCH` rename (description untouched) → 200; `PATCH` clear
-  description → 200 (`null`); mismatched `Origin` → 403
-  `csrf_origin_mismatch`. Final row cross-checked with a direct
-  `SELECT ... FROM organizer_profiles` — matched the HTTP responses exactly.
-- Live browser check via the `browser-automation` skill against a real
-  `next dev` server + the same `apps/api` (both on `localhost` with matching
-  `WEB_ORIGIN`, needed for the CSRF check to pass — the first attempt used
-  mismatched ports and correctly 403'd, confirming the CSRF check itself
-  works rather than being a bug): unauthenticated `/organizer/profile` →
-  redirected to `/login`; login → redirected to `/me`; `/me` showed the new
-  organizer CTA card; navigated into `/organizer/profile` — loaded in edit
-  mode, pre-filled with the account's existing `OrganizerProfile` (created via
-  the curl session above); edited the description, saved, saw
-  "Изменения сохранены."; reloaded and confirmed the new value persisted, not
-  just optimistic local state. No console errors beyond the expected
-  pre-login 401 on `/api/v1/auth/me`.
-- Every acceptance criterion from above is met.
+  pass this session on 4 files, caught by `format:check` itself).
+- Live check via the `browser-automation` skill against a real `next dev`
+  server + `apps/api`: registered + email-verified a fresh account (curl, no
+  verify-email screen exists yet); logged in through the browser; `/organizer`
+  with no `OrganizerProfile` showed the "Профиль организатора ещё не создан"
+  empty state with a working "Создать профиль" link to `/organizer/profile`;
+  created a profile through that existing form; revisited `/organizer` — the
+  widget now showed the profile summary (name, description) and a working
+  "Редактировать" link. Console errors: only the widget's own expected 404 on
+  `GET /v1/organizers/me` (the not-found case itself, not a bug) plus ordinary
+  Next dev-server hot-reload noise. Test account and its rows deleted from the
+  scratch DB afterward.
+- Every acceptance criterion from above is met, including "CR-016 explicitly
+  NOT implemented" — confirmed: no `apps/api` files touched, `docs/tasks.md`'s
+  CR-016 line is unchanged.
 
 ## Discovered issues
 
-Found and fixed during implementation (not left open):
-
-- `OrganizerProfileForm`'s success-message text was initially derived from
-  the `profile` state variable at render time (`profile ? saveSuccess :
-createSuccess`), but `setProfile(response.organizerProfile)` — called right
-  after a successful _create_ — already flips `profile` to non-null before
-  that render, so a fresh create showed the edit-mode success copy instead of
-  the create one. Caught by this ticket's own Vitest suite (a test asserting
-  the create-success text failed, showing the edit-success text instead)
-  before it ever reached the browser check. Fixed by capturing
-  `wasCreate = profile === null` before the request and setting an explicit
-  `successMessage` string from that captured value, not by re-deriving text
-  from `profile` after the state update.
-- This changelog/project-state's own prior "44 `apps/api` tests" figure for
-  CR-013 was stale — a direct count this session showed the actual pre-CR-014
-  total was 38. Corrected in this session's changelog/project-state entries
-  rather than silently carried forward.
-
-No open known-issue entries were created by fixing these. One existing known
-issue was widened, not duplicated: KI-023 (avatar/photo upload deferred to
-the S3 pipeline) now explicitly covers `OrganizerProfile` too, since CR-014
-hit the identical gap and scoped it out the same way CR-013 did for `User`.
+None found this session — no bugs surfaced by the widget's own test suite or
+the live browser check.
 
 ## Final result
 
-CR-014 complete. `POST`/`GET`/`PATCH /v1/organizers/me` implemented,
-creation gated on a verified email and capped at one profile per user.
-`/organizer/profile` (create-or-edit in one screen) and a minimal `/organizer`
-stub built on a newly-generalized `CabinetShell` shared with the participant
-cabinet, plus the first real ADR-009 organizer nav registry and a discoverability
-CTA on `/me`. All acceptance criteria met, full validation suite green, live-
-verified end to end over both curl and a real browser session. One real bug
-(success-message text picking the wrong branch after `setProfile`) found and
-fixed by this ticket's own tests, not deferred. `docs/tasks.md`,
-`docs/changelog.md`, `.claude/context/project-state.md`,
-`.claude/context/architecture-map.md`, `.claude/context/known-issues.md`,
-`docs/api.md`, `docs/database.md` all updated. Not yet committed — `git
-diff`/`git status` reviewed next; pre-existing unrelated pending changes
-(`docs/product.md`) and this session's own unrelated `.mcp.json`/
-`skills-lock.json` additions (from earlier in this conversation, not this
-ticket) again left untouched and out of scope.
+CR-015 complete. `/organizer` now renders a real ADR-009 `DashboardWidget`
+registry (`lib/cabinet/organizer-widgets.ts`) instead of CR-014's static stub,
+with one widget — a read-only `OrganizerProfile` summary reusing CR-014's
+existing `GET /v1/organizers/me` client, no new API endpoint or contract
+change. CR-016 ("Organizer authorization") was deliberately NOT done in this
+pass, after confirming with the repository (not chat memory) and two sibling
+Claude sessions that no prior plan to combine it with CR-015 existed, and that
+CR-016 is documented as blocked on `Ride`/CR-017+ — there is nothing
+organizer-owned yet for an ownership check to protect. All acceptance
+criteria met, full validation suite green, live-verified end to end via a
+real browser session. `docs/tasks.md`, `docs/changelog.md`,
+`.claude/context/project-state.md`, `.claude/context/architecture-map.md` all
+updated; `docs/api.md`/`docs/database.md` untouched (no contract/schema
+change this ticket). Not yet committed — `git diff`/`git status` reviewed
+next; pre-existing unrelated pending changes (`docs/product.md`,
+`.mcp.json`, `skills-lock.json`) left untouched and out of scope, same as
+CR-014 left them.

@@ -1,3 +1,5 @@
+import type { ComponentType } from 'react';
+
 // ADR-009 / `.claude/rules/extensibility.md`: cabinet features register a
 // descriptor into a shared list instead of the shell branching per feature.
 // This is the descriptor shape both the participant and (later) organizer
@@ -8,4 +10,19 @@ export interface CabinetNavItem {
   /** Lower sorts first. Leave gaps (10, 20, 30, ...) so a future feature can
    * slot in between without renumbering existing ones. */
   order: number;
+}
+
+// CR-015: same registration-over-branching pattern as `CabinetNavItem`, for
+// dashboard widgets (`docs/design.md` §8: "Dashboard (widgets from the ADR-009
+// registry)"). Deliberately minimal — no feature-flag field yet; CR-054 is the
+// ticket that generalizes this (and the nav registry) with flags across both
+// cabinets, not this one. A feature owns its own data fetching/loading/error
+// states inside `Component`; the registry only orders it on the page.
+export interface DashboardWidget {
+  /** Unique within one registry — used as the React list key. */
+  id: string;
+  /** Lower sorts first. Leave gaps (10, 20, 30, ...), same convention as
+   * `CabinetNavItem.order`. */
+  order: number;
+  Component: ComponentType;
 }

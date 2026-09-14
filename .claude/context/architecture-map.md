@@ -249,6 +249,25 @@ entries (nav label, CTA copy, `/organizer` stub copy) — no new components; thi
 screen reuses `Input`/`Textarea`/`FormField`/`Button`/`Card`/`Skeleton`/
 `ErrorState` as-is.
 
+`/organizer`'s stub `EmptyState` became a real dashboard (CR-015, 2026-09-14,
+`docs/design.md` §8: "Dashboard (widgets from the ADR-009 registry)"). New
+`DashboardWidget` descriptor (`apps/web/src/lib/cabinet/types.ts`, alongside
+`CabinetNavItem`: `id`/`order`/`Component`) and `lib/cabinet/organizer-widgets.ts`
+registry — deliberately minimal, no feature-flag field; CR-054 ("Feature registry
+for dashboard nav/widgets ... + feature flags", still open) is the ticket that
+generalizes this across both cabinets, not this one. One widget registers so far:
+`features/organizer/profile/components/OrganizerProfileWidget.tsx`
+(`organizerProfileWidget` in that feature's `nav.ts`, same file the nav-item
+descriptor already lived in) — a read-only summary of the same `OrganizerProfile`
+CR-014 built, reusing `getOrganizerProfile()` as-is, no new API endpoint. No
+ride-related widget exists yet — `Ride` isn't in the schema until CR-017+, so
+there is nothing else organizer-owned to summarize.
+
+CR-016 ("Organizer authorization") was explicitly NOT started this session —
+confirmed still blocked on `Ride`/CR-017+ existing (nothing organizer-owned to
+protect an ownership check against yet); `docs/tasks.md` line for it is
+untouched.
+
 ## Target structure
 
 apps/

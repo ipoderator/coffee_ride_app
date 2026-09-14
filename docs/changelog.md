@@ -1798,3 +1798,85 @@ UI) — no console errors beyond the expected pre-login 401 on
 
 Follow-up: CR-015 (Organizer dashboard) is next per `docs/tasks.md`'s
 Organizer section order.
+
+## 2026-09-14 — CR-015 — Organizer dashboard
+
+Summary: `/organizer` (a static `EmptyState` stub since CR-014) now renders a
+real ADR-009 widget registry, per `docs/design.md` §8: "Dashboard (widgets
+from the ADR-009 registry)".
+
+The user asked to do this together with CR-016 ("Organizer authorization") in
+one pass. Checked the repository first (`.claude/CLAUDE.md`'s non-negotiable
+rule) and two sibling Claude sessions running on the same machine — no prior
+plan for combining them existed anywhere, in chat or in the repo. CR-014's
+own changelog entry and `.claude/context/project-state.md` already say CR-016
+is blocked on `Ride` (CR-017+): there is no organizer-owned resource in the
+schema yet for an ownership check to protect. Per the user's own instruction
+to follow the plan as it was originally documented, this session did CR-015
+alone; CR-016 stays unchecked and unmodified in `docs/tasks.md`.
+
+`docs/tasks.md` also separately lists CR-054 ("Feature registry for dashboard
+nav/widgets ... + feature flags") as the ticket that generalizes the nav/
+widget registry pattern across both cabinets with flag support. CR-015 does
+not anticipate that — same "build the minimal real thing now" discipline
+CR-013 used for the nav registry itself before CR-054 existed. New
+`DashboardWidget` descriptor (`apps/web/src/lib/cabinet/types.ts`, same shape
+as `CabinetNavItem`: `id`/`order`/`Component`) and a small, organizer-only
+`ORGANIZER_WIDGETS` registry (`lib/cabinet/organizer-widgets.ts`) — no feature
+flags, no participant-side change.
+
+Only one organizer-owned data source exists in the schema today —
+`OrganizerProfile` (CR-014) — so the only honest widget this ticket could
+build is a read-only summary of it: `OrganizerProfileWidget`
+(`features/organizer/profile/components/`, registered via
+`organizerProfileWidget` in that feature's existing `nav.ts`, alongside its
+nav-item descriptor). Reuses `getOrganizerProfile()` as-is — no new API
+endpoint, no contract change. States: loading (`Skeleton`), no profile yet
+(`EmptyState` + a "Создать профиль" link to `/organizer/profile`, keyed off
+the existing `organizer_profile_not_found` 404), any other load failure
+(`ErrorState`, inline), success (`Card` with name, description when present,
+and a "Редактировать" link). No ride-related widget — `Ride` doesn't exist
+until CR-017+; a placeholder widget for it would have been exactly the kind
+of speculative building CR-014's own scoping notes avoided elsewhere.
+
+`/organizer/page.tsx` now maps `ORGANIZER_WIDGETS` into a grid instead of the
+CR-014 stub `EmptyState`, keeping that `EmptyState` only as a defensive
+fallback for an empty registry (unreachable today — one widget always
+registers). `packages/ui/src/terminology.ts` gained widget-specific
+`ORGANIZER_TERMS` entries and two generic `CABINET_TERMS` entries
+(`dashboardNoWidgetsTitle`/`Description`, replacing the now-dead
+`organizerHomeEmptyTitle`/`organizerHomeEmptyDescription` stub copy — checked
+nothing else referenced them before removing).
+
+Decisions: none new at the ADR level.
+
+Known limitations: unchanged from CR-014 — no public `GET /v1/organizers/:id`
+yet; organizer capability still has no server-side authorization check to
+_exercise_ (CR-016, confirmed still blocked on `Ride`/CR-017+, not started
+this session); `ORGANIZER_WIDGETS` has exactly one entry and no feature-flag
+support, same as `ORGANIZER_NAV_ITEMS` — CR-054 generalizes both.
+
+Validation: `turbo run typecheck lint test build` (all 9 packages, run
+together against a real `DATABASE_URL`) clean. `apps/api` 50 tests
+(unchanged — no `apps/api` file touched this ticket), `apps/web` 35 tests
+(was 31, +4, all in the new
+`organizer-profile-widget.test.tsx`), `packages/ui` 85 tests (unchanged — no
+new component, only terminology data). `format:check`/`lint:root` clean
+(after one `prettier --write` pass this session caught by the same command).
+`next build` compiles `/organizer` cleanly with the new widget grid. Live-
+verified via the `browser-automation` skill against a real `next dev` server
+and `apps/api`: registered and email-verified a fresh account (via curl, since
+no verify-email screen exists yet — unchanged from CR-014), logged in through
+the browser, visited `/organizer` with no `OrganizerProfile` yet — saw the
+"Профиль организатора ещё не создан" empty state with a working "Создать
+профиль" link; created a profile through the existing `/organizer/profile`
+form; revisited `/organizer` — saw the populated widget (name, description,
+working "Редактировать" link). No console errors beyond the widget's own
+expected 404 fetch (the "not found" case being exercised, not a bug) and
+ordinary Next dev-server hot-reload noise. Test account and its data deleted
+from the scratch DB afterward.
+
+Follow-up: CR-016 (Organizer authorization) stays blocked until `Ride`
+(CR-017, "Create ride") exists — that is the next logical Rides-section
+ticket per `docs/tasks.md`'s order, and the ticket that will finally give
+CR-016 something organizer-owned to check ownership against.
