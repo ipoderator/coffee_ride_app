@@ -146,7 +146,14 @@ rewrite, not a polish pass.
 
 ## Rides
 
-- [ ] CR-017 Create ride
+- [x] CR-017 Create ride — done 2026-09-14: first `Ride` table (`packages/db`,
+      owned by `OrganizerProfile`, ADR-006), `POST /v1/rides`
+      (`apps/api/src/modules/rides`, requires an `OrganizerProfile`, creates a
+      minimal `draft` — only `title`/`bicycleType`/`startsAt`/`startTimezone`,
+      everything else `null` until CR-018), `/organizer/rides/new` screen
+      (`apps/web`). Moved `RideStatus`/`BicycleType`/`DifficultyLevel` from
+      `packages/ui` to `packages/types` (architecture fix — `apps/api` can't
+      depend on `packages/ui`). See `docs/changelog.md`.
 - [ ] CR-018 Edit draft
 - [ ] CR-019 Publish ride
 - [ ] CR-020 Close registration

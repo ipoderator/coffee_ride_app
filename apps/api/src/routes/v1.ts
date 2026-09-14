@@ -3,13 +3,14 @@ import type { Env } from '../env.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
 import { usersRoutes } from '../modules/users/users.routes.js';
 import { organizersRoutes } from '../modules/organizers/organizers.routes.js';
+import { ridesRoutes } from '../modules/rides/rides.routes.js';
 import { registerCsrf } from '../plugins/csrf.js';
 
 // Versioned root (ADR-011): every product endpoint lives under /v1. Future
-// feature modules (rides, routes, registrations, ...) register themselves
-// here too, one per capability (.claude/rules/architecture.md), instead of
-// every route living in this file. First real modules: auth (CR-011), users
-// (CR-013), organizers (CR-014).
+// feature modules (routes, registrations, ...) register themselves here too,
+// one per capability (.claude/rules/architecture.md), instead of every route
+// living in this file. First real modules: auth (CR-011), users (CR-013),
+// organizers (CR-014), rides (CR-017).
 export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   app,
   opts,
@@ -25,4 +26,5 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   await app.register(authRoutes, { prefix: '/auth', env: opts.env });
   await app.register(usersRoutes, { prefix: '/users' });
   await app.register(organizersRoutes, { prefix: '/organizers' });
+  await app.register(ridesRoutes, { prefix: '/rides' });
 };

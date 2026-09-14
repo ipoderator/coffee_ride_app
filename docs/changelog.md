@@ -1880,3 +1880,127 @@ Follow-up: CR-016 (Organizer authorization) stays blocked until `Ride`
 (CR-017, "Create ride") exists — that is the next logical Rides-section
 ticket per `docs/tasks.md`'s order, and the ticket that will finally give
 CR-016 something organizer-owned to check ownership against.
+
+## 2026-09-14 — CR-017 — Create ride
+
+Summary: the first `Ride` entity ticket — `docs/design.md` §8:
+`/organizer/rides/new` "Create ride". User asked to continue "per the
+original plan"; per CR-015's own follow-up note, that meant CR-017, since
+CR-016 ("Organizer authorization") stays blocked until this ticket's `Ride`
+table exists.
+
+Scope decision (full rationale in `.claude/context/current-task.md`): CR-017
+creates a _minimal, valid draft_, not a fully-configured ride — `docs/design.md`
+§8 lists a separate "Edit draft" screen (CR-018) and `docs/product.md`'s MVP
+capability #3 ("ride creation/edit/publish") already spans three tickets. Only
+`title`/`bicycleType`/`startsAt`/`startTimezone` are required at creation;
+every other scalar field the table has room for (`description`, capacity,
+price, distance/duration/pace/elevation, difficulty, cover image) is nullable,
+filled in by CR-018. Route/stops/services/requirements are not this table at
+all — `docs/product.md`'s MVP list keeps "ride creation/edit/publish" (#3)
+distinct from "GPX route" (#5) and "stops/services/requirements" (#6);
+`RideRequirement`/`RideService` have no CR number yet (same "not yet
+scheduled" gap KI-021 already flagged for the services enum).
+
+Ownership: `docs/database.md` says `Ride` is owned by `OrganizerProfile`
+(written after CR-014), not directly by `User` — ADR-006's older
+"`ride.organizerId === session.userId`" phrasing predates that decision. The
+real FK is `rides.organizer_id -> organizer_profiles.id`; identity still
+traces only to the session (never a client-supplied id) by resolving the
+caller's own `OrganizerProfile` server-side, same pattern CR-014 uses for
+`emailVerified`. Creating a ride requires the caller to already have one —
+403 `organizer_profile_required` otherwise (mirrors CR-014's
+`email_verification_required` UX). This is deliberately NOT CR-016: that
+ticket checks ownership of an _already-existing_ ride on a later mutation
+(edit/publish/cancel); CR-017 only establishes ownership at creation.
+
+Architecture fix discovered and fixed in this ticket (not a new ADR): `RideStatus`/
+`BicycleType`/`DifficultyLevel` (CR-064) lived in `packages/ui/src/terminology.ts`,
+but `apps/api` needed the same enums for Zod validation and `packages/db` the
+same value lists for its Postgres enums — and `apps/api` must never depend on
+`packages/ui` (`.claude/rules/architecture.md`). Moved the type/value-list
+definitions to `packages/types/src/domain/ride.ts`; `packages/ui` now depends
+on `types` (previously had zero such dependency) and re-exports the types
+unchanged, keeping only the Russian label maps. No behavior change — this was
+heading toward `.claude/CLAUDE.md`'s "do not create duplicate concepts" the
+moment a second copy got invented for `apps/api`/`packages/db`.
+
+Timezone: ADR-012 requires the instant plus the ride's IANA start zone.
+Server-side Zod validation is loose (any zone `Intl.DateTimeFormat` accepts,
+same tier as CR-013's phone check); the web picker is narrower —
+`RUSSIAN_TIMEZONE_OPTIONS` (`packages/ui`), the 11 real Russian IANA zones
+with city labels, matching ADR-012's own "Russia spans eleven offsets" framing,
+not a raw ~400-entry `Intl.supportedValuesOf` dump. Converting the organizer's
+entered local wall-clock time + chosen zone into the correct UTC instant
+needed real zone-offset math — no timezone library exists as a dependency
+anywhere in this repo — so a small utility,
+`apps/web/src/lib/datetime/zoned-time.ts` (`zonedTimeToUtcIso`), was added and
+unit-tested against Europe/Moscow (UTC+3), Asia/Krasnoyarsk (UTC+7), Europe/
+Kaliningrad (UTC+2), and Asia/Vladivostok (UTC+10) — all DST-free year-round
+(Russia abolished DST in 2014), so no DST-transition edge case exists for this
+product's real target zones.
+
+Discoverability: no ticket yet builds `docs/design.md` §8's `/organizer/rides`
+"My rides" list — flagged as a new known issue (KI-024), not silently worked
+around. Added `organizerRidesNavItem` ("Заезды" → `/organizer/rides/new`) as a
+stopgap nav entry, same discipline as CR-013/014's stub screens; superseded
+once the real list lands. Post-create UX is self-contained (an inline success
+card showing the created ride's title/status/bicycle type/start time via
+`MetricTile`/`StatusBadge`) rather than linking to an edit/detail screen that
+doesn't exist yet.
+
+Files: `packages/types/src/domain/ride.ts` (new — `RIDE_STATUSES`/`RideStatus`,
+`BICYCLE_TYPES`/`BicycleType`, `DIFFICULTY_LEVELS`/`DifficultyLevel`, `Ride`),
+`src/api/rides.ts` (new — `createRideRequestSchema`, IANA-zone `refine`),
+`src/index.ts` (+exports); `packages/ui/package.json` (+`types` dependency),
+`src/terminology.ts` (re-exports the 3 moved types, +`RUSSIAN_TIMEZONE_OPTIONS`, +`RIDE_CREATE_TERMS`); `packages/db/src/schema/ride.ts` (new — `rides` table,
+`ride_status`/`bicycle_type` pg enums, 7 CHECK constraints), `schema/index.ts`
+(+export), migration `0004_sleepy_garia.sql`, applied to `coffee_ride_dev`;
+`apps/api/src/modules/rides/{ride-response.schema.ts,rides.service.ts,
+rides.routes.ts,rides.routes.test.ts}` (new), `routes/v1.ts` (register);
+`apps/web/src/lib/datetime/zoned-time.ts` (new, +test),
+`src/features/organizer/rides/{api.ts,nav.ts,components/CreateRideForm.tsx,
+rides.test.tsx}` (new), `app/organizer/rides/new/page.tsx` (new),
+`lib/cabinet/organizer-nav.ts` (+entry); `docs/api.md`/`docs/database.md`
+(new `Ride` sections).
+
+Decisions: none new at the ADR level — the ownership-model and type-ownership
+points above are documented here and in `.claude/context/current-task.md`,
+not `docs/decisions.md` (corrections/clarifications of existing ADRs, not new
+architectural decisions).
+
+Known limitations: new — `RideRequirement`/`RideService` still have no CR
+number (KI-021's sibling gap, now explicitly also true for the requirements
+entity); no `GET /v1/rides`/`GET /v1/rides/:id` yet (CR-018+ needs at least
+one to load a draft back for editing); no "My rides" list screen (KI-024, new);
+`Ride.coverImageUrl` joins the KI-023 S3-pipeline-deferred gap a third time,
+not a new one; CR-016 remains genuinely startable now that `Ride` exists, but
+was not started this session (user's own instruction was to follow the
+already-documented plan, which keeps CR-016 as its own ticket after CR-018+
+gives it a mutation to protect, not CR-017's creation-only endpoint).
+
+Validation: `turbo run typecheck lint test build` (all 9 packages, run
+together against a real `DATABASE_URL`) clean. `apps/api` gained 8 new tests
+(58 total, was 50); `apps/web` gained 9 new tests (44 total, was 35 — 5 in
+`rides.test.tsx`, 4 in `zoned-time.test.ts`); `packages/ui`/`packages/types`
+unaffected in test count (type-ownership move only). `format:check`/
+`lint:root` clean (after one `prettier --write` pass this session).
+`next build` compiles `/organizer/rides/new` cleanly. Live-verified end to
+end: curl sequence against a real Postgres + running `apps/api` (unauth 401 →
+no-organizer-profile 403 → create organizer profile → valid create 201,
+cross-checked against a direct DB read showing the correct stored UTC instant
+→ empty title 400 → invalid bicycleType 400 → invalid timezone 400 →
+mismatched-Origin 403); full browser flow via the `browser-automation` skill
+against a real `next dev` server (unauthenticated redirect to `/login`; login;
+form defaults confirmed — Гравийный/Москва; filled Красноярск (UTC+7) + 18:30
+local; submitted; success view showed the correct LOCAL time back — "15 июня
+2027 18:30", not UTC-shifted; nav showed the new "Заезды" entry) — a second,
+independent direct-DB check confirmed the stored instant (`14:30:00+03` =
+`11:30 UTC`) matches 18:30 Krasnoyarsk exactly. No console errors beyond the
+expected pre-login 401. Test accounts/rides deleted from the scratch DB
+afterward.
+
+Follow-up: CR-018 (Edit draft) is next per `docs/tasks.md`'s Rides section
+order — needs at least a `GET /v1/rides/:id` to load a draft back, and per
+KI-024 will hit the "no My rides list" gap unless that ticket is scheduled
+first.

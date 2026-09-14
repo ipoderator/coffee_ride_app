@@ -83,16 +83,28 @@ also accepts explicit `null` to clear it; `name` cannot be cleared (`NOT
 NULL`). `200` → `{ organizerProfile }`. `400 validation_error` on an invalid
 field.
 
-No public `GET /v1/organizers/:id` yet — nothing reads organizer data
-publicly until `Ride` exists; deferred to whichever ride ticket first needs
-to embed organizer info in a ride response.
+No public `GET /v1/organizers/:id` yet — `Ride` exists (CR-017) but no ride
+read endpoint does yet, so nothing embeds organizer info in a response
+publicly; deferred to whichever ride ticket first needs to.
 
 ## Rides
 
-GET `/v1/rides` — collection, paginated
+POST `/v1/rides` — **implemented (CR-017)**. Requires a valid session cookie
+(`401` otherwise) and an existing `OrganizerProfile` (`403
+organizer_profile_required` otherwise — mirrors `POST /v1/organizers/me`'s
+`email_verification_required` gate/UX; not the same check as CR-016
+"Organizer authorization", which is about an _existing_ ride's ownership on a
+later mutation). Body: `{ title, bicycleType, startsAt, startTimezone }` —
+only what a minimal, valid draft needs (`.claude/context/current-task.md`);
+`title` 1-140 chars, `bicycleType` one of `road`/`gravel`/`mtb`/`any`,
+`startsAt` an ISO 8601 instant, `startTimezone` any IANA zone identifier.
+`201` → `{ ride }` with `status: 'draft'`, `organizerId` set to the caller's
+own profile, `updatedBy` set to the caller, and every other field `null`.
+`400 validation_error` on an invalid field.
+
+GET `/v1/rides` — collection, paginated — not yet implemented
 GET `/v1/rides/:id`
-POST `/v1/rides`
-PATCH `/v1/rides/:id`
+PATCH `/v1/rides/:id` — CR-018 "Edit draft"
 POST `/v1/rides/:id/publish`
 POST `/v1/rides/:id/close-registration`
 POST `/v1/rides/:id/cancel`

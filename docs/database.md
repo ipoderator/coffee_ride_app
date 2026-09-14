@@ -32,7 +32,27 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   one path), `description` (nullable, ≤500 chars), `createdAt`/`updatedAt`
   (`timestamptz`). Creation is gated on `User.emailVerified`
   (`.claude/rules/security.md`).
-- Ride — cycling event owned by OrganizerProfile.
+- Ride — cycling event owned by OrganizerProfile (CR-017 landed the table; CR-018+
+  fill most of it in). `id`, `organizerId` (FK → OrganizerProfile, `ON DELETE
+RESTRICT` — losing every ride a profile owns as a side effect of some future
+  profile-delete feature would be real data loss), `title` (not null, 1-140
+  chars), `description` (nullable, ≤5000 chars, CR-018), `coverImageUrl`
+  (nullable, deferred to the S3 pipeline like KI-023), `bicycleType` (not null,
+  pg enum `road`/`gravel`/`mtb`/`any`), `startsAt` (`timestamptz`, not null) +
+  `startTimezone` (IANA identifier, not null, ADR-012 §2), `participantLimit`
+  (nullable int, CHECK `>= 1`), `priceRub` (nullable int, CHECK `>= 0`),
+  `distanceKm` (nullable numeric(6,1), CHECK `>= 0`), `elevationGainMeters`
+  (nullable int, CHECK `>= 0`), `paceKmh` (nullable numeric(4,1), CHECK `>= 0`),
+  `durationMinutes` (nullable int, CHECK `>= 0`), `difficulty` (nullable int,
+  CHECK `1-5`), `status` (not null, pg enum matching the Lifecycle section
+  above, default `draft`), `createdAt`/`updatedAt` (`timestamptz`),
+  `updatedBy` (nullable FK → User, `ON DELETE SET NULL` — audit trail,
+  `.claude/rules/security.md`). CR-017 ("Create ride") only ever sets
+  `organizerId`/`title`/`bicycleType`/`startsAt`/`startTimezone`/`status`
+  (`draft`) — every other column stays `null` until CR-018 ("Edit draft") fills
+  it in; see `.claude/context/current-task.md` for the create/edit split
+  rationale. `RideRequirement`/`RideService` (below) and `Route`/`RoutePoint`/
+  `Stop` are separate tables, not columns here.
 - Route — route geometry and metadata.
 - RoutePoint — start/finish/stop/danger/water/food/technical/other.
 - Stop — named planned stop with location and duration.

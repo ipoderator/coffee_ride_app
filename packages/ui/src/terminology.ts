@@ -2,27 +2,31 @@
 // for user-visible strings derived from a domain enum — the database keeps English
 // enums, the UI maps through here. Do not invent synonyms per screen.
 
-export type StatusTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger';
+import type { BicycleType, DifficultyLevel, RideStatus } from 'types';
 
-/**
- * Ride lifecycle status. Enum keys match `docs/product.md`'s lifecycle exactly:
- * `draft → published → registration_open → registration_closed → started → finished`,
- * with `cancelled` reachable from `published`/`registration_open`/`registration_closed`.
- */
-export type RideStatus =
-  | 'draft'
-  | 'published'
-  | 'registration_open'
-  | 'registration_closed'
-  | 'started'
-  | 'finished'
-  | 'cancelled';
+// `RideStatus`/`BicycleType`/`DifficultyLevel` themselves moved to `packages/types`
+// (CR-017, `.claude/context/current-task.md`): `apps/api` needs the same enums for
+// Zod validation and `packages/db` needs the same value lists for its Postgres enums,
+// but `apps/api` must never depend on `packages/ui`
+// (`.claude/rules/architecture.md`). Re-exported here so nothing inside `packages/ui`
+// that imported these types from this module before CR-017 has to change its import
+// path. Only the Russian label maps below are genuinely UI-layer and stay defined
+// here.
+export type { BicycleType, DifficultyLevel, RideStatus };
+
+export type StatusTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger';
 
 export interface RideStatusTerm {
   label: string;
   tone: StatusTone;
 }
 
+/**
+ * Ride lifecycle status labels. Enum keys match `docs/product.md`'s lifecycle
+ * exactly: `draft → published → registration_open → registration_closed → started →
+ * finished`, with `cancelled` reachable from `published`/`registration_open`/
+ * `registration_closed`.
+ */
 export const RIDE_STATUS_TERMS: Record<RideStatus, RideStatusTerm> = {
   draft: { label: 'Черновик', tone: 'neutral' },
   published: { label: 'Опубликован', tone: 'success' },
@@ -33,9 +37,8 @@ export const RIDE_STATUS_TERMS: Record<RideStatus, RideStatusTerm> = {
   cancelled: { label: 'Отменён', tone: 'danger' },
 };
 
-/** Bicycle type. Enum keys match `docs/product.md` §Ride (`road, gravel, MTB, any`). */
-export type BicycleType = 'road' | 'gravel' | 'mtb' | 'any';
-
+/** Bicycle type labels. Enum keys match `docs/product.md` §Ride (`road, gravel, MTB,
+ * any`). */
 export const BICYCLE_TYPE_TERMS: Record<BicycleType, string> = {
   road: 'Шоссейный',
   gravel: 'Гравийный',
@@ -91,13 +94,11 @@ export const METRIC_TERMS = {
 } as const;
 
 /**
- * Difficulty scale (`docs/design.md` §6, CR-065). A plain 1-5 integer, not a DB enum —
- * no provisional-key concern like {@link RideServiceKey}'s. Rendered as filled/empty
- * segments **plus** this word, never a color gradient and never color alone
- * (`DifficultyScale`).
+ * Difficulty scale labels (`docs/design.md` §6, CR-065). A plain 1-5 integer, not a
+ * DB enum — no provisional-key concern like {@link RideServiceKey}'s. Rendered as
+ * filled/empty segments **plus** this word, never a color gradient and never color
+ * alone (`DifficultyScale`).
  */
-export type DifficultyLevel = 1 | 2 | 3 | 4 | 5;
-
 export const DIFFICULTY_LEVEL_TERMS: Record<DifficultyLevel, string> = {
   1: 'Лёгкий',
   2: 'Ниже среднего',
@@ -235,4 +236,57 @@ export const ORGANIZER_TERMS = {
     'Создайте профиль, чтобы публиковать заезды под своим именем.',
   dashboardWidgetCreateLink: 'Создать профиль',
   dashboardWidgetEditLink: 'Редактировать',
+} as const;
+
+export interface TimezoneOption {
+  /** IANA identifier, e.g. `Asia/Krasnoyarsk` — what actually gets stored/sent
+   * (ADR-012 §2). */
+  value: string;
+  /** Russian city name, e.g. `Красноярск (UTC+7)` — what the organizer picks from. */
+  label: string;
+}
+
+/**
+ * The 11 real Russian IANA timezones (CR-017, ADR-012: "Russia spans eleven
+ * offsets"), not a raw `Intl.supportedValuesOf('timeZone')` dump (~400 entries) —
+ * `docs/product.md`'s market/locale is Russian specifically, so the picker is scoped
+ * to what an organizer here actually needs. None of these observe DST (Russia
+ * abolished it in 2014), so each offset is fixed year-round. Server-side validation
+ * (`packages/types`' `createRideRequestSchema`) stays loose and accepts any IANA zone
+ * `Intl` recognizes — this list is a UI convenience, not the API contract.
+ */
+export const RUSSIAN_TIMEZONE_OPTIONS: readonly TimezoneOption[] = [
+  { value: 'Europe/Kaliningrad', label: 'Калининград (UTC+2)' },
+  { value: 'Europe/Moscow', label: 'Москва (UTC+3)' },
+  { value: 'Europe/Samara', label: 'Самара (UTC+4)' },
+  { value: 'Asia/Yekaterinburg', label: 'Екатеринбург (UTC+5)' },
+  { value: 'Asia/Omsk', label: 'Омск (UTC+6)' },
+  { value: 'Asia/Krasnoyarsk', label: 'Красноярск (UTC+7)' },
+  { value: 'Asia/Irkutsk', label: 'Иркутск (UTC+8)' },
+  { value: 'Asia/Yakutsk', label: 'Якутск (UTC+9)' },
+  { value: 'Asia/Vladivostok', label: 'Владивосток (UTC+10)' },
+  { value: 'Asia/Magadan', label: 'Магадан (UTC+11)' },
+  { value: 'Asia/Kamchatka', label: 'Камчатка (UTC+12)' },
+];
+
+/** `/organizer/rides/new` (CR-017, `docs/design.md` §8 "Create ride"). Only the
+ * fields a valid draft needs at creation — see `.claude/context/current-task.md`. */
+export const RIDE_CREATE_TERMS = {
+  pageTitle: 'Новый заезд',
+  titleLabel: 'Название',
+  titleHint: 'До 140 символов.',
+  bicycleTypeLabel: 'Тип велосипеда',
+  startsAtLabel: 'Дата и время старта',
+  startsAtRequired: 'Укажите дату и время старта.',
+  startTimezoneLabel: 'Часовой пояс старта',
+  summaryBicycleTypeLabel: 'Тип велосипеда',
+  summaryStartLabel: 'Старт',
+  submit: 'Создать черновик',
+  submitPending: 'Создание…',
+  organizerProfileRequired:
+    'Чтобы создать заезд, сначала создайте профиль организатора.',
+  createOrganizerProfileLink: 'Создать профиль организатора',
+  loadError: 'Не удалось создать заезд. Попробуйте ещё раз.',
+  successTitle: 'Черновик заезда создан',
+  backToDashboard: 'Вернуться в кабинет',
 } as const;

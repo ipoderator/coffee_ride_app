@@ -268,6 +268,39 @@ confirmed still blocked on `Ride`/CR-017+ existing (nothing organizer-owned to
 protect an ownership check against yet); `docs/tasks.md` line for it is
 untouched.
 
+`packages/db` gained its **fourth table**, and the first fixed domain entity
+`Ride` (CR-017, 2026-09-14, `docs/database.md`: owned by `OrganizerProfile`,
+`organizer_id` FK `ON DELETE RESTRICT`). Scoped to "Create ride" only — a
+minimal valid draft (`title`/`bicycleType`/`startsAt`/`startTimezone`/
+`organizerId`/`status` NOT NULL, everything else nullable pending CR-018 "Edit
+draft"; see `.claude/context/current-task.md` for the full create/edit split
+rationale). Two new pg enums (`ride_status`, `bicycle_type`) and seven CHECK
+constraints (every nullable numeric field's lower bound, difficulty's 1-5
+range) enforce invariants at the DB level per `.claude/rules/database.md`.
+`apps/api` gained its **fourth capability module**, `modules/rides/` (`POST
+/v1/rides`, `requireAuth`, resolves the caller's own `OrganizerProfile`
+server-side — 403 `organizer_profile_required` if none — and sets
+`updatedBy`/`organizerId` from the session, never a client-supplied id).
+`apps/web` gained `/organizer/rides/new` (`features/organizer/rides/`,
+`CreateRideForm` — a self-contained create-only screen, unlike
+`OrganizerProfileForm`'s create-or-edit pattern, since a fresh ride draft has
+nothing to load back) and a new organizer nav entry (`organizerRidesNavItem`,
+"Заезды") — a deliberate stopgap since no ticket yet builds the real
+`/organizer/rides` list `docs/design.md` §8 describes (KI-024).
+
+**Architecture fix, not a new decision:** `RideStatus`/`BicycleType`/
+`DifficultyLevel` (originally defined in `packages/ui/src/terminology.ts`,
+CR-064) moved to `packages/types/src/domain/ride.ts` — `apps/api` needed the
+same enums for Zod validation and `packages/db` for its pg enums, but
+`.claude/rules/architecture.md` forbids `api -> ui`. `packages/ui` gained
+`types` as a real dependency (previously had none) and now re-exports the
+three types from `terminology.ts` unchanged, keeping only the Russian label
+maps there. New shared, feature-independent utility:
+`apps/web/src/lib/datetime/zoned-time.ts` (`zonedTimeToUtcIso`) — converts a
+`datetime-local` input value + an IANA zone into the correct UTC instant, no
+timezone library dependency (Russia has no DST since 2014, so every zone
+`RUSSIAN_TIMEZONE_OPTIONS` offers has a fixed year-round offset).
+
 ## Target structure
 
 apps/

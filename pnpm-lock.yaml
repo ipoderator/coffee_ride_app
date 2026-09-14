@@ -308,6 +308,9 @@ importers:
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
+      types:
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       '@eslint/js':
         specifier: ^9.0.0

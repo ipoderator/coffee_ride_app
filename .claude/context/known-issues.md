@@ -347,8 +347,8 @@ adds `@fastify/helmet`. Revisit this entry once both land.
 
 ### KI-023 — Profile avatar/photo upload is not implemented
 
-Status: open. Discovered: 2026-09-14 (CR-013). Widened: 2026-09-14 (CR-014, same
-gap on a second entity).
+Status: open. Discovered: 2026-09-14 (CR-013). Widened: 2026-09-14 (CR-014,
+same gap on a second entity). Widened again: 2026-09-14 (CR-017, a third).
 Problem: `docs/design.md` §9 lists `Avatar` in `packages/ui`'s intended
 component inventory, and a profile screen conventionally includes a photo, but
 CR-013 shipped only text fields (`displayName`/`phone`/`bio`) — deliberately,
@@ -356,15 +356,40 @@ not an oversight. Uploading and serving an image needs the S3 pipeline
 (`apps/api/src/s3.ts`), which has never been connected to a live object store
 in this environment (KI-015) and has no consumer yet. CR-014's
 `OrganizerProfile` hit the identical gap (a logo/photo would be the natural
-public-facing image) and was scoped out the same way — not a second, separate
-issue.
-Impact: low — both profile screens are fully usable without a photo; every
+public-facing image) and was scoped out the same way; CR-017's `Ride` table
+already has a nullable `coverImageUrl` column (`docs/product.md`'s Ride
+fields list "cover image") with no way to set it yet — same gap a third time,
+not a new one.
+Impact: low — every affected screen is fully usable without a photo; every
 other field on each works end to end.
-Workaround: none needed — no UI currently expects an avatar/logo to exist.
+Workaround: none needed — no UI currently expects an avatar/logo/cover image
+to exist.
 Next action: build alongside CR-086 (cover image pipeline: size/type limits,
 resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
-exists — reuse it for both `User` and `OrganizerProfile` rather than building
-a separate upload path per entity.
+exists — reuse it for `User`, `OrganizerProfile`, and `Ride` rather than
+building a separate upload path per entity.
+
+### KI-024 — No `docs/tasks.md` ticket builds the organizer's "My rides" list
+
+Status: open. Discovered: 2026-09-14 (CR-017).
+Problem: `docs/design.md` §8 lists `/organizer/rides` ("My rides, grouped by
+status") as a real screen in the organizer cabinet, but no CR ticket in the
+Rides section (CR-017..CR-026) builds it — CR-023 "Ride detail" is the
+participant-facing `/rides/[id]` screen and CR-024 "Ride list" is the public
+discovery list at `/`, not this one. CR-017 needed a nav entry point into ride
+creation regardless, so `organizerRidesNavItem` ("Заезды") points straight at
+`/organizer/rides/new` as a stopgap (same discipline as CR-013/014's stub
+screens) — there is nowhere else for it to point yet.
+Impact: low today (CR-017 only creates rides, nothing to list yet) but grows
+with every ride-related ticket that lands without this screen — CR-018 ("Edit
+draft") in particular will have no way to navigate to an existing draft
+through the UI once more than one exists, only by knowing its id.
+Workaround: none needed yet — the nav entry still reaches the one ride
+screen that exists.
+Next action: a real CR ticket for `/organizer/rides` (list, grouped by
+status, each row linking into CR-018's edit screen) needs a number added to
+`docs/tasks.md`'s Rides section before CR-018 ships, or CR-018 inherits the
+same "no way to reach it" problem CR-017 avoided for itself.
 
 ---
 

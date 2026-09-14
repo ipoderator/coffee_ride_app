@@ -8,5 +8,7 @@ export * from './api/pagination.js';
 export * from './api/auth.js';
 export * from './api/users.js';
 export * from './api/organizers.js';
+export * from './api/rides.js';
 export * from './domain/user.js';
 export * from './domain/organizer-profile.js';
+export * from './domain/ride.js';

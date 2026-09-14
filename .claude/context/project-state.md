@@ -23,11 +23,15 @@ CR-011 (User registration) and CR-012 (Login/logout/session) also completed
 2026-09-13. CR-013 (Profile) completed 2026-09-14 — Auth phase (CR-011..CR-013)
 is now fully done except CR-058 (Redis-backed rate limiting)/CR-059 (organizer-
 publish email-verification gate)/CR-060 (password reset), all deliberately
-deferred. CR-014 (Organizer profile) and CR-015 (Organizer dashboard) also
-completed 2026-09-14. CR-016 (Organizer authorization) stays blocked on
-`Ride`/CR-017+ (nothing organizer-owned to protect yet — confirmed again this
-session, not started); CR-017 (Create ride) is next per `docs/tasks.md`'s
-Rides section order.
+deferred. CR-014 (Organizer profile), CR-015 (Organizer dashboard), and CR-017 (Create
+ride) also completed 2026-09-14. CR-016 (Organizer authorization) is now
+genuinely startable — `Ride` exists — but was deliberately not started this
+session (the user's instruction was to follow the already-documented plan,
+which keeps CR-016 as its own ticket once a _mutation_ on an existing ride
+needs an ownership check, not CR-017's creation-only endpoint). CR-018 (Edit
+draft) is next per `docs/tasks.md`'s Rides section order — KI-024 notes it
+will hit the "no My rides list screen" gap unless that gets a CR number
+first.
 
 ## Implemented
 
@@ -359,6 +363,59 @@ state with a working create link → created a profile through the existing
 with a working edit link — no console errors beyond the widget's own expected
 404 fetch (the not-found case itself) and ordinary dev-server noise.
 
+Create ride landed 2026-09-14 (CR-017, see `docs/changelog.md`): the first
+`Ride` table (`packages/db`, fourth table — owned by `OrganizerProfile`,
+`organizer_id` FK `ON DELETE RESTRICT`, two new pg enums, 7 CHECK
+constraints) and `POST /v1/rides` (`apps/api/src/modules/rides`, fourth
+capability module — requires the caller to already have an `OrganizerProfile`,
+403 `organizer_profile_required` otherwise). Scoped to a _minimal valid
+draft_: only `title`/`bicycleType`/`startsAt`/`startTimezone` are required —
+every other column (`description`, capacity, price, distance/duration/pace/
+elevation, difficulty, cover image) stays `null`, filled in by CR-018 ("Edit
+draft") — not this ticket, same "build the minimal real thing now" discipline
+prior CRs used. Route/stops/services/requirements are not this table at all;
+`RideRequirement`/`RideService` still have no CR number (KI-021's sibling
+gap). User asked to "continue per the original plan"; per CR-015's own
+follow-up, that meant CR-017 (CR-016 stays blocked until this ticket's
+`Ride` table exists — genuinely startable now, but deliberately not started
+this session, since CR-016 is about an ownership check on a _mutation_ of an
+existing ride, which only starts existing with CR-018).
+
+Architecture fix discovered and fixed in this ticket (not a new ADR):
+`RideStatus`/`BicycleType`/`DifficultyLevel` (CR-064) lived in
+`packages/ui/src/terminology.ts`, but `apps/api` needed the same enums for
+Zod validation and `packages/db` the same value lists for its Postgres
+enums — `apps/api` must never depend on `packages/ui`
+(`.claude/rules/architecture.md`). Moved to `packages/types/src/domain/
+ride.ts`; `packages/ui` now depends on `types` (previously had none) and
+re-exports the types unchanged from `terminology.ts`, keeping only the
+Russian label maps there.
+
+Timezone handling: ADR-012 needs the instant plus the ride's IANA start
+zone. Server validation is loose (any zone `Intl` recognizes); the web picker
+is narrower — `RUSSIAN_TIMEZONE_OPTIONS` (`packages/ui`), the 11 real Russian
+IANA zones, matching ADR-012's own "Russia spans eleven offsets" framing. New
+utility `apps/web/src/lib/datetime/zoned-time.ts` (`zonedTimeToUtcIso`)
+converts a local wall-clock time + IANA zone into the correct UTC instant —
+no timezone library dependency anywhere in this repo; unit-tested against 4
+Russian zones (all DST-free year-round, Russia abolished DST in 2014).
+
+`apps/web` gained `/organizer/rides/new` (`features/organizer/rides/`,
+`CreateRideForm` — self-contained create-only, no edit-screen dependency
+since none exists yet) and a stopgap nav entry (`organizerRidesNavItem`,
+"Заезды") — no ticket yet builds the real `/organizer/rides` "My rides" list
+`docs/design.md` §8 describes, flagged as new known issue KI-024 rather than
+silently worked around; CR-018 will hit the same gap unless a CR number is
+added first. 8 new `apps/api` tests (58 total, was 50); 9 new `apps/web`
+tests (44 total, was 35 — 5 for `CreateRideForm`, 4 for `zonedTimeToUtcIso`).
+Live-verified via curl (401/403/201/400×3/CSRF-403, 201 cross-checked against
+a direct DB read) and the `browser-automation` skill against a real `next
+dev` server + `apps/api`: filled Красноярск (UTC+7) + 18:30 local, submitted,
+success view showed the correct local time back ("15 июня 2027 18:30", not
+UTC-shifted) — independently confirmed via a direct DB read
+(`14:30:00+03` = `11:30 UTC`, exactly 18:30 Krasnoyarsk). No console errors
+beyond the expected pre-login 401.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -560,8 +617,16 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   no-feature-flag-yet caveat as the participant registry (CR-054).
 - new (CR-015): `ORGANIZER_WIDGETS` has exactly one entry and no feature-flag
   support, same caveat as `ORGANIZER_NAV_ITEMS`/`PARTICIPANT_NAV_ITEMS`
-  (CR-054 generalizes all of these); CR-016 confirmed still blocked on
-  `Ride`/CR-017+, not started this session.
+  (CR-054 generalizes all of these).
+- new (CR-017): `Ride` only has `title`/`bicycleType`/`startsAt`/
+  `startTimezone` set on create — every other column is `null` until CR-018;
+  no `GET /v1/rides`/`GET /v1/rides/:id` yet (needed once something has to
+  load a draft back); no "My rides" list screen (KI-024); `RideRequirement`/
+  `RideService` still have no CR number (KI-021's sibling gap);
+  `Ride.coverImageUrl` joins the KI-023 gap a third time. CR-016 is now
+  genuinely startable (`Ride` exists) but was not started this session —
+  it needs a mutation on an existing ride to protect, which starts with
+  CR-018.
 
 ## Do not break
 
@@ -581,4 +646,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-14 (CR-015)
+2026-09-14 (CR-017)
