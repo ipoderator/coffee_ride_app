@@ -44,7 +44,7 @@ jobs:
 
       # Version comes from package.json → packageManager. Do not also pass
       # `version:` here: action-setup fails when the two disagree.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v4
         with:
