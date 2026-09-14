@@ -24,14 +24,13 @@ CR-011 (User registration) and CR-012 (Login/logout/session) also completed
 is now fully done except CR-058 (Redis-backed rate limiting)/CR-059 (organizer-
 publish email-verification gate)/CR-060 (password reset), all deliberately
 deferred. CR-014 (Organizer profile), CR-015 (Organizer dashboard), and CR-017 (Create
-ride) also completed 2026-09-14. CR-016 (Organizer authorization) is now
-genuinely startable — `Ride` exists — but was deliberately not started this
-session (the user's instruction was to follow the already-documented plan,
-which keeps CR-016 as its own ticket once a _mutation_ on an existing ride
-needs an ownership check, not CR-017's creation-only endpoint). CR-018 (Edit
-draft) is next per `docs/tasks.md`'s Rides section order — KI-024 notes it
-will hit the "no My rides list screen" gap unless that gets a CR number
-first.
+ride) also completed 2026-09-14. CR-088 (Organizer rides list — new ticket,
+added this session per KI-024's own "next action"), CR-016 (Organizer
+authorization), and CR-018 (Edit draft) also completed 2026-09-14, in that
+order, in one session: CR-088 first (so CR-018's edit screen had a real UI
+entry point), then CR-016/CR-018 together (the ownership check only has a
+mutation to protect once CR-018's `PATCH` exists). Rides section now stands
+at CR-017/CR-088/CR-016/CR-018 done, CR-019 (Publish ride) next.
 
 ## Implemented
 
@@ -416,6 +415,50 @@ UTC-shifted) — independently confirmed via a direct DB read
 (`14:30:00+03` = `11:30 UTC`, exactly 18:30 Krasnoyarsk). No console errors
 beyond the expected pre-login 401.
 
+Organizer rides list, authorization & edit draft landed 2026-09-14
+(CR-088/CR-016/CR-018, see `docs/changelog.md`): three tickets, one session.
+KI-024 (opened by the CR-017 session) blocked starting CR-018 directly — no
+ticket built `/organizer/rides`, so CR-018's edit screen would have had no UI
+entry point. Added CR-088 to `docs/tasks.md` (first free number,
+CR-001..CR-087 had no gaps) and built it first: `GET /v1/rides/mine`
+(`apps/api/src/modules/rides`), the API's first cursor-paginated collection
+endpoint (ADR-011 §2) — new shared `apps/api/src/lib/cursor.ts` for every
+future collection endpoint to reuse; `/organizer/rides`
+(`features/organizer/rides/components/RidesList.tsx`) groups the caller's
+own rides by status. `organizerRidesNavItem` now points here instead of
+straight at `/organizer/rides/new`. Then CR-016 ("Organizer authorization")
+together with CR-018 ("Edit draft") — CR-016 has no surface of its own; it
+_is_ the ownership check inside `GET`/`PATCH /v1/rides/:id`
+(`getRideForOwner`/`updateRideDraft`), both 404 `ride_not_found` whether the
+ride doesn't exist or belongs to a different organizer (deliberately the
+same response either way — resource-enumeration reasoning,
+`.claude/rules/security.md`). `PATCH` is draft-only, 409 `ride_not_editable`
+otherwise; fills in every field CR-017 left `null`
+(`title`/`description`/`bicycleType`/`startsAt`+`startTimezone`/
+`participantLimit`/`priceRub`/`distanceKm`/`elevationGainMeters`/`paceKmh`/
+`durationMinutes`/`difficulty` — `coverImageUrl` stays out, KI-023). No
+migration — CR-017's table already had every column. New `/organizer/rides/
+[id]/edit` (`EditRideForm`) and the inverse timezone conversion,
+`utcIsoToZonedLocalInput` (`zoned-time.ts`), to prefill it.
+`CreateRideForm`'s success view now links into both new screens instead of
+only "back to dashboard". Two real bugs found and fixed while building this
+(not left as workarounds): interpolating a JS `Date` into a hand-written
+Drizzle `sql` template throws inside the `postgres` driver's own parameter
+binding (fixed — pass the cursor's `createdAt` as the ISO string it already
+is, `::timestamptz` cast on the SQL side); and this file's own new tests'
+last-run case left a `rides` row alive after the file finished (a
+CSRF-rejected `PATCH` test creates a real ride via a preceding successful
+`POST` first), breaking the next test file's cleanup with a foreign-key
+violation — fixed with an `afterAll` in `rides.routes.test.ts`. 15 new
+`apps/api` tests (73 total, was 58); 13 new `apps/web` tests (56 total, was
+44). Live-verified end to end: curl sequence against a real Postgres +
+running `apps/api` (mine-list pagination followed across a real second page,
+malformed cursor 400, stranger's-ride 404, non-draft 409, valid `PATCH` 200
+cross-checked against a direct DB read) and a full browser walkthrough via
+`browser-automation` against a real `next dev` server (nav → list → edit →
+save → reload, including the not-found state for a random id) — no console
+errors beyond the expected pre-login 401 and the not-found check's expected 404. KI-024 is resolved (`.claude/context/known-issues.md`).
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -513,15 +556,17 @@ None.
 
 ## Next
 
-CR-015 — Organizer dashboard (`docs/tasks.md` Organizer section). `CabinetShell`
-now serves both cabinets and `ORGANIZER_NAV_ITEMS` (CR-014) has exactly one entry
-— this ticket fills in `/organizer`'s real dashboard content (the stub page
-CR-014 left behind) with the widgets-from-registry pattern ADR-009/
-`docs/design.md` §8 describe, and is the natural place to add further nav
-entries as they exist. CR-016 ("Organizer authorization") stays the first real
-exercise of ownership-check authorization (`.claude/rules/security.md`) — it
-needs something organizer-owned to protect, which doesn't exist until `Ride`
-(CR-017+).
+CR-019 — Publish ride (`docs/tasks.md` Rides section, next after CR-017/
+CR-088/CR-016/CR-018). Moves a `draft` ride to `published` — the first real
+ride-lifecycle state transition, likely needs its own validation (e.g. can a
+ride with no route/stops publish yet? `docs/product.md`'s MVP capability list
+separates "ride creation/edit/publish" from "GPX route" and "stops/services/
+requirements" as distinct capabilities, so check `docs/product.md` before
+assuming publish requires a route). CR-020 (Close registration)/CR-021
+(Cancel ride)/CR-022 (Finish ride) are the remaining lifecycle transitions
+after it, then CR-023 (Ride detail, participant-facing) and CR-024 (Ride
+list, public discovery — distinct from this session's CR-088 "My rides",
+which is organizer-scoped and already done).
 
 ## Important decisions
 
@@ -618,15 +663,15 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 - new (CR-015): `ORGANIZER_WIDGETS` has exactly one entry and no feature-flag
   support, same caveat as `ORGANIZER_NAV_ITEMS`/`PARTICIPANT_NAV_ITEMS`
   (CR-054 generalizes all of these).
-- new (CR-017): `Ride` only has `title`/`bicycleType`/`startsAt`/
-  `startTimezone` set on create — every other column is `null` until CR-018;
-  no `GET /v1/rides`/`GET /v1/rides/:id` yet (needed once something has to
-  load a draft back); no "My rides" list screen (KI-024); `RideRequirement`/
-  `RideService` still have no CR number (KI-021's sibling gap);
-  `Ride.coverImageUrl` joins the KI-023 gap a third time. CR-016 is now
-  genuinely startable (`Ride` exists) but was not started this session —
-  it needs a mutation on an existing ride to protect, which starts with
-  CR-018.
+- new (CR-017): `RideRequirement`/`RideService` still have no CR number
+  (KI-021's sibling gap); `Ride.coverImageUrl` joins the KI-023 gap a third
+  time.
+- new (CR-088/CR-016/CR-018): no public `GET /v1/rides` yet (CR-024, the
+  discovery list — distinct from this session's organizer-scoped `GET /v1/
+rides/mine`); publishing/cancelling/finishing a ride are still separate,
+  unimplemented tickets (CR-019/CR-021/CR-022) — `PATCH /v1/rides/:id`
+  deliberately refuses to touch `status` at all. KI-024 (no "My rides" list)
+  is resolved.
 
 ## Do not break
 
@@ -646,4 +691,4 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
 
 ## Last updated
 
-2026-09-14 (CR-017)
+2026-09-14 (CR-088/CR-016/CR-018)

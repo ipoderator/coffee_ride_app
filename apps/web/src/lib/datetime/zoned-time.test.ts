@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { zonedTimeToUtcIso } from './zoned-time';
+import { utcIsoToZonedLocalInput, zonedTimeToUtcIso } from './zoned-time';
 
 describe('zonedTimeToUtcIso', () => {
   it('converts a Moscow (UTC+3) local time to the correct UTC instant', () => {
@@ -25,5 +25,44 @@ describe('zonedTimeToUtcIso', () => {
     expect(zonedTimeToUtcIso('2027-06-02T01:00', 'Asia/Vladivostok')).toBe(
       '2027-06-01T15:00:00.000Z',
     );
+  });
+});
+
+describe('utcIsoToZonedLocalInput', () => {
+  it('converts a UTC instant back to Moscow (UTC+3) local wall-clock time', () => {
+    expect(
+      utcIsoToZonedLocalInput('2027-05-01T05:00:00.000Z', 'Europe/Moscow'),
+    ).toBe('2027-05-01T08:00');
+  });
+
+  it('converts a UTC instant back to Krasnoyarsk (UTC+7) local wall-clock time', () => {
+    expect(
+      utcIsoToZonedLocalInput('2027-05-01T01:00:00.000Z', 'Asia/Krasnoyarsk'),
+    ).toBe('2027-05-01T08:00');
+  });
+
+  it('round-trips midnight correctly across the UTC day boundary', () => {
+    expect(
+      utcIsoToZonedLocalInput('2027-06-01T15:00:00.000Z', 'Asia/Vladivostok'),
+    ).toBe('2027-06-02T01:00');
+  });
+
+  it('is the exact inverse of zonedTimeToUtcIso for every Russian zone this product supports', () => {
+    const localValue = '2027-03-10T14:45';
+    for (const timeZone of [
+      'Europe/Kaliningrad',
+      'Europe/Moscow',
+      'Asia/Yekaterinburg',
+      'Asia/Omsk',
+      'Asia/Krasnoyarsk',
+      'Asia/Irkutsk',
+      'Asia/Yakutsk',
+      'Asia/Vladivostok',
+      'Asia/Magadan',
+      'Asia/Kamchatka',
+    ]) {
+      const utc = zonedTimeToUtcIso(localValue, timeZone);
+      expect(utcIsoToZonedLocalInput(utc, timeZone)).toBe(localValue);
+    }
   });
 });

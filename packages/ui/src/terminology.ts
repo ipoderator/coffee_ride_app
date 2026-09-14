@@ -289,4 +289,49 @@ export const RIDE_CREATE_TERMS = {
   loadError: 'Не удалось создать заезд. Попробуйте ещё раз.',
   successTitle: 'Черновик заезда создан',
   backToDashboard: 'Вернуться в кабинет',
+  // CR-088: both the edit screen and the rides list exist now — the success view
+  // closes the loop instead of only pointing back at the dashboard.
+  editRideLink: 'Редактировать заезд',
+  allRidesLink: 'Все мои заезды',
+} as const;
+
+/** `/organizer/rides` (CR-088, `docs/design.md` §8 "My rides, grouped by status"). */
+export const RIDE_LIST_TERMS = {
+  pageTitle: 'Мои заезды',
+  createLink: 'Новый заезд',
+  loadError: 'Не удалось загрузить список заездов. Попробуйте ещё раз.',
+  emptyTitle: 'Пока нет ни одного заезда',
+  emptyDescription: 'Создайте первый заезд, чтобы он появился здесь.',
+  summaryStartLabel: 'Старт',
+} as const;
+
+/** `/organizer/rides/[id]/edit` (CR-018, `docs/design.md` §8 "Edit draft"). Every
+ * field CR-017 deliberately left `null` at creation — see
+ * `.claude/context/current-task.md`. */
+export const RIDE_EDIT_TERMS = {
+  pageTitle: 'Редактирование заезда',
+  notFoundTitle: 'Заезд не найден',
+  notFoundDescription:
+    'Такого заезда нет, либо он принадлежит другому организатору.',
+  backToList: 'К списку заездов',
+  loadError: 'Не удалось загрузить заезд. Попробуйте ещё раз.',
+  titleLabel: 'Название',
+  descriptionLabel: 'Описание',
+  descriptionHint: 'До 2000 символов.',
+  bicycleTypeLabel: 'Тип велосипеда',
+  startsAtLabel: 'Дата и время старта',
+  startsAtRequired: 'Укажите дату и время старта.',
+  startTimezoneLabel: 'Часовой пояс старта',
+  participantLimitLabel: 'Лимит участников',
+  priceRubLabel: 'Стоимость участия, ₽',
+  distanceKmLabel: 'Дистанция, км',
+  elevationGainMetersLabel: 'Набор высоты, м',
+  paceKmhLabel: 'Средняя скорость, км/ч',
+  durationMinutesLabel: 'Длительность, мин',
+  difficultyLabel: 'Сложность',
+  difficultyNotSet: 'Не указана',
+  notEditable: 'Редактировать можно только черновик заезда.',
+  save: 'Сохранить',
+  savePending: 'Сохранение…',
+  saveSuccess: 'Изменения сохранены.',
 } as const;

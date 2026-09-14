@@ -6,155 +6,172 @@ complete
 
 ## Task ID
 
-CR-017 — Create ride
+CR-088 — Organizer rides list (new ticket, registered this session) + CR-016 —
+Organizer authorization + CR-018 — Edit draft (combined implementation, three
+`docs/tasks.md` checkboxes).
 
 ## Goal
 
-First `Ride` entity ticket (`.claude/CLAUDE.md` fixed domain entities; `docs/tasks.md`
-Rides section, next after CR-015/CR-016 — CR-016 stays blocked on this very ticket
-existing, per CR-015's own follow-up note). `docs/design.md` §8: `/organizer/rides/new`
-"Create ride".
+Continue `docs/tasks.md`'s Rides section per the user's "continue per the plan"
+instruction. Next unchecked ticket is CR-018 ("Edit draft"), but
+`.claude/context/known-issues.md` KI-024 (opened by the CR-017 session) explicitly
+blocks starting it: no ticket builds `/organizer/rides` ("My rides", `docs/design.md`
+§8), so CR-018's edit screen would have no way to be reached from the UI once more
+than one ride exists — "a real CR ticket ... needs a number added to `docs/tasks.md`'s
+Rides section before CR-018 ships." Also, CR-016 ("Organizer authorization",
+`## Organizer` section, still unchecked) was deliberately deferred by CR-014/CR-015/
+CR-017 specifically until a mutation on an _existing_ ride needs an ownership check —
+CR-018's `PATCH` is exactly that first mutation, so it lands together with CR-016
+rather than as a separate pass.
 
-## Scoping decisions (product.md doesn't split "create" vs "edit" vs "publish" fields)
+## Scoping decisions
 
-- **Create vs. edit split.** `docs/design.md` §8 lists a separate "Edit draft" screen
-  (CR-018) and `docs/product.md`'s MVP capability #3 ("ride creation/edit/publish")
-  already spans three CR tickets. Decision: CR-017 creates a minimal, valid draft —
-  only `title`, `bicycleType`, `startsAt`, `startTimezone` are required at creation.
-  Every other scalar field the DB table has room for (`description`, capacity, price,
-  distance/duration/pace/elevation, difficulty, cover image) is nullable and filled in
-  by CR-018, not asked for on this screen. This mirrors CR-011→CR-013's precedent
-  (registration = email+password only, profile fields came later) applied to the ride
-  entity's own multi-ticket lifecycle.
-- **Route/stops/services/requirements are NOT this table.** `docs/product.md`'s MVP
-  list separates "ride creation/edit/publish" (#3) from "GPX route" (#5) and "stops/
-  services/requirements" (#6) as distinct capabilities; `docs/tasks.md` has dedicated
-  Route tickets (CR-027..CR-031). `RideRequirement`/`RideService` have no CR number yet
-  at all (same "not yet scheduled" gap KI-021 already flagged for the services enum) —
-  not invented here. `Ride`'s own "start"/"finish" from `docs/product.md`'s field list
-  map to `RoutePoint` types (`docs/database.md`: "RoutePoint — start/finish/stop/
-  danger/water/food/technical/other"), not a `Ride`-level location field.
-- **Ownership model.** `docs/database.md`: "Ride — cycling event owned by
-  OrganizerProfile" (written after CR-014). ADR-006's older "`ride.organizerId ===
-session.userId`" phrasing predates the `OrganizerProfile` decision — the actual FK is
-  `rides.organizer_id → organizer_profiles.id`; identity still traces only to the
-  session (never a client-supplied id), by resolving the caller's own
-  `OrganizerProfile` server-side, same pattern CR-014 already uses. Creating a ride
-  requires the caller to already have an `OrganizerProfile` — 403
-  `organizer_profile_required` otherwise (mirrors CR-014's `email_verification_
-required` gate/UX). This is NOT CR-016 ("Organizer authorization") — that ticket is
-  about checking ownership of an _already-existing_ ride on a later mutation
-  (edit/publish/cancel, CR-018+); CR-017 only establishes ownership at creation, it
-  doesn't need to re-verify it against anything that already exists.
-- **Discovered architecture gap, fixed in this ticket:** `RideStatus`/`BicycleType`/
-  `DifficultyLevel` (CR-064) were defined directly in `packages/ui/src/terminology.ts`.
-  `apps/api` needs the same enums for Zod request validation and `packages/db` needs
-  the same value lists for its Postgres enums — but `apps/api` must never depend on
-  `packages/ui` (`.claude/rules/architecture.md`: "api -> db/types/maps-core", not
-  "api -> ui"). Moved the type + value-list definitions to `packages/types/src/domain/
-ride.ts` (the one package both `apps/api` and `packages/ui` may depend on);
-  `packages/ui/src/terminology.ts` now re-exports the types from `types` and keeps only
-  the Russian label maps (genuinely UI-layer). `packages/ui` gains `types` as a real
-  dependency (previously zero packages inside `ui` needed one). No behavior change,
-  same values, `.claude/CLAUDE.md`: "do not create duplicate concepts under different
-  names" — this was heading toward exactly that (a second definition needed to be
-  invented for `apps/api`/`packages/db` otherwise).
-- **Timezone.** ADR-012 requires `startsAt` (`timestamptz`) plus the ride's own IANA
-  start timezone. Server-side Zod validation accepts any zone `Intl.DateTimeFormat`
-  recognizes (loose, same tier as CR-013's phone validation). The web picker is
-  deliberately narrower: `docs/product.md`/ADR-012 frame this product around Russia's
-  eleven timezones specifically ("Russia spans eleven offsets") — a hard-coded list of
-  the 11 real Russian IANA zones with Russian city labels (`RUSSIAN_TIMEZONE_OPTIONS`,
-  `packages/ui/src/terminology.ts`), not a raw 400-entry `Intl.supportedValuesOf`
-  dump. Converting the organizer's entered local wall-clock time + chosen zone into the
-  correct UTC instant needs real zone-offset math (no timezone library is a dependency
-  anywhere in this repo yet) — small utility `apps/web/src/lib/datetime/zoned-time.ts`
-  (`zonedTimeToUtcIso`), unit-tested against Europe/Moscow (UTC+3) and Asia/
-  Krasnoyarsk (UTC+7) — both DST-free year-round (Russia abolished DST in 2014), so no
-  DST-transition edge case exists for this product's real target zones.
-- **Discoverability.** No "My rides" list screen exists yet (`docs/design.md` §8 lists
-  `/organizer/rides` but no `docs/tasks.md` CR ticket builds it — a genuine backlog gap,
-  flagged in `known-issues.md`, not silently invented here). Added a nav item
-  (`organizerRidesNavItem`, "Заезды" → `/organizer/rides/new`) as a stopgap, same
-  discipline as CR-013/014's stub screens — superseded once the real list lands.
-  Post-create UX stays self-contained (shows the created ride inline: title, status,
-  bicycle type, start date/time) rather than linking to an edit/detail screen that
-  doesn't exist yet (CR-018/CR-023).
+- **New ticket number.** `docs/tasks.md` has zero gaps from CR-001 through CR-087
+  (checked programmatically). Next free number is CR-088 — added to the `## Rides`
+  section, positioned logically right after CR-017 (before CR-018) even though its
+  number is out of the section's local sequence, same as CR-054/CR-058/CR-063 etc.
+  already being out-of-sequence numbers referenced inside other sections.
+- **Three tickets, one implementation pass.** CR-088 (list) is built first since
+  CR-018's edit screen needs a real entry point (KI-024's own directive, and the same
+  "don't ship an unreachable screen" discipline CR-017 itself used for its nav entry).
+  CR-016 has no independent surface of its own to exercise — it _is_ the ownership
+  check inside CR-018's `GET`/`PATCH /v1/rides/:id`, so implementing CR-018 correctly
+  is what satisfies CR-016, not a separate change.
+- **`GET /v1/rides/mine`, not overloading `GET /v1/rides`.** `docs/api.md`'s Rides
+  section already reserves plain `GET /v1/rides` for the public discovery collection
+  (CR-024 "Ride list" — unauthenticated, `status: 'published'`+ only). CR-088 needs an
+  authenticated, caller-scoped list across _all_ statuses including `draft` — a
+  different resource shape, not a filter on the same one
+  (`.claude/rules/security.md`: never trust a client-supplied id/filter for "whose
+  data" — scoping must come from the session). Follows the existing `/me`-suffix
+  convention (`/v1/organizers/me`, `/v1/auth/me`) → `/v1/rides/mine` (`/me` itself
+  collides with nothing here, but `mine` reads clearer for "rides I organize" vs. "my
+  own rider profile" — still the same pattern, not a new one).
+- **No organizer profile yet → empty list, not an error.** Unlike `POST /v1/rides`
+  (which 403s `organizer_profile_required`, since creating requires an owner to
+  attach to), listing "my rides" for a caller with no `OrganizerProfile` is simply
+  "zero rides" — `200 { items: [], nextCursor: null }`. An empty state, not a guard.
+- **Cursor pagination, first real implementation of ADR-011 §2.** Sort key
+  `(createdAt desc, id desc)` — a management list is naturally "newest draft first",
+  unlike CR-024's future public feed (sorted by `startsAt`). Cursor is
+  `base64url(JSON.stringify({ createdAt, id }))`, opaque per ADR-011, decoded in a new
+  shared `apps/api/src/lib/cursor.ts` (not inlined in `rides.service.ts`) since this
+  is the first of several collection endpoints `docs/api.md` already lists (
+  participants, updates, reviews, the public ride list) that will need the exact same
+  mechanics — one shared helper now, not five independent re-derivations later. A
+  malformed cursor is `400 invalid_cursor` (distinct code from `validation_error`,
+  since it isn't a body-schema failure); `limit` clamps to `[1, 100]`, default `20`,
+  per ADR-011 ("clamps rather than errors").
+- **Ownership check returns `404`, not `403`, for a ride that exists but isn't the
+  caller's.** Same resource-enumeration reasoning as returning a generic
+  `invalid_credentials` on login (`.claude/rules/security.md`): confirming "this ride
+  id exists, you just don't own it" to another organizer leaks more than
+  `ride_not_found` does. `.claude/rules/testing.md`'s "authenticated-but-not-owner
+  request is rejected" is satisfied by 404 equally well as by 403 — this is CR-016's
+  one concrete design call.
+- **`PATCH /v1/rides/:id` is draft-only.** `docs/design.md` §8 names this screen "Edit
+  draft" specifically; publishing/cancelling/finishing are separate lifecycle
+  tickets (CR-019/CR-021/CR-022) with their own state-transition rules. A `PATCH`
+  against a non-`draft` ride is `409 ride_not_editable`, not silently accepted or
+  broadened into a general "edit anything anytime" endpoint.
+- **Field scope matches CR-017's own deferral note verbatim**: `title`, `description`,
+  `bicycleType`, `startsAt`+`startTimezone` (both together or neither — partial
+  time/zone changes are rejected, `.refine`), `participantLimit`, `priceRub`,
+  `distanceKm`, `elevationGainMeters`, `paceKmh`, `durationMinutes`, `difficulty`.
+  `coverImageUrl` stays out (KI-023, S3 pipeline deferred — same call CR-017 already
+  made for creation). The web form always submits the full current state for every
+  field (same convention as `OrganizerProfileForm`/`ProfileForm`), not a sparse diff —
+  simpler than tracking which fields actually changed, and the API's Zod schema still
+  treats every field as independently optional so a future caller _could_ send a
+  sparse patch.
+- **Reverse timezone conversion needed.** CR-017's `zonedTimeToUtcIso` only goes one
+  way (local input + zone → UTC instant). Prefilling the edit form's
+  `datetime-local` input from an existing `Ride.startsAt` (a UTC instant) requires the
+  inverse — new `utcIsoToZonedLocalInput(isoString, timeZone)` in the same
+  `apps/web/src/lib/datetime/zoned-time.ts`, unit-tested against the same Russian
+  zones CR-017 already covers.
+- **Create-success view now links into the loop it previously couldn't.** CR-017's
+  `CreateRideForm` success view only linked back to `/organizer` (no edit/list screen
+  existed yet). Now both exist — adds "Редактировать заезд" (straight to
+  `/organizer/rides/[id]/edit`) alongside a "Все мои заезды" link
+  (`/organizer/rides`), keeping the existing dashboard link too. Closes KI-024's gap
+  at the source, not just for future visits.
+- **Nav entry updated, not duplicated.** `organizerRidesNavItem` ("Заезды") now
+  points at `/organizer/rides` (the list) instead of straight at
+  `/organizer/rides/new` — the list page itself carries the "new ride" call to
+  action. One nav entry still covers the whole ride-management area (ADR-009
+  registry, no new nav item needed).
 
 ## Requirements
 
-- `packages/types`: `domain/ride.ts` (`RIDE_STATUSES`/`RideStatus`,
-  `BICYCLE_TYPES`/`BicycleType`, `DIFFICULTY_LEVELS`/`DifficultyLevel`, `Ride`),
-  `api/rides.ts` (`createRideRequestSchema` — title/bicycleType/startsAt/
-  startTimezone only — + `CreateRideResponse`), `index.ts` exports.
-- `packages/ui`: `package.json` +`types` dependency; `terminology.ts` re-exports the
-  three moved types from `types`, keeps `RIDE_STATUS_TERMS`/`BICYCLE_TYPE_TERMS`/
-  `DIFFICULTY_LEVEL_TERMS` as-is; new `RUSSIAN_TIMEZONE_OPTIONS`.
-- `packages/db`: `schema/ride.ts` (`rides` table + `ride_status`/`bicycle_type` pg
-  enums, CHECK constraints for every nullable numeric field's lower bound and
-  difficulty's 1-5 range), `schema/index.ts` export, migration via `db:generate`,
-  applied to the local scratch DB.
-- `apps/api`: new `modules/rides/` (`ride-response.schema.ts` — full `Ride` shape;
-  `rides.service.ts` — `RideServiceError`, `createRide` resolving the caller's
-  `OrganizerProfile` (403 `organizer_profile_required` if none), inserting with
-  `status: 'draft'` and `updatedBy` set to the caller; `rides.routes.ts` — `POST /v1/
-rides`, `requireAuth`; `rides.routes.test.ts`). `routes/v1.ts` registers it. General
-  rate-limit tier (not an auth endpoint).
-- `apps/web`: `lib/datetime/zoned-time.ts` (+test); new `features/organizer/rides/`
-  (`api.ts`, `nav.ts`, `components/CreateRideForm.tsx`, test) — title/bicycleType
-  (native `<select>`)/date-time (`datetime-local` input)/timezone (native `<select>`
-  from `RUSSIAN_TIMEZONE_OPTIONS`) fields, loading/error/duplicate-submit protection
-  per `.claude/rules/frontend.md`, inline success view (no dependency on unbuilt
-  screens) using `MetricTile`/`StatusBadge`; `app/organizer/rides/new/page.tsx`;
-  `lib/cabinet/organizer-nav.ts` +`organizerRidesNavItem`.
-- `docs/database.md`, `docs/api.md`: new `Ride` sections.
+- `docs/tasks.md`: add `CR-088 Organizer rides list` to `## Rides`; check off
+  CR-016/CR-018 on completion.
+- `apps/api/src/lib/cursor.ts` (new): `encodeCursor`/`decodeCursor` for a
+  `{ createdAt: string; id: string }` sort key, `CursorError` on malformed input.
+- `packages/types`: `api/rides.ts` gains `updateRideRequestSchema` (+
+  `UpdateRideRequest`), `listRidesQuerySchema` (+ type), `UpdateRideResponse`,
+  `ListRidesResponse` (= `Paginated<Ride>`).
+- `apps/api/src/modules/rides/`: `rides.service.ts` gains `RIDE_NOT_FOUND` (404
+  `ride_not_found`)/`RIDE_NOT_EDITABLE` (409 `ride_not_editable`) errors,
+  `listOwnRides`, `getRideForOwner`, `updateRideDraft`; `rides.routes.ts` gains
+  `GET /mine`, `GET /:id`, `PATCH /:id`; new tests in `rides.routes.test.ts`.
+  `routes/v1.ts` unchanged (already registers `ridesRoutes`).
+- `apps/web/src/lib/datetime/zoned-time.ts`: + `utcIsoToZonedLocalInput` (+test).
+- `apps/web/src/features/organizer/rides/`: `api.ts` gains `listMyRides`/`getRide`/
+  `updateRide`; new `components/RidesList.tsx`, `components/EditRideForm.tsx`; `nav.ts`
+  href updated; tests extended.
+- `apps/web/src/app/organizer/rides/page.tsx` (new), `[id]/edit/page.tsx` (new).
+- `packages/ui/src/terminology.ts`: `RIDE_LIST_TERMS`, `RIDE_EDIT_TERMS`.
+- `docs/api.md`, `docs/database.md`: update Rides section (no schema change — CR-017
+  already created every column CR-018 needs).
 
 ## Acceptance criteria
 
-- Migration applies cleanly against the local scratch DB (`coffee_ride_dev`); the
-  `organizer_id` FK, both pg enums, and every CHECK constraint hold.
-- `POST /v1/rides`: no cookie → 401; verified organizer, no `OrganizerProfile` yet →
-  403 `organizer_profile_required`; valid body → 201 with the created `Ride`
-  (`status: 'draft'`, `organizerId` = caller's own profile id, `updatedBy` = caller's
-  user id, every unset field `null`); invalid payload (empty/too-long title, bad
-  `bicycleType`, non-ISO `startsAt`, unrecognized `startTimezone`) → 400
-  `validation_error`.
-- CSRF check already covers `POST /v1/rides` (verified in tests, not assumed).
-- Web: unauthenticated visit to `/organizer/rides/new` redirects to `/login`; a
-  verified organizer without an `OrganizerProfile` sees a clear message instead of a
-  generic error; a valid submit shows an inline success view with the created ride's
-  title/status/bicycle type/start time, correctly converted to the right UTC instant
-  for the chosen Russian timezone; duplicate-submit protected. Nav gains "Заезды"
-  pointing at the new screen.
+- `GET /v1/rides/mine`: no cookie → 401; no `OrganizerProfile` → 200 empty page;
+  organizer with rides → 200, newest-created first, `nextCursor` correctly paginates
+  past `limit`; malformed `cursor` → 400 `invalid_cursor`; `limit` clamps to 100.
+- `GET /v1/rides/:id`: no cookie → 401; non-existent id → 404 `ride_not_found`;
+  someone else's ride → 404 `ride_not_found` (not 403); owner's own ride → 200.
+- `PATCH /v1/rides/:id`: same 401/404 rules as `GET`; non-draft status → 409
+  `ride_not_editable`; valid partial body on a draft → 200 with updated fields,
+  `updatedAt` bumped, `updatedBy` = caller; invalid field → 400 `validation_error`;
+  mismatched `Origin` → 403 (CSRF, already covered by the existing `/v1` hook —
+  verified in tests, not assumed).
+- Web: `/organizer/rides` shows a loading skeleton, then either an empty state with a
+  working "create" CTA or the caller's rides grouped by status, each linking to its
+  edit screen; `/organizer/rides/[id]/edit` shows a not-found state for someone else's
+  ride id, prefills every field correctly (including the local time/zone round-trip),
+  saves via duplicate-submit-protected `PATCH`, and reflects the update after reload.
+  Nav "Заезды" now opens the list. Create-success view links straight into edit.
 - `turbo run lint/typecheck/build/test` (run separately) all green; `format:check`/
   `lint:root` clean.
-- Live check: real Postgres + both dev servers — curl sequence (unauth 401, no-profile
-  403, valid create 201 cross-checked against a direct DB read, invalid payload 400)
-  plus a real-browser walkthrough via `browser-automation`, including verifying the
-  stored `starts_at` instant matches the entered local time in the chosen zone.
+- Live check: curl sequence (401/403/404-cross-organizer/409-non-draft/200 sequences,
+  cross-checked against a direct DB read) plus a real-browser walkthrough via
+  `browser-automation` covering create → list → edit → save → reload.
 
 ## Planned files
 
-- `packages/types/src/domain/ride.ts` (new), `src/api/rides.ts` (new), `src/index.ts`
-  (+exports).
-- `packages/ui/package.json` (+`types` dep), `src/terminology.ts` (move 3 types out, +`RUSSIAN_TIMEZONE_OPTIONS`).
-- `packages/db/src/schema/ride.ts` (new), `schema/index.ts` (+export), new migration.
-- `apps/api/src/modules/rides/{ride-response.schema.ts,rides.service.ts,
-rides.routes.ts,rides.routes.test.ts}` (new), `apps/api/src/routes/v1.ts` (register).
-- `apps/web/src/lib/datetime/zoned-time.ts` (new, +test).
-- `apps/web/src/features/organizer/rides/{api.ts,nav.ts,
-components/CreateRideForm.tsx,rides.test.tsx}` (new).
-- `apps/web/src/app/organizer/rides/new/page.tsx` (new).
-- `apps/web/src/lib/cabinet/organizer-nav.ts` (+entry).
-- `docs/api.md`, `docs/database.md` (new Ride sections).
+- `docs/tasks.md` (+CR-088 line; check CR-016/CR-018).
+- `apps/api/src/lib/cursor.ts` (new).
+- `packages/types/src/api/rides.ts` (+schemas/types), `src/index.ts` if new exports
+  need adding (likely already covered by existing `export *`).
+- `apps/api/src/modules/rides/{rides.service.ts,rides.routes.ts,rides.routes.test.ts}`
+  (extend).
+- `apps/web/src/lib/datetime/zoned-time.ts` (+fn, +test).
+- `apps/web/src/features/organizer/rides/{api.ts,nav.ts,rides.test.tsx,
+components/RidesList.tsx,components/EditRideForm.tsx}` (new/extend).
+- `apps/web/src/app/organizer/rides/page.tsx` (new),
+  `apps/web/src/app/organizer/rides/[id]/edit/page.tsx` (new).
+- `packages/ui/src/terminology.ts` (+RIDE_LIST_TERMS/RIDE_EDIT_TERMS).
+- `docs/api.md`, `docs/database.md` (update Rides section).
 
 ## Implementation progress
 
 - [x] Plan written (this file)
-- [x] `packages/types` + `packages/ui` (type-ownership fix + new contracts)
-- [x] `packages/db` schema + migration
-- [x] `apps/api` rides module + tests
-- [x] `apps/web` zoned-time util + feature + page + nav
+- [x] `apps/api/src/lib/cursor.ts`
+- [x] `packages/types` schema additions
+- [x] `apps/api` rides module (`mine`/`:id` GET/PATCH) + tests
+- [x] `apps/web` zoned-time reverse conversion + feature (list + edit) + pages + nav
 - [x] Full validation
 - [x] Live check
 - [x] Context/docs updated (changelog, project-state, architecture-map,
@@ -163,79 +180,94 @@ components/CreateRideForm.tsx,rides.test.tsx}` (new).
 
 ## Validation
 
-- `turbo run typecheck lint test build` (all 9 packages, run together against
-  a real `DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`
-  — Docker Desktop unavailable in this environment, local Homebrew Postgres
-  used instead, same as CR-015/CR-014): all 25 tasks green. `apps/api` 58
-  tests (was 50, +8 in `rides.routes.test.ts`); `apps/web` 44 tests (was 35,
-  +5 in `rides.test.tsx`, +4 in `zoned-time.test.ts`); `packages/ui` 85 tests
-  unchanged (type-ownership move only, no behavior change — confirmed by the
-  suite staying green); `packages/types` typecheck/lint clean. `next build`
-  compiles `/organizer/rides/new` cleanly.
-- `pnpm format:check` / `pnpm lint:root`: clean (after one `prettier --write`
-  pass this session on 3 files).
-- Live check via curl against a real `apps/api` + `coffee_ride_dev`: no
-  cookie → 401; verified organizer, no profile → 403
-  `organizer_profile_required`; create organizer profile → valid ride create
-  → 201 (cross-checked against a direct `SELECT` — `starts_at` stored as the
-  correct UTC instant); empty title → 400; invalid `bicycleType` → 400;
-  invalid `startTimezone` → 400; mismatched `Origin` → 403
-  `csrf_origin_mismatch`.
+- `turbo run typecheck lint test build` (all 25 tasks, run together against
+  a real `DATABASE_URL=postgresql://glebchurkin@localhost:5432/
+coffee_ride_dev` — Docker Desktop still unavailable in this environment):
+  all green. `apps/api` 73 tests (was 58, +15 in `rides.routes.test.ts`),
+  run twice in a row to confirm stability after the two bugs below were
+  fixed. `apps/web` 56 tests (was 44, +13 — 8 in `rides.test.tsx` for
+  `RidesList`/`EditRideForm`, 4 new in `zoned-time.test.ts` for
+  `utcIsoToZonedLocalInput`, 1 net from `CreateRideForm`'s unchanged suite).
+  `next build` compiles `/organizer/rides` (static) and `/organizer/rides/
+[id]/edit` (dynamic) cleanly.
+- `pnpm format:check` / `pnpm lint:root`: clean (one `prettier --write` pass
+  this session on 6 files).
+- Live check via curl against a real `apps/api` + `coffee_ride_dev`: full
+  sequence — register/verify/login/create-organizer-profile/create-ride,
+  `GET /v1/rides/mine` (empty before the profile existed, populated after,
+  malformed cursor → 400 `invalid_cursor`), `GET /v1/rides/:id` (owner 200,
+  a second registered "stranger" account 404 `ride_not_found`, non-existent
+  id 404), `PATCH /v1/rides/:id` (valid 200 cross-checked against a direct
+  `SELECT`, flipped to `published` via direct SQL then `PATCH` → 409
+  `ride_not_editable`, reverted to `draft`, invalid `participantLimit: -5`
+  → 400 `validation_error`).
 - Live browser check via the `browser-automation` skill against a real `next
-dev` server + `apps/api`: unauthenticated `/organizer/rides/new` →
-  redirected to `/login`; logged in; form showed all 4 fields with correct
-  defaults (Гравийный/Москва); filled title, `2027-06-15T18:30`, changed zone
-  to Красноярск (UTC+7); submitted; success view showed "Черновик заезда
-  создан", the `Черновик` status badge, the title, and — critically — the
-  start time displayed back as the correct LOCAL Krasnoyarsk time ("15 июня
-  2027 18:30"), not shifted to UTC; a direct DB read independently confirmed
-  the stored instant (`14:30:00+03` = `11:30 UTC`) is exactly 18:30
-  Krasnoyarsk (UTC+7). Dashboard nav showed the new "Заезды" entry. No
-  console errors beyond the expected pre-login 401. Test accounts/rides
-  deleted from the scratch DB afterward.
+dev` server + `apps/api` (a pre-existing server left running from an
+  earlier session — reused rather than restarted, confirmed already serving
+  this session's new routes via `tsx watch`'s auto-reload): logged in with
+  the seeded organizer account; `/organizer`'s "Заезды" nav link resolved to
+  `/organizer/rides` (confirmed via `<a href>`, not just visually);
+  `/organizer/rides` showed "Мои заезды"/"Новый заезд"/a "Черновик" group
+  heading with the seeded ride card (correct local start time "1 августа
+  2027 21:00" for an 18:00 UTC instant in Europe/Moscow, "Шоссейный" bicycle
+  type); clicking the card navigated to `/organizer/rides/[id]/edit` with
+  every field correctly prefilled (title/description/`startsAt` local
+  value/participantLimit/priceRub/distanceKm/difficulty all matched exactly);
+  edited the title, saved, saw "Изменения сохранены.", reloaded, the new
+  title persisted. A separate run confirmed the not-found state (`Заезд не
+найден` / "К списку заездов") for a random ride id. No console errors
+  beyond the expected pre-login noise and the not-found check's expected 404. Test accounts/rides deleted from the scratch DB afterward; the `next
+dev` server this session started was stopped, the pre-existing `apps/api`
+  one left as found.
 - Every acceptance criterion from above is met.
 
 ## Discovered issues
 
 Found and fixed during implementation (not left open):
 
-- Architecture gap: `RideStatus`/`BicycleType`/`DifficultyLevel` lived in
-  `packages/ui`, which `apps/api` cannot depend on
-  (`.claude/rules/architecture.md`). Fixed by moving the definitions to
-  `packages/types` and having `packages/ui` re-export them — caught during
-  planning, before any code was written that would have had to invent a
-  second, drifting copy.
+- A raw JS `Date` interpolated into a hand-written Drizzle `sql` template
+  (the cursor's keyset-comparison condition) throws `ERR_INVALID_ARG_TYPE`
+  inside the `postgres` driver's own parameter binding — confirmed live via
+  a standalone repro script, not guessed. The driver only auto-serializes
+  parameters bound through Drizzle's own typed column helpers. Fixed by
+  passing the cursor's `createdAt` as the ISO string it already is
+  (`::timestamptz` cast on the SQL side), not a `Date`.
+- `rides.routes.test.ts`'s own new tests' last-run case (a CSRF-rejected
+  `PATCH`) creates a real ride via a preceding successful `POST` before the
+  rejected request — unlike the file's original last test, which never got
+  past the CSRF check at all — leaving a `rides` row (and its
+  `organizer_profiles`/`users` rows) alive after the file finished.
+  `rides.organizer_id` is `ON DELETE RESTRICT`, so the next test file's
+  unscoped `DELETE FROM users` then failed with a foreign-key violation.
+  Fixed with an `afterAll` in `rides.routes.test.ts` that cleans up after
+  this file's own tests, rather than relying on running last.
 
-New known issues opened (not silently worked around):
-
-- KI-024: no `docs/tasks.md` ticket builds the organizer's "My rides" list
-  `docs/design.md` §8 describes. `organizerRidesNavItem` points straight at
-  `/organizer/rides/new` as a stopgap. Flagged as something CR-018 will hit
-  too unless a real ticket is scheduled first.
-- KI-023 widened a third time: `Ride.coverImageUrl` is the same
-  S3-pipeline-deferred gap `User`/`OrganizerProfile` already carry.
+New known issues opened: none. KI-024 (no "My rides" list) is resolved by
+this ticket — moved to `.claude/context/known-issues.md`'s Resolved section.
 
 ## Final result
 
-CR-017 complete. First `Ride` table (`packages/db`, owned by
-`OrganizerProfile`) and `POST /v1/rides` (`apps/api`, requires an existing
-`OrganizerProfile`, creates a minimal valid `draft`) implemented, plus
-`/organizer/rides/new` (`apps/web`) with correct local-time-to-UTC-instant
-conversion for all 11 real Russian timezones. Deliberately scoped to
-"create," not "create and fully configure" — every field beyond
-`title`/`bicycleType`/`startsAt`/`startTimezone` stays `null`, left to CR-018
-("Edit draft"). A real architecture gap (`RideStatus`/`BicycleType`/
-`DifficultyLevel` living somewhere `apps/api` couldn't depend on) was found
-and fixed as part of this ticket, not worked around. CR-016 ("Organizer
-authorization") remains deliberately unstarted — genuinely possible now that
-`Ride` exists, but the user's own instruction was to follow the
-already-documented plan, and that plan ties CR-016 to a mutation on an
-existing ride (CR-018+), not this ticket's creation-only endpoint. All
-acceptance criteria met, full validation suite green, live-verified end to
-end over both curl and a real browser session including independent DB
-verification of the timezone math. `docs/tasks.md`, `docs/changelog.md`,
-`.claude/context/project-state.md`, `.claude/context/architecture-map.md`,
-`.claude/context/known-issues.md`, `docs/api.md`, `docs/database.md` all
-updated. Not yet committed — `git diff`/`git status` reviewed next;
-pre-existing unrelated pending changes (`docs/product.md`, `.mcp.json`,
-`skills-lock.json`) again left untouched and out of scope.
+CR-088/CR-016/CR-018 complete, in one session, in that order. CR-088
+(`GET /v1/rides/mine` + `/organizer/rides`) was added as a new ticket
+(first free CR number, CR-001..CR-087 had no gaps) per KI-024's own "next
+action," and built first so CR-018's edit screen had a real UI entry point.
+CR-016 ("Organizer authorization") and CR-018 ("Edit draft") then landed
+together — `GET`/`PATCH /v1/rides/:id`, ownership-scoped through the
+caller's own `OrganizerProfile`, 404 `ride_not_found` for both "doesn't
+exist" and "isn't yours" (never distinguished), `PATCH` draft-only (409
+`ride_not_editable` otherwise), filling in every field CR-017 left `null`.
+No `packages/db` migration — CR-017's table already had every column. Two
+real bugs were found and fixed along the way (a Drizzle/postgres.js
+parameter-binding gap, and a test-suite cross-file cleanup gap), not worked
+around. All acceptance criteria met, full validation suite green (25/25
+tasks, `apps/api` stable across 2 repeated runs), live-verified end to end
+over both curl and a real browser session including the not-found state.
+`docs/tasks.md`, `docs/changelog.md`, `.claude/context/project-state.md`,
+`.claude/context/architecture-map.md`, `.claude/context/known-issues.md`,
+`docs/api.md`, `docs/database.md` all updated. Not yet committed —
+`git diff`/`git status` reviewed next; pre-existing unrelated pending
+changes (`docs/product.md`, `.mcp.json`, `skills-lock.json`) again left
+untouched and out of scope. A local `.env` was created for this session's
+live checks (gitignored, not part of the diff) — left in place for
+continued local dev rather than deleted, since it contains no real secrets
+(a local-only `AUTH_SECRET`, local Postgres URL).

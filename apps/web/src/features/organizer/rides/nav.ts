@@ -4,13 +4,13 @@ import type { CabinetNavItem } from '@/lib/cabinet/types';
 // (`@/lib/cabinet/organizer-nav.ts`), same pattern as
 // `features/organizer/profile/nav.ts`.
 //
-// Stopgap, same discipline as CR-013/014's stub screens: `docs/design.md` §8 lists
-// `/organizer/rides` ("My rides, grouped by status") as the real destination for this
-// nav entry, but no `docs/tasks.md` CR ticket builds that list yet (flagged in
-// `.claude/context/known-issues.md`, not silently worked around) — points straight at
-// the create screen until the list exists and gets its own "New ride" entry point.
+// Points at `/organizer/rides` (CR-088, `docs/design.md` §8 "My rides, grouped by
+// status") — previously a stopgap straight at `/organizer/rides/new` before that list
+// screen existed (see `.claude/context/known-issues.md` KI-024, now closed). The list
+// page itself carries the "new ride" call to action, so one nav entry still covers
+// the whole ride-management area.
 export const organizerRidesNavItem: CabinetNavItem = {
   label: 'Заезды',
-  href: '/organizer/rides/new',
+  href: '/organizer/rides',
   order: 20,
 };

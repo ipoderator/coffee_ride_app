@@ -102,9 +102,31 @@ only what a minimal, valid draft needs (`.claude/context/current-task.md`);
 own profile, `updatedBy` set to the caller, and every other field `null`.
 `400 validation_error` on an invalid field.
 
-GET `/v1/rides` — collection, paginated — not yet implemented
-GET `/v1/rides/:id`
-PATCH `/v1/rides/:id` — CR-018 "Edit draft"
+GET `/v1/rides` — collection, paginated — not yet implemented (CR-024, public
+discovery: only `published`+ statuses, no auth).
+
+GET `/v1/rides/mine` — **implemented (CR-088)**. Requires a valid session cookie
+(`401` otherwise). Every ride owned by the caller, any status — distinct from the
+above; no `OrganizerProfile` yet is `200 { items: [], nextCursor: null }`, not an
+error. Cursor-paginated per ADR-011 (`apps/api/src/lib/cursor.ts`), sorted
+`(createdAt desc, id desc)`. A malformed `cursor` → `400 invalid_cursor`.
+
+GET `/v1/rides/:id` — **implemented (CR-016/CR-018)**. Requires a valid session
+cookie (`401` otherwise) and ownership of the ride: `404 ride_not_found` both when
+the id doesn't exist at all and when it belongs to a different organizer
+(deliberately the same response either way — resource-enumeration reasoning, see
+`.claude/rules/security.md`). `200` → `{ ride }` on success.
+
+PATCH `/v1/rides/:id` — **implemented (CR-016/CR-018, "Edit draft")**. Same
+401/404 rules as `GET`. Draft-only: `409 ride_not_editable` once the ride has left
+`draft` (publishing/cancelling/finishing are separate tickets below, not a
+broader "edit anything anytime" endpoint). Body: any subset of `title`,
+`description`, `bicycleType`, `startsAt`+`startTimezone` (must arrive together or
+not at all), `participantLimit`, `priceRub`, `distanceKm`, `elevationGainMeters`,
+`paceKmh`, `durationMinutes`, `difficulty` — every field CR-017 left `null` at
+creation. `coverImageUrl` stays out (KI-023, deferred to the S3 pipeline). `200`
+→ `{ ride }` with the updated fields, `400 validation_error` on an invalid field.
+
 POST `/v1/rides/:id/publish`
 POST `/v1/rides/:id/close-registration`
 POST `/v1/rides/:id/cancel`

@@ -301,6 +301,24 @@ maps there. New shared, feature-independent utility:
 timezone library dependency (Russia has no DST since 2014, so every zone
 `RUSSIAN_TIMEZONE_OPTIONS` offers has a fixed year-round offset).
 
+CR-088/CR-016/CR-018 (2026-09-14, `docs/changelog.md`): `modules/rides/`
+gained `GET /v1/rides/mine` (the caller's own rides, any status) and `GET`/
+`PATCH /v1/rides/:id` (ownership-scoped — 404 `ride_not_found` whether the id
+doesn't exist or belongs to a different organizer; `PATCH` draft-only, 409
+`ride_not_editable` otherwise). New shared cross-cutting utility, first of its
+kind: `apps/api/src/lib/cursor.ts` (`encodeCursor`/`decodeCursor`/
+`clampLimit`) — ADR-011's opaque cursor-pagination contract, implemented once
+here for every future collection endpoint to reuse rather than re-deriving.
+`apps/web` gained `/organizer/rides` (`features/organizer/rides/components/
+RidesList.tsx` — groups the caller's rides by `RIDE_STATUSES`' order, each
+card linking into the edit screen) and `/organizer/rides/[id]/edit`
+(`EditRideForm` — not-found state, read-only once non-draft, fills in every
+field CR-017 left `null`). `organizerRidesNavItem` now points at the list
+instead of straight at `/organizer/rides/new`. `zoned-time.ts` gained the
+inverse conversion, `utcIsoToZonedLocalInput` (UTC instant + zone → local
+`datetime-local` value), needed to prefill the edit form. No `packages/db`
+schema change — every column CR-018 needed already existed from CR-017.
+
 ## Target structure
 
 apps/

@@ -49,10 +49,10 @@ function selectClassName(hasError: boolean): string {
 
 /**
  * `/organizer/rides/new` (`docs/design.md` §8, CR-017). Only the fields a valid draft
- * needs at creation — see `.claude/context/current-task.md`. Self-contained success
- * view (no link to an edit/detail screen — neither exists yet, CR-018/CR-023) rather
- * than the create-or-edit-in-one-screen pattern `OrganizerProfileForm` uses, since a
- * ride draft has nothing to load back (this screen only ever creates).
+ * needs at creation — see `.claude/context/current-task.md`. This screen only ever
+ * creates (not the create-or-edit-in-one-screen pattern `OrganizerProfileForm` uses),
+ * but its success view links straight into `/organizer/rides/[id]/edit` and
+ * `/organizer/rides` (both built by CR-018/CR-088) to close the loop.
  */
 export function CreateRideForm() {
   const [title, setTitle] = useState('');
@@ -170,12 +170,26 @@ export function CreateRideForm() {
             })}
           />
         </MetricRow>
-        <Link
-          href="/organizer"
-          className="self-start text-sm font-medium text-primary hover:underline"
-        >
-          {RIDE_CREATE_TERMS.backToDashboard}
-        </Link>
+        <div className="flex flex-wrap gap-4">
+          <Link
+            href={`/organizer/rides/${createdRide.id}/edit`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_CREATE_TERMS.editRideLink}
+          </Link>
+          <Link
+            href="/organizer/rides"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_CREATE_TERMS.allRidesLink}
+          </Link>
+          <Link
+            href="/organizer"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_CREATE_TERMS.backToDashboard}
+          </Link>
+        </div>
       </Card>
     );
   }

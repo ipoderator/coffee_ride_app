@@ -369,28 +369,6 @@ resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
 exists — reuse it for `User`, `OrganizerProfile`, and `Ride` rather than
 building a separate upload path per entity.
 
-### KI-024 — No `docs/tasks.md` ticket builds the organizer's "My rides" list
-
-Status: open. Discovered: 2026-09-14 (CR-017).
-Problem: `docs/design.md` §8 lists `/organizer/rides` ("My rides, grouped by
-status") as a real screen in the organizer cabinet, but no CR ticket in the
-Rides section (CR-017..CR-026) builds it — CR-023 "Ride detail" is the
-participant-facing `/rides/[id]` screen and CR-024 "Ride list" is the public
-discovery list at `/`, not this one. CR-017 needed a nav entry point into ride
-creation regardless, so `organizerRidesNavItem` ("Заезды") points straight at
-`/organizer/rides/new` as a stopgap (same discipline as CR-013/014's stub
-screens) — there is nowhere else for it to point yet.
-Impact: low today (CR-017 only creates rides, nothing to list yet) but grows
-with every ride-related ticket that lands without this screen — CR-018 ("Edit
-draft") in particular will have no way to navigate to an existing draft
-through the UI once more than one exists, only by knowing its id.
-Workaround: none needed yet — the nav entry still reaches the one ride
-screen that exists.
-Next action: a real CR ticket for `/organizer/rides` (list, grouped by
-status, each row linking into CR-018's edit screen) needs a number added to
-`docs/tasks.md`'s Rides section before CR-018 ships, or CR-018 inherits the
-same "no way to reach it" problem CR-017 avoided for itself.
-
 ---
 
 ## Resolved
@@ -587,3 +565,26 @@ stable across 5 consecutive full-suite runs after the fix.
 Note for future sessions: adding a fifth (or later) `apps/api` test file that
 touches the DB does not reintroduce this risk — `fileParallelism: false` is a
 suite-wide setting, not per-file.
+
+### KI-024 — No `docs/tasks.md` ticket builds the organizer's "My rides" list
+
+Resolved: 2026-09-14 (CR-088, its own new ticket — see this entry's own "Next
+action" below, which is exactly what happened). Discovered: 2026-09-14
+(CR-017).
+Problem: `docs/design.md` §8 lists `/organizer/rides` ("My rides, grouped by
+status") as a real screen in the organizer cabinet, but no CR ticket in the
+Rides section (CR-017..CR-026) built it — CR-023 "Ride detail" is the
+participant-facing `/rides/[id]` screen and CR-024 "Ride list" is the public
+discovery list at `/`, not this one. CR-017 needed a nav entry point into ride
+creation regardless, so `organizerRidesNavItem` ("Заезды") pointed straight at
+`/organizer/rides/new` as a stopgap.
+Impact: would have grown with every ride-related ticket landing without this
+screen — CR-018 ("Edit draft") in particular would have had no way to
+navigate to an existing draft through the UI once more than one existed.
+Fix: added CR-088 to `docs/tasks.md`'s Rides section (first free CR number —
+CR-001..CR-087 had no gaps) and built it in the same session as CR-016/CR-018,
+before CR-018 shipped: `GET /v1/rides/mine` (first cursor-paginated collection
+endpoint, `apps/api/src/lib/cursor.ts`) + `/organizer/rides` (groups the
+caller's own rides by status, each card linking into CR-018's edit screen).
+`organizerRidesNavItem` now points at the list instead of straight at the
+create screen.

@@ -66,3 +66,23 @@ export function zonedTimeToUtcIso(
   const offsetMinutes = timeZoneOffsetMinutes(probe, timeZone);
   return new Date(probe.getTime() - offsetMinutes * 60_000).toISOString();
 }
+
+/**
+ * The inverse of {@link zonedTimeToUtcIso} (CR-018, `.claude/context/
+ * current-task.md`): converts a UTC instant (`Ride.startsAt`) back into a
+ * `<input type="datetime-local">` value (`"2027-05-01T08:00"`) as it reads in the
+ * given IANA zone — used to prefill `EditRideForm` from an existing `Ride`.
+ */
+export function utcIsoToZonedLocalInput(
+  isoInstant: string,
+  timeZone: string,
+): string {
+  const instant = new Date(isoInstant);
+  const offsetMinutes = timeZoneOffsetMinutes(instant, timeZone);
+  const zoned = new Date(instant.getTime() + offsetMinutes * 60_000);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return (
+    `${zoned.getUTCFullYear()}-${pad(zoned.getUTCMonth() + 1)}-${pad(zoned.getUTCDate())}` +
+    `T${pad(zoned.getUTCHours())}:${pad(zoned.getUTCMinutes())}`
+  );
+}

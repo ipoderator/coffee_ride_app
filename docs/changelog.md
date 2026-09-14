@@ -2004,3 +2004,135 @@ Follow-up: CR-018 (Edit draft) is next per `docs/tasks.md`'s Rides section
 order — needs at least a `GET /v1/rides/:id` to load a draft back, and per
 KI-024 will hit the "no My rides list" gap unless that ticket is scheduled
 first.
+
+## 2026-09-14 — CR-088/CR-016/CR-018 — Organizer rides list, authorization & edit draft
+
+User asked to continue per the already-documented plan. Next unchecked ticket
+was CR-018 ("Edit draft"), but KI-024 (opened by the CR-017 session) blocked
+starting it: no ticket built `/organizer/rides` ("My rides"), so CR-018's
+edit screen would have had no way to be reached from the UI. Per KI-024's own
+"Next action," added CR-088 to `docs/tasks.md`'s Rides section (CR-001..CR-087
+had no gaps — first free number) and built it before CR-018, in the same
+session. CR-016 ("Organizer authorization," unchecked since CR-014) has no
+surface of its own to exercise — it _is_ the ownership check inside CR-018's
+`GET`/`PATCH /v1/rides/:id`, so it lands together with CR-018 rather than as
+a separate change. No migration in any of the three — CR-017's `rides` table
+already had every column CR-018 needed.
+
+CR-088 — Organizer rides list: `GET /v1/rides/mine`
+(`apps/api/src/modules/rides`), the API's first real cursor-paginated
+collection endpoint (ADR-011 §2) — new shared `apps/api/src/lib/cursor.ts`
+(`encodeCursor`/`decodeCursor`/`clampLimit`), reused by every later collection
+endpoint instead of each one re-deriving its own encoding. Requires a session
+(`401` otherwise); no `OrganizerProfile` yet is `200 { items: [], nextCursor:
+null }`, not an error — distinct from `createRide`'s `403`, since listing "my
+rides" for someone who hasn't created any is a legitimate empty state.
+Deliberately `/mine`, not a `?filter=` on the still-unimplemented public
+`GET /v1/rides` (CR-024) — "whose rides" must never be a client-supplied
+value (`.claude/rules/security.md`), and the two endpoints will show
+different things anyway (any status here vs. `published`+ only there). Sorted
+`(createdAt desc, id desc)` — newest draft first. `apps/web` gained
+`/organizer/rides` (`features/organizer/rides/components/RidesList.tsx`):
+loading/error/empty states per `.claude/rules/frontend.md`, rides grouped by
+`RIDE_STATUSES`' declared order, each card linking into CR-018's edit screen.
+`organizerRidesNavItem` now points here instead of straight at
+`/organizer/rides/new`; the list page itself carries the "new ride" CTA.
+
+CR-016/CR-018 — Organizer authorization + Edit draft: `GET`/`PATCH /v1/
+rides/:id`, both ownership-scoped through the caller's own `OrganizerProfile`
+(`rides.service.ts`'s `getRideForOwner`/`updateRideDraft`, resolved from the
+session, never a client-supplied id). Both 404 `ride_not_found` for a ride
+that doesn't exist at all **and** for one that exists but belongs to a
+different organizer — deliberately the same response either way, so a
+non-owner can't distinguish the two (same resource-enumeration reasoning as
+login's generic `invalid_credentials`). `PATCH` is draft-only: `409
+ride_not_editable` once the ride has left `draft` — publishing/cancelling/
+finishing stay separate tickets (CR-019/CR-021/CR-022), not folded into a
+general "edit anything anytime" endpoint. Body covers every field CR-017 left
+`null`: `title`, `description` (new Zod-layer cap — 2000 chars, not the 5000
+`docs/database.md` had provisionally guessed; no DB CHECK either way),
+`bicycleType`, `startsAt`+`startTimezone` (must arrive together or not at
+all — a `.refine` rejects a lone change to either), `participantLimit`,
+`priceRub`, `distanceKm`, `elevationGainMeters`, `paceKmh`,
+`durationMinutes`, `difficulty`. `coverImageUrl` stays out (KI-023, S3
+pipeline deferred, same call CR-017 made). `apps/web/src/lib/datetime/
+zoned-time.ts` gained `utcIsoToZonedLocalInput` — the inverse of CR-017's
+`zonedTimeToUtcIso`, needed to prefill the edit form's `datetime-local` input
+from an existing UTC instant; unit-tested as an exact round-trip against all
+11 Russian zones `RUSSIAN_TIMEZONE_OPTIONS` offers. New `/organizer/rides/
+[id]/edit` (`EditRideForm`) — not-found state for someone else's/a
+non-existent id, prefills every field, renders read-only with no save button
+once the ride leaves `draft`, duplicate-submit-protected `PATCH`.
+`CreateRideForm`'s success view now links straight into the new edit screen
+and the new list (previously only "back to dashboard" — neither existed yet).
+
+Files: `apps/api/src/lib/cursor.ts` (new); `packages/types/src/api/rides.ts`
+(+`listRidesQuerySchema`, `updateRideRequestSchema`, `ListRidesResponse`,
+`UpdateRideResponse`); `apps/api/src/modules/rides/{rides.service.ts,
+rides.routes.ts,rides.routes.test.ts}` (extended — `routes/v1.ts` already
+registered this module); `apps/web/src/lib/datetime/zoned-time.ts` (+fn,
++test); `apps/web/src/features/organizer/rides/{api.ts,nav.ts,rides.test.tsx,
+components/RidesList.tsx,components/EditRideForm.tsx,
+components/CreateRideForm.tsx}` (new/extended); `apps/web/src/app/organizer/
+rides/{page.tsx,[id]/edit/page.tsx}` (new); `packages/ui/src/terminology.ts`
+(+`RIDE_LIST_TERMS`, `RIDE_EDIT_TERMS`, +2 `RIDE_CREATE_TERMS` keys);
+`docs/api.md`/`docs/database.md` (Rides section updated); `docs/tasks.md`
+(CR-088 added and checked, CR-016/CR-018 checked).
+
+Decisions: none new at the ADR level. The `/mine`-suffix convention, the
+"404 either way" ownership response, and the draft-only `PATCH` gate are
+documented here and in `.claude/context/current-task.md`, not
+`docs/decisions.md` — applications of ADR-006/ADR-011's existing rules to a
+new endpoint, not new architectural decisions.
+
+Known limitations: none new. KI-024 (no "My rides" list) is resolved — see
+`.claude/context/known-issues.md`'s Resolved section.
+
+A real bug was found and fixed while building `listOwnRides`, not left as a
+workaround: interpolating a JS `Date` directly into a hand-written Drizzle
+`sql` template (for the cursor's keyset-comparison condition) throws
+`ERR_INVALID_ARG_TYPE` inside the `postgres` driver's own parameter binding —
+confirmed live, not guessed — because the driver only auto-serializes
+parameters bound through Drizzle's typed column helpers, not a raw `Date` in
+a manual template. Fixed by passing the cursor's `createdAt` as the ISO
+string it already is (`::timestamptz` cast on the SQL side), not a `Date`.
+Also found and fixed: this file's own new tests' last-run case (a
+CSRF-rejected `PATCH`) creates a real ride via a preceding successful `POST`
+before the rejected request, unlike the file's original last test (which
+never got past the CSRF check at all) — left a `rides` row (and its
+`organizer_profiles`/`users` rows) alive after the file finished, which then
+broke the next file's `DELETE FROM users` with a foreign-key violation
+(`rides.organizer_id` is `ON DELETE RESTRICT`). Fixed with an `afterAll` in
+`rides.routes.test.ts` that cleans up after this file's own tests — a suite
+shouldn't depend on running last to avoid leaking state into whatever runs
+next.
+
+Validation: `turbo run typecheck lint test build` (all 25 tasks, run together
+against a real `DATABASE_URL=postgresql://glebchurkin@localhost:5432/
+coffee_ride_dev` — Docker Desktop still unavailable in this environment)
+green, twice in a row for `apps/api`'s suite specifically (stability check
+after the two bugs above were fixed). `apps/api` gained 15 new tests (73
+total, was 58); `apps/web` gained 13 new tests (56 total, was 44 — plus 4 new
+`zoned-time.test.ts` cases for the reverse conversion). `format:check`/
+`lint:root` clean (one `prettier --write` pass this session). `next build`
+compiles both new routes (`/organizer/rides` static, `/organizer/rides/[id]/
+edit` dynamic) cleanly. Live-verified end to end against a real Postgres +
+running `apps/api`: curl sequence covering `GET /v1/rides/mine` (401 → empty
+page → populated + `limit=1` pagination across two rides, `nextCursor`
+followed to a real second page → malformed cursor 400 `invalid_cursor`),
+`GET`/`PATCH /v1/rides/:id` (a stranger's request 404 `ride_not_found`;
+publishing then `PATCH`ing 409 `ride_not_editable`; invalid field 400;
+valid `PATCH` 200, cross-checked against a direct DB read). Full browser
+walkthrough via the `browser-automation` skill against a real `next dev`
+server + `apps/api`: logged in, confirmed the "Заезды" nav link now opens
+`/organizer/rides`, the list showed the seeded draft grouped under
+"Черновик" with the correct local start time, clicking the card opened the
+edit screen with every field correctly prefilled (including the UTC→local
+round-trip), edited the title, saved (success message shown), reloaded — the
+new title persisted; separately confirmed the not-found state renders
+correctly for a random ride id. No console errors beyond the expected
+pre-login 401 and the expected 404 on the not-found check. Test accounts/
+rides deleted from the scratch DB afterward.
+
+Follow-up: CR-019 (Publish ride) is next per `docs/tasks.md`'s Rides section
+order.

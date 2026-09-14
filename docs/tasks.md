@@ -140,9 +140,11 @@ rewrite, not a polish pass.
       `DashboardWidget` descriptor) instead of the CR-014 stub; one widget so
       far, `OrganizerProfileWidget` (organizer-profile summary, reuses
       `GET /v1/organizers/me`). See `docs/changelog.md`.
-- [ ] CR-016 Organizer authorization — still blocked on `Ride`/CR-017+ (nothing
-      organizer-owned to protect yet; see `docs/changelog.md` CR-014/CR-015
-      entries)
+- [x] CR-016 Organizer authorization — done 2026-09-14, alongside CR-018: the
+      first real ownership check on an _existing_ ride (`GET`/`PATCH /v1/
+    rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
+      the caller's — deliberately the same response either way). See
+      `docs/changelog.md`.
 
 ## Rides
 
@@ -154,7 +156,17 @@ rewrite, not a polish pass.
       (`apps/web`). Moved `RideStatus`/`BicycleType`/`DifficultyLevel` from
       `packages/ui` to `packages/types` (architecture fix — `apps/api` can't
       depend on `packages/ui`). See `docs/changelog.md`.
-- [ ] CR-018 Edit draft
+- [x] CR-088 Organizer rides list (new ticket, added this session — see
+      `.claude/context/known-issues.md` KI-024) — done 2026-09-14:
+      `GET /v1/rides/mine`, the API's first cursor-paginated collection
+      endpoint (ADR-011, `apps/api/src/lib/cursor.ts`); `/organizer/rides`
+      screen grouping the caller's own rides by status. See
+      `docs/changelog.md`.
+- [x] CR-018 Edit draft — done 2026-09-14, together with CR-016: `GET`/
+      `PATCH /v1/rides/:id` (draft-only, 409 `ride_not_editable` once
+      published), `/organizer/rides/[id]/edit` filling in every field CR-017
+      left `null`. No migration needed — CR-017's schema already had every
+      column. See `docs/changelog.md`.
 - [ ] CR-019 Publish ride
 - [ ] CR-020 Close registration
 - [ ] CR-021 Cancel ride
