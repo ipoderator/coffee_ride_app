@@ -173,7 +173,17 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       KI-025), gated on `emailVerified` per `.claude/rules/security.md`
       (closes CR-059's remaining scope). `/organizer/rides/[id]/edit` gained
       a "Опубликовать" button next to Save. See `docs/changelog.md`.
-- [ ] CR-020 Close registration
+- [x] CR-089 Open registration (new ticket, added this session — see
+      `.claude/context/known-issues.md` KI-025) — done 2026-09-14: a new
+      publish endpoint takes a ride from `published` to `registration_open`,
+      resolving KI-025 (no ticket previously transitioned a ride into that
+      state at all).
+- [x] CR-020 Close registration — done 2026-09-14, together with CR-089: a
+      matching endpoint takes a ride from `registration_open` to
+      `registration_closed`. Neither transition gates on `emailVerified` —
+      only `publish` is named by `.claude/rules/security.md`.
+      `/organizer/rides/[id]/edit` gained the matching "Открыть
+      регистрацию"/"Закрыть регистрацию" buttons.
 - [ ] CR-021 Cancel ride
 - [ ] CR-022 Finish ride
 - [ ] CR-023 Ride detail

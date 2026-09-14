@@ -84,6 +84,26 @@ const EMAIL_VERIFICATION_REQUIRED = () =>
     'Verify your email before publishing a ride.',
   );
 
+// CR-089 ("Open registration"): distinct from `ride_not_publishable` — a different
+// action, different guard (`published` only, not `draft`).
+const RIDE_REGISTRATION_NOT_OPENABLE = () =>
+  new RideServiceError(
+    'ride_registration_not_openable',
+    409,
+    'Ride registration is not openable',
+    'Only a published ride can have registration opened.',
+  );
+
+// CR-020 ("Close registration"): distinct from the other two 409 codes above — guard
+// is `registration_open` only.
+const RIDE_REGISTRATION_NOT_CLOSABLE = () =>
+  new RideServiceError(
+    'ride_registration_not_closable',
+    409,
+    'Ride registration is not closable',
+    'Only a ride with open registration can have it closed.',
+  );
+
 const INVALID_CURSOR = () =>
   new RideServiceError(
     'invalid_cursor',
@@ -386,6 +406,93 @@ export async function publishRide(
   const [updated] = await db
     .update(rides)
     .set({ status: 'published', updatedAt: new Date(), updatedBy: userId })
+    .where(eq(rides.id, rideId))
+    .returning();
+  if (!updated) {
+    throw new Error('Ride update returned no row.');
+  }
+  return toPublicRide(updated);
+}
+
+/**
+ * CR-089 ("Open registration"): `published -> registration_open`, resolving KI-025
+ * (nothing previously transitioned a ride into `registration_open` at all). Same
+ * ownership resolution as {@link publishRide} (404 `ride_not_found` either way), but
+ * no `emailVerified` gate — `.claude/rules/security.md` names only the publish action,
+ * and there is no de-verification flow that could make an already-published ride's
+ * organizer newly unverified.
+ */
+export async function openRegistration(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (existing.status !== 'published') {
+    throw RIDE_REGISTRATION_NOT_OPENABLE();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({
+      status: 'registration_open',
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
+    .where(eq(rides.id, rideId))
+    .returning();
+  if (!updated) {
+    throw new Error('Ride update returned no row.');
+  }
+  return toPublicRide(updated);
+}
+
+/**
+ * CR-020 ("Close registration"): `registration_open -> registration_closed`. Same
+ * ownership resolution and no-`emailVerified`-gate reasoning as
+ * {@link openRegistration}.
+ */
+export async function closeRegistration(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (existing.status !== 'registration_open') {
+    throw RIDE_REGISTRATION_NOT_CLOSABLE();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({
+      status: 'registration_closed',
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
     .where(eq(rides.id, rideId))
     .returning();
   if (!updated) {

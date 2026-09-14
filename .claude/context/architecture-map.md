@@ -332,6 +332,20 @@ same `email_verification_required` guiding-banner pattern
 `OrganizerProfileForm` established. No `packages/db` schema change —
 `published` already existed in the `ride_status` enum since CR-017.
 
+CR-089/CR-020 (2026-09-14, `docs/changelog.md`): `modules/rides/` gained
+`POST /v1/rides/:id/open-registration` (`published -> registration_open`,
+resolving KI-025 — no ticket previously owned entering that state) and
+`POST /v1/rides/:id/close-registration` (`registration_open ->
+registration_closed`). Same ownership resolution as `publish` (404
+`ride_not_found` either way); unlike `publish`, neither gates on
+`emailVerified` — only the publish trigger is named by
+`.claude/rules/security.md`. Two new 409 codes, one per action
+(`ride_registration_not_openable`/`ride_registration_not_closable`).
+`apps/web`'s `EditRideForm` gained two status-conditional buttons
+("Открыть регистрацию"/"Закрыть регистрацию"), same pattern as CR-019's
+publish button. No `packages/db` schema change — both enum values already
+existed since CR-017.
+
 ## Target structure
 
 apps/

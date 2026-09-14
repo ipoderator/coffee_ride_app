@@ -25,7 +25,9 @@ import {
 } from '@/lib/datetime/zoned-time';
 import {
   ApiError,
+  closeRegistration,
   getRide,
+  openRegistration,
   publishRide,
   updateRide,
   updateRideRequestSchema,
@@ -105,6 +107,8 @@ export function EditRideForm({ rideId }: { rideId: string }) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishVerificationRequired, setPublishVerificationRequired] =
     useState(false);
+  const [isOpeningRegistration, setIsOpeningRegistration] = useState(false);
+  const [isClosingRegistration, setIsClosingRegistration] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +226,50 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       }
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  /** CR-089 ("Open registration"): `published -> registration_open`. No dedicated
+   * error banner like `handlePublish`'s email-verification case — the one possible
+   * failure beyond the network (`ride_registration_not_openable`) can't actually
+   * happen from this button, since it only renders while `ride.status ===
+   * 'published'`. */
+  async function handleOpenRegistration() {
+    if (isOpeningRegistration) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsOpeningRegistration(true);
+
+    try {
+      const response = await openRegistration(rideId);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.openRegistrationSuccess);
+    } catch {
+      setFormError(RIDE_EDIT_TERMS.loadError);
+    } finally {
+      setIsOpeningRegistration(false);
+    }
+  }
+
+  /** CR-020 ("Close registration"): `registration_open -> registration_closed`. */
+  async function handleCloseRegistration() {
+    if (isClosingRegistration) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsClosingRegistration(true);
+
+    try {
+      const response = await closeRegistration(rideId);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.closeRegistrationSuccess);
+    } catch {
+      setFormError(RIDE_EDIT_TERMS.loadError);
+    } finally {
+      setIsClosingRegistration(false);
     }
   }
 
@@ -523,6 +571,34 @@ export function EditRideForm({ rideId }: { rideId: string }) {
                 : RIDE_EDIT_TERMS.publish}
             </Button>
           </div>
+        )}
+
+        {ride.status === 'published' && (
+          <Button
+            type="button"
+            variant="secondary"
+            isLoading={isOpeningRegistration}
+            onClick={handleOpenRegistration}
+            className="self-start"
+          >
+            {isOpeningRegistration
+              ? RIDE_EDIT_TERMS.openRegistrationPending
+              : RIDE_EDIT_TERMS.openRegistration}
+          </Button>
+        )}
+
+        {ride.status === 'registration_open' && (
+          <Button
+            type="button"
+            variant="secondary"
+            isLoading={isClosingRegistration}
+            onClick={handleCloseRegistration}
+            className="self-start"
+          >
+            {isClosingRegistration
+              ? RIDE_EDIT_TERMS.closeRegistrationPending
+              : RIDE_EDIT_TERMS.closeRegistration}
+          </Button>
         )}
       </form>
     </Card>

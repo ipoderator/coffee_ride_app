@@ -369,28 +369,6 @@ resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
 exists — reuse it for `User`, `OrganizerProfile`, and `Ride` rather than
 building a separate upload path per entity.
 
-### KI-025 — No ticket transitions a ride into `registration_open`
-
-Status: open. Discovered: 2026-09-14 (CR-019).
-Problem: `docs/product.md`'s Lifecycle is `draft → published →
-registration_open → registration_closed → started → finished`, but
-`docs/tasks.md`'s Rides section only has tickets for `draft → published`
-(CR-019, this session) and `registration_open/closed → ...` at the closing
-end (CR-020 "Close registration"). No ticket owns entering
-`registration_open` in the first place — CR-019 was deliberately scoped to
-exactly what its name says (`published`), not silently widened to also open
-registration, since neither `docs/design.md` nor `docs/product.md` describes
-that as one combined action.
-Impact: none yet — `registration_open` is unreachable, but nothing consumes
-it yet either (CR-032 "Register" isn't built). Would block CR-032 if it
-assumes rides can already reach that state.
-Workaround: none needed yet.
-Next action: whichever of CR-020 ("Close registration") or CR-032
-("Register") turns out to need it should either get a preceding "Open
-registration" ticket added to `docs/tasks.md` (same pattern CR-088 used for
-its own gap, KI-024) or fold the transition into itself with a documented
-reason — decide when that ticket is actually started, not speculatively now.
-
 ### KI-026 — No verify-email web screen exists, and two organizer actions now hard-depend on it
 
 Status: open. Discovered: 2026-09-13 (CR-011, as an accepted scope boundary —
@@ -641,3 +619,29 @@ endpoint, `apps/api/src/lib/cursor.ts`) + `/organizer/rides` (groups the
 caller's own rides by status, each card linking into CR-018's edit screen).
 `organizerRidesNavItem` now points at the list instead of straight at the
 create screen.
+
+### KI-025 — No ticket transitions a ride into `registration_open`
+
+Resolved: 2026-09-14 (CR-089, its own new ticket — the "add a preceding
+ticket" option this entry's own "Next action" named, taken instead of folding
+the transition into CR-020). Discovered: 2026-09-14 (CR-019).
+Problem: `docs/product.md`'s Lifecycle is `draft → published →
+registration_open → registration_closed → started → finished`, but
+`docs/tasks.md`'s Rides section only had tickets for `draft → published`
+(CR-019) and `registration_open/closed → ...` at the closing end (CR-020
+"Close registration"). No ticket owned entering `registration_open` in the
+first place — CR-019 was deliberately scoped to exactly what its name says
+(`published`), not silently widened to also open registration, since neither
+`docs/design.md` nor `docs/product.md` describes that as one combined action.
+Impact: none while open — `registration_open` was unreachable, but nothing
+consumed it yet either (CR-032 "Register" isn't built). Would have blocked
+CR-020, which is exactly what surfaced it: `docs/tasks.md`'s next unchecked
+Rides ticket had no reachable source state to transition out of.
+Fix: added CR-089 ("Open registration") to `docs/tasks.md`'s Rides section
+(same "real gap, add a ticket" pattern CR-088 used for KI-024) and built it in
+the same session as CR-020, immediately before it: `POST
+/v1/rides/:id/open-registration` (`published -> registration_open`, same
+ownership rules as `publish`, no `emailVerified` gate) + `POST
+/v1/rides/:id/close-registration` (`registration_open -> registration_closed`,
+CR-020 itself). `/organizer/rides/[id]/edit` gained both actions as
+status-conditional buttons, same pattern CR-019 established for "Опубликовать".

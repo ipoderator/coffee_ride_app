@@ -135,10 +135,21 @@ id doesn't exist and when it belongs to a different organizer (same rule as `GET
 verified email before an account can act as an organizer (publish a ride)"; same code
 `POST /v1/organizers/me` already uses). Draft-only: `409 ride_not_publishable` for any
 non-`draft` status. `200` → `{ ride }` with `status: 'published'`. No request body.
-`draft → published` only — the lifecycle's later states (`registration_open` onward)
-have no owning ticket yet (`.claude/context/known-issues.md` KI-025).
+`draft → published` only — opening registration is a separate endpoint below
+(KI-025, resolved by CR-089).
 
-POST `/v1/rides/:id/close-registration`
+POST `/v1/rides/:id/open-registration` — **implemented (CR-089)**. Same
+401/404-ownership rule as `publish`. No `emailVerified` gate (only publish names that
+trigger in `.claude/rules/security.md`, and there is no de-verification flow that could
+affect an already-published ride). Published-only: `409
+ride_registration_not_openable` for any other status. `200` → `{ ride }` with
+`status: 'registration_open'`. No request body. `published → registration_open` only.
+
+POST `/v1/rides/:id/close-registration` — **implemented (CR-020)**. Same
+401/404-ownership rule as `publish`/`open-registration`, no `emailVerified` gate.
+`registration_open`-only: `409 ride_registration_not_closable` for any other status.
+`200` → `{ ride }` with `status: 'registration_closed'`. No request body.
+
 POST `/v1/rides/:id/cancel`
 POST `/v1/rides/:id/finish`
 

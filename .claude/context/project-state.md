@@ -31,9 +31,12 @@ order, in one session: CR-088 first (so CR-018's edit screen had a real UI
 entry point), then CR-016/CR-018 together (the ownership check only has a
 mutation to protect once CR-018's `PATCH` exists). CR-019 (Publish ride) also
 completed 2026-09-14, together with CR-059's remaining scope (gating organizer
-publish on `emailVerified`, `.claude/rules/security.md`). Rides section now
-stands at CR-017/CR-088/CR-016/CR-018/CR-019 done, CR-020 (Close registration)
-next.
+publish on `emailVerified`, `.claude/rules/security.md`). CR-089 (Open
+registration — new ticket, added this session per KI-025's own "next action")
+and CR-020 (Close registration) also completed 2026-09-14, together, in that
+order (CR-020 had nothing to close without CR-089 existing first). Rides
+section now stands at CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020 done,
+CR-021 (Cancel ride) next.
 
 ## Implemented
 
@@ -484,6 +487,32 @@ non-existent/404 stranger's-ride/403 unverified-email/409 non-draft/200
 cross-checked against a direct DB read/403 CSRF) and the `browser-automation`
 skill against a real `next dev` server + `apps/api`.
 
+Open/close registration landed 2026-09-14 (CR-089/CR-020, see
+`docs/changelog.md`): resolved KI-025 (opened by the CR-019 session — no
+ticket transitioned a ride into `registration_open` at all) by adding CR-089
+("Open registration") to `docs/tasks.md` — same "real gap, add a ticket"
+precedent as CR-088/KI-024 — and building it together with CR-020 ("Close
+registration") in one pass, since CR-020 had no reachable source state
+without it. `POST /v1/rides/:id/open-registration` (`published ->
+registration_open`) and `POST /v1/rides/:id/close-registration`
+(`registration_open -> registration_closed`), both in `apps/api/src/modules/
+rides`. Same ownership rules as `publish` (404 `ride_not_found` either way);
+unlike `publish`, neither gates on `emailVerified` —
+`.claude/rules/security.md` names only the publish trigger, and there is no
+de-verification flow that could affect an already-published ride's
+organizer. Two new 409 codes, one per action:
+`ride_registration_not_openable`/`ride_registration_not_closable`. No
+`packages/db` migration — both enum values already existed since CR-017.
+`apps/web`'s `/organizer/rides/[id]/edit` gained two status-conditional
+buttons ("Открыть регистрацию" while `published`, "Закрыть регистрацию" while
+`registration_open`), same pattern CR-019 established for "Опубликовать". 12
+new `apps/api` tests (92 total, was 80); 4 new `apps/web` tests (63 total,
+was 59). Live-verified via curl (401/404 non-existent/404 stranger's-ride/409
+wrong-state/200 cross-checked against a direct DB read/403 CSRF, for both
+endpoints) and the `browser-automation` skill against a real `next dev`
+server + `apps/api` (published -> open -> closed, screenshot-confirmed final
+read-only state, 0 console errors during the flow itself).
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -581,15 +610,12 @@ None.
 
 ## Next
 
-CR-020 — Close registration (`docs/tasks.md` Rides section, next after
-CR-017/CR-088/CR-016/CR-018/CR-019). Note KI-025: no ticket currently
-transitions a ride from `published` into `registration_open` at all — decide
-whether CR-020 needs to own that transition too (or a preceding "Open
-registration" ticket is warranted) before assuming `registration_open ->
-registration_closed` is CR-020's whole scope. CR-021 (Cancel ride)/CR-022
-(Finish ride) are the remaining lifecycle transitions after it, then CR-023
-(Ride detail, participant-facing) and CR-024 (Ride list, public discovery —
-distinct from CR-088's "My rides", organizer-scoped and already done).
+CR-021 — Cancel ride (`docs/tasks.md` Rides section, next after
+CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020). CR-022 (Finish ride) is the
+remaining lifecycle transition after it, then CR-023 (Ride detail,
+participant-facing) and CR-024 (Ride list, public discovery — distinct from
+CR-088's "My rides", organizer-scoped and already done). KI-025 is resolved —
+`registration_open`/`registration_closed` are both reachable now.
 
 ## Important decisions
 
@@ -696,12 +722,16 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   deliberately refuses to touch `status` at all. KI-024 (no "My rides" list)
   is resolved.
 - new (CR-019): cancelling/finishing a ride are still unimplemented
-  (CR-021/CR-022); no ticket transitions a ride into `registration_open` at
-  all — new KI-025; no `/verify-email` web screen exists anywhere in
+  (CR-021/CR-022); no `/verify-email` web screen exists anywhere in
   `apps/web` (only the API call CR-011 built), so an organizer who hits
   `email_verification_required` (this ticket or CR-014's) has no in-app way
   to actually verify — new KI-026, and CR-059 checking off in `docs/tasks.md`
   only closes its "gate organizer publish" scope, not this gap.
+- new (CR-089/CR-020): KI-025 resolved — `registration_open`/
+  `registration_closed` are both reachable now. Cancelling/finishing a ride
+  are still the only remaining unimplemented lifecycle transitions
+  (CR-021/CR-022); KI-026 (no `/verify-email` screen) is unaffected —
+  neither new endpoint gates on `emailVerified`.
 
 ## Do not break
 
@@ -721,4 +751,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-14 (CR-019, + CR-059's remaining scope)
+2026-09-14 (CR-089/CR-020)

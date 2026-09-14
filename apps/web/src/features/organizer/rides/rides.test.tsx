@@ -6,9 +6,11 @@ import { RidesList } from './components/RidesList';
 import { EditRideForm } from './components/EditRideForm';
 import {
   ApiError,
+  closeRegistration,
   createRide,
   getRide,
   listMyRides,
+  openRegistration,
   publishRide,
   updateRide,
 } from './api';
@@ -22,6 +24,8 @@ vi.mock('./api', async () => {
     getRide: vi.fn(),
     updateRide: vi.fn(),
     publishRide: vi.fn(),
+    openRegistration: vi.fn(),
+    closeRegistration: vi.fn(),
   };
 });
 
@@ -30,6 +34,8 @@ const listMyRidesMock = vi.mocked(listMyRides);
 const getRideMock = vi.mocked(getRide);
 const updateRideMock = vi.mocked(updateRide);
 const publishRideMock = vi.mocked(publishRide);
+const openRegistrationMock = vi.mocked(openRegistration);
+const closeRegistrationMock = vi.mocked(closeRegistration);
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -233,6 +239,8 @@ describe('EditRideForm', () => {
     getRideMock.mockReset();
     updateRideMock.mockReset();
     publishRideMock.mockReset();
+    openRegistrationMock.mockReset();
+    closeRegistrationMock.mockReset();
   });
 
   it('shows a not-found state for a ride that does not exist or is not owned by the caller', async () => {
@@ -377,6 +385,78 @@ describe('EditRideForm', () => {
     await screen.findByText('Редактировать можно только черновик заезда.');
     expect(
       screen.queryByRole('button', { name: 'Опубликовать' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('opens registration on a published ride and shows a success message', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+    openRegistrationMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Открыть регистрацию' }),
+    );
+
+    expect(await screen.findByText('Регистрация открыта.')).toBeInTheDocument();
+    expect(openRegistrationMock).toHaveBeenCalledWith('ride-1');
+    // The badge/action flips: the open button is gone, the close button appears.
+    expect(
+      screen.queryByRole('button', { name: 'Открыть регистрацию' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Закрыть регистрацию' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no open-registration button for a draft or registration_open ride', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByRole('button', { name: 'Открыть регистрацию' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes registration on a registration_open ride and shows a success message', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+    closeRegistrationMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_closed' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Закрыть регистрацию' }),
+    );
+
+    expect(await screen.findByText('Регистрация закрыта.')).toBeInTheDocument();
+    expect(closeRegistrationMock).toHaveBeenCalledWith('ride-1');
+    expect(
+      screen.queryByRole('button', { name: 'Закрыть регистрацию' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows no close-registration button for a published ride', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByRole('button', { name: 'Закрыть регистрацию' }),
     ).not.toBeInTheDocument();
   });
 });

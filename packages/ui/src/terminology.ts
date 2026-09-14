@@ -340,4 +340,11 @@ export const RIDE_EDIT_TERMS = {
   publishSuccess: 'Заезд опубликован.',
   publishEmailVerificationRequired:
     'Подтвердите email, чтобы опубликовать заезд. Ссылка для подтверждения была отправлена при регистрации.',
+  // CR-089 ("Open registration") / CR-020 ("Close registration").
+  openRegistration: 'Открыть регистрацию',
+  openRegistrationPending: 'Открытие регистрации…',
+  openRegistrationSuccess: 'Регистрация открыта.',
+  closeRegistration: 'Закрыть регистрацию',
+  closeRegistrationPending: 'Закрытие регистрации…',
+  closeRegistrationSuccess: 'Регистрация закрыта.',
 } as const;

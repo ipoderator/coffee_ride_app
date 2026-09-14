@@ -8,9 +8,11 @@ import {
 import { requireAuth } from '../../plugins/auth.js';
 import { rideResponseSchema } from './ride-response.schema.js';
 import {
+  closeRegistration,
   createRide,
   getRideForOwner,
   listOwnRides,
+  openRegistration,
   publishRide,
   updateRideDraft,
 } from './rides.service.js';
@@ -126,6 +128,50 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const ride = await publishRide(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-089 ("Open registration"): `published -> registration_open`, resolving KI-025.
+  // Same ownership rule as `publish`; 409 `ride_registration_not_openable` for any
+  // other status.
+  app.post(
+    '/:id/open-registration',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await openRegistration(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-020 ("Close registration"): `registration_open -> registration_closed`. Same
+  // ownership rule as `publish`/`open-registration`; 409
+  // `ride_registration_not_closable` for any other status.
+  app.post(
+    '/:id/close-registration',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await closeRegistration(
         app.db,
         request.user!.id,
         request.params.id,

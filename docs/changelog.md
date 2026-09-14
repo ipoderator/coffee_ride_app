@@ -2244,3 +2244,85 @@ re-diagnosing it.
 
 Follow-up: CR-020 (Close registration) is next per `docs/tasks.md`'s Rides
 section order.
+
+## 2026-09-14 — CR-089 + CR-020 — Open + close registration
+
+User asked to continue per the already-documented plan. Next unchecked ticket
+was CR-020 ("Close registration"), but its natural source state
+(`registration_open`) was unreachable — the CR-019 session had already
+flagged this as KI-025: no ticket transitioned a ride into
+`registration_open` at all. KI-025's own "next action" named two options
+(fold the transition into CR-020, or add a preceding ticket); chose the
+latter, same precedent as CR-088 for KI-024 — added CR-089 ("Open
+registration") to `docs/tasks.md`'s Rides section (next free CR number) and
+built both in the same session, since CR-020 was untestable without CR-089
+existing first.
+
+`apps/api/src/modules/rides/rides.service.ts` gained `openRegistration`
+(`published -> registration_open`) and `closeRegistration`
+(`registration_open -> registration_closed`), each with the same ownership
+resolution as `publishRide` (404 `ride_not_found` whether the ride doesn't
+exist or belongs to a different organizer). Unlike `publishRide`, neither
+gates on `emailVerified` — `.claude/rules/security.md` names only the
+publish trigger, and there is no de-verification flow that could make an
+already-published ride's organizer newly unverified; re-checking here would
+guard against a state that cannot occur. Two new 409 codes, one per action
+(`ride_registration_not_openable`/`ride_registration_not_closable`),
+distinct from each other and from `publish`'s `ride_not_publishable` so
+`apps/web` can branch without inspecting `detail` text. `apps/api/src/
+modules/rides/rides.routes.ts` gained `POST /:id/open-registration` and
+`POST /:id/close-registration`. No `packages/db` migration —
+`registration_open`/`registration_closed` already existed in the
+`ride_status` enum since CR-017.
+
+`apps/web/src/features/organizer/rides/{api.ts,components/EditRideForm.tsx}`
+gained the matching typed client calls and two status-conditional buttons on
+`/organizer/rides/[id]/edit`: "Открыть регистрацию" while `published`,
+"Закрыть регистрацию" while `registration_open` — same pattern CR-019
+established for "Опубликовать" (no confirmation dialog, same
+duplicate-submit-protection discipline). `packages/ui/src/terminology.ts`'s
+`RIDE_EDIT_TERMS` gained the six new labels/messages.
+`.claude/context/known-issues.md`'s KI-025 is resolved.
+
+Files: `packages/types/src/api/rides.ts`, `apps/api/src/modules/rides/
+{rides.service.ts,rides.routes.ts,rides.routes.test.ts}`, `apps/web/src/
+features/organizer/rides/{api.ts,components/EditRideForm.tsx,rides.test.tsx}`,
+`packages/ui/src/terminology.ts`, `docs/api.md`, `docs/tasks.md`,
+`.claude/context/known-issues.md`.
+Decisions: none new — resolves KI-025 per its own documented options, no ADR
+needed.
+
+Validation: `turbo run typecheck lint test build` (all 25 tasks, run against
+a real `DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`,
+Docker Desktop still unavailable in this environment) green. `apps/api`
+gained 12 new tests (92 total, was 80); `apps/web` gained 4 new tests (63
+total, was 59). `format:check`/`lint:root` clean (two `docs/tasks.md` list
+items were reworded, not just reflowed, to avoid a real Prettier markdown
+proseWrap instability — an inline code span split across a list-item
+continuation line converged to a different indentation on every successive
+`--write` pass; fixed by rewording those two bullets to keep each inline
+code span on one line, not by fighting the formatter). Live-verified via curl
+against a real Postgres + running `apps/api`, both endpoints in sequence on
+one ride (register → verify → login → create organizer profile → create
+draft ride): 401 (no cookie) → 404 (non-existent id) → 409
+`ride_registration_not_openable` (still `draft`) → publish → 404 (a second
+registered organizer's ride) → 200 `open-registration` happy path → 403 CSRF
+(mismatched `Origin` on `close-registration`) → 200 `close-registration`
+happy path (cross-checked against a direct `SELECT` — `status`/`updated_by`
+correct at every step) → 409 `ride_registration_not_closable` (closing an
+already-closed ride). Full browser walkthrough via the `browser-automation`
+skill against a real `next dev` server + the already-running `apps/api`:
+logged in as a fresh organizer with a `published` ride, confirmed "Открыть
+регистрацию" (and no close button) on the edit screen, clicked it, confirmed
+via `page.waitForResponse` the `POST .../open-registration` response was
+`200`, the success message and "Регистрация открыта" badge appeared and the
+button flipped to "Закрыть регистрацию"; clicked that, confirmed `POST
+.../close-registration` was `200`, the success message and "Регистрация
+закрыта" badge appeared with no action button remaining — screenshot taken
+and visually confirmed. No console errors during the flow itself (two
+unrelated `ERR_ABORTED` network entries were ordinary Next dev HMR/RSC
+prefetch noise from the initial page load, not part of the feature). Test
+accounts/rides deleted from the scratch DB afterward.
+
+Follow-up: CR-021 (Cancel ride) is next per `docs/tasks.md`'s Rides section
+order.

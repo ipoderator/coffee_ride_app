@@ -169,3 +169,16 @@ export interface UpdateRideResponse {
 export interface PublishRideResponse {
   ride: Ride;
 }
+
+// CR-089 ("Open registration") / CR-020 ("Close registration"): same shape as
+// `PublishRideResponse` — no request body, `:id` param only. Two distinct types (not
+// one shared alias) so each stays free to diverge later without a rename, same
+// convention as `CreateRideResponse`/`UpdateRideResponse` already being separate
+// interfaces despite an identical shape today.
+export interface OpenRegistrationResponse {
+  ride: Ride;
+}
+
+export interface CloseRegistrationResponse {
+  ride: Ride;
+}

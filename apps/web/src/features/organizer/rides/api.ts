@@ -1,9 +1,11 @@
 import {
   createRideRequestSchema,
   updateRideRequestSchema,
+  type CloseRegistrationResponse,
   type CreateRideRequest,
   type CreateRideResponse,
   type ListRidesResponse,
+  type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
   type Ride,
@@ -14,9 +16,11 @@ import { ApiError } from '@/lib/api/errors';
 
 export { createRideRequestSchema, updateRideRequestSchema, ApiError };
 export type {
+  CloseRegistrationResponse,
   CreateRideRequest,
   CreateRideResponse,
   ListRidesResponse,
+  OpenRegistrationResponse,
   PublishRideResponse,
   UpdateRideRequest,
   UpdateRideResponse,
@@ -126,4 +130,48 @@ export async function publishRide(id: string): Promise<PublishRideResponse> {
   }
 
   return body as PublishRideResponse;
+}
+
+/**
+ * CR-089 ("Open registration"): `published -> registration_open`. Throws `ApiError`
+ * on any non-2xx response, including the expected
+ * `ride_registration_not_openable` 409.
+ */
+export async function openRegistration(
+  id: string,
+): Promise<OpenRegistrationResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/open-registration`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as
+    OpenRegistrationResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as OpenRegistrationResponse;
+}
+
+/**
+ * CR-020 ("Close registration"): `registration_open -> registration_closed`. Throws
+ * `ApiError` on any non-2xx response, including the expected
+ * `ride_registration_not_closable` 409.
+ */
+export async function closeRegistration(
+  id: string,
+): Promise<CloseRegistrationResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/close-registration`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as
+    CloseRegistrationResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as CloseRegistrationResponse;
 }
