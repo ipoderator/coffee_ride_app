@@ -1641,3 +1641,82 @@ scratch DB afterward.
 Follow-up: CR-026 ("Map discovery") is next per `docs/tasks.md`'s Rides
 section order. New KI-030 records that distance/difficulty/price/
 date-range filters remain deferred (no design-doc backing yet).
+
+## 2026-09-15 — CR-026 / CR-084 — Map discovery + its geo-query decision
+
+Summary: CR-084 ("Decide the geo query approach for map discovery") was
+resolved together with CR-026 rather than as a separate prior session — same
+precedent as ADR-013/CR-062. Decision (**ADR-014**, `docs/decisions.md`):
+plain `numeric(9,6)` `startLat`/`startLng` columns on `rides`, not a PostGIS
+geography type, with a map-viewport (bbox) filter as a plain range query
+backed by a composite B-tree index — the current Postgres image
+(`postgres:17-alpine`) has no PostGIS, and `docs/product.md`'s MVP scope
+names only viewport markers, not true radius/proximity search. Only the
+ride's _start_ point gets coordinates — no named use case shows a finish pin
+on a discovery map (new KI-033).
+`GET /v1/rides` gained an optional `?bboxNorth=&bboxSouth=&bboxEast=
+&bboxWest=` filter (`packages/types`'s `listPublicRidesQuerySchema`, all
+four required together — a partial bbox is `400 validation_error`); a ride
+with no coordinates is excluded from a bbox-filtered result but stays
+visible in the plain, unfiltered list (`.claude/rules/resilience.md`: "the
+ride can still be created/viewed without geocoded coordinates").
+`PATCH /v1/rides/:id` accepts `startLat`/`startLng` (must arrive together or
+both be cleared together, same "arrive together" rule `startsAt`/
+`startTimezone` already used) — entered manually in `EditRideForm`, since
+`packages/maps-2gis`'s geocode adapter has no live-verified response shape
+in this environment (KI-016, no `MAPS_2GIS_API_KEY` configured) and building
+an address-lookup UI on top of it now would be unverifiable code (new
+KI-032).
+`apps/web`'s `/` gained a List/Map toggle (`DiscoveryViewToggle`,
+`docs/design.md` §8). No `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` exists in this
+environment either, so a real 2GIS MapGL render could not be built and
+live-verified — there is no mock for "does a vendor map tile render in a
+browser", unlike CR-007/CR-008's geocode adapter. Per `.claude/CLAUDE.md`'s
+stop conditions ("the failure depends on an unavailable external
+service/credential"), the map view instead renders `RideMapPlaceholder`
+(`ErrorState`, `tone="warning"`, `variant="inline"` — the existing CR-066
+degraded-state pattern) — a real, fully live-verified degraded state, not a
+speculative, unverifiable live integration (new KI-031, blocked on KI-016).
+`packages/maps-core`/`packages/maps-2gis` are unchanged by this ticket.
+Files: `docs/decisions.md` (ADR-014); `packages/db/src/schema/ride.ts` +
+migration `0005_polite_jimmy_woo.sql`; `packages/types/src/{domain/ride.ts,
+api/rides.ts}`; `apps/api/src/modules/rides/{rides.service.ts,
+ride-response.schema.ts,rides.routes.test.ts}`; `apps/web/src/features/
+organizer/rides/{components/EditRideForm.tsx,rides.test.tsx}`;
+`apps/web/src/features/participant/discovery/{components/
+{DiscoveryViewToggle.tsx (new),RideMapPlaceholder.tsx
+(new),DiscoveryList.tsx},discovery.test.tsx}`; three other tests' `Ride`/
+`PublicRide` fixtures updated for the new required fields
+(`ride-detail.test.tsx`); `packages/ui/src/terminology.ts`; `docs/api.md`,
+`docs/tasks.md`, `.claude/context/known-issues.md`.
+Decisions: ADR-014 (above) — the first ADR since ADR-013.
+Validation: `turbo run lint typecheck build test` (25 tasks) against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`: all
+green. `apps/api`'s rides suite gained 6 tests (bbox filter + no-coordinates
+exclusion, partial-bbox rejection, coordinate persistence, paired-field
+rejection, out-of-range rejection) — 152 total, was 126. `apps/web` gained 2
+tests (coordinate save, map-toggle degraded state) — 87 total, was 85.
+`format:check`/`lint:root` clean after one `prettier --write` pass
+(cosmetic only). Live-verified via curl against a real Postgres + a freshly
+started `apps/api`: three published rides (Moscow coordinates, Novosibirsk
+coordinates, no coordinates) — a Moscow-area bbox returned only the Moscow
+ride, excluding both Novosibirsk and the coordinate-less ride, while the
+unfiltered list still included all three; a partial bbox and an
+out-of-range/unpaired coordinate PATCH both returned `400
+validation_error`. Live browser-verified via the `browser-automation` skill
+against a real `next dev` server + `apps/api`: on `/`, clicking "Карта"
+replaced the list with the degraded notice (list hidden), clicking "Список"
+restored it, 0 console errors/failed requests; a full register → verify →
+organizer-profile → create-ride → edit-ride walkthrough confirmed the
+`Широта старта`/`Долгота старта` fields save and persist correctly
+(`55.751244`/`37.618423` round-tripped exactly through reload). All test
+accounts/rides deleted from the scratch DB by id/email afterward (a blanket
+`DELETE FROM` was refused by the session's own safety classifier — scoped
+deletes were used instead, same end state).
+Known limitations: KI-031 (no live MapGL render), KI-032 (no geocode-by-
+address UI), KI-033 (no finish-point coordinates) — all new, all recorded
+with an explicit next action in `.claude/context/known-issues.md`.
+Next logical task: the Route section (CR-027 "GPX upload") per
+`docs/tasks.md`'s order — note its own prerequisite, CR-085 ("GPX parsing
+must not block the event loop"), the same shape of gap CR-084 was for this
+ticket.

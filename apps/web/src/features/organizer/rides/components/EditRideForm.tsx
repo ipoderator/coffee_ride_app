@@ -57,6 +57,8 @@ interface FormState {
   paceKmh: string;
   durationMinutes: string;
   difficulty: '' | DifficultyLevel;
+  startLat: string;
+  startLng: string;
 }
 
 function toFormState(ride: Ride): FormState {
@@ -73,6 +75,8 @@ function toFormState(ride: Ride): FormState {
     paceKmh: ride.paceKmh?.toString() ?? '',
     durationMinutes: ride.durationMinutes?.toString() ?? '',
     difficulty: ride.difficulty ?? '',
+    startLat: ride.startLat?.toString() ?? '',
+    startLng: ride.startLng?.toString() ?? '',
   };
 }
 
@@ -171,6 +175,8 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       paceKmh: toNullableNumber(form.paceKmh),
       durationMinutes: toNullableNumber(form.durationMinutes),
       difficulty: form.difficulty === '' ? null : form.difficulty,
+      startLat: toNullableNumber(form.startLat),
+      startLng: toNullableNumber(form.startLng),
     };
 
     const parsed = updateRideRequestSchema.safeParse(payload);
@@ -490,6 +496,42 @@ export function EditRideForm({ rideId }: { rideId: string }) {
               </option>
             ))}
           </select>
+        </FormField>
+
+        <FormField
+          id="ride-start-lat"
+          label={RIDE_EDIT_TERMS.startLatLabel}
+          error={fieldErrors.startLat}
+        >
+          <Input
+            type="number"
+            min={-90}
+            max={90}
+            step="any"
+            value={form.startLat}
+            onChange={(event) =>
+              setForm({ ...form, startLat: event.target.value })
+            }
+            disabled={isPending || !isDraft}
+          />
+        </FormField>
+
+        <FormField
+          id="ride-start-lng"
+          label={RIDE_EDIT_TERMS.startLngLabel}
+          error={fieldErrors.startLng}
+        >
+          <Input
+            type="number"
+            min={-180}
+            max={180}
+            step="any"
+            value={form.startLng}
+            onChange={(event) =>
+              setForm({ ...form, startLng: event.target.value })
+            }
+            disabled={isPending || !isDraft}
+          />
         </FormField>
 
         <FormField

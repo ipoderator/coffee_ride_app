@@ -15,6 +15,8 @@ export const rideResponseSchema = z.object({
   bicycleType: z.enum(BICYCLE_TYPES),
   startsAt: z.string(),
   startTimezone: z.string(),
+  startLat: z.number().nullable(),
+  startLng: z.number().nullable(),
   participantLimit: z.number().nullable(),
   priceRub: z.number().nullable(),
   distanceKm: z.number().nullable(),

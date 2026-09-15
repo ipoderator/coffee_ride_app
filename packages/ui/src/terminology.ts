@@ -330,6 +330,10 @@ export const RIDE_EDIT_TERMS = {
   durationMinutesLabel: 'Длительность, мин',
   difficultyLabel: 'Сложность',
   difficultyNotSet: 'Не указана',
+  // CR-026 ("Map discovery"), ADR-014: manual coordinate entry — no geocode-by-
+  // address UI yet (KI-016).
+  startLatLabel: 'Широта старта',
+  startLngLabel: 'Долгота старта',
   notEditable: 'Редактировать можно только черновик заезда.',
   save: 'Сохранить',
   savePending: 'Сохранение…',
@@ -399,4 +403,11 @@ export const RIDE_DISCOVERY_TERMS = {
   filterAllOption: 'Все типы',
   emptyFilteredTitle: 'Пока нет заездов по этим фильтрам',
   resetFiltersLabel: 'Сбросить фильтры',
+  // CR-026 ("Map discovery"): the List/Map toggle (`docs/design.md` §8). No live
+  // 2GIS credential is configured in this environment (KI-016), so the map view
+  // shows a degraded notice instead of attempting a real map render
+  // (`.claude/rules/resilience.md`).
+  viewListLabel: 'Список',
+  viewMapLabel: 'Карта',
+  mapUnavailable: 'Карта временно недоступна. Используйте список заездов.',
 } as const;

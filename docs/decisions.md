@@ -337,3 +337,70 @@ all of them deliberate:
 When a second first-party client ships (mobile), or if the web app ever has to be served
 from a host that cannot proxy `/api` — for example a frontend platform that will not
 forward a path prefix. Both are real reasons; "it feels cleaner to separate them" is not.
+
+## ADR-014 — Geo query approach for map discovery: plain lat/lng columns, not PostGIS
+
+Status: Accepted.
+
+Resolves backlog item CR-084 ("Decide the geo query approach for map discovery: PostGIS
+vs built-in types + index strategy"), decided together with CR-026 ("Map discovery")
+rather than as a separate prior session — same precedent as ADR-013/CR-062 being decided
+alongside CR-012.
+
+### 1. Each ride's start point is two plain columns, not a PostGIS geography/geometry type
+
+`rides.startLat` / `rides.startLng`: `numeric(9,6)`, nullable, each with a range CHECK
+(`-90..90` / `-180..180` — `.claude/rules/database.md`: invariants enforced at the DB
+level). No PostGIS extension, no `geography`/`geometry` column type.
+
+### 2. Map-viewport (bbox) queries are plain range predicates, not a spatial index
+
+`GET /v1/rides`'s optional bbox filter (`bboxNorth`/`bboxSouth`/`bboxEast`/`bboxWest`)
+becomes `startLat BETWEEN bboxSouth AND bboxNorth AND startLng BETWEEN bboxWest AND
+bboxEast`, backed by a plain composite B-tree index on `(startLat, startLng)`. No GiST
+index, no `earthdistance`/`cube` extension.
+
+### Rationale
+
+- `docs/product.md`'s MVP scope (item 4, "map/list discovery") only needs markers
+  within the current map viewport — a bbox query. No named use case for true radius/
+  great-circle proximity search ("rides within N km of me") or a spatial join against
+  a route polyline — the polyline itself doesn't exist yet (`Route`/`RoutePoint` are
+  CR-027..031, unscheduled at the time of this decision).
+- The current `docker-compose.yml` Postgres image is plain `postgres:17-alpine`.
+  PostGIS is not installed, and installing it means a base-image swap — a real infra
+  change with its own operational surface (extension management, image provenance),
+  not something the current requirement justifies. Same "only when justified"
+  discipline as ADR-004 (Redis) and ADR-005 (S3): don't add infrastructure ahead of a
+  named need.
+- A plain-degree bbox range query, index-supported by an ordinary B-tree, is a strict
+  subset of what PostGIS/`earthdistance` offer and is sufficient for "show markers in
+  the visible map area" at MVP scale. It also has no `packages/db`/Drizzle marshaling
+  cost — Drizzle has no first-class PostGIS geography/geometry column helper, so a
+  spatial type would need raw SQL column definitions and custom serialization, while
+  `numeric` is already a first-class Drizzle type this codebase uses elsewhere
+  (`distanceKm`, `paceKmh`).
+- Known accuracy limitation, accepted for MVP: a degree of longitude covers less
+  ground distance at high latitude than at the equator, so a plain-degree bbox
+  slightly over-fetches near a viewport's north/south edges at high latitude (Russia
+  spans a wide latitude range). Acceptable for "which pins show on the current map",
+  not used for precise distance sorting or radius search — nothing in scope today
+  does either.
+
+### What this does NOT mean
+
+- It does not add coordinates for a ride's finish point, stops, or route geometry —
+  those remain unmodeled until the tickets that need them (CR-026 only adds the one
+  point a discovery-map pin needs; `.claude/context/known-issues.md` tracks the finish-
+  point gap explicitly rather than silently).
+- It does not preclude true radius search, server-side clustering, or PostGIS later.
+  Those are the trigger to revisit, not a reason to build the capability now.
+
+### When to revisit
+
+If the product ever names real radius/proximity search ("rides near me"), server-side
+marker clustering at scale, or a spatial join against actual route geometry (once
+`Route`/`RoutePoint` exist), that is the point to add `earthdistance`/`cube` (a
+lightweight contrib extension, no base-image change) or, if a true polygon/line spatial
+join is needed, PostGIS via a base-image swap — decided in a follow-up ADR, not a config
+tweak.

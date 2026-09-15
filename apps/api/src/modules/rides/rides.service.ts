@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
 import { organizerProfiles, rides, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
@@ -155,6 +155,8 @@ function toPublicRide(row: typeof rides.$inferSelect): Ride {
     bicycleType: row.bicycleType,
     startsAt: row.startsAt.toISOString(),
     startTimezone: row.startTimezone,
+    startLat: row.startLat,
+    startLng: row.startLng,
     participantLimit: row.participantLimit,
     priceRub: row.priceRub,
     distanceKm: row.distanceKm,
@@ -324,6 +326,27 @@ export async function listPublicRides(
   if (query.bicycleType) {
     conditions.push(eq(rides.bicycleType, query.bicycleType));
   }
+  // CR-026 ("Map discovery"), ADR-014: a map-viewport (bbox) filter — the request
+  // schema (`listPublicRidesQuerySchema`) already guarantees all four params arrive
+  // together or not at all. A ride with no coordinates can't be placed on the map, so
+  // it's excluded here — but only when a bbox filter is active; the plain,
+  // unfiltered list is unaffected (`.claude/rules/resilience.md`: "the ride can still
+  // be created/viewed without geocoded coordinates").
+  if (
+    query.bboxNorth !== undefined &&
+    query.bboxSouth !== undefined &&
+    query.bboxEast !== undefined &&
+    query.bboxWest !== undefined
+  ) {
+    conditions.push(
+      isNotNull(rides.startLat),
+      isNotNull(rides.startLng),
+      gte(rides.startLat, query.bboxSouth),
+      lte(rides.startLat, query.bboxNorth),
+      gte(rides.startLng, query.bboxWest),
+      lte(rides.startLng, query.bboxEast),
+    );
+  }
   if (query.cursor) {
     let cursorKey;
     try {
@@ -468,6 +491,8 @@ export async function updateRideDraft(
   if (patch.startsAt !== undefined) values.startsAt = new Date(patch.startsAt);
   if (patch.startTimezone !== undefined)
     values.startTimezone = patch.startTimezone;
+  if (patch.startLat !== undefined) values.startLat = patch.startLat;
+  if (patch.startLng !== undefined) values.startLng = patch.startLng;
   if (patch.participantLimit !== undefined)
     values.participantLimit = patch.participantLimit;
   if (patch.priceRub !== undefined) values.priceRub = patch.priceRub;

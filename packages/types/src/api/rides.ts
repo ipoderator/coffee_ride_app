@@ -99,11 +99,54 @@ export type ListPublicRidesResponse = Paginated<PublicRide>;
 // (`.claude/context/current-task.md`). Distance/difficulty/price/date-range filters
 // are deferred (no design-doc backing yet). `/mine` keeps the unextended
 // `listRidesQuerySchema` — this filter is discovery-only.
-export const listPublicRidesQuerySchema = listRidesQuerySchema.extend({
-  bicycleType: z
-    .enum(BICYCLE_TYPES, 'bicycleType must be one of: road, gravel, mtb, any.')
-    .optional(),
-});
+// CR-026 ("Map discovery"), ADR-014: an optional map-viewport (bbox) filter — four
+// named params, matching the existing style (`bicycleType`, `limit`, `cursor`) rather
+// than one delimited string, still fully typed server-side. A partial bbox is
+// meaningless, so all four must arrive together or not at all (the `.refine` below) —
+// same "arrive together" pattern `updateRideRequestSchema`'s `startsAt`/
+// `startTimezone` already uses.
+const bboxFieldSchema = z.coerce.number();
+export const listPublicRidesQuerySchema = listRidesQuerySchema
+  .extend({
+    bicycleType: z
+      .enum(
+        BICYCLE_TYPES,
+        'bicycleType must be one of: road, gravel, mtb, any.',
+      )
+      .optional(),
+    bboxNorth: bboxFieldSchema
+      .min(-90, 'bboxNorth must be between -90 and 90.')
+      .max(90, 'bboxNorth must be between -90 and 90.')
+      .optional(),
+    bboxSouth: bboxFieldSchema
+      .min(-90, 'bboxSouth must be between -90 and 90.')
+      .max(90, 'bboxSouth must be between -90 and 90.')
+      .optional(),
+    bboxEast: bboxFieldSchema
+      .min(-180, 'bboxEast must be between -180 and 180.')
+      .max(180, 'bboxEast must be between -180 and 180.')
+      .optional(),
+    bboxWest: bboxFieldSchema
+      .min(-180, 'bboxWest must be between -180 and 180.')
+      .max(180, 'bboxWest must be between -180 and 180.')
+      .optional(),
+  })
+  .refine(
+    (value) => {
+      const provided = [
+        value.bboxNorth,
+        value.bboxSouth,
+        value.bboxEast,
+        value.bboxWest,
+      ].filter((field) => field !== undefined).length;
+      return provided === 0 || provided === 4;
+    },
+    {
+      message:
+        'bboxNorth, bboxSouth, bboxEast and bboxWest must all be provided together.',
+      path: ['bboxNorth'],
+    },
+  );
 export type ListPublicRidesQuery = z.infer<typeof listPublicRidesQuerySchema>;
 
 // CR-018 ("Edit draft"): every field CR-017 deliberately left `null` at creation,
@@ -146,6 +189,22 @@ export const updateRideRequestSchema = z
         isValidIanaTimeZone,
         'Start timezone must be a valid IANA time zone identifier.',
       )
+      .optional(),
+    // CR-026 ("Map discovery"), ADR-014: manual entry only — no geocode-by-address UI
+    // yet (KI-016). Nullable/optional like every other field this ticket didn't
+    // introduce; must arrive together or both be cleared together, same reasoning as
+    // `startsAt`/`startTimezone` above (a lone coordinate is meaningless).
+    startLat: z
+      .number()
+      .min(-90, 'startLat must be between -90 and 90.')
+      .max(90, 'startLat must be between -90 and 90.')
+      .nullable()
+      .optional(),
+    startLng: z
+      .number()
+      .min(-180, 'startLng must be between -180 and 180.')
+      .max(180, 'startLng must be between -180 and 180.')
+      .nullable()
       .optional(),
     participantLimit: z
       .number()
@@ -194,6 +253,18 @@ export const updateRideRequestSchema = z
     {
       message: 'startsAt and startTimezone must both be provided together.',
       path: ['startTimezone'],
+    },
+  )
+  // CR-026: same "arrive together" rule as `startsAt`/`startTimezone` above — a lone
+  // `startLat` without `startLng` (or vice versa) is meaningless. `undefined` means
+  // "omit" (leave unchanged); a provided `null` is a deliberate clear and must be
+  // paired with the other field's `null`, not left as `undefined`.
+  .refine(
+    (value) =>
+      (value.startLat === undefined) === (value.startLng === undefined),
+    {
+      message: 'startLat and startLng must both be provided together.',
+      path: ['startLng'],
     },
   );
 export type UpdateRideRequest = z.infer<typeof updateRideRequestSchema>;

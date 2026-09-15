@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  index,
   integer,
   numeric,
   pgEnum,
@@ -72,6 +73,14 @@ export const rides = pgTable(
     // alone answers "what did the organizer mean by 08:00".
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     startTimezone: text('start_timezone').notNull(),
+    // CR-026 ("Map discovery"), ADR-014: plain lat/lng, not a PostGIS geography
+    // column — see the ADR for why. Only the start point — no named use case shows a
+    // finish pin on the discovery map (`.claude/context/known-issues.md`). Nullable:
+    // `.claude/rules/resilience.md`'s "ride can still be created/viewed without
+    // geocoded coordinates" is the default path today, not a fallback for a failed
+    // geocode call (no geocode-by-address UI exists yet, KI-016).
+    startLat: numeric('start_lat', { precision: 9, scale: 6, mode: 'number' }),
+    startLng: numeric('start_lng', { precision: 9, scale: 6, mode: 'number' }),
     participantLimit: integer('participant_limit'),
     priceRub: integer('price_rub'),
     // `mode: 'number'`: this codebase's `packages/ui` formatters
@@ -141,5 +150,19 @@ export const rides = pgTable(
       'rides_difficulty_range',
       sql`${table.difficulty} is null or (${table.difficulty} >= 1 and ${table.difficulty} <= 5)`,
     ),
+    // ADR-014: latitude/longitude range invariants enforced at the DB level, not
+    // just by `packages/types`' Zod schema.
+    check(
+      'rides_start_lat_range',
+      sql`${table.startLat} is null or (${table.startLat} >= -90 and ${table.startLat} <= 90)`,
+    ),
+    check(
+      'rides_start_lng_range',
+      sql`${table.startLng} is null or (${table.startLng} >= -180 and ${table.startLng} <= 180)`,
+    ),
+    // ADR-014: the composite B-tree backing `GET /v1/rides`'s bbox filter
+    // (`rides.service.ts`'s `listPublicRides`) — the plain-range-query half of the
+    // decision, not a spatial (GiST) index.
+    index('rides_start_lat_lng_idx').on(table.startLat, table.startLng),
   ],
 );

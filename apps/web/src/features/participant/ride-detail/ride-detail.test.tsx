@@ -23,6 +23,8 @@ const baseRide: Ride = {
   bicycleType: 'gravel',
   startsAt: '2027-05-01T05:00:00.000Z',
   startTimezone: 'Europe/Moscow',
+  startLat: null,
+  startLng: null,
   participantLimit: 20,
   priceRub: 500,
   distanceKm: 42.3,

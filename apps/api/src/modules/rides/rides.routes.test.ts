@@ -548,6 +548,90 @@ describe('/v1/rides', () => {
 
       await app.close();
     });
+
+    it('rejects a partial bbox (CR-026) with 400 validation_error', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?bboxNorth=56&bboxSouth=55',
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('validation_error');
+
+      await app.close();
+    });
+
+    it('filters by bbox (CR-026, ADR-014) and excludes a ride with no coordinates', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+
+      async function createPublishedAt(
+        title: string,
+        coords: { startLat: number; startLng: number } | null,
+      ) {
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: { ...VALID_PAYLOAD, title },
+        });
+        const rideId = created.json().ride.id as string;
+        if (coords) {
+          await app.inject({
+            method: 'PATCH',
+            url: `/v1/rides/${rideId}`,
+            headers: { origin: WEB_ORIGIN },
+            cookies: { session: owner.rawToken },
+            payload: coords,
+          });
+        }
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/publish`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+        });
+        return rideId;
+      }
+
+      // Moscow — inside the bbox below.
+      const insideId = await createPublishedAt('Москва', {
+        startLat: 55.751244,
+        startLng: 37.618423,
+      });
+      // Novosibirsk — well outside the bbox below.
+      const outsideId = await createPublishedAt('Новосибирск', {
+        startLat: 55.0084,
+        startLng: 82.9357,
+      });
+      // No coordinates at all — must never appear in a bbox-filtered result.
+      const noCoordsId = await createPublishedAt('Без координат', null);
+
+      const filtered = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?bboxNorth=56&bboxSouth=55&bboxEast=38&bboxWest=37',
+      });
+      expect(filtered.statusCode).toBe(200);
+      const filteredIds = (filtered.json().items as Array<{ id: string }>).map(
+        (item) => item.id,
+      );
+      expect(filteredIds).toContain(insideId);
+      expect(filteredIds).not.toContain(outsideId);
+      expect(filteredIds).not.toContain(noCoordsId);
+
+      // Unfiltered: the coordinate-less ride still appears (resilience: viewable
+      // without geocoded coordinates).
+      const unfiltered = await app.inject({ method: 'GET', url: '/v1/rides' });
+      const unfilteredIds = (
+        unfiltered.json().items as Array<{ id: string }>
+      ).map((item) => item.id);
+      expect(unfilteredIds).toContain(noCoordsId);
+
+      await app.close();
+    });
   });
 
   describe('GET /v1/rides/mine', () => {
@@ -1024,6 +1108,8 @@ describe('/v1/rides', () => {
           distanceKm: 42.5,
           elevationGainMeters: 350,
           difficulty: 3,
+          startLat: 55.751244,
+          startLng: 37.618423,
         },
       });
 
@@ -1036,6 +1122,8 @@ describe('/v1/rides', () => {
       expect(body.ride.distanceKm).toBe(42.5);
       expect(body.ride.elevationGainMeters).toBe(350);
       expect(body.ride.difficulty).toBe(3);
+      expect(body.ride.startLat).toBe(55.751244);
+      expect(body.ride.startLng).toBe(37.618423);
       expect(body.ride.updatedBy).toBe(userId);
 
       // Verified via a direct DB read, not just the HTTP response.
@@ -1045,6 +1133,62 @@ describe('/v1/rides', () => {
         .where(eq(rides.id, created.json().ride.id));
       expect(row?.title).toBe('Обновлённое название');
       expect(row?.participantLimit).toBe(30);
+      expect(row?.startLat).toBe(55.751244);
+      expect(row?.startLng).toBe(37.618423);
+
+      await app.close();
+    });
+
+    it('rejects startLat without startLng (CR-026) with 400 validation_error', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${created.json().ride.id}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { startLat: 55.751244 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('validation_error');
+
+      await app.close();
+    });
+
+    it('rejects an out-of-range startLat (CR-026) with 400 validation_error', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${created.json().ride.id}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { startLat: 200, startLng: 37.618423 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('validation_error');
 
       await app.close();
     });

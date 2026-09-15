@@ -106,14 +106,20 @@ own profile, `updatedBy` set to the caller, and every other field `null`.
 `400 validation_error` on an invalid field.
 
 GET `/v1/rides` — **implemented (CR-024, public discovery; extended CR-025,
-"Filters")**. No session cookie ever required or consulted — fully public.
-Every ride whose status has left `draft` (`published`/`registration_open`/
-`registration_closed`/`started`/`finished`/`cancelled` — same "published+" rule
-`GET /v1/rides/:id` uses) **and** whose `startsAt` has not yet passed — a
-ride that has already started/finished, or a past-dated cancelled one, no
-longer appears here at all (CR-025, resolves KI-029), though it stays
-reachable directly at `/rides/:id`. Optional `?bicycleType=` narrows to one
-of `road`/`gravel`/`mtb`/`any`; omitted returns every type. Each item carries
+"Filters"; extended CR-026, "Map discovery")**. No session cookie ever
+required or consulted — fully public. Every ride whose status has left
+`draft` (`published`/`registration_open`/`registration_closed`/`started`/
+`finished`/`cancelled` — same "published+" rule `GET /v1/rides/:id` uses)
+**and** whose `startsAt` has not yet passed — a ride that has already
+started/finished, or a past-dated cancelled one, no longer appears here at
+all (CR-025, resolves KI-029), though it stays reachable directly at
+`/rides/:id`. Optional `?bicycleType=` narrows to one of
+`road`/`gravel`/`mtb`/`any`; omitted returns every type. Optional map-viewport
+filter (CR-026, ADR-014): `?bboxNorth=&bboxSouth=&bboxEast=&bboxWest=` (all
+four required together — a partial bbox is `400 validation_error`) narrows to
+rides whose `startLat`/`startLng` fall inside the box; a ride with no
+coordinates never appears in a bbox-filtered result (it still appears in the
+plain, unfiltered list — `.claude/rules/resilience.md`). Each item carries
 `organizer: { id, name }` (same embed as the single-ride response).
 Cursor-paginated per ADR-011, sorted `(startsAt asc, id asc)` — soonest-first,
 distinct from `/mine`'s `(createdAt desc, id desc)`. A malformed `cursor` →
@@ -136,15 +142,20 @@ either way — resource-enumeration reasoning, see `.claude/rules/security.md`).
 `200` → `{ ride, organizer: { id, name } }` — `organizer` is additive (CR-023)
 alongside the unchanged `ride` field.
 
-PATCH `/v1/rides/:id` — **implemented (CR-016/CR-018, "Edit draft")**. Same
-401/404 rules as `GET`. Draft-only: `409 ride_not_editable` once the ride has left
-`draft` (publishing/cancelling/finishing are separate tickets below, not a
-broader "edit anything anytime" endpoint). Body: any subset of `title`,
-`description`, `bicycleType`, `startsAt`+`startTimezone` (must arrive together or
-not at all), `participantLimit`, `priceRub`, `distanceKm`, `elevationGainMeters`,
-`paceKmh`, `durationMinutes`, `difficulty` — every field CR-017 left `null` at
-creation. `coverImageUrl` stays out (KI-023, deferred to the S3 pipeline). `200`
-→ `{ ride }` with the updated fields, `400 validation_error` on an invalid field.
+PATCH `/v1/rides/:id` — **implemented (CR-016/CR-018, "Edit draft"; extended
+CR-026, "Map discovery")**. Same 401/404 rules as `GET`. Draft-only: `409
+ride_not_editable` once the ride has left `draft` (publishing/cancelling/
+finishing are separate tickets below, not a broader "edit anything anytime"
+endpoint). Body: any subset of `title`, `description`, `bicycleType`,
+`startsAt`+`startTimezone` (must arrive together or not at all),
+`startLat`+`startLng` (CR-026, ADR-014: must arrive together or not at all,
+each `null` to clear; `startLat` in `[-90, 90]`, `startLng` in
+`[-180, 180]`), `participantLimit`, `priceRub`, `distanceKm`,
+`elevationGainMeters`, `paceKmh`, `durationMinutes`, `difficulty` — every
+field CR-017 left `null` at creation. `coverImageUrl` stays out (KI-023,
+deferred to the S3 pipeline); `startLat`/`startLng` are entered manually —
+no geocode-by-address UI exists yet (KI-016). `200` → `{ ride }` with the
+updated fields, `400 validation_error` on an invalid field.
 
 POST `/v1/rides/:id/publish` — **implemented (CR-019)**. Requires a valid session
 cookie (`401` otherwise) and ownership of the ride: `404 ride_not_found` both when the

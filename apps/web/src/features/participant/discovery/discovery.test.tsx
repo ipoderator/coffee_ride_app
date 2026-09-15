@@ -23,6 +23,8 @@ const baseRide: PublicRide = {
   bicycleType: 'gravel',
   startsAt: '2027-05-01T05:00:00.000Z',
   startTimezone: 'Europe/Moscow',
+  startLat: null,
+  startLng: null,
   participantLimit: 20,
   priceRub: 500,
   distanceKm: 42.3,
@@ -138,5 +140,28 @@ describe('DiscoveryList', () => {
     expect(listPublicRidesMock).toHaveBeenLastCalledWith({
       bicycleType: undefined,
     });
+  });
+
+  it('switches to the map view and shows the degraded notice instead of a blank pane (CR-026)', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [baseRide],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+    await screen.findByText(baseRide.title);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
+
+    expect(
+      await screen.findByText(
+        'Карта временно недоступна. Используйте список заездов.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(baseRide.title)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Список' }));
+
+    expect(await screen.findByText(baseRide.title)).toBeInTheDocument();
   });
 });

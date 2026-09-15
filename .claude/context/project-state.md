@@ -50,9 +50,20 @@ screen, `/rides/[id]`. CR-024 (Ride list, public discovery) also completed
 2026-09-15: `GET /v1/rides` (fully public, "published+" statuses), and
 `apps/web`'s `/` (replaces the CR-002 bootstrap placeholder). CR-025
 (Filters) also completed 2026-09-15: `?bicycleType=` on `GET /v1/rides`
-plus the "upcoming only" default + `startsAt asc` sort (resolves KI-029) —
-the Rides section now has every ticket done through CR-025; CR-026 (Map
-discovery) next.
+plus the "upcoming only" default + `startsAt asc` sort (resolves KI-029).
+CR-026 (Map discovery) and CR-084 (its geo-query prerequisite, decided
+together — same precedent as ADR-013/CR-062) also completed 2026-09-15:
+`rides` gained nullable `startLat`/`startLng` (ADR-014: plain columns + a
+bbox range query, not PostGIS — no PostGIS in the current Postgres image,
+no named radius-search use case), `GET /v1/rides` gained an optional
+`?bboxNorth=&bboxSouth=&bboxEast=&bboxWest=` map-viewport filter,
+`PATCH /v1/rides/:id` accepts the new coordinate fields (manual entry only —
+KI-016 blocks a geocode-by-address UI), and `/` gained a List/Map toggle.
+No live 2GIS credential exists in this environment, so the map view is a
+real, live-verified degraded state (`ErrorState`, `.claude/rules/
+resilience.md`) rather than an unverifiable live MapGL render (new KI-031).
+The Rides section now has every ticket done through CR-026; the Route
+section (CR-027..031) is next.
 
 ## Implemented
 
@@ -952,6 +963,13 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   outright and sorts `startsAt asc` (soonest-first). New KI-030: only
   `bicycleType` is filterable; distance/difficulty/price/date-range
   filters remain deferred (no design-doc backing yet).
+- new (CR-026/CR-084, ADR-014): `rides.startLat`/`startLng` cover the start
+  point only — no `finishLat`/`finishLng` (new KI-033, no named use case
+  yet). No geocode-by-address UI exists (new KI-032, blocked on KI-016);
+  coordinates are entered manually. No live 2GIS MapGL rendering exists yet
+  either (new KI-031, also blocked on KI-016) — `/`'s "Карта" tab always
+  shows a live-verified degraded notice, never a blank pane or a fake map.
+  `packages/maps-core`/`packages/maps-2gis` are unchanged by this ticket.
 
 ## Do not break
 
@@ -971,4 +989,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-025)
+2026-09-15 (CR-026/CR-084)

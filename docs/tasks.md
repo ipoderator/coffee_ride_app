@@ -219,7 +219,15 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       (the one filter dimension this ticket ships), plus the "upcoming
       only" default + `startsAt asc` sort resolving KI-029. See
       `docs/changelog.md`.
-- [ ] CR-026 Map discovery
+- [x] CR-026 Map discovery — done 2026-09-15: `GET /v1/rides` gained an
+      optional map-viewport (bbox) filter (`?bboxNorth=&bboxSouth=&bboxEast=
+&bboxWest=`, ADR-014), `rides` gained nullable `startLat`/`startLng`
+      (`PATCH /v1/rides/:id`, manual entry — KI-016 blocks geocode-by-
+      address), and `/` gained a List/Map toggle. No live 2GIS credential
+      exists in this environment, so the map view is a real, live-verified
+      degraded state (`ErrorState`, `.claude/rules/resilience.md`) rather
+      than an unverifiable live MapGL render — KI-031. See
+      `docs/changelog.md`.
 
 ## Route
 
@@ -325,8 +333,10 @@ Found during the 2026-09-11 audit, cheaper before the related feature is built.
 
 - [ ] CR-083 Idempotency for `POST /v1/rides/:id/register` (network retry must not create
       a second registration; the DB constraint is the backstop, not the design)
-- [ ] CR-084 Decide the geo query approach for map discovery (bbox/radius): PostGIS vs
-      built-in types + index strategy — needed by CR-026
+- [x] CR-084 Decide the geo query approach for map discovery (bbox/radius): PostGIS vs
+      built-in types + index strategy — needed by CR-026 — decided together
+      with CR-026 (ADR-014, 2026-09-15): plain lat/lng columns + a bbox range
+      query, not PostGIS. See `docs/decisions.md`.
 - [ ] CR-085 GPX parsing must not block the event loop: size limit, streaming or worker —
       needed by CR-027
 - [ ] CR-086 Cover image pipeline: size/type limits, resizing, how files are served

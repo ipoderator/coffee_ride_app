@@ -757,3 +757,59 @@ Next action: add distance/difficulty/price/date-range filters to
 `RideFilters` if/when the product spec names them — same "the minimal real
 thing now" discipline this ticket itself used, not an oversight to fix
 blindly.
+
+### KI-031 — No live 2GIS MapGL rendering yet; `/`'s map view is a degraded placeholder
+
+Status: open. Discovered: 2026-09-15 (CR-026, "Map discovery" session).
+Problem: no `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` is configured anywhere in this
+environment (`.env.example` only — grepped `apps/web/src`, no matches), so a
+real 2GIS MapGL JS integration could not be built and live-verified this
+session — unlike `packages/maps-2gis`'s geocode adapter (KI-016), there is no
+way to mock "does a vendor map tile actually render in a browser".
+`.claude/CLAUDE.md`'s stop conditions ("the failure depends on an unavailable
+external service/credential") apply directly.
+Impact: medium — `/`'s "Карта" tab (CR-026's `DiscoveryViewToggle`) always
+shows `RideMapPlaceholder` (`ErrorState`, `tone="warning"`, `variant="inline"`
+— `.claude/rules/resilience.md`'s required degraded-state pattern) instead of
+an actual map, regardless of whether any ride has coordinates. The list view
+is fully unaffected.
+Workaround: none needed for the list-based discovery journey — the
+placeholder never blocks it, per its own design.
+Next action: once a real `MAPS_2GIS_MAPGL_KEY`/`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`
+pair exists, build the actual render layer `.claude/rules/maps.md` describes
+(a `packages/maps-core` render-layer type + a `packages/maps-2gis`
+implementation loading the real MapGL script) and wire markers from each
+ride's `startLat`/`startLng`. Blocked on KI-016 (same missing credential).
+
+### KI-032 — No geocode-by-address UI; ride coordinates are entered manually
+
+Status: open. Discovered: 2026-09-15 (CR-026, "Map discovery" session).
+Problem: `PATCH /v1/rides/:id`'s new `startLat`/`startLng` fields (CR-026)
+are plain number inputs in `EditRideForm` — there is no address-to-
+coordinates lookup UI, because building one on top of `packages/maps-2gis`'s
+geocode adapter would be new code with no way to verify it actually works
+against a live 2GIS account (KI-016 — no credential configured).
+Impact: low-medium — an organizer must already know (or look up elsewhere)
+their ride's start coordinates to fill in the field; this is the
+`.claude/rules/resilience.md`-required "ride can still be created/viewed
+without geocoded coordinates" path, just made the _only_ path for now rather
+than a fallback for a failed geocode call.
+Workaround: manual entry, or leave both fields blank (the ride stays fully
+usable — it just won't appear in a bbox-filtered/map query).
+Next action: once KI-016 is resolved (a live geocode credential exists),
+wire `EditRideForm` to call `packages/maps-2gis`'s `geocode()` and offer a
+"find on map"/address-search affordance instead of raw lat/lng inputs.
+
+### KI-033 — A ride's finish point has no coordinates (start point only)
+
+Status: open. Discovered: 2026-09-15 (CR-026, "Map discovery" session).
+Problem: `docs/product.md`'s Ride fields list names "start, finish" directly
+on `Ride`. CR-026 (ADR-014) only added `startLat`/`startLng` — a discovery
+map only ever needs one pin per ride (where it begins), and no named use
+case shows a finish pin on the discovery map.
+Impact: low — nothing in scope today needs a finish point; a future ride-
+detail map or route-summary screen might.
+Workaround: none needed.
+Next action: add `finishLat`/`finishLng` (same ADR-014 shape) if/when a
+screen actually needs to show or query by the finish location — likely
+alongside CR-027..031 (`Route`/`RoutePoint`), not before.

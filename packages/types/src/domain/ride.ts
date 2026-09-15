@@ -50,6 +50,11 @@ export interface Ride {
   /** IANA identifier for where the ride starts (ADR-012 §2) — required alongside
    * `startsAt` so "08:00" has an unambiguous meaning. */
   startTimezone: string;
+  /** ADR-014 (CR-026, "Map discovery"): the ride's start point only — no `finish`
+   * point yet (`.claude/context/known-issues.md`). Both `null` unless the organizer
+   * has entered them manually (no geocode-by-address UI exists yet, KI-016). */
+  startLat: number | null;
+  startLng: number | null;
   participantLimit: number | null;
   priceRub: number | null;
   distanceKm: number | null;

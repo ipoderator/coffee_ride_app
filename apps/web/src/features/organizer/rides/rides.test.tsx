@@ -55,6 +55,8 @@ const baseRide: Ride = {
   bicycleType: 'gravel',
   startsAt: '2027-05-01T05:00:00.000Z',
   startTimezone: 'Europe/Moscow',
+  startLat: null,
+  startLng: null,
   participantLimit: null,
   priceRub: null,
   distanceKm: null,
@@ -303,6 +305,30 @@ describe('EditRideForm', () => {
     expect(updateRideMock).toHaveBeenCalledWith(
       'ride-1',
       expect.objectContaining({ title: 'Обновлённое название' }),
+    );
+  });
+
+  it('saves start coordinates (CR-026)', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+    updateRideMock.mockResolvedValue({
+      ride: { ...baseRide, startLat: 55.751244, startLng: 37.618423 },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.change(screen.getByLabelText('Широта старта'), {
+      target: { value: '55.751244' },
+    });
+    fireEvent.change(screen.getByLabelText('Долгота старта'), {
+      target: { value: '37.618423' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Изменения сохранены.')).toBeInTheDocument();
+    expect(updateRideMock).toHaveBeenCalledWith(
+      'ride-1',
+      expect.objectContaining({ startLat: 55.751244, startLng: 37.618423 }),
     );
   });
 
