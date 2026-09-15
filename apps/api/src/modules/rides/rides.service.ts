@@ -3,6 +3,7 @@ import { organizerProfiles, rides, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
+  GetRideResponse,
   ListRidesQuery,
   ListRidesResponse,
   Ride,
@@ -288,30 +289,53 @@ export async function listOwnRides(
 }
 
 /**
- * CR-016 ("Organizer authorization"): resolves a single ride, scoped to the caller's
- * own `OrganizerProfile`. Throws `ride_not_found` (404) both when the id doesn't
- * exist at all and when it belongs to a different organizer — see the comment on
- * `RIDE_NOT_FOUND` above for why those two cases share one response.
+ * CR-016/CR-018 ("Organizer authorization"/"Edit draft") originally, now CR-023
+ * ("Ride detail") too: resolves a single ride for *any* viewer, owner or not.
+ *
+ * `userId` is `null` for an unauthenticated request (`resolveOptionalUser`,
+ * `plugins/auth.ts`) — never rejected outright, unlike every other `rides.service.ts`
+ * function. Visibility rule (`.claude/context/current-task.md`'s investigation):
+ * - the ride's own organizer (resolved server-side from the session, never a
+ *   client-supplied id) sees it at any status, same as the pre-CR-023 owner-only
+ *   behavior;
+ * - anyone else (including no session at all) sees it unless it's still `draft` —
+ *   `404 ride_not_found`, the same response `RIDE_NOT_FOUND` already used for "doesn't
+ *   exist"/"exists but isn't yours", so a draft's existence is never revealed to a
+ *   non-owner either way.
+ *
+ * Returns the organizer's public `{ id, name }` alongside the ride
+ * (`docs/product.md` Principle 2: "complete ride record, not a link out" — no separate
+ * public organizer-read endpoint exists or is needed for just this).
  */
-export async function getRideForOwner(
+export async function getRideForViewer(
   db: DbClient,
-  userId: string,
+  userId: string | null,
   rideId: string,
-): Promise<Ride> {
-  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
-  if (!organizerProfileId) {
-    throw RIDE_NOT_FOUND();
-  }
-
+): Promise<GetRideResponse> {
   const [row] = await db
-    .select()
+    .select({
+      ride: rides,
+      organizerId: organizerProfiles.id,
+      organizerName: organizerProfiles.name,
+      organizerUserId: organizerProfiles.userId,
+    })
     .from(rides)
-    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(eq(rides.id, rideId))
     .limit(1);
   if (!row) {
     throw RIDE_NOT_FOUND();
   }
-  return toPublicRide(row);
+
+  const isOwner = userId !== null && row.organizerUserId === userId;
+  if (!isOwner && row.ride.status === 'draft') {
+    throw RIDE_NOT_FOUND();
+  }
+
+  return {
+    ride: toPublicRide(row.ride),
+    organizer: { id: row.organizerId, name: row.organizerName },
+  };
 }
 
 /**

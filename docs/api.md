@@ -83,9 +83,12 @@ also accepts explicit `null` to clear it; `name` cannot be cleared (`NOT
 NULL`). `200` → `{ organizerProfile }`. `400 validation_error` on an invalid
 field.
 
-No public `GET /v1/organizers/:id` yet — `Ride` exists (CR-017) but no ride
-read endpoint does yet, so nothing embeds organizer info in a response
-publicly; deferred to whichever ride ticket first needs to.
+No public `GET /v1/organizers/:id` endpoint exists, and none is planned for
+just this — CR-023 ("Ride detail") embeds `{ id, name }` directly on `GET
+/v1/rides/:id`'s response instead (`docs/product.md` Principle 2: "complete
+ride record, not a link out"). A standalone public organizer-read endpoint
+would only be added if something else genuinely needs to look up an
+organizer independently of a ride.
 
 ## Rides
 
@@ -111,11 +114,16 @@ above; no `OrganizerProfile` yet is `200 { items: [], nextCursor: null }`, not a
 error. Cursor-paginated per ADR-011 (`apps/api/src/lib/cursor.ts`), sorted
 `(createdAt desc, id desc)`. A malformed `cursor` → `400 invalid_cursor`.
 
-GET `/v1/rides/:id` — **implemented (CR-016/CR-018)**. Requires a valid session
-cookie (`401` otherwise) and ownership of the ride: `404 ride_not_found` both when
-the id doesn't exist at all and when it belongs to a different organizer
-(deliberately the same response either way — resource-enumeration reasoning, see
-`.claude/rules/security.md`). `200` → `{ ride }` on success.
+GET `/v1/rides/:id` — **implemented (CR-016/CR-018, extended CR-023 "Ride
+detail")**. No session cookie required — a session, if present and valid, is
+resolved but never rejected (`resolveOptionalUser`, distinct from every other
+`/v1/rides` route's `requireAuth`). Visibility: the ride's own organizer sees
+it at any status; anyone else (including no session at all) sees it unless
+it's still `draft` — `404 ride_not_found` both when the id doesn't exist at
+all and when a non-owner requests a `draft` (deliberately the same response
+either way — resource-enumeration reasoning, see `.claude/rules/security.md`).
+`200` → `{ ride, organizer: { id, name } }` — `organizer` is additive (CR-023)
+alongside the unchanged `ride` field.
 
 PATCH `/v1/rides/:id` — **implemented (CR-016/CR-018, "Edit draft")**. Same
 401/404 rules as `GET`. Draft-only: `409 ride_not_editable` once the ride has left

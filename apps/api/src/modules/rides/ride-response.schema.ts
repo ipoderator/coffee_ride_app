@@ -27,3 +27,11 @@ export const rideResponseSchema = z.object({
   updatedAt: z.string(),
   updatedBy: z.string().nullable(),
 });
+
+// CR-023 ("Ride detail"): the ride's public organizer identity, embedded in `GET
+// /v1/rides/:id`'s response instead of a separate public organizer-read endpoint
+// (`.claude/context/current-task.md`).
+export const rideOrganizerSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});

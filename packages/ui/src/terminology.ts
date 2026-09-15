@@ -361,3 +361,22 @@ export const RIDE_EDIT_TERMS = {
   finishPending: 'Завершение…',
   finishSuccess: 'Заезд завершён.',
 } as const;
+
+/**
+ * `/rides/[id]` (CR-023, `docs/design.md` §8 "Ride detail"). Public, participant-
+ * facing — distinct copy from `RIDE_EDIT_TERMS`'s organizer-only not-found message
+ * (that one names "belongs to another organizer"; here a draft/non-existent/other-
+ * organizer's-draft ride are all the same "not available" state to a viewer who was
+ * never going to be told which). Route/stops/services/requirements/registration
+ * action have no data model yet (CR-027..036) — this screen only shows core `Ride`
+ * fields plus the organizer's name (`.claude/context/current-task.md`).
+ */
+export const RIDE_DETAIL_TERMS = {
+  notFoundTitle: 'Заезд не найден',
+  notFoundDescription: 'Такого заезда нет, либо он больше не доступен.',
+  loadError: 'Не удалось загрузить заезд. Попробуйте ещё раз.',
+  organizedByLabel: 'Организатор',
+  startLabel: 'Старт',
+  priceLabel: 'Стоимость участия',
+  participantLimitLabel: 'Лимит участников',
+} as const;

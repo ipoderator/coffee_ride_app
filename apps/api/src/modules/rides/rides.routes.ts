@@ -5,14 +5,17 @@ import {
   listRidesQuerySchema,
   updateRideRequestSchema,
 } from 'types';
-import { requireAuth } from '../../plugins/auth.js';
-import { rideResponseSchema } from './ride-response.schema.js';
+import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
+import {
+  rideOrganizerSummarySchema,
+  rideResponseSchema,
+} from './ride-response.schema.js';
 import {
   cancelRide,
   closeRegistration,
   createRide,
   finishRide,
-  getRideForOwner,
+  getRideForViewer,
   listOwnRides,
   openRegistration,
   publishRide,
@@ -21,6 +24,13 @@ import {
 } from './rides.service.js';
 
 const rideResponseWrapper = z.object({ ride: rideResponseSchema });
+// CR-023 ("Ride detail"): `GET /:id` alone gains the ride's public organizer identity
+// alongside the unchanged `ride` field — additive, every other endpoint keeps
+// `rideResponseWrapper` as-is.
+const rideDetailResponseSchema = z.object({
+  ride: rideResponseSchema,
+  organizer: rideOrganizerSummarySchema,
+});
 const listRidesResponseSchema = z.object({
   items: z.array(rideResponseSchema),
   nextCursor: z.string().nullable(),
@@ -71,25 +81,28 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  // CR-016/CR-018: ownership-scoped single-ride read. 404s (not 403) for a ride that
-  // exists but belongs to a different organizer — see `rides.service.ts`'s
-  // `RIDE_NOT_FOUND` comment.
+  // CR-016/CR-018 ("Organizer authorization"/"Edit draft"), extended by CR-023 ("Ride
+  // detail") to also serve any other viewer: `resolveOptionalUser`, not `requireAuth`
+  // — a request with no session cookie at all is a legitimate participant, not an
+  // error. 404s `ride_not_found` for a non-existent ride, a `draft` ride viewed by
+  // anyone but its own organizer, either the same way (see `rides.service.ts`'s
+  // `getRideForViewer`).
   app.get(
     '/:id',
     {
       schema: {
         params: rideIdParamsSchema,
-        response: { 200: rideResponseWrapper },
+        response: { 200: rideDetailResponseSchema },
       },
-      preHandler: requireAuth,
+      preHandler: resolveOptionalUser,
     },
     async (request, reply) => {
-      const ride = await getRideForOwner(
+      const result = await getRideForViewer(
         app.db,
-        request.user!.id,
+        request.user?.id ?? null,
         request.params.id,
       );
-      return reply.status(200).send({ ride });
+      return reply.status(200).send(result);
     },
   );
 

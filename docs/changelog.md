@@ -1446,3 +1446,61 @@ DB afterward.
 Follow-up: CR-023 (Ride detail, participant-facing) is next per
 `docs/tasks.md`'s Rides section order — the ride lifecycle is now fully
 implemented end to end (`draft` through `cancelled`/`finished`).
+
+## 2026-09-15 — CR-023 — Ride detail (participant-facing)
+
+Summary: `GET /v1/rides/:id` (owner-only since CR-016/CR-018) now serves any
+viewer — the ride's own organizer sees it at any status, anyone else
+(including no session at all) sees it once it's left `draft` (`404
+ride_not_found` either way, same resource-enumeration reasoning as before).
+`apps/api/src/plugins/auth.ts` gained `resolveOptionalUser` (resolves the
+session if present, never rejects — distinct from `requireAuth`).
+`rides.service.ts`'s owner-only `getRideForOwner` was replaced by
+`getRideForViewer`, which also joins `organizer_profiles` and returns the
+ride's public `{ id, name }` on the response (`organizer`, additive
+alongside the unchanged `ride` field) instead of a separate public
+organizer-read endpoint — `docs/product.md` Principle 2, "complete ride
+record, not a link out." `apps/web` gained its first fully public feature
+module, `features/participant/ride-detail/`, and its first top-level route
+with no `CabinetShell`/auth gate, `/rides/[id]` — shows cover (if set)/
+title/status badge/organizer name/description/start date-time (in the
+ride's own zone)/whichever of distance/elevation/pace/duration/difficulty
+are set/price/participant limit, omitting rather than em-dashing anything
+still `null`. Route/stops/services/requirements/registration action have no
+data model yet (CR-027..036) and no discovery screen links here yet
+(CR-024) — recorded as new KI-028, not silently skipped.
+Files: `apps/api/src/plugins/auth.ts`; `apps/api/src/modules/rides/
+{rides.service.ts,rides.routes.ts,ride-response.schema.ts,
+rides.routes.test.ts}`; `packages/types/src/api/rides.ts`;
+`packages/ui/src/terminology.ts`; `apps/web/src/features/participant/
+ride-detail/{api.ts,components/RideDetailView.tsx,ride-detail.test.tsx}`;
+`apps/web/src/app/rides/[id]/page.tsx`; `docs/api.md`; `docs/tasks.md`;
+`.claude/context/known-issues.md`.
+Decisions: none new — `.claude/context/current-task.md`'s "Investigation
+before deciding scope" documents merging the public/owner read into one
+endpoint (vs. a second endpoint at a different path) and why `cancelled`
+stays publicly visible ("published+" means "left draft," not "never
+cancelled"), per `.claude/rules/extensibility.md`'s contract-change-check
+discipline — no existing caller (`EditRideForm`, always the owner) is
+affected.
+Follow-up: CR-024 (Ride list/public discovery) is next — nothing yet links
+into `/rides/[id]` from within the app (KI-028). CR-027..031 (route/stops/
+services/requirements) and CR-032..036 (registration) each extend this
+screen further once their data models exist.
+Validation: `turbo run lint typecheck build test` (25 tasks) against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`
+(Docker Desktop still unavailable): green. `apps/api` gained/replaced tests
+in the `GET /v1/rides/:id` block (116 total, was 113); `apps/web` gained 4
+new tests (78 total, was 74). `format:check`/`lint:root` clean (two files
+needed a `prettier --write` pass — this file's own task-tracking docs,
+cosmetic only). Live-verified via curl against a real Postgres + a running
+`apps/api` (draft ride: 404 with no cookie, 200 with the owner's cookie;
+non-existent id: 404; malformed id: 400; published ride: 200 with no cookie
+at all, `organizer` cross-checked against a direct DB read) and a full
+browser walkthrough via the `browser-automation` skill against a real `next
+dev` server + `apps/api` (unauthenticated: published ride renders every
+field correctly formatted — 42,3 км / 350 м / 24,5 км/ч / 2 ч 30 мин /
+"Средний (уровень 3 из 5)" / 500 ₽ / 20 — 0 console errors, 0 failed
+requests; a non-existent id renders the not-found state, not a crash, with
+only the expected 404 fetch itself in the console). Test account/ride
+deleted from the scratch DB afterward.

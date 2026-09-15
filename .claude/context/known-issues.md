@@ -682,3 +682,30 @@ first now that `started` is reachable. `/organizer/rides/[id]/edit` gained
 "Начать заезд"/"Завершить заезд" buttons, no confirmation guard (unlike
 `cancel` — both are forward-only steps with a further continuation in the
 normal case).
+
+### KI-028 — Ride detail is missing route/stops/services/requirements/registration and a discovery entry point
+
+Status: open. Discovered: 2026-09-15 (CR-023 session).
+Problem: `docs/design.md`'s `/rides/[id]` spec names "Cover, metrics, route +
+profile, stops, services, requirements, organizer, registration action" —
+CR-023 could only build the pieces that have a real data model today (core
+`Ride` fields + the organizer's name). `Route`/`Stop`/`RideRequirement`/
+`RideService` have no tables (CR-027..031, `RideRequirement`/`RideService`
+don't even have CR numbers yet — KI-021's sibling gap) and `Registration`
+doesn't exist either (CR-032+), so there is no registered-participant count
+and no register/cancel action on the screen. Separately, no discovery
+screen links into `/rides/[id]` yet — `docs/design.md`'s `/` (Discovery) is
+still CR-002's placeholder, and CR-024 ("Ride list") is the ticket that
+builds it — same "screen built before its real entry point" shape as
+KI-024 (CR-017's `/organizer/rides/new` before CR-088's list existed).
+Impact: none today — the screen is reachable and correct for what exists;
+these are gaps to close by later tickets, not defects in this one. A
+participant can only reach `/rides/[id]` via a direct link today (e.g. one
+an organizer shares manually), not through in-app discovery.
+Workaround: none needed — every field CR-023 does show reflects real,
+current data; the screen omits what it can't yet know rather than showing
+a fake placeholder.
+Next action: CR-024 (discovery list, links into this screen) is the
+immediate next ticket. CR-027..031 add route/stops/services/requirements to
+the screen; CR-032..036 add the registered-participant count and
+register/cancel action.

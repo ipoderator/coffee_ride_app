@@ -43,6 +43,25 @@ export async function requireAuth(
   request.sessionId = validated.sessionId;
 }
 
+/**
+ * CR-023 ("Ride detail", public read): resolves `request.user`/`sessionId` from the
+ * cookie when one is present and valid, but never rejects — for a route a visitor may
+ * hit without being logged in at all, where "who is this, if anyone" still needs to
+ * be known server-side (e.g. to grant an owner extra visibility a stranger doesn't
+ * get). Distinct from `requireAuth`: no route should use both preHandlers together.
+ */
+export async function resolveOptionalUser(request: FastifyRequest) {
+  const token = request.cookies[SESSION_COOKIE_NAME];
+  if (!token) return;
+
+  const app = request.server;
+  const validated = await validateSession(app.db, token);
+  if (!validated) return;
+
+  request.user = validated.user;
+  request.sessionId = validated.sessionId;
+}
+
 function sendUnauthorized(reply: FastifyReply, instance: string) {
   return reply.status(401).type('application/problem+json').send({
     type: 'https://coffee-ride.example/errors/unauthorized',

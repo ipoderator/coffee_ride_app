@@ -376,6 +376,26 @@ steps with a further continuation in the normal case). The ride lifecycle
 end — every status in `packages/db`'s `ride_status` enum is reachable
 through a real endpoint.
 
+CR-023 (2026-09-15, `docs/changelog.md`): `GET /v1/rides/:id`
+(`modules/rides/rides.routes.ts`) changed from owner-only to serving any
+viewer — `apps/api/src/plugins/auth.ts` gained `resolveOptionalUser` (resolves
+`request.user` from the cookie when present/valid, never rejects), and
+`rides.service.ts`'s `getRideForOwner` was replaced by `getRideForViewer`
+(owner sees any status; anyone else sees it unless still `draft`, `404
+ride_not_found` either way). Response gained an additive `organizer: { id,
+name }` field (`packages/types`' new `RideOrganizerSummary`/
+`GetRideResponse`) — one query joins `rides` to `organizer_profiles` instead
+of a separate public organizer-read endpoint. No `packages/db` schema
+change. `apps/web` gained its first fully public feature module,
+`features/participant/ride-detail/` (`api.ts`,
+`components/RideDetailView.tsx`) and its first top-level route with no
+`CabinetShell`, `app/rides/[id]/page.tsx` — renders cover/title/status/
+organizer/description/start time/whichever metrics are set/price/
+participant limit, omitting (not em-dashing) anything still `null`.
+`packages/ui/src/terminology.ts` gained `RIDE_DETAIL_TERMS`. New KI-028:
+route/stops/services/requirements/registration action have no data model
+yet (CR-027..036), and no discovery screen links here yet (CR-024).
+
 ## Target structure
 
 apps/

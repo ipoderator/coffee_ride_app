@@ -55,6 +55,22 @@ export interface CreateRideResponse {
   ride: Ride;
 }
 
+// CR-023 ("Ride detail"): the ride's public organizer identity, embedded directly in
+// `GET /v1/rides/:id`'s response rather than a separate public organizer-read
+// endpoint — `docs/product.md` Principle 2, "complete ride record, not a link out"
+// (`.claude/context/current-task.md`).
+export interface RideOrganizerSummary {
+  id: string;
+  name: string;
+}
+
+// CR-023: `GET /v1/rides/:id`'s response shape, extended from a bare `{ ride }` —
+// additive (existing owner-only consumers destructuring `{ ride }` are unaffected).
+export interface GetRideResponse {
+  ride: Ride;
+  organizer: RideOrganizerSummary;
+}
+
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real
 // collection endpoint (`GET /v1/rides/mine`) — cursor pagination per ADR-011.
 // `cursor` is opaque (`apps/api/src/lib/cursor.ts` encodes/decodes it) — never parsed

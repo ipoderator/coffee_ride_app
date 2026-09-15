@@ -40,11 +40,13 @@ order (CR-020 had nothing to close without CR-089 existing first). CR-021
 transition with three valid source statuses). CR-090 (Start ride — new
 ticket, added this session per KI-027's own "next action") and CR-022
 (Finish ride) also completed 2026-09-15, together, in that order (CR-022 had
-no reachable source state without CR-090 existing first). Rides section is
+no reachable source state without CR-090 existing first). Rides section's organizer-facing lifecycle work is
 now fully done: CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/
 CR-090/CR-022 — the full ride lifecycle (`draft` through
 `cancelled`/`finished`) is implemented end to end. CR-023 (Ride detail,
-participant-facing) next.
+participant-facing) also completed 2026-09-15: `GET /v1/rides/:id` extended
+from owner-only to serve any viewer, and `apps/web`'s first fully public
+screen, `/rides/[id]`. CR-024 (Ride list, public discovery) next.
 
 ## Implemented
 
@@ -590,6 +592,46 @@ action button remaining) — 0 console errors during the flow itself. The ride
 lifecycle (`draft` through `cancelled`/`finished`) is now fully implemented
 end to end.
 
+Ride detail landed 2026-09-15 (CR-023, see `docs/changelog.md`): `GET /v1/
+rides/:id` (`apps/api/src/modules/rides`), owner-only since CR-016/CR-018,
+extended to serve any viewer — the ride's own organizer sees it at any
+status, anyone else (including no session at all) sees it once it's left
+`draft` (`404 ride_not_found` either way, same resource-enumeration
+reasoning `RIDE_NOT_FOUND` already used). New `resolveOptionalUser`
+preHandler (`apps/api/src/plugins/auth.ts`) resolves the session if present
+without ever rejecting — distinct from `requireAuth`, still used by every
+other `/v1` route. `getRideForOwner` was replaced by `getRideForViewer`,
+which joins `organizer_profiles` and returns the ride's public `{ id,
+name }` on the response (`organizer`, additive alongside the unchanged
+`ride` field, `packages/types`' new `RideOrganizerSummary`/
+`GetRideResponse`) instead of a separate public organizer-read endpoint
+(`docs/product.md` Principle 2: "complete ride record, not a link out").
+No `packages/db` schema change. `apps/web` gained its first fully public
+feature module, `features/participant/ride-detail/` (`api.ts`,
+`components/RideDetailView.tsx`), and its first top-level route with no
+`CabinetShell`/auth gate at all, `/rides/[id]` — renders cover (if set)/
+title/`StatusBadge`/organizer name/description/start date-time (in the
+ride's own zone, `formatDate`/`formatTime`)/`MetricTile`s for whichever of
+distance/elevation/pace/duration/difficulty are actually set/price/
+participant limit, omitting (not em-dashing) any field still `null` —
+deliberately different from `EditRideForm`'s form, which always shows every
+field. `packages/ui/src/terminology.ts` gained `RIDE_DETAIL_TERMS`. Route/
+stops/services/requirements/registration action have no data model yet
+(CR-027..036) and no discovery screen links into `/rides/[id]` yet
+(CR-024) — recorded as new KI-028, the same "screen built before its real
+entry point" shape KI-024 already was for CR-017's create screen. 3 new/
+replaced `apps/api` tests in the `GET /v1/rides/:id` block (116 total, was
+113); 4 new `apps/web` tests (78 total, was 74). Live-verified via curl
+against a real Postgres + running `apps/api` (draft ride: 404 with no
+cookie/200 with the owner's cookie; non-existent id: 404; malformed id: 400;
+published ride: 200 with no cookie at all, `organizer` cross-checked against
+a direct DB read) and a full browser walkthrough via the
+`browser-automation` skill against a real `next dev` server + `apps/api`
+(unauthenticated: a published ride renders every field correctly formatted
+— 0 console errors, 0 failed requests; a non-existent id renders the
+not-found state, not a crash, with only the expected 404 fetch itself in
+the console).
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -687,13 +729,11 @@ None.
 
 ## Next
 
-CR-023 — Ride detail, participant-facing (`docs/tasks.md` Rides section,
-next after CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/
-CR-022 — the Rides section's organizer-facing lifecycle work is now fully
-done). Then CR-024 (Ride list, public discovery — distinct from CR-088's "My
-rides", organizer-scoped and already done). KI-025/KI-027 are both
-resolved — every lifecycle status (`registration_open`/`registration_closed`/
-`started`) is reachable now.
+CR-024 — Ride list, public discovery (`docs/tasks.md` Rides section, next
+after CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/
+CR-022/CR-023 — distinct from CR-088's "My rides", organizer-scoped and
+already done). CR-024 is also `/rides/[id]`'s (CR-023) first real entry
+point from within the app — nothing links there yet (KI-028).
 
 ## Important decisions
 
@@ -828,6 +868,13 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   fields have no post-ride notes/results field, so there's nothing yet for a
   future participant-facing "ride summary" screen to show beyond the status
   itself; not a gap this ticket introduces.
+- new (CR-023): KI-028 — route/stops/services/requirements/registration
+  action have no data model yet (CR-027..036) so `/rides/[id]` can't show
+  them; no discovery screen links into `/rides/[id]` yet either (CR-024,
+  the immediate next ticket). Neither is a regression — every field the
+  screen does show is real. `GET /v1/rides/:id`'s visibility change (owner-
+  only -> any viewer once non-`draft`) is additive for the one existing
+  caller (`EditRideForm`, always the owner); no other caller exists yet.
 
 ## Do not break
 
@@ -847,4 +894,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-090/CR-022)
+2026-09-15 (CR-023)

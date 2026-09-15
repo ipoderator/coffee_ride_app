@@ -202,7 +202,16 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       new endpoint gates on `emailVerified`. `/organizer/rides/[id]/edit`
       gained "Начать заезд"/"Завершить заезд" buttons, no confirmation
       guard (unlike `cancel` — both are forward-only steps).
-- [ ] CR-023 Ride detail
+- [x] CR-023 Ride detail — done 2026-09-15: `GET /v1/rides/:id` (CR-016/
+      CR-018) extended from owner-only to serve any viewer — visible to
+      anyone once it's left `draft`, `404 ride_not_found` either way for a
+      non-existent ride or a `draft` ride viewed by a non-owner. Response
+      gained an additive `organizer: { id, name }` field instead of a
+      separate public organizer-read endpoint. New public `/rides/[id]`
+      screen (`apps/web`, no `CabinetShell`) showing the `Ride` fields that
+      exist today; route/stops/services/requirements/registration action
+      have no data model yet (CR-027..036, see
+      `.claude/context/known-issues.md` KI-028).
 - [ ] CR-024 Ride list
 - [ ] CR-025 Filters
 - [ ] CR-026 Map discovery
