@@ -71,3 +71,19 @@ export const routeGeometryResponseSchema = z.object({
     }),
   ),
 });
+
+// CR-030 ("Stops"): the one "stop over the wire" shape, embedded as an array in
+// `GET /v1/rides/:id`'s response and returned by `POST`/`PATCH .../stops`.
+export const stopResponseSchema = z.object({
+  id: z.string(),
+  rideId: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+  durationMinutes: z.number().nullable(),
+  position: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  updatedBy: z.string().nullable(),
+});

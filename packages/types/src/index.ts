@@ -13,3 +13,4 @@ export * from './domain/user.js';
 export * from './domain/organizer-profile.js';
 export * from './domain/ride.js';
 export * from './domain/route.js';
+export * from './domain/stop.js';

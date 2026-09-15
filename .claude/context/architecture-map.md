@@ -424,6 +424,22 @@ is still `null`) now commit atomically. No schema change, no new endpoint —
 after every mutation instead of trusting a locally-guessed copy of the server's
 auto-fill logic.
 
+CR-030 ("Stops", 2026-09-15): `packages/db` gained its sixth table, `stops`
+(`rideId` FK → `rides` `ON DELETE CASCADE`, server-assigned `position` unique
+per `(rideId, position)`). `modules/rides/` gained `POST`/`PATCH`/`DELETE
+/v1/rides/:id/stops(/:stopId)` — reuses `resolveOwnDraftRide` verbatim (same
+draft-only ownership gate as GPX upload), one new error code
+(`stop_not_found`, 404). `getRideForViewer`'s response gained an additive
+`stops: Stop[]` array (ordered by `position`) — same "embed it in ride
+detail, no separate read endpoint" precedent CR-027 set for `route`.
+`features/organizer/route/` gained `components/StopsSection.tsx` (add/edit/
+delete UI, rendered alongside `RouteUploadForm` per `docs/design.md` §8's
+screen grouping); `features/participant/ride-detail/` gained
+`components/StopList.tsx` (a numbered, read-only list, wired into
+`RideDetailView`). No new `packages/maps-core`/`maps-2gis` dependency — a
+stop's `lat`/`lng` are plain required numbers, same as `Ride.startLat/Lng`,
+not yet rendered on any map (KI-031 unaffected).
+
 ## Target structure
 
 apps/

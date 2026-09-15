@@ -474,3 +474,32 @@ export const ROUTE_RENDERING_TERMS = {
     'Не удалось загрузить профиль высоты. Попробуйте ещё раз.',
   mapUnavailable: 'Карта маршрута временно недоступна.',
 } as const;
+
+/**
+ * CR-030 ("Stops"). Shared between the organizer's management UI
+ * (`/organizer/rides/[id]/route`, same screen as `RIDE_ROUTE_TERMS` — `docs/design.md`
+ * §8 groups "Route, GPX upload, stops, route points" together) and the
+ * participant-facing `StopList` on `/rides/[id]`.
+ */
+export const STOPS_TERMS = {
+  sectionTitle: 'Остановки',
+  emptyTitle: 'Остановки ещё не добавлены',
+  emptyDescription: 'Например, кофейня или смотровая площадка на маршруте.',
+  addButton: 'Добавить остановку',
+  nameLabel: 'Название',
+  descriptionLabel: 'Описание',
+  latLabel: 'Широта',
+  lngLabel: 'Долгота',
+  durationLabel: 'Длительность, мин',
+  save: 'Сохранить',
+  savePending: 'Сохранение…',
+  saveSuccess: 'Остановка сохранена.',
+  cancel: 'Отмена',
+  edit: 'Изменить',
+  delete: 'Удалить',
+  deletePending: 'Удаление…',
+  deleteSuccess: 'Остановка удалена.',
+  deleteConfirm: 'Удалить остановку? Это действие необратимо.',
+  loadError: 'Не удалось сохранить остановку. Попробуйте ещё раз.',
+  notEditable: 'Остановки можно менять только у черновика заезда.',
+} as const;

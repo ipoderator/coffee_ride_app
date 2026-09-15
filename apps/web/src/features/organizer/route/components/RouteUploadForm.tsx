@@ -21,7 +21,9 @@ import {
   syncRideMetricsFromRoute,
   uploadRoute,
   type RouteSummary,
+  type Stop,
 } from '../api';
+import { StopsSection } from './StopsSection';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -43,6 +45,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     number | null
   >(null);
   const [route, setRoute] = useState<RouteSummary | null>(null);
+  const [stops, setStops] = useState<Stop[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -55,6 +58,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     setRideDistanceKm(state.distanceKm);
     setRideElevationGainMeters(state.elevationGainMeters);
     setRoute(state.route);
+    setStops(state.stops);
   }, [rideId]);
 
   useEffect(() => {
@@ -383,6 +387,13 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
           </div>
         )}
       </Card>
+
+      <StopsSection
+        rideId={rideId}
+        stops={stops}
+        isDraft={isDraft}
+        onChange={reload}
+      />
     </div>
   );
 }

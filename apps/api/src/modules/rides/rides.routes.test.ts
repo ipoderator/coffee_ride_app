@@ -846,6 +846,8 @@ describe('/v1/rides', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().ride.id).toBe(created.json().ride.id);
       expect(response.json().organizer.name).toBe('Гравийный клуб');
+      // CR-030 ("Stops"): additive field, empty until a stop is created.
+      expect(response.json().stops).toEqual([]);
 
       await app.close();
     });

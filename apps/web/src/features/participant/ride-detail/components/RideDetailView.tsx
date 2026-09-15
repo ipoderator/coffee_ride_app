@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Ride, RouteGeometryPoint, RouteSummary } from 'types';
+import type { Ride, RouteGeometryPoint, RouteSummary, Stop } from 'types';
 import {
   BICYCLE_TYPE_TERMS,
   Card,
@@ -26,6 +26,7 @@ import {
 import { ApiError, getRideDetail, getRouteGeometry } from '../api';
 import { ElevationProfileChart } from './ElevationProfileChart';
 import { RouteMapPlaceholder } from './RouteMapPlaceholder';
+import { StopList } from './StopList';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 type GeometryStatus = 'loading' | 'ready' | 'error';
@@ -106,6 +107,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [ride, setRide] = useState<Ride | null>(null);
   const [organizerName, setOrganizerName] = useState<string>('');
   const [route, setRoute] = useState<RouteSummary | null>(null);
+  const [stops, setStops] = useState<Stop[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +118,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         setRide(response.ride);
         setOrganizerName(response.organizer.name);
         setRoute(response.route);
+        setStops(response.stops);
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -256,6 +259,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
       </div>
 
       {route ? <RouteSection rideId={rideId} route={route} /> : null}
+
+      <StopList stops={stops} />
     </div>
   );
 }

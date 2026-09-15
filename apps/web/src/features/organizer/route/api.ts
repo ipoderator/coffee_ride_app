@@ -1,8 +1,14 @@
-import type { ProblemDetails, RouteSummary } from 'types';
+import type {
+  CreateStopRequest,
+  ProblemDetails,
+  RouteSummary,
+  Stop,
+  UpdateStopRequest,
+} from 'types';
 import { ApiError } from '@/lib/api/errors';
 
 export { ApiError };
-export type { RouteSummary };
+export type { RouteSummary, Stop };
 
 const RIDES_ENDPOINT = '/api/v1/rides';
 
@@ -12,13 +18,15 @@ const RIDES_ENDPOINT = '/api/v1/rides';
  * response (`.claude/context/current-task.md`'s scoping note). `status` (the
  * draft-only gate) and `route` are read here; CR-029 ("Route metadata") also reads
  * the ride's own `distanceKm`/`elevationGainMeters` — already present on the same
- * response — to detect a mismatch against `route`'s GPX-computed figures.
+ * response — to detect a mismatch against `route`'s GPX-computed figures. CR-030
+ * ("Stops") also reads the additive `stops` array, same embedding precedent.
  */
 export async function getRideRouteState(rideId: string): Promise<{
   status: string;
   distanceKm: number | null;
   elevationGainMeters: number | null;
   route: RouteSummary | null;
+  stops: Stop[];
 }> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}`);
   const body = (await response.json()) as
@@ -29,6 +37,7 @@ export async function getRideRouteState(rideId: string): Promise<{
           elevationGainMeters: number | null;
         };
         route: RouteSummary | null;
+        stops: Stop[];
       }
     | ProblemDetails;
 
@@ -42,13 +51,65 @@ export async function getRideRouteState(rideId: string): Promise<{
       elevationGainMeters: number | null;
     };
     route: RouteSummary | null;
+    stops: Stop[];
   };
   return {
     status: parsed.ride.status,
     distanceKm: parsed.ride.distanceKm,
     elevationGainMeters: parsed.ride.elevationGainMeters,
     route: parsed.route,
+    stops: parsed.stops,
   };
+}
+
+/** 409 `ride_not_editable` unless the ride is still `draft`. Appended at the end —
+ * `position` is server-assigned, never sent by the client (`.claude/context/
+ * current-task.md`). */
+export async function createStop(
+  rideId: string,
+  input: CreateStopRequest,
+): Promise<Stop> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/stops`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const body = (await response.json()) as { stop: Stop } | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as { stop: Stop }).stop;
+}
+
+/** 404 `stop_not_found` if the id doesn't exist or belongs to a different ride. */
+export async function updateStop(
+  rideId: string,
+  stopId: string,
+  patch: UpdateStopRequest,
+): Promise<Stop> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/stops/${stopId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  const body = (await response.json()) as { stop: Stop } | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as { stop: Stop }).stop;
+}
+
+export async function deleteStop(
+  rideId: string,
+  stopId: string,
+): Promise<void> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/stops/${stopId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
 }
 
 /**

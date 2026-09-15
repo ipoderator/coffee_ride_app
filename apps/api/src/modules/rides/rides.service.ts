@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { organizerProfiles, rides, routes, users } from 'db/schema';
+import { organizerProfiles, rides, routes, stops, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
+  CreateStopRequest,
   GetRideResponse,
   GetRouteGeometryResponse,
   ListPublicRidesQuery,
@@ -13,7 +14,9 @@ import type {
   Ride,
   RouteGeometryPoint,
   RouteSummary,
+  Stop,
   UpdateRideRequest,
+  UpdateStopRequest,
 } from 'types';
 import {
   CursorError,
@@ -176,6 +179,18 @@ const ROUTE_NOT_FOUND = () =>
     'This ride has no route uploaded yet.',
   );
 
+// CR-030 ("Stops"): distinct from `RIDE_NOT_FOUND` — the ride itself was already
+// resolved (ownership + draft-only checked via `resolveOwnDraftRide`) by the time this
+// fires. Used for both "no such stop" and "stop belongs to a different ride", the same
+// resource-enumeration-safe shape as `ROUTE_NOT_FOUND`/`RIDE_NOT_FOUND`.
+const STOP_NOT_FOUND = () =>
+  new RideServiceError(
+    'stop_not_found',
+    404,
+    'Stop not found',
+    'No stop with that id exists for this ride.',
+  );
+
 const GPX_FILE_MISSING = () =>
   new RideServiceError(
     'gpx_file_missing',
@@ -218,6 +233,22 @@ function toPublicRide(row: typeof rides.$inferSelect): Ride {
     durationMinutes: row.durationMinutes,
     difficulty: row.difficulty as Ride['difficulty'],
     status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    updatedBy: row.updatedBy,
+  };
+}
+
+function toStop(row: typeof stops.$inferSelect): Stop {
+  return {
+    id: row.id,
+    rideId: row.rideId,
+    name: row.name,
+    description: row.description,
+    lat: row.lat,
+    lng: row.lng,
+    durationMinutes: row.durationMinutes,
+    position: row.position,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
@@ -513,10 +544,20 @@ export async function getRideForViewer(
     .where(eq(routes.rideId, rideId))
     .limit(1);
 
+  // CR-030 ("Stops"): additive `stops` array, ordered for display — no separate read
+  // endpoint exists (`docs/api.md`'s sketch names none), same embedding precedent as
+  // `route` above.
+  const stopRows = await db
+    .select()
+    .from(stops)
+    .where(eq(stops.rideId, rideId))
+    .orderBy(asc(stops.position));
+
   return {
     ride: toPublicRide(row.ride),
     organizer: { id: row.organizerId, name: row.organizerName },
     route: routeRow ? toRouteSummary(routeRow) : null,
+    stops: stopRows.map(toStop),
   };
 }
 
@@ -1179,4 +1220,113 @@ export async function getRouteGeometry(
   }
 
   return { points: routeRow.geometry as RouteGeometryPoint[] };
+}
+
+/**
+ * CR-030 ("Stops"): adds a new stop to a draft ride's route, appended at the end.
+ * Same ownership + draft-only gate as {@link uploadRoute}
+ * ({@link resolveOwnDraftRide} — `404 ride_not_found`/`409 ride_not_editable`).
+ *
+ * `position` is server-assigned (current stop count for this ride), never client-
+ * supplied (`.claude/context/current-task.md`: no reorder support in this ticket).
+ * Computed and inserted in one transaction so two concurrent creates can't compute the
+ * same next position — `stops_ride_id_position_unique` is the DB-level backstop for
+ * that race either way (`.claude/rules/database.md`).
+ */
+export async function createStop(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  input: CreateStopRequest,
+): Promise<Stop> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const inserted = await db.transaction(async (tx) => {
+    const [countRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(stops)
+      .where(eq(stops.rideId, rideId));
+
+    const [stop] = await tx
+      .insert(stops)
+      .values({
+        rideId,
+        name: input.name,
+        description: input.description ?? null,
+        lat: input.lat,
+        lng: input.lng,
+        durationMinutes: input.durationMinutes ?? null,
+        position: countRow?.count ?? 0,
+        updatedBy: userId,
+      })
+      .returning();
+    if (!stop) {
+      throw new Error('Stop insert returned no row.');
+    }
+    return stop;
+  });
+
+  return toStop(inserted);
+}
+
+/**
+ * CR-030: edits a draft ride's stop — any subset of `name`/`description`/`lat`/`lng`/
+ * `durationMinutes` (same PATCH semantics as {@link updateRideDraft}: `undefined` means
+ * "omit", `null` on `description`/`durationMinutes` means "clear"). `position` is never
+ * accepted here (see {@link createStop}). `404 stop_not_found` if the id doesn't exist
+ * or belongs to a different ride — checked after the ride-level ownership/draft gate,
+ * same layering as every other nested-resource mutation in this module.
+ */
+export async function updateStop(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  stopId: string,
+  patch: UpdateStopRequest,
+): Promise<Stop> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const values: Partial<typeof stops.$inferInsert> = {
+    updatedAt: new Date(),
+    updatedBy: userId,
+  };
+  if (patch.name !== undefined) values.name = patch.name;
+  if (patch.description !== undefined) values.description = patch.description;
+  if (patch.lat !== undefined) values.lat = patch.lat;
+  if (patch.lng !== undefined) values.lng = patch.lng;
+  if (patch.durationMinutes !== undefined)
+    values.durationMinutes = patch.durationMinutes;
+
+  const [updated] = await db
+    .update(stops)
+    .set(values)
+    .where(and(eq(stops.id, stopId), eq(stops.rideId, rideId)))
+    .returning();
+  if (!updated) {
+    throw STOP_NOT_FOUND();
+  }
+  return toStop(updated);
+}
+
+/**
+ * CR-030: removes a draft ride's stop. `404 stop_not_found` if the id doesn't exist or
+ * belongs to a different ride. Does not renumber the remaining stops' `position`
+ * values — a gap in the sequence is harmless for display (still sorted ascending), and
+ * closing it would be unrequested reorder behavior (see {@link createStop}'s comment).
+ */
+export async function deleteStop(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  stopId: string,
+): Promise<void> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [deleted] = await db
+    .delete(stops)
+    .where(and(eq(stops.id, stopId), eq(stops.rideId, rideId)))
+    .returning({ id: stops.id });
+  if (!deleted) {
+    throw STOP_NOT_FOUND();
+  }
 }

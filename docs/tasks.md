@@ -252,7 +252,13 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       reconciliation note with a "Использовать данные трека" action (reuses the
       existing ride-update endpoint, no new endpoint) when the two have
       genuinely diverged. See `docs/changelog.md`.
-- [ ] CR-030 Stops
+- [x] CR-030 Stops — done 2026-09-15: sixth domain table
+      (`name`/`description`/`lat`/`lng`/`durationMinutes`/server-assigned
+      `position`), new create/edit/delete stop endpoints, draft-only same as
+      GPX upload, plus an additive `stops` array on the ride detail response.
+      Organizer manages stops on the existing route screen; participants see
+      them as a numbered list on the ride detail page. See
+      `docs/changelog.md`.
 - [ ] CR-031 Route points
 
 ## Registration

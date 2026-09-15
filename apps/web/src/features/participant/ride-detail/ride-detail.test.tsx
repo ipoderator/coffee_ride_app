@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Ride, RouteSummary } from 'types';
+import type { Ride, RouteSummary, Stop } from 'types';
 import { RideDetailView } from './components/RideDetailView';
 import { ApiError, getRideDetail, getRouteGeometry } from './api';
 
@@ -52,6 +52,20 @@ const baseRide: Ride = {
   updatedBy: 'user-1',
 };
 
+const baseStop: Stop = {
+  id: 'stop-1',
+  rideId: 'ride-1',
+  name: 'Кофейня на набережной',
+  description: 'Короткая остановка на кофе.',
+  lat: 55.751,
+  lng: 37.618,
+  durationMinutes: 15,
+  position: 0,
+  createdAt: '2027-01-01T00:00:00.000Z',
+  updatedAt: '2027-01-01T00:00:00.000Z',
+  updatedBy: null,
+};
+
 describe('RideDetailView', () => {
   beforeEach(() => {
     getRideDetailMock.mockReset();
@@ -92,6 +106,7 @@ describe('RideDetailView', () => {
       ride: baseRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
+      stops: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -128,6 +143,7 @@ describe('RideDetailView', () => {
       ride: mockedRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
+      stops: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -145,6 +161,7 @@ describe('RideDetailView', () => {
       ride: baseRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
+      stops: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -159,6 +176,7 @@ describe('RideDetailView', () => {
       ride: baseRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: baseRoute,
+      stops: [],
     });
     getRouteGeometryMock.mockResolvedValue({
       points: [
@@ -188,6 +206,7 @@ describe('RideDetailView', () => {
       ride: baseRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: baseRoute,
+      stops: [],
     });
     getRouteGeometryMock.mockRejectedValue(new Error('network error'));
 
@@ -201,5 +220,44 @@ describe('RideDetailView', () => {
     // The rest of the page (title, other metrics) stays intact — a route-render
     // failure degrades locally, it does not blank the page.
     expect(screen.getByText(baseRide.title)).toBeInTheDocument();
+  });
+
+  it('renders stops in order, and omits the section entirely when there are none', async () => {
+    getRideDetailMock.mockResolvedValue({
+      ride: baseRide,
+      organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: null,
+      stops: [
+        baseStop,
+        {
+          ...baseStop,
+          id: 'stop-2',
+          name: 'Смотровая площадка',
+          description: null,
+          position: 1,
+        },
+      ],
+    });
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    expect(await screen.findByText('Остановки')).toBeInTheDocument();
+    expect(screen.getByText(/1\. Кофейня на набережной/)).toBeInTheDocument();
+    expect(screen.getByText(/2\. Смотровая площадка/)).toBeInTheDocument();
+    expect(screen.getByText('Короткая остановка на кофе.')).toBeInTheDocument();
+  });
+
+  it('omits the "Остановки" section entirely when there are no stops', async () => {
+    getRideDetailMock.mockResolvedValue({
+      ride: baseRide,
+      organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: null,
+      stops: [],
+    });
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    await screen.findByText(baseRide.title);
+    expect(screen.queryByText('Остановки')).not.toBeInTheDocument();
   });
 });

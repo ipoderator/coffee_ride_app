@@ -1999,5 +1999,81 @@ deleted from the scratch DB by id/email afterward.
 
 Known limitations: KI-034 resolved. No new issues.
 
-Next logical task: CR-030 ("Stops") or CR-031 ("Route points") — neither
-depends on CR-028/CR-029; `docs/tasks.md`'s order puts CR-030 first.
+Follow-up: CR-030 ("Stops") or CR-031 ("Route points") — neither depends on
+CR-028/CR-029; `docs/tasks.md`'s order puts CR-030 first.
+
+## 2026-09-15 — CR-030 — Stops
+
+Summary: sixth domain table, `Stop` (`docs/database.md`: "named planned stop
+with location and duration") — distinct from `Route` (the raw GPX polyline)
+and the not-yet-built `RoutePoint` (CR-031). `POST`/`PATCH`/`DELETE
+/v1/rides/:id/stops(/:stopId)`, draft-only (reuses `resolveOwnDraftRide`
+verbatim — same gate as GPX upload, no new status code), plus an additive
+`stops: Stop[]` array on `GET /v1/rides/:id` (no separate read endpoint,
+same "embed it in the ride detail response" precedent as `route`, CR-027).
+Organizer manages stops on the existing `/organizer/rides/[id]/route`
+screen, alongside GPX upload (`docs/design.md` §8 groups them); a numbered
+`StopList` on `/rides/[id]` shows them to participants.
+
+Scope decisions (`.claude/context/current-task.md`): `lat`/`lng` are
+required, not nullable — unlike `Ride.startLat/startLng`, a stop's entire
+reason for existing is a location. `position` orders stops along the route;
+it is server-assigned on create (current stop count for the ride, i.e.
+appended at the end) and enforced unique per `(rideId, position)` at the DB
+level — never client-supplied, and `PATCH` cannot change it. No
+reorder/drag support in this ticket (no design-doc UI names one) — a stop
+can only be appended or removed. One new error code, `stop_not_found`
+(404), for a `PATCH`/`DELETE` on a nonexistent-or-wrong-ride stop id — same
+resource-enumeration-safe shape as `route_not_found`.
+
+Files: `packages/db/src/schema/stop.ts` (new) + migration
+`0007_white_wong.sql`, `schema/index.ts` (+export); `packages/types/src/
+domain/stop.ts` (new), `src/api/rides.ts` (+`createStopRequestSchema`/
+`updateStopRequestSchema`, extended `GetRideResponse`), `src/index.ts`
+(+export); `apps/api/src/modules/rides/` (`ride-response.schema.ts` +`stopResponseSchema`; `rides.service.ts` +`toStop`/`STOP_NOT_FOUND`/
+`createStop`/`updateStop`/`deleteStop`, extended `getRideForViewer`;
+`rides.routes.ts` +three routes, extended `rideDetailResponseSchema`; new
+`stops.routes.test.ts`; `rides.routes.test.ts` +one assertion on the
+additive field); `apps/web/src/features/organizer/route/` (`api.ts` +`createStop`/`updateStop`/`deleteStop`, new `components/
+StopsSection.tsx`, wired into `RouteUploadForm.tsx`; `route.test.tsx` +5
+tests, +`stops: []` on every existing mocked response); `apps/web/src/
+features/participant/ride-detail/` (new `components/StopList.tsx`, wired
+into `RideDetailView.tsx`; `ride-detail.test.tsx` +2 tests, +`stops: []` on
+every existing mocked response); `packages/ui/src/terminology.ts`
+(+`STOPS_TERMS`); `docs/api.md`, `docs/database.md`, `docs/tasks.md`.
+
+Decisions: none new at the ADR level — the field-scope/position/draft-only
+decisions above are ticket-level, same tier as CR-013's profile-field
+scoping, recorded here and in `current-task.md`.
+
+Known limitations: none new. Stops share the existing "no reorder" and
+"draft-only" constraints other ride-configuration endpoints already have;
+if a real need for either surfaces later (e.g. editing stops after
+publish), that's a follow-up ticket, not silently done here.
+
+Tests: 14 new `apps/api` tests (new `stops.routes.test.ts`) — 174 total,
+was 160. 7 new `apps/web` tests (5 in `route.test.tsx`'s new `StopsSection`
+suite, 2 in `ride-detail.test.tsx`) — 116 total, was 109.
+
+Validation: `turbo run lint typecheck build test --force` (25 tasks, all 8
+workspace members) green against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`.
+`format:check`/`lint:root` clean after one `prettier --write` pass
+(cosmetic, 9 files). Live-verified via curl against a real Postgres + a
+freshly started `apps/api`: register → verify → login → create organizer →
+create draft ride → create stop (position 0) → create second stop
+(position 1) → `GET /v1/rides/:id` returned both in order → invalid `lat`
+400 → `PATCH` rename 200 → `DELETE` 204 → repeat `DELETE` 404
+`stop_not_found` → publish the ride → `POST .../stops` 409
+`ride_not_editable` — the remaining stop cross-checked against a direct DB
+read. Live browser-verified via the `browser-automation` skill against a
+real `next dev` server + `apps/api`: added two stops through the form
+(screenshotted — Tailwind styling, `Card`/`Button` components all render
+correctly), edited one, deleted one, confirmed the participant-facing
+`/rides/[id]` shows the remaining stop under a numbered "Остановки"
+heading — 0 console errors throughout. All test data (rides/organizer
+profiles/users) deleted from the scratch DB by id/email afterward.
+
+Follow-up: CR-031 ("Route points" — the organizer-placed typed markers
+distinct from `Stop`, per `docs/database.md`) is next per `docs/tasks.md`'s
+Route section order.

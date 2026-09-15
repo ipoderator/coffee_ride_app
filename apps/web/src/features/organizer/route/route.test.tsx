@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouteUploadForm } from './components/RouteUploadForm';
 import {
   ApiError,
+  createStop,
   deleteRoute,
+  deleteStop,
   getRideRouteState,
   replaceRoute,
   syncRideMetricsFromRoute,
+  updateStop,
   uploadRoute,
   type RouteSummary,
+  type Stop,
 } from './api';
 
 vi.mock('./api', async () => {
@@ -20,6 +24,9 @@ vi.mock('./api', async () => {
     replaceRoute: vi.fn(),
     deleteRoute: vi.fn(),
     syncRideMetricsFromRoute: vi.fn(),
+    createStop: vi.fn(),
+    updateStop: vi.fn(),
+    deleteStop: vi.fn(),
   };
 });
 
@@ -28,6 +35,23 @@ const uploadRouteMock = vi.mocked(uploadRoute);
 const replaceRouteMock = vi.mocked(replaceRoute);
 const deleteRouteMock = vi.mocked(deleteRoute);
 const syncRideMetricsFromRouteMock = vi.mocked(syncRideMetricsFromRoute);
+const createStopMock = vi.mocked(createStop);
+const updateStopMock = vi.mocked(updateStop);
+const deleteStopMock = vi.mocked(deleteStop);
+
+const baseStop: Stop = {
+  id: 'stop-1',
+  rideId: 'ride-1',
+  name: 'Кофейня на набережной',
+  description: null,
+  lat: 55.751,
+  lng: 37.618,
+  durationMinutes: 15,
+  position: 0,
+  createdAt: '2027-01-01T00:00:00.000Z',
+  updatedAt: '2027-01-01T00:00:00.000Z',
+  updatedBy: null,
+};
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -53,6 +77,9 @@ describe('RouteUploadForm', () => {
     replaceRouteMock.mockReset();
     deleteRouteMock.mockReset();
     syncRideMetricsFromRouteMock.mockReset();
+    createStopMock.mockReset();
+    updateStopMock.mockReset();
+    deleteStopMock.mockReset();
   });
 
   it('shows a not-found state for a non-existent/foreign ride', async () => {
@@ -92,6 +119,7 @@ describe('RouteUploadForm', () => {
       distanceKm: null,
       elevationGainMeters: null,
       route: null,
+      stops: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -116,12 +144,14 @@ describe('RouteUploadForm', () => {
         distanceKm: null,
         elevationGainMeters: null,
         route: null,
+        stops: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
         distanceKm: baseRoute.distanceKm,
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: baseRoute,
+        stops: [],
       });
     uploadRouteMock.mockResolvedValue(baseRoute);
 
@@ -150,6 +180,7 @@ describe('RouteUploadForm', () => {
       distanceKm: null,
       elevationGainMeters: null,
       route: null,
+      stops: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -169,6 +200,7 @@ describe('RouteUploadForm', () => {
       distanceKm: null,
       elevationGainMeters: null,
       route: null,
+      stops: [],
     });
     uploadRouteMock.mockRejectedValue(
       new ApiError({
@@ -204,12 +236,14 @@ describe('RouteUploadForm', () => {
         distanceKm: baseRoute.distanceKm,
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: baseRoute,
+        stops: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
         distanceKm: baseRoute.distanceKm,
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: replaced,
+        stops: [],
       });
     replaceRouteMock.mockResolvedValue(replaced);
 
@@ -229,6 +263,7 @@ describe('RouteUploadForm', () => {
       distanceKm: baseRoute.distanceKm,
       elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
+      stops: [],
     });
     deleteRouteMock.mockResolvedValue(undefined);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -249,6 +284,7 @@ describe('RouteUploadForm', () => {
       distanceKm: baseRoute.distanceKm,
       elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
+      stops: [],
     });
     vi.spyOn(window, 'confirm').mockReturnValue(false);
 
@@ -266,6 +302,7 @@ describe('RouteUploadForm', () => {
       distanceKm: baseRoute.distanceKm,
       elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
+      stops: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -289,6 +326,7 @@ describe('RouteUploadForm', () => {
       distanceKm: 99.9,
       elevationGainMeters: 1234,
       route: baseRoute,
+      stops: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -310,12 +348,14 @@ describe('RouteUploadForm', () => {
         distanceKm: 99.9,
         elevationGainMeters: 1234,
         route: baseRoute,
+        stops: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
         distanceKm: baseRoute.distanceKm,
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: baseRoute,
+        stops: [],
       });
     syncRideMetricsFromRouteMock.mockResolvedValue(undefined);
 
@@ -349,6 +389,7 @@ describe('RouteUploadForm', () => {
       distanceKm: 99.9,
       elevationGainMeters: 1234,
       route: baseRoute,
+      stops: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -360,6 +401,151 @@ describe('RouteUploadForm', () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Использовать данные трека' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('StopsSection (CR-030)', () => {
+  beforeEach(() => {
+    getRideRouteStateMock.mockReset();
+    createStopMock.mockReset();
+    updateStopMock.mockReset();
+    deleteStopMock.mockReset();
+  });
+
+  it('shows the empty state and an add button for a draft ride with no stops', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+      stops: [],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText('Остановки ещё не добавлены'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Добавить остановку' }),
+    ).toBeInTheDocument();
+  });
+
+  it('lists existing stops in order', async () => {
+    const second: Stop = {
+      ...baseStop,
+      id: 'stop-2',
+      name: 'Смотровая площадка',
+      position: 1,
+    };
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+      stops: [baseStop, second],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText('Кофейня на набережной'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Смотровая площадка')).toBeInTheDocument();
+  });
+
+  it('adds a new stop through the form', async () => {
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [],
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [baseStop],
+      });
+    createStopMock.mockResolvedValue(baseStop);
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Остановки ещё не добавлены');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить остановку' }));
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: baseStop.name },
+    });
+    fireEvent.change(screen.getByLabelText('Широта'), {
+      target: { value: String(baseStop.lat) },
+    });
+    fireEvent.change(screen.getByLabelText('Долгота'), {
+      target: { value: String(baseStop.lng) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Остановка сохранена.')).toBeInTheDocument();
+    expect(createStopMock).toHaveBeenCalledWith('ride-1', {
+      name: baseStop.name,
+      description: null,
+      lat: baseStop.lat,
+      lng: baseStop.lng,
+      durationMinutes: null,
+    });
+  });
+
+  it('deletes a stop after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [baseStop],
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [],
+      });
+    deleteStopMock.mockResolvedValue(undefined);
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Кофейня на набережной');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+
+    expect(await screen.findByText('Остановка удалена.')).toBeInTheDocument();
+    expect(deleteStopMock).toHaveBeenCalledWith('ride-1', baseStop.id);
+    confirmSpy.mockRestore();
+  });
+
+  it('hides add/edit/delete controls for a non-draft ride', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'published',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+      stops: [baseStop],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText('Кофейня на набережной'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Добавить остановку' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Удалить' }),
     ).not.toBeInTheDocument();
   });
 });

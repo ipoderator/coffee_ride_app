@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BICYCLE_TYPES, type Ride } from '../domain/ride.js';
 import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
+import type { Stop } from '../domain/stop.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -69,10 +70,13 @@ export interface RideOrganizerSummary {
 // additive (existing owner-only consumers destructuring `{ ride }` are unaffected).
 // CR-027 ("GPX upload") added `route` — a summary only (no `geometry` array), same
 // additive-field discipline; `null` when no GPX has been uploaded yet.
+// CR-030 ("Stops"): additive `stops` array, ordered by `position` — same "no separate
+// read endpoint, embed it in the ride detail response" precedent as `route` (CR-027).
 export interface GetRideResponse {
   ride: Ride;
   organizer: RideOrganizerSummary;
   route: RouteSummary | null;
+  stops: Stop[];
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real
@@ -321,4 +325,79 @@ export interface FinishRideResponse {
 // deliberately omits.
 export interface GetRouteGeometryResponse {
   points: RouteGeometryPoint[];
+}
+
+// CR-030 ("Stops", `.claude/context/current-task.md`): `position` is never part of the
+// request — server-assigned on create (appended at the end), immutable on `PATCH` (no
+// reorder support in this ticket, no design-doc UI names one).
+export const createStopRequestSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Name cannot be empty.')
+    .max(140, 'Name must be at most 140 characters.'),
+  description: z
+    .string()
+    .trim()
+    .max(500, 'Description must be at most 500 characters.')
+    .nullable()
+    .optional(),
+  lat: z
+    .number()
+    .min(-90, 'lat must be between -90 and 90.')
+    .max(90, 'lat must be between -90 and 90.'),
+  lng: z
+    .number()
+    .min(-180, 'lng must be between -180 and 180.')
+    .max(180, 'lng must be between -180 and 180.'),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(0, 'Duration must not be negative.')
+    .nullable()
+    .optional(),
+});
+export type CreateStopRequest = z.infer<typeof createStopRequestSchema>;
+
+export interface CreateStopResponse {
+  stop: Stop;
+}
+
+// CR-030: every field independently optional, same PATCH-semantics precedent as
+// `updateRideRequestSchema`/`updateOrganizerProfile` — `position` is deliberately not
+// here (see `createStopRequestSchema`'s comment).
+export const updateStopRequestSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Name cannot be empty.')
+    .max(140, 'Name must be at most 140 characters.')
+    .optional(),
+  description: z
+    .string()
+    .trim()
+    .max(500, 'Description must be at most 500 characters.')
+    .nullable()
+    .optional(),
+  lat: z
+    .number()
+    .min(-90, 'lat must be between -90 and 90.')
+    .max(90, 'lat must be between -90 and 90.')
+    .optional(),
+  lng: z
+    .number()
+    .min(-180, 'lng must be between -180 and 180.')
+    .max(180, 'lng must be between -180 and 180.')
+    .optional(),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(0, 'Duration must not be negative.')
+    .nullable()
+    .optional(),
+});
+export type UpdateStopRequest = z.infer<typeof updateStopRequestSchema>;
+
+export interface UpdateStopResponse {
+  stop: Stop;
 }

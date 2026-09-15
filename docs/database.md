@@ -68,7 +68,15 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   organizer-placed _typed_ markers along the route (CR-031, not yet built) — distinct
   from `Route.geometry` above, which is the raw GPX-derived polyline (potentially
   thousands of points, always read/written as one unit, never one row per point).
-- Stop — named planned stop with location and duration.
+- Stop — named planned stop with location and duration (CR-030): `id`, `rideId` (FK →
+  Ride, `ON DELETE CASCADE`), `name` (not null), `description` (nullable),
+  `lat`/`lng` (not null, numeric(9,6), range-checked — required, unlike `Ride`'s own
+  nullable `startLat`/`startLng`, since a stop's entire reason for existing is a
+  location), `durationMinutes` (nullable int, CHECK `>= 0`), `position` (not null int,
+  server-assigned on create — appended at the end, no reorder support yet — unique per
+  `(rideId, position)`), `createdAt`/`updatedAt`/`updatedBy` (audit trail). No
+  separate read endpoint — exposed as an additive `stops` array on `GET
+/v1/rides/:id`.
 - RideRequirement — participation rules.
 - RideService — included logistics/services.
 - Registration — User ↔ Ride.

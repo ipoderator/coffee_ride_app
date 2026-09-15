@@ -262,9 +262,29 @@ separate from `GET /v1/rides/:id`'s `route` summary field, which deliberately ha
 `geometry`). No S3 call — the geometry is already in the `routes` row from `POST/PATCH
 .../route`, so there is no `route_storage_unavailable` case here.
 
-POST `/v1/rides/:id/stops`
-PATCH `/v1/rides/:id/stops/:stopId`
-DELETE `/v1/rides/:id/stops/:stopId`
+POST `/v1/rides/:id/stops` — **implemented (CR-030, "Stops")**. Same
+auth/ownership/draft-only rules as `POST .../route` (`resolveOwnDraftRide`): `404
+ride_not_found` if the ride doesn't exist or isn't the caller's, `409
+ride_not_editable` once it has left `draft`. Body: `{ name, description?, lat, lng,
+durationMinutes? }` — `lat`/`lng` are required (unlike `Ride.startLat/startLng`, a
+stop's whole reason for existing is a location). `position` is never in the request —
+server-assigned as the current stop count for the ride (appended at the end); no
+reorder support in this ticket. `201` → `{ stop }`.
+
+PATCH `/v1/rides/:id/stops/:stopId` — **implemented (CR-030)**. Same draft-only gate.
+Any subset of `name`/`description`/`lat`/`lng`/`durationMinutes` — `position` cannot be
+changed via this endpoint. `404 stop_not_found` if the id doesn't exist or belongs to a
+different ride (checked after the ride-level ownership/draft gate — same
+resource-enumeration-safe shape as `ride_not_found`). `200` → `{ stop }`.
+
+DELETE `/v1/rides/:id/stops/:stopId` — **implemented (CR-030)**. Same draft-only gate;
+`404 stop_not_found` as above. `204` on success. Does not renumber the remaining
+stops' `position` values — a gap in the sequence is harmless for display.
+
+`GET /v1/rides/:id`'s response gained an additive `stops: Stop[]` field (CR-030),
+ordered by `position` — same "no separate read endpoint, embed it in the ride detail
+response" precedent as `route` (CR-027). Same viewer-visibility rule as the rest of
+that response.
 
 ## Updates
 

@@ -3,9 +3,11 @@ import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createRideRequestSchema,
+  createStopRequestSchema,
   listPublicRidesQuerySchema,
   listRidesQuerySchema,
   updateRideRequestSchema,
+  updateStopRequestSchema,
 } from 'types';
 import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import {
@@ -14,13 +16,16 @@ import {
   routeGeometryResponseSchema,
   routeSummaryResponseSchema,
   rideWithOrganizerResponseSchema,
+  stopResponseSchema,
 } from './ride-response.schema.js';
 import {
   RideServiceError,
   cancelRide,
   closeRegistration,
   createRide,
+  createStop,
   deleteRoute,
+  deleteStop,
   finishRide,
   getRideForViewer,
   getRouteDownload,
@@ -32,6 +37,7 @@ import {
   replaceRoute,
   startRide,
   updateRideDraft,
+  updateStop,
   uploadRoute,
 } from './rides.service.js';
 
@@ -75,13 +81,19 @@ const rideResponseWrapper = z.object({ ride: rideResponseSchema });
 // CR-023 ("Ride detail"): `GET /:id` alone gains the ride's public organizer identity
 // alongside the unchanged `ride` field — additive, every other endpoint keeps
 // `rideResponseWrapper` as-is. CR-027 ("GPX upload") added `route` (nullable summary,
-// same additive discipline).
+// same additive discipline). CR-030 ("Stops") added `stops` (array, same discipline).
 const rideDetailResponseSchema = z.object({
   ride: rideResponseSchema,
   organizer: rideOrganizerSummarySchema,
   route: routeSummaryResponseSchema.nullable(),
+  stops: z.array(stopResponseSchema),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
+const stopResponseWrapper = z.object({ stop: stopResponseSchema });
+const stopIdParamsSchema = z.object({
+  id: z.uuid('id must be a valid ride id.'),
+  stopId: z.uuid('stopId must be a valid stop id.'),
+});
 const listRidesResponseSchema = z.object({
   items: z.array(rideResponseSchema),
   nextCursor: z.string().nullable(),
@@ -447,6 +459,74 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.params.id,
       );
       return reply.status(200).send(geometry);
+    },
+  );
+
+  // CR-030 ("Stops"): adds a stop to a draft ride, appended at the end (`position` is
+  // server-assigned — see `rides.service.ts`'s `createStop`). Same draft-only
+  // ownership gate as `POST .../route`.
+  app.post(
+    '/:id/stops',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: createStopRequestSchema,
+        response: { 201: stopResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const stop = await createStop(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.body,
+      );
+      return reply.status(201).send({ stop });
+    },
+  );
+
+  // CR-030: edits a draft ride's stop. `404 stop_not_found` if the id doesn't exist or
+  // belongs to a different ride (checked after the ride-level ownership/draft gate).
+  app.patch(
+    '/:id/stops/:stopId',
+    {
+      schema: {
+        params: stopIdParamsSchema,
+        body: updateStopRequestSchema,
+        response: { 200: stopResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const stop = await updateStop(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.params.stopId,
+        request.body,
+      );
+      return reply.status(200).send({ stop });
+    },
+  );
+
+  // CR-030: removes a draft ride's stop. `404 stop_not_found` if the id doesn't exist
+  // or belongs to a different ride. Does not renumber remaining stops (no reorder
+  // support in this ticket).
+  app.delete(
+    '/:id/stops/:stopId',
+    {
+      schema: { params: stopIdParamsSchema },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      await deleteStop(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.params.stopId,
+      );
+      return reply.status(204).send();
     },
   );
 };
