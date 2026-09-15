@@ -1579,3 +1579,65 @@ page; clicked into the published card, correctly navigated to
 requests). Test accounts/rides deleted from the scratch DB afterward.
 Follow-up: CR-025 ("Filters") is next per `docs/tasks.md`'s Rides section
 order — also the ticket that should resolve KI-029's ordering gap.
+
+## 2026-09-15 — CR-025 — Filters (public discovery)
+
+Summary: `bicycleType` is the one filter dimension this ticket ships —
+`GET /v1/rides?bicycleType=road|gravel|mtb|any` narrows the discovery list;
+omitted returns every type. `packages/types` gained
+`listPublicRidesQuerySchema` (`listRidesQuerySchema.extend`)/
+`ListPublicRidesQuery`; `/mine` keeps the unextended schema, this filter is
+discovery-only. Also resolves KI-029 (opened by CR-024, explicitly deferred
+here): `listPublicRides` now makes "upcoming" (`startsAt >= now`, computed
+fresh per call) an unconditional part of the endpoint, not a toggleable
+filter — no named use case exists for browsing past rides from `/`
+(`docs/product.md` Principle 3). With past rides excluded outright,
+`startsAt asc` (soonest-first) is now the correct default sort, distinct
+from `/mine`'s unchanged `createdAt desc`. `apps/api/src/lib/cursor.ts`'s
+`CursorKey` field was generalized from `createdAt` to the neutral
+`sortValue` (an internal rename only — the cursor is opaque and never
+parsed client-side, ADR-011) so both endpoints' cursor pagination can share
+the same helper while sorting by different columns.
+`apps/web` gained `features/participant/discovery/components/
+RideFilters.tsx` — a plain native `<select>`, not a new `packages/ui`
+primitive (KI-020 stays open; no shared `Select` exists yet and one
+feature-local dropdown doesn't need it). `DiscoveryList` holds the selected
+`bicycleType`, refetches on change, and now renders two distinct empty
+states: the existing unfiltered `emptyTitle` ("Пока нет заездов") and a new
+filtered one, `emptyFilteredTitle` ("Пока нет заездов по этим фильтрам")
+with a "Сбросить фильтры" reset action — exact copy `docs/design.md` §10
+and `EmptyState`'s own doc comment already quoted verbatim since CR-066,
+before any filter existed to use it.
+Files: `apps/api/src/lib/cursor.ts`; `apps/api/src/modules/rides/
+{rides.service.ts,rides.routes.ts,rides.routes.test.ts}`; `packages/types/
+src/api/rides.ts`; `packages/ui/src/terminology.ts`; `apps/web/src/
+features/participant/discovery/{api.ts,components/{RideFilters.tsx (new),
+DiscoveryList.tsx},discovery.test.tsx}`; `docs/api.md`, `docs/tasks.md`,
+`.claude/context/known-issues.md`.
+Decisions: none new — no ADR needed (additive query param + an internal,
+opaque-cursor field rename; no schema/architecture change). The "upcoming
+only, unconditional" behavior change is documented in
+`.claude/context/current-task.md`'s investigation as the deliberate
+resolution KI-029 asked for, not an incidental side effect.
+Validation: `turbo run lint typecheck build test` (25 tasks) against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`
+(Docker Desktop still unavailable): green. `apps/api`'s `GET /v1/rides`
+block gained 2 tests (past-ride exclusion, bicycleType filter) and had its
+pagination test rewritten for the new soonest-first sort — 122 total, was 120. `apps/web` gained 2 new tests in `discovery.test.tsx` (filter refetch,
+filtered-empty + reset) — 83 total, was 81. `format:check`/`lint:root`
+clean after one `prettier --write` pass (cosmetic only). Live-verified via
+curl against a real Postgres + a freshly started `apps/api` (a road ride
+and a sooner gravel ride, both published and future, plus a third
+published ride with a 2020 `startsAt`: unfiltered `GET /v1/rides` returned
+exactly the two future rides, gravel before road — soonest-first, not
+creation order; `?bicycleType=road` returned only the road one) and a full
+browser walkthrough via the `browser-automation` skill against a real
+`next dev` server + `apps/api` (unauthenticated: initial list rendered
+soonest-first with the past ride absent; selecting "Горный (MTB)" showed
+the filtered-empty state with a working "Сбросить фильтры" that restored
+the full list; selecting "Шоссейный" showed only the road ride) — 0
+console errors, 0 failed requests. Test accounts/rides deleted from the
+scratch DB afterward.
+Follow-up: CR-026 ("Map discovery") is next per `docs/tasks.md`'s Rides
+section order. New KI-030 records that distance/difficulty/price/
+date-range filters remain deferred (no design-doc backing yet).

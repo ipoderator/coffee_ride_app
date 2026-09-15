@@ -1,9 +1,10 @@
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ne, sql } from 'drizzle-orm';
 import { organizerProfiles, rides, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
   GetRideResponse,
+  ListPublicRidesQuery,
   ListPublicRidesResponse,
   ListRidesQuery,
   ListRidesResponse,
@@ -261,13 +262,13 @@ export async function listOwnRides(
       if (error instanceof CursorError) throw INVALID_CURSOR();
       throw error;
     }
-    // The cursor's `createdAt` is passed as the ISO string it already is, not a `Date`
+    // The cursor's `sortValue` is passed as the ISO string it already is, not a `Date`
     // — the `postgres` driver only auto-serializes parameters bound through Drizzle's
     // own typed column helpers, not a raw JS `Date` interpolated into a hand-written
     // `sql` template (confirmed by a live query while building this: passing a `Date`
     // here throws `ERR_INVALID_ARG_TYPE` inside the driver's own parameter binding).
     conditions.push(
-      sql`(${rides.createdAt}, ${rides.id}) < (${cursorKey.createdAt}::timestamptz, ${cursorKey.id}::uuid)`,
+      sql`(${rides.createdAt}, ${rides.id}) < (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
     );
   }
 
@@ -283,30 +284,46 @@ export async function listOwnRides(
   const last = page[page.length - 1];
   const nextCursor =
     hasMore && last
-      ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+      ? encodeCursor({ sortValue: last.createdAt.toISOString(), id: last.id })
       : null;
 
   return { items: page.map(toPublicRide), nextCursor };
 }
 
 /**
- * CR-024 ("Ride list", public discovery): every ride that has left `draft`, for
- * *any* viewer — unlike {@link listOwnRides}, no session is ever consulted
- * (`docs/api.md`: "no auth"), so there is no owner-sees-their-own-drafts exception
- * like {@link getRideForViewer}'s. "published+" means the same thing here as it does
- * there: any status except `draft` (`.claude/context/current-task.md`).
+ * CR-024 ("Ride list", public discovery), extended by CR-025 ("Filters"): every
+ * upcoming ride that has left `draft`, for *any* viewer — unlike {@link listOwnRides},
+ * no session is ever consulted (`docs/api.md`: "no auth"), so there is no
+ * owner-sees-their-own-drafts exception like {@link getRideForViewer}'s. "published+"
+ * means the same thing here as it does for `GET /v1/rides/:id`: any status except
+ * `draft` (`.claude/context/current-task.md`).
  *
- * Same cursor pagination and `(createdAt desc, id desc)` sort key as
- * {@link listOwnRides} — `apps/api/src/lib/cursor.ts` anticipated this endpoint
- * reusing it. Each item carries its organizer's public `{ id, name }`, same join
+ * CR-025 made "upcoming" (`startsAt >= now`, computed fresh per call) an
+ * unconditional part of this endpoint, not a toggleable filter — a discovery screen
+ * has no named use case for surfacing already-started/finished rides
+ * (`docs/product.md` Principle 3, "Live status, not stale coordination"). This also
+ * resolves KI-029: with past rides excluded, `startsAt asc` (soonest-first) is the
+ * correct default sort — unlike `/mine`, which stays `createdAt desc`
+ * ({@link listOwnRides}, a management list, unaffected by this ticket).
+ *
+ * `bicycleType` narrows to one enum value when provided — the one filter dimension
+ * this ticket ships (`.claude/context/current-task.md`).
+ *
+ * Each item carries its organizer's public `{ id, name }`, same join
  * {@link getRideForViewer} already does for a single ride.
  */
 export async function listPublicRides(
   db: DbClient,
-  query: ListRidesQuery,
+  query: ListPublicRidesQuery,
 ): Promise<ListPublicRidesResponse> {
   const limit = clampLimit(query.limit);
-  const conditions = [ne(rides.status, 'draft')];
+  const conditions = [
+    ne(rides.status, 'draft'),
+    gte(rides.startsAt, new Date()),
+  ];
+  if (query.bicycleType) {
+    conditions.push(eq(rides.bicycleType, query.bicycleType));
+  }
   if (query.cursor) {
     let cursorKey;
     try {
@@ -315,8 +332,11 @@ export async function listPublicRides(
       if (error instanceof CursorError) throw INVALID_CURSOR();
       throw error;
     }
+    // Ascending pagination (soonest-first): the next page needs rows *after* the
+    // last one seen, so `>` here — the inverse of `listOwnRides`'s `<` (which pages
+    // through its `desc` order).
     conditions.push(
-      sql`(${rides.createdAt}, ${rides.id}) < (${cursorKey.createdAt}::timestamptz, ${cursorKey.id}::uuid)`,
+      sql`(${rides.startsAt}, ${rides.id}) > (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
     );
   }
 
@@ -329,7 +349,7 @@ export async function listPublicRides(
     .from(rides)
     .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
     .where(and(...conditions))
-    .orderBy(desc(rides.createdAt), desc(rides.id))
+    .orderBy(asc(rides.startsAt), asc(rides.id))
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
@@ -338,7 +358,7 @@ export async function listPublicRides(
   const nextCursor =
     hasMore && last
       ? encodeCursor({
-          createdAt: last.ride.createdAt.toISOString(),
+          sortValue: last.ride.startsAt.toISOString(),
           id: last.ride.id,
         })
       : null;

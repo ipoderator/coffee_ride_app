@@ -105,13 +105,18 @@ only what a minimal, valid draft needs (`.claude/context/current-task.md`);
 own profile, `updatedBy` set to the caller, and every other field `null`.
 `400 validation_error` on an invalid field.
 
-GET `/v1/rides` — **implemented (CR-024, public discovery)**. No session cookie
-ever required or consulted — fully public. Every ride whose status has left
-`draft` (`published`/`registration_open`/`registration_closed`/`started`/
-`finished`/`cancelled` — same "published+" rule `GET /v1/rides/:id` uses), each
-item carrying `organizer: { id, name }` (same embed as the single-ride response).
-Cursor-paginated per ADR-011, sorted `(createdAt desc, id desc)` — same key as
-`/mine`, not yet ordered by upcoming-soonest (KI-029). A malformed `cursor` →
+GET `/v1/rides` — **implemented (CR-024, public discovery; extended CR-025,
+"Filters")**. No session cookie ever required or consulted — fully public.
+Every ride whose status has left `draft` (`published`/`registration_open`/
+`registration_closed`/`started`/`finished`/`cancelled` — same "published+" rule
+`GET /v1/rides/:id` uses) **and** whose `startsAt` has not yet passed — a
+ride that has already started/finished, or a past-dated cancelled one, no
+longer appears here at all (CR-025, resolves KI-029), though it stays
+reachable directly at `/rides/:id`. Optional `?bicycleType=` narrows to one
+of `road`/`gravel`/`mtb`/`any`; omitted returns every type. Each item carries
+`organizer: { id, name }` (same embed as the single-ride response).
+Cursor-paginated per ADR-011, sorted `(startsAt asc, id asc)` — soonest-first,
+distinct from `/mine`'s `(createdAt desc, id desc)`. A malformed `cursor` →
 `400 invalid_cursor`.
 
 GET `/v1/rides/mine` — **implemented (CR-088)**. Requires a valid session cookie

@@ -709,7 +709,8 @@ Update 2026-09-15 (CR-024): resolved the other half of this issue — `/`
 
 ### KI-029 — Discovery list isn't ordered by upcoming-soonest, and past rides aren't segregated
 
-Status: open. Discovered: 2026-09-15 (CR-024 session).
+Status: resolved 2026-09-15 (CR-025, "Filters" — the "next action" this
+entry itself named). Discovered: 2026-09-15 (CR-024 session).
 Problem: `GET /v1/rides` (and `apps/web`'s `/` built on top of it) sorts
 `(createdAt desc, id desc)` — the same cursor key `/mine` (CR-088) already
 used, reused as-is for simplicity. A discovery feed's more useful ordering
@@ -724,6 +725,35 @@ Impact: low today — very few rides exist in any environment this ticket
 would be tested against, so `createdAt desc` and "upcoming first" mostly
 coincide by accident. Will matter once the list has enough rides spanning
 past and future.
-Workaround: none needed yet.
-Next action: CR-025 ("Filters") is the natural ticket to add this — either
-a default "upcoming only" filter, a smarter default sort, or both.
+Resolution: `listPublicRides` now makes "upcoming" (`startsAt >= now`,
+computed fresh per call) an unconditional part of the endpoint — not a
+toggleable filter, since no use case for browsing past rides from `/` was
+ever named (`docs/product.md` Principle 3, "Live status, not stale
+coordination"). With past rides excluded outright, `startsAt asc`
+(soonest-first) is now the correct default sort — the `apps/api/src/lib/
+cursor.ts` `CursorKey` field was generalized from `createdAt` to the
+neutral `sortValue` so `/mine` (still `createdAt desc`) and `/` (now
+`startsAt asc`) can share the same opaque-cursor machinery on two
+different columns. Live-verified: a published ride with a 2020 `startsAt`
+never appears in `GET /v1/rides`, and two future rides created out of
+chronological order still return soonest-first.
+
+### KI-030 — Discovery only filters by bicycleType; distance/difficulty/price/date-range filters are deferred
+
+Status: open. Discovered: 2026-09-15 (CR-025 session).
+Problem: `docs/tasks.md`'s "CR-025 Filters" ticket and `docs/design.md`'s
+`RideFilters` component name filtering generically, with no field list.
+Of `Ride`'s fields, `bicycleType` is the only one that's both always-set
+(required since CR-017) and a small closed enum — the rest
+(`distanceKm`/`difficulty`/`priceRub`/`startsAt` as a range rather than the
+unconditional "upcoming" floor KI-029's resolution added) are nullable and
+would each need real range-picker UI with no design-doc backing.
+Impact: low — the shipped `bicycleType` filter is real and correct for what
+it covers; a participant cannot yet narrow by distance/difficulty/price/a
+specific date range.
+Workaround: none needed — browsing the full (already upcoming-only)
+list and reading each `RideCard`'s metrics is the fallback.
+Next action: add distance/difficulty/price/date-range filters to
+`RideFilters` if/when the product spec names them — same "the minimal real
+thing now" discipline this ticket itself used, not an oversight to fix
+blindly.

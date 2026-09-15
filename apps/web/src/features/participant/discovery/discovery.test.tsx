@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicRide } from 'types';
 import { DiscoveryList } from './components/DiscoveryList';
@@ -91,5 +91,52 @@ describe('DiscoveryList', () => {
 
     await screen.findByText(baseRide.title);
     expect(screen.queryByText('Набор высоты')).not.toBeInTheDocument();
+  });
+
+  it('refetches with the selected bicycleType when the filter changes', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [baseRide],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+    await screen.findByText(baseRide.title);
+    expect(listPublicRidesMock).toHaveBeenLastCalledWith({
+      bicycleType: undefined,
+    });
+
+    fireEvent.change(screen.getByLabelText('Тип велосипеда'), {
+      target: { value: 'road' },
+    });
+
+    await screen.findByText(baseRide.title);
+    expect(listPublicRidesMock).toHaveBeenLastCalledWith({
+      bicycleType: 'road',
+    });
+  });
+
+  it('shows a filtered empty state with a working reset action that restores the full list', async () => {
+    listPublicRidesMock
+      .mockResolvedValueOnce({ items: [baseRide], nextCursor: null })
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+      .mockResolvedValueOnce({ items: [baseRide], nextCursor: null });
+
+    render(<DiscoveryList />);
+    await screen.findByText(baseRide.title);
+
+    fireEvent.change(screen.getByLabelText('Тип велосипеда'), {
+      target: { value: 'road' },
+    });
+
+    expect(
+      await screen.findByText('Пока нет заездов по этим фильтрам'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
+
+    expect(await screen.findByText(baseRide.title)).toBeInTheDocument();
+    expect(listPublicRidesMock).toHaveBeenLastCalledWith({
+      bicycleType: undefined,
+    });
   });
 });

@@ -393,4 +393,10 @@ export const RIDE_DISCOVERY_TERMS = {
   emptyDescription:
     'Загляните позже — организаторы скоро опубликуют новые заезды.',
   organizedByLabel: 'Организатор',
+  // CR-025 ("Filters"): exact copy `docs/design.md` §10 and `EmptyState`'s own doc
+  // comment already quote for the filtered-empty state, distinct from the plain
+  // `emptyTitle` above (no filter active).
+  filterAllOption: 'Все типы',
+  emptyFilteredTitle: 'Пока нет заездов по этим фильтрам',
+  resetFiltersLabel: 'Сбросить фильтры',
 } as const;

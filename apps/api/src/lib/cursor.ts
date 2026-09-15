@@ -1,11 +1,14 @@
 /**
  * Opaque cursor pagination (ADR-011 §2, `docs/api.md` → "Pagination"). First real
  * implementation — `GET /v1/rides/mine` (CR-088) is the first collection endpoint;
- * every later one (participants, updates, reviews, the public ride list) reuses this
- * same helper instead of re-deriving its own encoding.
+ * every later one (participants, updates, reviews, `GET /v1/rides`) reuses this same
+ * helper instead of re-deriving its own encoding.
  *
- * The cursor encodes the sort key of the last row on the previous page. It is never
- * parsed or constructed client-side (ADR-011) — only this module reads/writes it.
+ * The cursor encodes the sort key of the last row on the previous page — `sortValue`
+ * plus the row's `id` as a tiebreaker. Different endpoints sort by different columns
+ * (`/mine`'s `createdAt` vs. `GET /v1/rides`'s `startsAt`, CR-025), so the field name
+ * is generic on purpose. It is never parsed or constructed client-side (ADR-011) —
+ * only this module reads/writes it.
  */
 
 export class CursorError extends Error {
@@ -15,8 +18,13 @@ export class CursorError extends Error {
   }
 }
 
+// `sortValue` is deliberately generic, not `createdAt` — CR-025 ("Filters") added a
+// second collection endpoint sorted by a different column (`GET /v1/rides`'s
+// `startsAt`, vs `/mine`'s `createdAt`). The cursor is opaque and never parsed
+// client-side (ADR-011), so the field name is an internal implementation detail, safe
+// to rename without a contract change.
 export interface CursorKey {
-  createdAt: string;
+  sortValue: string;
   id: string;
 }
 
@@ -34,7 +42,7 @@ export function decodeCursor(cursor: string): CursorKey {
   if (
     typeof parsed !== 'object' ||
     parsed === null ||
-    typeof (parsed as CursorKey).createdAt !== 'string' ||
+    typeof (parsed as CursorKey).sortValue !== 'string' ||
     typeof (parsed as CursorKey).id !== 'string'
   ) {
     throw new CursorError();

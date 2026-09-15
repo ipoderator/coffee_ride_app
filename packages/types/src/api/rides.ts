@@ -94,6 +94,18 @@ export type PublicRide = Ride & { organizer: RideOrganizerSummary };
 
 export type ListPublicRidesResponse = Paginated<PublicRide>;
 
+// CR-025 ("Filters"): `bicycleType` is the one filter dimension this ticket ships —
+// the only `Ride` field that's both always-set and a small closed enum
+// (`.claude/context/current-task.md`). Distance/difficulty/price/date-range filters
+// are deferred (no design-doc backing yet). `/mine` keeps the unextended
+// `listRidesQuerySchema` — this filter is discovery-only.
+export const listPublicRidesQuerySchema = listRidesQuerySchema.extend({
+  bicycleType: z
+    .enum(BICYCLE_TYPES, 'bicycleType must be one of: road, gravel, mtb, any.')
+    .optional(),
+});
+export type ListPublicRidesQuery = z.infer<typeof listPublicRidesQuerySchema>;
+
 // CR-018 ("Edit draft"): every field CR-017 deliberately left `null` at creation,
 // still all independently optional (a future caller could send a sparse patch even
 // though `EditRideForm` always submits the full current state,

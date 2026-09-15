@@ -48,9 +48,11 @@ participant-facing) also completed 2026-09-15: `GET /v1/rides/:id` extended
 from owner-only to serve any viewer, and `apps/web`'s first fully public
 screen, `/rides/[id]`. CR-024 (Ride list, public discovery) also completed
 2026-09-15: `GET /v1/rides` (fully public, "published+" statuses), and
-`apps/web`'s `/` (replaces the CR-002 bootstrap placeholder) — the ride
-lifecycle's Rides section now has every ticket done through CR-024; CR-025
-(Filters) next.
+`apps/web`'s `/` (replaces the CR-002 bootstrap placeholder). CR-025
+(Filters) also completed 2026-09-15: `?bicycleType=` on `GET /v1/rides`
+plus the "upcoming only" default + `startsAt asc` sort (resolves KI-029) —
+the Rides section now has every ticket done through CR-025; CR-026 (Map
+discovery) next.
 
 ## Implemented
 
@@ -673,6 +675,36 @@ malformed cursor 400) and a full browser walkthrough via the
 cards, the draft ride did not appear, clicking a card correctly navigated
 into `/rides/[id]`) — 0 console errors, 0 failed requests.
 
+Filters (public discovery) landed 2026-09-15 (CR-025, see
+`docs/changelog.md`): `?bicycleType=road|gravel|mtb|any` on `GET /v1/rides`
+— the one filter dimension this ticket ships, `packages/types`'
+`listPublicRidesQuerySchema` (`/mine` keeps the unextended schema). Also
+resolves KI-029: `listPublicRides` now makes "upcoming" (`startsAt >= now`,
+computed fresh per call) an unconditional part of the endpoint, not a
+toggleable filter (`docs/product.md` Principle 3) — `startsAt asc`
+(soonest-first) is now the correct default sort, distinct from `/mine`'s
+unchanged `createdAt desc`. `apps/api/src/lib/cursor.ts`'s `CursorKey`
+field generalized from `createdAt` to `sortValue` (internal rename only,
+cursor stays opaque) so both endpoints share the pagination helper while
+sorting by different columns. `apps/web` gained
+`features/participant/discovery/components/RideFilters.tsx` — a plain
+native `<select>`, not a new `packages/ui` primitive (KI-020 stays open).
+`DiscoveryList` now renders two distinct empty states: the existing
+unfiltered one and a new filtered one ("Пока нет заездов по этим
+фильтрам" + "Сбросить фильтры", exact copy `docs/design.md` §10 already
+quoted since CR-066). New KI-030: distance/difficulty/price/date-range
+filters remain deferred (no design-doc backing yet). 2 new `apps/api`
+tests (122 total, was 120) plus a rewritten pagination test (soonest-first,
+not newest-created); `apps/web` gained 2 new tests (83 total, was 81).
+Live-verified via curl against a real Postgres + `apps/api` (a past
+published ride excluded outright; two future rides created out of
+chronological order returned soonest-first; `?bicycleType=road` returned
+only the road one) and a full browser walkthrough via the
+`browser-automation` skill against a real `next dev` server + `apps/api`
+(soonest-first ordering, past ride absent, MTB filter showing the filtered
+empty state with a working reset, road filter narrowing correctly) — 0
+console errors, 0 failed requests.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -770,10 +802,10 @@ None.
 
 ## Next
 
-CR-025 — Filters (`docs/tasks.md` Rides section, next after CR-017/CR-088/
-CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/CR-022/CR-023/CR-024, all
-done). Also the natural ticket to resolve KI-029 (discovery isn't ordered
-by upcoming-soonest).
+CR-026 — Map discovery (`docs/tasks.md` Rides section, next after
+CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/CR-022/
+CR-023/CR-024/CR-025, all done). `docs/design.md` §8: `/` "List + **map
+toggle**" — the list-only slice CR-024/CR-025 built gains its map half.
 
 ## Important decisions
 
@@ -915,10 +947,11 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   always the owner); no other caller exists yet.
 - new (CR-024): KI-028 narrowed — the "no discovery entry point" half is
   resolved (`/` now links every published+ ride into `/rides/[id]`); the
-  route/stops/services/requirements/registration half stays open. New
-  KI-029: the discovery list sorts `createdAt desc` (identical to `/mine`),
-  not by upcoming-soonest — deferred to CR-025 ("Filters"), the immediate
-  next ticket.
+  route/stops/services/requirements/registration half stays open.
+- new (CR-025): KI-029 resolved — discovery now excludes past rides
+  outright and sorts `startsAt asc` (soonest-first). New KI-030: only
+  `bicycleType` is filterable; distance/difficulty/price/date-range
+  filters remain deferred (no design-doc backing yet).
 
 ## Do not break
 
@@ -938,4 +971,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-024)
+2026-09-15 (CR-025)

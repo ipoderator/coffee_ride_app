@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import {
   createRideRequestSchema,
+  listPublicRidesQuerySchema,
   listRidesQuerySchema,
   updateRideRequestSchema,
 } from 'types';
@@ -71,15 +72,18 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  // CR-024 ("Ride list", public discovery): every ride that has left `draft`, for
-  // any viewer — no `preHandler` at all, `docs/api.md` names this endpoint "no
-  // auth" outright (distinct from `/:id`'s `resolveOptionalUser`, which still needs
-  // to know *whether* a session exists so an owner can see their own draft).
+  // CR-024 ("Ride list", public discovery), extended by CR-025 ("Filters"): every
+  // upcoming ride that has left `draft`, for any viewer — no `preHandler` at all,
+  // `docs/api.md` names this endpoint "no auth" outright (distinct from `/:id`'s
+  // `resolveOptionalUser`, which still needs to know *whether* a session exists so
+  // an owner can see their own draft). `listPublicRidesQuerySchema` adds the
+  // optional `bicycleType` filter on top of `listRidesQuerySchema`'s `limit`/
+  // `cursor`.
   app.get(
     '/',
     {
       schema: {
-        querystring: listRidesQuerySchema,
+        querystring: listPublicRidesQuerySchema,
         response: { 200: listPublicRidesResponseSchema },
       },
     },

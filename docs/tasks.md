@@ -215,7 +215,10 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
 - [x] CR-024 Ride list — done 2026-09-15: `GET /v1/rides` (public discovery,
       no auth), `apps/web`'s `/` (replaces the CR-002 bootstrap placeholder).
       See `docs/changelog.md`.
-- [ ] CR-025 Filters
+- [x] CR-025 Filters — done 2026-09-15: `?bicycleType=` on `GET /v1/rides`
+      (the one filter dimension this ticket ships), plus the "upcoming
+      only" default + `startsAt asc` sort resolving KI-029. See
+      `docs/changelog.md`.
 - [ ] CR-026 Map discovery
 
 ## Route

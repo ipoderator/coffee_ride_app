@@ -419,17 +419,17 @@ describe('/v1/rides', () => {
       await app.close();
     });
 
-    it('paginates newest-created first and rejects a malformed cursor with 400 invalid_cursor', async () => {
+    it('paginates soonest-first and rejects a malformed cursor with 400 invalid_cursor', async () => {
       const app = await buildApp(testEnv);
       const owner = await registerAndLogin(app, { withOrganizerProfile: true });
 
-      async function createPublished(title: string) {
+      async function createPublished(title: string, startsAt: string) {
         const created = await app.inject({
           method: 'POST',
           url: '/v1/rides',
           headers: { origin: WEB_ORIGIN },
           cookies: { session: owner.rawToken },
-          payload: { ...VALID_PAYLOAD, title },
+          payload: { ...VALID_PAYLOAD, title, startsAt },
         });
         const rideId = created.json().ride.id as string;
         await app.inject({
@@ -441,8 +441,10 @@ describe('/v1/rides', () => {
         return rideId;
       }
 
-      const first = await createPublished('Первый');
-      const second = await createPublished('Второй');
+      // Created out of chronological order on purpose — the sooner one must still
+      // come first (CR-025: `startsAt asc`, not creation order).
+      const sooner = await createPublished('Скоро', '2027-05-01T05:00:00.000Z');
+      const later = await createPublished('Позже', '2027-06-01T05:00:00.000Z');
 
       const page1 = await app.inject({
         method: 'GET',
@@ -451,7 +453,7 @@ describe('/v1/rides', () => {
       expect(page1.statusCode).toBe(200);
       const body1 = page1.json();
       expect(body1.items).toHaveLength(1);
-      expect(body1.items[0].id).toBe(second);
+      expect(body1.items[0].id).toBe(sooner);
       expect(body1.nextCursor).not.toBeNull();
 
       const page2 = await app.inject({
@@ -461,7 +463,7 @@ describe('/v1/rides', () => {
       expect(page2.statusCode).toBe(200);
       const body2 = page2.json();
       expect(body2.items).toHaveLength(1);
-      expect(body2.items[0].id).toBe(first);
+      expect(body2.items[0].id).toBe(later);
       expect(body2.nextCursor).toBeNull();
 
       const malformed = await app.inject({
@@ -470,6 +472,79 @@ describe('/v1/rides', () => {
       });
       expect(malformed.statusCode).toBe(400);
       expect(malformed.json().code).toBe('invalid_cursor');
+
+      await app.close();
+    });
+
+    it('excludes a published ride whose startsAt has already passed (CR-025, resolves KI-029)', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: { ...VALID_PAYLOAD, startsAt: '2020-01-01T05:00:00.000Z' },
+      });
+      const rideId = created.json().ride.id as string;
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/v1/rides' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().items).toEqual([]);
+
+      await app.close();
+    });
+
+    it('filters by bicycleType when provided, and returns every type when omitted', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+
+      async function createPublished(bicycleType: string) {
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: { ...VALID_PAYLOAD, bicycleType },
+        });
+        const rideId = created.json().ride.id as string;
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/publish`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+        });
+        return rideId;
+      }
+
+      const roadId = await createPublished('road');
+      const gravelId = await createPublished('gravel');
+
+      const filtered = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?bicycleType=road',
+      });
+      expect(filtered.statusCode).toBe(200);
+      const filteredIds = (filtered.json().items as Array<{ id: string }>).map(
+        (item) => item.id,
+      );
+      expect(filteredIds).toContain(roadId);
+      expect(filteredIds).not.toContain(gravelId);
+
+      const unfiltered = await app.inject({ method: 'GET', url: '/v1/rides' });
+      const unfilteredIds = (
+        unfiltered.json().items as Array<{ id: string }>
+      ).map((item) => item.id);
+      expect(unfilteredIds).toContain(roadId);
+      expect(unfilteredIds).toContain(gravelId);
 
       await app.close();
     });
