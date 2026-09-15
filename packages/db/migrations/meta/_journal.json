@@ -43,6 +43,13 @@
       "when": 1789453942569,
       "tag": "0005_polite_jimmy_woo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789462073849,
+      "tag": "0006_add_routes_table",
+      "breakpoints": true
     }
   ]
 }

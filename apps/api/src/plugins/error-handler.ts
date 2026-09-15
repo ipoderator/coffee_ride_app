@@ -81,10 +81,23 @@ export function registerErrorHandler(app: FastifyInstance) {
     const status =
       (typeof error.statusCode === 'number' && error.statusCode) || 500;
 
+    // A deliberate domain error (`AuthServiceError`/`OrganizerServiceError`/
+    // `RideServiceError`, ...) always sets its own `title` alongside `code` — the
+    // same signal the below-500 branch already keyed on before this ticket. CR-027
+    // ("GPX upload") is the first ticket to deliberately throw a >=500 domain error
+    // (`route_storage_unavailable`, 503 — a *known*, safe-to-describe degraded
+    // state per `.claude/rules/resilience.md`, not an unexpected failure), so
+    // "has a title" now also decides whether a >=500 status is trusted as safe to
+    // expose, not just whether it's below 500.
+    const isDeliberateDomainError = Boolean(
+      (error as FastifyError & { title?: string }).title,
+    );
+
     // Never leak stack traces / driver internals (.claude/rules/backend.md).
-    // Below 500, the thrown message is assumed to already be user-safe (it was
-    // written by this codebase, not by a dependency/driver).
-    if (status >= 500) {
+    // A >=500 status with no `title` is assumed to come from an unexpected failure
+    // (a bug, a driver/DB error) — its message was written by a dependency, not
+    // this codebase, so it is never safe to return as-is.
+    if (status >= 500 && !isDeliberateDomainError) {
       request.log.error({ err: error }, 'Unhandled error');
       return sendProblem(reply, {
         status: 500,
@@ -95,7 +108,13 @@ export function registerErrorHandler(app: FastifyInstance) {
       });
     }
 
-    request.log.warn({ err: error }, 'Request error');
+    if (status >= 500) {
+      // Still a server-side problem worth logging loudly, even though its message
+      // is safe to return to the caller.
+      request.log.error({ err: error }, 'Degraded dependency');
+    } else {
+      request.log.warn({ err: error }, 'Request error');
+    }
     // Domain errors (e.g. `AuthServiceError`) may carry a human-readable
     // `title` alongside the RFC 9457-required `code` — falls back to
     // `error.name` for plain thrown errors that don't set one.

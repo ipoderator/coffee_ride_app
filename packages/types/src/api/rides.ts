@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BICYCLE_TYPES, type Ride } from '../domain/ride.js';
+import type { RouteSummary } from '../domain/route.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -66,9 +67,12 @@ export interface RideOrganizerSummary {
 
 // CR-023: `GET /v1/rides/:id`'s response shape, extended from a bare `{ ride }` —
 // additive (existing owner-only consumers destructuring `{ ride }` are unaffected).
+// CR-027 ("GPX upload") added `route` — a summary only (no `geometry` array), same
+// additive-field discipline; `null` when no GPX has been uploaded yet.
 export interface GetRideResponse {
   ride: Ride;
   organizer: RideOrganizerSummary;
+  route: RouteSummary | null;
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real

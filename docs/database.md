@@ -54,8 +54,20 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   CR-017; it only added the `PATCH` endpoint (draft-only, ownership-checked
   per CR-016) and the web form. `RideRequirement`/`RideService` (below) and
   `Route`/`RoutePoint`/`Stop` are separate tables, not columns here.
-- Route — route geometry and metadata.
-- RoutePoint — start/finish/stop/danger/water/food/technical/other.
+- Route — route geometry and metadata (CR-027, "GPX upload"): `id`, `rideId` (FK →
+  Ride, `ON DELETE CASCADE`, unique — one per ride), `gpxFileKey`/`gpxFileName`/
+  `gpxFileSizeBytes` (the uploaded file, stored in S3-compatible object storage —
+  `apps/api/src/s3.ts`'s first real consumer, KI-015), `distanceKm`/
+  `elevationGainMeters`/`pointCount` (computed from the GPX's own track points —
+  haversine sum / positive-elevation-delta sum — independent from `Ride`'s own
+  organizer-entered `distanceKm`/`elevationGainMeters`, not reconciled), `geometry`
+  (`jsonb`, the ordered `{ lat, lng, elevationMeters }[]` polyline — a single column,
+  not a row-per-point table; see the next line), `createdAt`/`updatedAt`,
+  `updatedBy` (audit trail).
+- RoutePoint — start/finish/stop/danger/water/food/technical/other: a small set of
+  organizer-placed _typed_ markers along the route (CR-031, not yet built) — distinct
+  from `Route.geometry` above, which is the raw GPX-derived polyline (potentially
+  thousands of points, always read/written as one unit, never one row per point).
 - Stop — named planned stop with location and duration.
 - RideRequirement — participation rules.
 - RideService — included logistics/services.

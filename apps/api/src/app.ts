@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import {
   serializerCompiler,
@@ -10,8 +11,15 @@ import type { Env } from './env.js';
 import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerOpenApi } from './plugins/openapi.js';
+import { registerS3 } from './plugins/s3.js';
 import { healthRoutes } from './routes/health.js';
 import { v1Routes } from './routes/v1.js';
+
+// ADR-015 (CR-085/CR-027): hard upload size cap — the primary event-loop-blocking
+// safeguard (see `modules/rides/gpx.ts`'s own comment for the streaming-parse half).
+// 10 MB is generous for a real ride GPX track; anything larger is rejected before a
+// single byte reaches the parser.
+export const GPX_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /**
  * Builds (but does not start listening) the Fastify instance. Kept separate
@@ -44,6 +52,14 @@ export async function buildApp(env: Env) {
   registerErrorHandler(app);
   await registerOpenApi(app);
   registerDb(app, env);
+  registerS3(app, env);
+
+  // CR-027: GPX file uploads. `fileSize` is the actual event-loop-protection
+  // mechanism (ADR-015) — everything past this limit is rejected by the plugin
+  // before `modules/rides/gpx.ts` ever sees it.
+  await app.register(multipart, {
+    limits: { fileSize: GPX_MAX_UPLOAD_BYTES, files: 1 },
+  });
 
   // CR-012: the session cookie carries only an opaque token — its value is
   // never trusted on its own, only looked up against `sessions.tokenHash`

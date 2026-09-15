@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createRideRequestSchema,
@@ -10,30 +11,75 @@ import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import {
   rideOrganizerSummarySchema,
   rideResponseSchema,
+  routeSummaryResponseSchema,
   rideWithOrganizerResponseSchema,
 } from './ride-response.schema.js';
 import {
+  RideServiceError,
   cancelRide,
   closeRegistration,
   createRide,
+  deleteRoute,
   finishRide,
   getRideForViewer,
+  getRouteDownload,
   listOwnRides,
   listPublicRides,
   openRegistration,
   publishRide,
+  replaceRoute,
   startRide,
   updateRideDraft,
+  uploadRoute,
 } from './rides.service.js';
+
+const GPX_FILE_TOO_LARGE = () =>
+  new RideServiceError(
+    'gpx_file_too_large',
+    400,
+    'GPX file too large',
+    'The uploaded file exceeds the maximum GPX upload size.',
+  );
+
+/**
+ * Reads the one multipart file field (`@fastify/multipart`, registered globally in
+ * `app.ts` with `limits.fileSize` = ADR-015's upload cap) into a buffer. `null` if no
+ * file part was sent at all — the route layer maps that to `gpx_file_missing`, not a
+ * generic 400.
+ */
+async function readGpxUpload(
+  request: FastifyRequest,
+): Promise<{ filename: string; buffer: Buffer } | null> {
+  const part = await request.file();
+  if (!part) {
+    return null;
+  }
+  let buffer: Buffer;
+  try {
+    buffer = await part.toBuffer();
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
+    ) {
+      throw GPX_FILE_TOO_LARGE();
+    }
+    throw err;
+  }
+  return { filename: part.filename, buffer };
+}
 
 const rideResponseWrapper = z.object({ ride: rideResponseSchema });
 // CR-023 ("Ride detail"): `GET /:id` alone gains the ride's public organizer identity
 // alongside the unchanged `ride` field — additive, every other endpoint keeps
-// `rideResponseWrapper` as-is.
+// `rideResponseWrapper` as-is. CR-027 ("GPX upload") added `route` (nullable summary,
+// same additive discipline).
 const rideDetailResponseSchema = z.object({
   ride: rideResponseSchema,
   organizer: rideOrganizerSummarySchema,
+  route: routeSummaryResponseSchema.nullable(),
 });
+const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 const listRidesResponseSchema = z.object({
   items: z.array(rideResponseSchema),
   nextCursor: z.string().nullable(),
@@ -287,6 +333,95 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.params.id,
       );
       return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-027 ("GPX upload"): multipart, not JSON — no Zod `body` schema (there is
+  // nothing for `@fastify/type-provider-zod` to validate; the file itself is
+  // checked by hand in `readGpxUpload`/`rides.service.ts`). Same draft-only
+  // ownership gate as `PATCH /:id`; 409 `route_already_exists` if one is already
+  // present.
+  app.post(
+    '/:id/route',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 201: routeResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const file = await readGpxUpload(request);
+      const route = await uploadRoute(
+        app.db,
+        app.s3,
+        request.user!.id,
+        request.params.id,
+        file,
+      );
+      return reply.status(201).send({ route });
+    },
+  );
+
+  // Replaces an existing route's GPX file. 404 `route_not_found` if none exists yet
+  // — use `POST` instead.
+  app.patch(
+    '/:id/route',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: routeResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const file = await readGpxUpload(request);
+      const route = await replaceRoute(
+        app.db,
+        app.s3,
+        request.user!.id,
+        request.params.id,
+        file,
+      );
+      return reply.status(200).send({ route });
+    },
+  );
+
+  app.delete(
+    '/:id/route',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      await deleteRoute(app.db, app.s3, request.user!.id, request.params.id);
+      return reply.status(204).send();
+    },
+  );
+
+  // Streams the raw GPX bytes. Same viewer-visibility rule as `GET /:id`
+  // (`resolveOptionalUser`, not `requireAuth`) — not JSON, so no Zod `response`
+  // schema; the download itself is the payload.
+  app.get(
+    '/:id/route/download',
+    {
+      schema: { params: rideIdParamsSchema },
+      preHandler: resolveOptionalUser,
+    },
+    async (request, reply) => {
+      const { body, filename } = await getRouteDownload(
+        app.db,
+        app.s3,
+        request.user?.id ?? null,
+        request.params.id,
+      );
+      return reply
+        .status(200)
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .type('application/gpx+xml')
+        .send(body);
     },
   );
 };

@@ -44,3 +44,17 @@ export const rideOrganizerSummarySchema = z.object({
 export const rideWithOrganizerResponseSchema = rideResponseSchema.extend({
   organizer: rideOrganizerSummarySchema,
 });
+
+// CR-027 ("GPX upload"): a route summary — no `geometry` array (see
+// `.claude/context/current-task.md`'s "Full geometry exposure" scoping note).
+export const routeSummaryResponseSchema = z.object({
+  id: z.string(),
+  rideId: z.string(),
+  gpxFileName: z.string(),
+  gpxFileSizeBytes: z.number(),
+  distanceKm: z.number(),
+  elevationGainMeters: z.number(),
+  pointCount: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});

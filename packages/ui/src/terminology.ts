@@ -334,6 +334,8 @@ export const RIDE_EDIT_TERMS = {
   // address UI yet (KI-016).
   startLatLabel: 'Широта старта',
   startLngLabel: 'Долгота старта',
+  // CR-027 ("GPX upload"): link into `/organizer/rides/[id]/route`.
+  routeLink: 'Маршрут →',
   notEditable: 'Редактировать можно только черновик заезда.',
   save: 'Сохранить',
   savePending: 'Сохранение…',
@@ -410,4 +412,40 @@ export const RIDE_DISCOVERY_TERMS = {
   viewListLabel: 'Список',
   viewMapLabel: 'Карта',
   mapUnavailable: 'Карта временно недоступна. Используйте список заездов.',
+} as const;
+
+/**
+ * `/organizer/rides/[id]/route` (CR-027, `docs/design.md` §8 "Route, GPX upload,
+ * stops, route points" — this ticket ships the GPX upload slice only; stops/route
+ * points are CR-030/CR-031). Draft-only, same gate `RIDE_EDIT_TERMS` uses for the
+ * rest of ride configuration. `storageUnavailable` is the exact degraded-state copy
+ * `docs/design.md` §10 already names for an S3 failure.
+ */
+export const RIDE_ROUTE_TERMS = {
+  pageTitle: 'Маршрут',
+  backToEdit: 'К редактированию заезда',
+  loadError: 'Не удалось загрузить заезд. Попробуйте ещё раз.',
+  notEditable: 'Маршрут можно менять только у черновика заезда.',
+  emptyTitle: 'Маршрут ещё не загружен',
+  emptyDescription: 'Загрузите трек в формате GPX, чтобы добавить маршрут.',
+  uploadLabel: 'Файл GPX',
+  upload: 'Загрузить трек',
+  uploadPending: 'Загрузка…',
+  uploadSuccess: 'Маршрут загружен.',
+  replace: 'Заменить трек',
+  replacePending: 'Замена…',
+  replaceSuccess: 'Маршрут обновлён.',
+  delete: 'Удалить маршрут',
+  deletePending: 'Удаление…',
+  deleteSuccess: 'Маршрут удалён.',
+  deleteConfirm: 'Удалить загруженный маршрут? Это действие необратимо.',
+  download: 'Скачать трек (GPX)',
+  distanceLabel: 'Дистанция трека',
+  elevationGainLabel: 'Набор высоты трека',
+  pointCountLabel: 'Точек трека',
+  fileNameLabel: 'Файл',
+  gpxFileMissing: 'Выберите файл GPX для загрузки.',
+  gpxInvalid: 'Файл не распознан как корректный GPX-трек.',
+  gpxFileTooLarge: 'Файл превышает допустимый размер.',
+  storageUnavailable: 'Загрузка недоступна. Попробуйте ещё раз позже.',
 } as const;

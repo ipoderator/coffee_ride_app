@@ -140,7 +140,10 @@ it's still `draft` — `404 ride_not_found` both when the id doesn't exist at
 all and when a non-owner requests a `draft` (deliberately the same response
 either way — resource-enumeration reasoning, see `.claude/rules/security.md`).
 `200` → `{ ride, organizer: { id, name } }` — `organizer` is additive (CR-023)
-alongside the unchanged `ride` field.
+alongside the unchanged `ride` field. `route` is a second additive field
+(CR-027, `RouteSummary | null` — `id`/`gpxFileName`/`gpxFileSizeBytes`/
+`distanceKm`/`elevationGainMeters`/`pointCount`/`createdAt`/`updatedAt`, no
+`geometry` array; `null` until a GPX is uploaded).
 
 PATCH `/v1/rides/:id` — **implemented (CR-016/CR-018, "Edit draft"; extended
 CR-026, "Map discovery")**. Same 401/404 rules as `GET`. Draft-only: `409
@@ -208,9 +211,44 @@ DELETE `/v1/rides/:id/waitlist`
 
 ## Route
 
-POST `/v1/rides/:id/route`
-PATCH `/v1/rides/:id/route`
-DELETE `/v1/rides/:id/route`
+POST `/v1/rides/:id/route` — **implemented (CR-027, "GPX upload")**. Requires a valid
+session cookie (`401` otherwise) and ownership of the ride: `404 ride_not_found` both
+when the id doesn't exist and when it belongs to a different organizer (same rule as
+`GET`/`PATCH /v1/rides/:id`). Draft-only: `409 ride_not_editable` once the ride has
+left `draft` (same code/meaning `PATCH` uses). `multipart/form-data`, not JSON — one
+file field named `file`, a `.gpx` track. `400 gpx_file_missing` if no file part is
+sent, `400 gpx_file_too_large` past ADR-015's 10 MB cap, `400 gpx_invalid` if the file
+isn't well-formed GPX with at least one `trk/trkseg/trkpt`. `409 route_already_exists`
+if the ride already has a route (use `PATCH` to replace it). `503
+route_storage_unavailable` (RFC 9457, degraded state per `.claude/rules/
+resilience.md`) if the S3-compatible object store is unreachable or unconfigured
+(KI-015 — never live-verified against a real MinIO in this environment). `201` →
+`{ route }` (`RouteSummary`: `id`/`rideId`/`gpxFileName`/`gpxFileSizeBytes`/
+`distanceKm`/`elevationGainMeters`/`pointCount`/`createdAt`/`updatedAt`) — distance/
+elevation gain are computed from the GPX itself (haversine sum / positive-elevation-
+delta sum), independent from `Ride.distanceKm`/`elevationGainMeters`'s
+organizer-entered values (not reconciled — see `.claude/context/known-issues.md`).
+
+PATCH `/v1/rides/:id/route` — **implemented (CR-027)**. Same auth/ownership/draft-only
+rules and request shape as `POST`. `404 route_not_found` if the ride has no route yet
+(use `POST` instead). `200` → `{ route }`, replacing the file and recomputed metrics —
+the old S3 object is deleted best-effort, after the DB row already points at the new
+one.
+
+DELETE `/v1/rides/:id/route` — **implemented (CR-027)**. Same auth/ownership/
+draft-only rules. `404 route_not_found` if none exists. `204` — the DB row is deleted
+first; the S3 object is deleted best-effort afterward (never blocks the response).
+
+GET `/v1/rides/:id/route/download` — **implemented (CR-027)**. Not in the original
+contract sketch — added to fulfill `docs/product.md`'s "route (including a
+downloadable track)" promise (same "product spec requires it, add the endpoint"
+reasoning as KI-024/KI-025/KI-027). Same viewer-visibility rule as `GET
+/v1/rides/:id` (`resolveOptionalUser`: the ride's owner always, anyone else only once
+the ride has left `draft`). `404 route_not_found` if the ride has no route. `200` →
+the raw GPX bytes, `Content-Type: application/gpx+xml`,
+`Content-Disposition: attachment; filename="<original filename>"`. `503
+route_storage_unavailable` on a storage failure, same as `POST`/`PATCH`.
+
 POST `/v1/rides/:id/stops`
 PATCH `/v1/rides/:id/stops/:stopId`
 DELETE `/v1/rides/:id/stops/:stopId`

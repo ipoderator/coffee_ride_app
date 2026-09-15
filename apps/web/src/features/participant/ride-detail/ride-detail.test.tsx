@@ -76,6 +76,7 @@ describe('RideDetailView', () => {
     getRideDetailMock.mockResolvedValue({
       ride: baseRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: null,
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -111,6 +112,7 @@ describe('RideDetailView', () => {
     getRideDetailMock.mockResolvedValue({
       ride: mockedRide,
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: null,
     });
 
     render(<RideDetailView rideId="ride-1" />);

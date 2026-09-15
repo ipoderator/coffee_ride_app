@@ -401,6 +401,12 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
+          <Link
+            href={`/organizer/rides/${rideId}/route`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_EDIT_TERMS.routeLink}
+          </Link>
         </div>
 
         {!isDraft && (

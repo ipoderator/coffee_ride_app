@@ -1720,3 +1720,118 @@ Next logical task: the Route section (CR-027 "GPX upload") per
 `docs/tasks.md`'s order — note its own prerequisite, CR-085 ("GPX parsing
 must not block the event loop"), the same shape of gap CR-084 was for this
 ticket.
+
+## 2026-09-15 — CR-027 / CR-085 — GPX upload + its event-loop-safety decision
+
+`docs/tasks.md`'s Route section, first ticket — CR-017..CR-026 (Rides) fully
+done. Resolved CR-085 (event-loop-safety decision) together with CR-027, same
+precedent as ADR-014/CR-026 and ADR-013/CR-062.
+
+Decisions: ADR-015 (above) — 10 MB upload cap (`@fastify/multipart`) +
+streaming SAX parse (`sax` package), no worker thread; revisit only if a real
+perf problem is measured at scale. Also decided inline (not ADR-worthy,
+recorded in `.claude/context/current-task.md`'s investigation): `Route`'s
+GPX-parsed geometry lives in a single `jsonb` column, not a row-per-point
+table (`RoutePoint` is a distinct, smaller concept — organizer-placed typed
+markers, CR-031, not raw track points); `Route.distanceKm`/
+`elevationGainMeters` (GPX-computed) are independent from `Ride`'s own
+organizer-entered fields, not reconciled (new KI-034); download is served
+through the API (`GET /v1/rides/:id/route/download`), not a public/pre-signed
+bucket URL.
+
+Database: new `routes` table (`packages/db/src/schema/route.ts`,
+migration `0006_add_routes_table.sql`) — `id`, `rideId` (FK → `rides`,
+`ON DELETE CASCADE`, unique — one route per ride), `gpxFileKey`/
+`gpxFileName`/`gpxFileSizeBytes`, `distanceKm`/`elevationGainMeters`/
+`pointCount` (computed at upload time), `geometry` (`jsonb`), `createdAt`/
+`updatedAt`/`updatedBy`; CHECKs on every numeric column's lower bound.
+Applied against the local scratch Postgres, live-verified.
+
+API: `apps/api/src/modules/rides/gpx.ts` (new) — streaming SAX parser,
+haversine distance sum, positive-elevation-delta sum, rejects a file with no
+track points. `route-storage.ts` (new) — a small, module-scoped
+timeout+bounded-retry wrapper around S3 PUT/GET/DELETE (CR-049, the shared
+version of this, isn't built yet — same "minimal thing now" precedent as
+every other module). `plugins/s3.ts` (new) — decorates `app.s3` from env,
+`null` if unconfigured (not a boot failure). `POST`/`PATCH`/
+`DELETE /v1/rides/:id/route` (multipart, `@fastify/multipart` — new
+dependency, draft-only, same 404/409 ownership rules as `PATCH /v1/rides/
+:id`) + `GET /v1/rides/:id/route/download` (new, not in the original
+contract sketch — added to fulfill `docs/product.md`'s "downloadable track"
+promise, same viewer-visibility rule as `GET /v1/rides/:id`). `GET
+/v1/rides/:id` gained an additive `route: RouteSummary | null` field.
+
+Found and fixed a real, pre-existing bug while building this (not a
+workaround): `apps/api/src/plugins/error-handler.ts` unconditionally
+redacted every `>=500` status to a generic `internal_error`/"Internal Server
+Error" — correct for genuinely unexpected failures (a driver/DB error with
+no `title` set), but CR-027's `route_storage_unavailable` (503) is the first
+_deliberate_ domain error in this codebase with a status `>=500`, and the
+old logic silently discarded its own safe, specific code/title/detail. Fixed
+by keying the redaction on whether the error carries a `title` (the same
+signal the `<500` branch already used to distinguish a domain error from a
+raw thrown error) — a driver/DB failure (no `title`) is still fully
+redacted; a deliberate `ServiceError` with a `>=500` status now passes
+through its own safe code/title/detail, still logged loudly server-side
+either way. Caught immediately by the new `route.routes.test.ts` suite's
+storage-unavailable tests (500 instead of the expected 503), not left
+undiscovered.
+
+Web: new `apps/web/src/features/organizer/route/` feature module (ADR-009)
+— `api.ts`, `RouteUploadForm.tsx` (loading/not-found/error/empty/success/
+degraded states per `docs/design.md` §10; the degraded state reuses
+`ErrorState tone="warning" variant="inline"`, exact copy "Загрузка
+недоступна. Попробуйте ещё раз позже."). New `/organizer/rides/[id]/route`
+screen; `EditRideForm` gained a "Маршрут →" link into it.
+`packages/ui/src/terminology.ts` gained `RIDE_ROUTE_TERMS` +
+`RIDE_EDIT_TERMS.routeLink`. `packages/types` gained `domain/route.ts`
+(`RouteSummary`) and `GetRideResponse.route` (additive).
+
+New dependencies: `sax` (streaming XML/GPX parser), `@fastify/multipart`
+(file uploads) — both in `apps/api`.
+
+Tests: 18 new `apps/api` tests (`route.routes.test.ts`, S3 mocked via
+`vi.mock('@aws-sdk/client-s3')` — same technique CR-008 used for
+`maps-2gis`'s `fetch`) + 7 new (`gpx.test.ts`, pure-function unit tests
+against hand-built GPX fixtures) — 151 total, was 126. 10 new `apps/web`
+tests (`route.test.tsx`) — 95 total, was 85. Two existing
+`ride-detail.test.tsx` mocks updated for `GetRideResponse`'s new required
+`route` field.
+
+Validation: `turbo run lint typecheck test` and `turbo run build` (run
+separately after a local `next build` — this repo's `web` package's
+`typecheck` has no dependency on its own `build` completing, and Next.js's
+`.next/types` generation races it when both are scheduled in one combined
+`turbo run` invocation with a stale `.next` present locally; CI's
+`ci.yml` already runs every task as its own sequential step and never hits
+this) all green across all 8 packages. `format:check`/`lint:root` clean
+after one `prettier --write` pass (cosmetic only, 9 files).
+
+Live check: curl sequence against a real Postgres + a freshly started
+`apps/api` with no `S3_*` configured — 401/404 (non-existent + stranger's
+ride)/`gpx_invalid`/`ride_not_editable` (after publish)/`route_not_found`
+(download with none uploaded) all as expected, and the upload itself
+correctly returned `503 route_storage_unavailable` rather than a 500 or a
+hang, with no orphaned `routes` row left behind (cross-checked with a direct
+DB read — upload to S3 happens before the DB insert). Live browser-verified
+via the `browser-automation` skill against a real `next dev` server +
+`apps/api`: a fresh draft ride's route screen showed the empty state with a
+working file input and upload button; selecting a GPX file and submitting
+showed the degraded "Загрузка недоступна…" notice, not a crash; a
+previously-published ride correctly hid the upload/replace/delete controls
+and showed the draft-only notice instead. The one console error/failed
+request in both walkthroughs was the expected 503 itself. All test
+accounts/rides deleted from the scratch DB by id/email afterward.
+
+Known limitations: KI-015 widened (S3 is now a real, tested-but-mocked-only
+code path, not just a dormant client); new KI-034 (`Route`/`Ride` distance-
+elevation figures not reconciled) and KI-035 (no full-geometry endpoint yet
+for map/elevation-profile rendering) — both recorded with an explicit next
+action in `.claude/context/known-issues.md`.
+
+Next logical task: CR-028 ("Route rendering") — blocked on the same missing
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` credential as KI-031 for the map half, but
+an elevation-profile chart from `Route.geometry` doesn't need 2GIS and could
+ship independently; alternatively CR-029 ("Route metadata") to resolve
+KI-034 deliberately, or CR-030/CR-031 (Stops/RoutePoint) which have no
+dependency on CR-028 at all.

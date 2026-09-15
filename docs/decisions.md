@@ -404,3 +404,60 @@ marker clustering at scale, or a spatial join against actual route geometry (onc
 lightweight contrib extension, no base-image change) or, if a true polygon/line spatial
 join is needed, PostGIS via a base-image swap — decided in a follow-up ADR, not a config
 tweak.
+
+## ADR-015 — GPX upload: size cap + streaming parse, no worker thread
+
+Status: Accepted.
+
+Resolves backlog item CR-085 ("GPX parsing must not block the event loop: size limit,
+streaming or worker — needed by CR-027"), decided together with CR-027 ("GPX upload")
+rather than as a separate prior session — same precedent as ADR-013/CR-062 and
+ADR-014/CR-026.
+
+### Decision
+
+1. **Hard upload size cap.** `@fastify/multipart`'s `limits.fileSize` rejects any
+   upload over 10 MB before a single byte reaches the GPX parser
+   (`apps/api/src/app.ts`'s `GPX_MAX_UPLOAD_BYTES`). 10 MB is generous for a real ride
+   track — even a 24-hour continuous recording at one point per second with
+   lat/lon/elevation/time stays well under it.
+2. **Streaming (SAX) parse, not a full-DOM parse.** `apps/api/src/modules/rides/
+gpx.ts` uses the `sax` package's incremental event-based parser over the buffered
+   upload, rather than a library that builds a complete in-memory parse tree first —
+   no single call does work proportional to an unbounded document structure; work is
+   already bounded primarily by (1)'s size cap.
+3. **No worker thread.** The size cap already bounds worst-case synchronous work to a
+   small, fixed amount at today's data scale (thousands of track points, not
+   millions) — a worker thread adds process/IPC complexity `.claude/rules/
+resilience.md`'s "only when justified" discipline doesn't support yet.
+
+### Rationale
+
+- `docs/product.md`'s MVP item 5 ("GPX route") only needs to accept and store one
+  organizer-uploaded track per ride — no batch/bulk GPX processing, no server-side
+  GPX generation, nothing that would make even a 10 MB cap a real constraint.
+- A synchronous parse of a capped, few-megabyte XML document with a streaming parser
+  completes in single-digit milliseconds — not the kind of event-loop-blocking
+  concern a worker thread exists to solve. Revisit only if a real production
+  perf problem is actually observed once route data exists at scale (e.g. many
+  concurrent uploads of near-cap-size files), not speculatively.
+- Consistent with ADR-014's own reasoning for deferring PostGIS: don't build
+  infrastructure (a worker pool) ahead of a named, measured need.
+
+### What this does NOT mean
+
+- It does not mean any future heavy/bulk file-processing feature is automatically
+  safe without a worker — this decision is scoped to a single-file, capped-size GPX
+  upload specifically.
+- It does not extract the size-cap/timeout/retry pattern into a shared utility —
+  CR-049 ("Timeout/retry/circuit-breaker utilities for external integrations") is the
+  ticket that generalizes this once a second consumer (2GIS, S3 cover images) needs
+  the same shape; CR-027's `route-storage.ts` wrapper stays scoped to the `rides`
+  module for now.
+
+### When to revisit
+
+If GPX file sizes or upload concurrency at production scale ever make parsing a
+measured event-loop latency problem, or if GPX processing grows beyond "parse one
+uploaded file into a geometry array" (e.g. server-side track simplification,
+batch reprocessing), reconsider a worker-thread offload then — not speculatively now.

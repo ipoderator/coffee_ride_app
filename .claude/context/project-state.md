@@ -62,8 +62,18 @@ KI-016 blocks a geocode-by-address UI), and `/` gained a List/Map toggle.
 No live 2GIS credential exists in this environment, so the map view is a
 real, live-verified degraded state (`ErrorState`, `.claude/rules/
 resilience.md`) rather than an unverifiable live MapGL render (new KI-031).
-The Rides section now has every ticket done through CR-026; the Route
-section (CR-027..031) is next.
+The Rides section now has every ticket done through CR-026. CR-027 ("GPX
+upload") and its prerequisite CR-085 (event-loop-safety decision) also
+completed 2026-09-15, decided/built together (ADR-015, same precedent as
+ADR-014/CR-026): a new `routes` table (one per ride, GPX-parsed geometry +
+computed distance/elevation/point count), `POST`/`PATCH`/`DELETE
+/v1/rides/:id/route` (draft-only, multipart) plus a new `GET /v1/rides/:id/
+route/download` endpoint, and a new `/organizer/rides/[id]/route` screen.
+No live MinIO in this environment (KI-015, widened) — the S3 code path is
+real and unit-tested with the client mocked, live-verified only for its
+degraded (`503 route_storage_unavailable`) response, not a successful
+upload. The Route section has CR-028 ("Route rendering"), CR-029 ("Route
+metadata"), CR-030 ("Stops"), and CR-031 ("Route points") remaining.
 
 ## Implemented
 
@@ -807,16 +817,67 @@ CR-004/CR-005/CR-006 — recorded as a standing environment constraint in
 Claude's project memory (`docker-desktop-unavailable`) rather than
 re-investigated per task; live connection unverified (KI-015).
 
+GPX upload landed 2026-09-15 (CR-027, together with its prerequisite CR-085,
+see `docs/changelog.md`): the Route section's first ticket, and `apps/api`'s
+first real S3 consumer (KI-015). `packages/db` gained its fifth table,
+`routes` — one per `Ride` (`rideId` unique FK, `ON DELETE CASCADE`), holding
+the uploaded GPX file's S3 key/filename/size plus metrics computed from the
+track itself (`distanceKm`/`elevationGainMeters`/`pointCount`, haversine sum
+/ positive-elevation-delta sum) and the ordered `{lat,lng,elevationMeters}[]`
+polyline as a single `jsonb` column — deliberately not a row-per-point table
+(that shape belongs to the distinct, smaller `RoutePoint` entity, CR-031,
+per `docs/database.md`'s own domain descriptions). New `apps/api/src/modules/
+rides/gpx.ts` (streaming SAX parser, ADR-015) and `route-storage.ts` (a
+module-scoped S3 timeout+bounded-retry wrapper — CR-049's shared version
+isn't built yet). `POST`/`PATCH`/`DELETE /v1/rides/:id/route` (multipart,
+`@fastify/multipart`, draft-only, same ownership rules as `PATCH /v1/rides/
+:id`) plus a new `GET /v1/rides/:id/route/download` endpoint (not in the
+original `docs/api.md` sketch — added to fulfill `docs/product.md`'s
+"downloadable track" promise, same viewer-visibility rule as `GET /v1/rides/
+:id`). `GET /v1/rides/:id` gained an additive `route: RouteSummary | null`
+field (a summary only, no full `geometry` — new KI-035). Found and fixed a
+real pre-existing bug along the way: `apps/api/src/plugins/error-handler.ts`
+unconditionally redacted every `>=500` status to a generic `internal_error`
+— correct for a genuinely unexpected failure, but wrong for CR-027's own
+deliberate `route_storage_unavailable` (503), the first domain error in this
+codebase with a `>=500` status; fixed by keying the redaction on whether the
+error carries a `title` (the same signal already used below 500), caught by
+the new test suite itself (500 instead of the expected 503) before it ever
+reached this changelog entry. New `apps/web/src/features/organizer/route/`
+feature module and `/organizer/rides/[id]/route` screen (loading/not-found/
+error/empty/success/degraded states; the degraded state — S3 unreachable or
+unconfigured — reuses `ErrorState tone="warning"`, exact copy "Загрузка
+недоступна. Попробуйте ещё раз позже." per `docs/design.md` §10).
+`EditRideForm` gained a "Маршрут →" link into it. `packages/ui` gained
+`RIDE_ROUTE_TERMS`; `packages/types` gained `domain/route.ts`. New
+dependencies: `sax`, `@fastify/multipart`. 151 `apps/api` tests (was 126,
++18 route-routes +7 gpx-unit), 95 `apps/web` tests (was 85, +10). No live
+MinIO in this environment (Docker unreachable, KI-019/KI-015 standing
+constraint) — the S3 code path is unit-tested with `S3Client.send` mocked
+(same technique CR-008 used for `maps-2gis`'s `fetch`); live-verified via
+curl that the _degraded_ path is correct (`503 route_storage_unavailable`,
+no orphaned `routes` row) and via the `browser-automation` skill that the
+non-S3-dependent screen states (empty/loading/degraded/draft-gate) all
+render correctly — 0 unexpected console errors in either walkthrough.
+`Route.distanceKm`/`elevationGainMeters` (GPX-computed) are deliberately not
+reconciled with `Ride`'s own organizer-entered fields (new KI-034, CR-029's
+job to resolve). Route section: CR-028/029/030/031 remain.
+
 ## In progress
 
 None.
 
 ## Next
 
-CR-026 — Map discovery (`docs/tasks.md` Rides section, next after
-CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/CR-022/
-CR-023/CR-024/CR-025, all done). `docs/design.md` §8: `/` "List + **map
-toggle**" — the list-only slice CR-024/CR-025 built gains its map half.
+`docs/tasks.md`'s Route section has three remaining tickets after CR-027
+("GPX upload", done): CR-028 ("Route rendering" — likely blocked on the same
+missing `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` as KI-031 for the map half, but an
+elevation-profile chart from `Route.geometry` doesn't need 2GIS), CR-029
+("Route metadata" — the natural place to resolve KI-034's `Route`/`Ride`
+distance-elevation mismatch), CR-030 ("Stops") and CR-031 ("Route points" /
+`RoutePoint`, the organizer-placed typed-marker entity, distinct from
+`Route.geometry`) — the latter two have no dependency on CR-028 at all and
+could go first if CR-028 stays blocked on the missing credential.
 
 ## Important decisions
 
@@ -833,6 +894,12 @@ See `docs/decisions.md`. Notably:
   `packages/maps-2gis` adapter split.
 - ADR-011: `/v1` prefix, cursor pagination on every collection, RFC 9457 error envelope.
 - ADR-012: `timestamptz` everywhere; `Ride` also stores its start location's IANA zone.
+- ADR-014: map discovery's geo query is plain `startLat`/`startLng` columns + a bbox
+  range query (composite B-tree index), not PostGIS — no named radius-search use case,
+  no PostGIS in the current Postgres image.
+- ADR-015: GPX upload is bounded by a 10 MB size cap (`@fastify/multipart`) plus a
+  streaming SAX parse (`sax`), not a worker thread — revisit only if a real perf
+  problem is measured at scale.
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
   warm neutral base with one muted teal-green accent; metric presentation modeled on
   Strava/TrainingPeaks/Rouvy. One exception: `danger` is a bright red (`#D42B20` /
@@ -859,10 +926,11 @@ Full list with IDs and next actions: `.claude/context/known-issues.md`. In short
   `turbo`; three of them (`apps/api`, `apps/web`, `packages/maps-2gis`) now
   have real passing Vitest suites (CR-008), the other five intentionally
   don't yet (nothing real to test);
-- `apps/api`'s Redis and S3 clients (CR-005, CR-006) have never been connected
-  to a live service — Docker unavailable all session, no local fallback for
-  either (KI-014, KI-015; verify before CR-050/CR-058/CR-027/CR-086 consume
-  them);
+- `apps/api`'s Redis client (CR-005) has never been connected to a live
+  service — Docker unavailable all session, no local fallback (KI-014;
+  verify before CR-050/CR-058 consumes it). The S3 client (CR-006) is now a
+  real, tested-but-mocked-only code path as of CR-027 (GPX upload) — still
+  never connected to a live MinIO (KI-015, widened, not resolved);
 - `packages/maps-2gis`'s Geocoder/Routing response parsing is unverified
   against a live 2GIS account (KI-016);
 - KI-017: `packages/db`/`packages/types`/`packages/maps-2gis` export raw TS
@@ -970,6 +1038,14 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   either (new KI-031, also blocked on KI-016) — `/`'s "Карта" tab always
   shows a live-verified degraded notice, never a blank pane or a fake map.
   `packages/maps-core`/`packages/maps-2gis` are unchanged by this ticket.
+- new (CR-027/CR-085, ADR-015): `Route.distanceKm`/`elevationGainMeters`
+  (GPX-computed) and `Ride`'s own organizer-entered fields are not
+  reconciled (new KI-034 — CR-029 "Route metadata" is where to decide this
+  deliberately). `GET /v1/rides/:id`'s `route` field is a summary only, no
+  full `geometry` array yet (new KI-035 — CR-028 "Route rendering" decides
+  how the polyline/elevation-profile UI reads it). The S3 upload/download/
+  delete code path is real now but only unit-tested with the S3 client
+  mocked — never live-verified against MinIO (KI-015, widened, not new).
 
 ## Do not break
 
@@ -989,4 +1065,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-026/CR-084)
+2026-09-15 (CR-027/CR-085)

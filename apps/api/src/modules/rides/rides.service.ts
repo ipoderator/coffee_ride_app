@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { organizerProfiles, rides, users } from 'db/schema';
+import { organizerProfiles, rides, routes, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
@@ -9,6 +10,7 @@ import type {
   ListRidesQuery,
   ListRidesResponse,
   Ride,
+  RouteSummary,
   UpdateRideRequest,
 } from 'types';
 import {
@@ -17,6 +19,14 @@ import {
   decodeCursor,
   encodeCursor,
 } from '../../lib/cursor.js';
+import { GpxParseError, parseGpx } from './gpx.js';
+import {
+  RouteStorageError,
+  deleteGpxObject,
+  downloadGpxObject,
+  uploadGpxObject,
+} from './route-storage.js';
+import type { S3Handle } from '../../plugins/s3.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `OrganizerServiceError`/`AuthServiceError` (`.claude/rules/backend.md`: route ->
@@ -145,6 +155,47 @@ const INVALID_CURSOR = () =>
     'The cursor parameter is not a valid pagination cursor.',
   );
 
+// CR-027 ("GPX upload"). `ROUTE_NOT_FOUND` is distinct from `RIDE_NOT_FOUND` — the
+// ride itself was already resolved (ownership-checked) by the time this fires, it's
+// specifically "this ride has no route yet".
+const ROUTE_ALREADY_EXISTS = () =>
+  new RideServiceError(
+    'route_already_exists',
+    409,
+    'Route already exists',
+    'This ride already has a route — use PATCH to replace it.',
+  );
+
+const ROUTE_NOT_FOUND = () =>
+  new RideServiceError(
+    'route_not_found',
+    404,
+    'Route not found',
+    'This ride has no route uploaded yet.',
+  );
+
+const GPX_FILE_MISSING = () =>
+  new RideServiceError(
+    'gpx_file_missing',
+    400,
+    'GPX file missing',
+    'Upload a .gpx file in the "file" field.',
+  );
+
+const GPX_INVALID = (detail: string) =>
+  new RideServiceError('gpx_invalid', 400, 'Invalid GPX file', detail);
+
+// `.claude/rules/resilience.md`: a degraded-storage response, not a generic 500 —
+// covers both "S3 not configured in this environment" and "the call to S3 failed"
+// (`route-storage.ts`'s `RouteStorageError` covers both uniformly).
+const ROUTE_STORAGE_UNAVAILABLE = () =>
+  new RideServiceError(
+    'route_storage_unavailable',
+    503,
+    'Route storage unavailable',
+    'File storage is temporarily unavailable. Try again shortly.',
+  );
+
 function toPublicRide(row: typeof rides.$inferSelect): Ride {
   return {
     id: row.id,
@@ -168,6 +219,20 @@ function toPublicRide(row: typeof rides.$inferSelect): Ride {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
+  };
+}
+
+function toRouteSummary(row: typeof routes.$inferSelect): RouteSummary {
+  return {
+    id: row.id,
+    rideId: row.rideId,
+    gpxFileName: row.gpxFileName,
+    gpxFileSizeBytes: row.gpxFileSizeBytes,
+    distanceKm: row.distanceKm,
+    elevationGainMeters: row.elevationGainMeters,
+    pointCount: row.pointCount,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -439,9 +504,17 @@ export async function getRideForViewer(
     throw RIDE_NOT_FOUND();
   }
 
+  // CR-027 ("GPX upload"): additive `route` summary, `null` until one is uploaded.
+  const [routeRow] = await db
+    .select()
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+
   return {
     ride: toPublicRide(row.ride),
     organizer: { id: row.organizerId, name: row.organizerName },
+    route: routeRow ? toRouteSummary(routeRow) : null,
   };
 }
 
@@ -789,4 +862,243 @@ export async function finishRide(
     throw new Error('Ride update returned no row.');
   }
   return toPublicRide(updated);
+}
+
+/**
+ * Ownership + draft-only gate shared by every route mutation below — same rule
+ * {@link updateRideDraft} uses (`.claude/context/current-task.md`: route
+ * configuration is part of the same pre-publish setup, no named use case for
+ * post-publish route edits yet).
+ */
+async function resolveOwnDraftRide(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (existing.status !== 'draft') {
+    throw RIDE_NOT_EDITABLE();
+  }
+}
+
+function parseUploadedGpx(buffer: Buffer) {
+  try {
+    return parseGpx(buffer.toString('utf-8'));
+  } catch (err) {
+    if (err instanceof GpxParseError) throw GPX_INVALID(err.message);
+    throw err;
+  }
+}
+
+/**
+ * CR-027 ("GPX upload"): parses and stores a new GPX track for a ride that has none
+ * yet. 409 `route_already_exists` if one is already present — use
+ * {@link replaceRoute} instead. S3 failure (or S3 not configured — KI-015) surfaces
+ * as `503 route_storage_unavailable`, never a generic 500
+ * (`.claude/rules/resilience.md`).
+ */
+export async function uploadRoute(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string,
+  rideId: string,
+  file: { filename: string; buffer: Buffer } | null,
+): Promise<RouteSummary> {
+  if (!file) {
+    throw GPX_FILE_MISSING();
+  }
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [existingRoute] = await db
+    .select({ id: routes.id })
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+  if (existingRoute) {
+    throw ROUTE_ALREADY_EXISTS();
+  }
+
+  const parsed = parseUploadedGpx(file.buffer);
+  const key = `routes/${rideId}/${randomUUID()}.gpx`;
+  try {
+    await uploadGpxObject(s3, key, file.buffer);
+  } catch (err) {
+    if (err instanceof RouteStorageError) throw ROUTE_STORAGE_UNAVAILABLE();
+    throw err;
+  }
+
+  const [inserted] = await db
+    .insert(routes)
+    .values({
+      rideId,
+      gpxFileKey: key,
+      gpxFileName: file.filename,
+      gpxFileSizeBytes: file.buffer.byteLength,
+      distanceKm: parsed.distanceKm,
+      elevationGainMeters: parsed.elevationGainMeters,
+      pointCount: parsed.pointCount,
+      geometry: parsed.geometry,
+      updatedBy: userId,
+    })
+    .returning();
+  if (!inserted) {
+    throw new Error('Route insert returned no row.');
+  }
+  return toRouteSummary(inserted);
+}
+
+/**
+ * CR-027: replaces an existing route's GPX file. 404 `route_not_found` if none
+ * exists yet — use {@link uploadRoute} instead. The old S3 object is deleted only
+ * after the DB row points at the new one, and only best-effort (a failed delete
+ * leaves an orphaned object, logged by the caller, never blocks the replace —
+ * `.claude/rules/resilience.md`: the DB row is the source of truth for which file is
+ * current).
+ */
+export async function replaceRoute(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string,
+  rideId: string,
+  file: { filename: string; buffer: Buffer } | null,
+): Promise<RouteSummary> {
+  if (!file) {
+    throw GPX_FILE_MISSING();
+  }
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [existingRoute] = await db
+    .select()
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+  if (!existingRoute) {
+    throw ROUTE_NOT_FOUND();
+  }
+
+  const parsed = parseUploadedGpx(file.buffer);
+  const key = `routes/${rideId}/${randomUUID()}.gpx`;
+  try {
+    await uploadGpxObject(s3, key, file.buffer);
+  } catch (err) {
+    if (err instanceof RouteStorageError) throw ROUTE_STORAGE_UNAVAILABLE();
+    throw err;
+  }
+
+  const [updated] = await db
+    .update(routes)
+    .set({
+      gpxFileKey: key,
+      gpxFileName: file.filename,
+      gpxFileSizeBytes: file.buffer.byteLength,
+      distanceKm: parsed.distanceKm,
+      elevationGainMeters: parsed.elevationGainMeters,
+      pointCount: parsed.pointCount,
+      geometry: parsed.geometry,
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
+    .where(eq(routes.id, existingRoute.id))
+    .returning();
+  if (!updated) {
+    throw new Error('Route update returned no row.');
+  }
+
+  try {
+    await deleteGpxObject(s3, existingRoute.gpxFileKey);
+  } catch {
+    // Best-effort — see the function's own doc comment.
+  }
+
+  return toRouteSummary(updated);
+}
+
+/**
+ * CR-027: removes a ride's route. 404 `route_not_found` if none exists. The DB row
+ * is deleted first — S3 cleanup is best-effort and never blocks the delete
+ * (`.claude/rules/resilience.md`).
+ */
+export async function deleteRoute(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [existingRoute] = await db
+    .select({ id: routes.id, gpxFileKey: routes.gpxFileKey })
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+  if (!existingRoute) {
+    throw ROUTE_NOT_FOUND();
+  }
+
+  await db.delete(routes).where(eq(routes.id, existingRoute.id));
+
+  try {
+    await deleteGpxObject(s3, existingRoute.gpxFileKey);
+  } catch {
+    // Best-effort — see `replaceRoute`'s doc comment.
+  }
+}
+
+/**
+ * CR-027: streams the raw GPX file back. Same viewer-visibility rule as
+ * {@link getRideForViewer} (owner always, others only once the ride has left
+ * `draft`) — route download is part of the same "complete ride record" a viewer can
+ * already see, not a separate, more-restricted capability.
+ */
+export async function getRouteDownload(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string | null,
+  rideId: string,
+): Promise<{ body: Buffer; filename: string }> {
+  const [row] = await db
+    .select({
+      status: rides.status,
+      organizerUserId: organizerProfiles.userId,
+    })
+    .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(eq(rides.id, rideId))
+    .limit(1);
+  if (!row) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const isOwner = userId !== null && row.organizerUserId === userId;
+  if (!isOwner && row.status === 'draft') {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [routeRow] = await db
+    .select({ gpxFileKey: routes.gpxFileKey, gpxFileName: routes.gpxFileName })
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+  if (!routeRow) {
+    throw ROUTE_NOT_FOUND();
+  }
+
+  try {
+    const downloaded = await downloadGpxObject(s3, routeRow.gpxFileKey);
+    return { body: downloaded.body, filename: routeRow.gpxFileName };
+  } catch (err) {
+    if (err instanceof RouteStorageError) throw ROUTE_STORAGE_UNAVAILABLE();
+    throw err;
+  }
 }

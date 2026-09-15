@@ -112,21 +112,34 @@ first) before or during whichever CR wires this client into a real code path.
 
 ### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
 
-Status: open. Discovered: 2026-09-12 (CR-006).
+Status: open — now a real code path, still unverified. Discovered: 2026-09-12
+(CR-006). Widened: 2026-09-15 (CR-027).
 Problem: same root cause as KI-014 — Docker's daemon did not come up in this
-environment (confirmed a third time across CR-004/CR-005/CR-006; recorded as a
+environment (confirmed across CR-004/CR-005/CR-006/CR-027; recorded as a
 standing environment constraint, not re-litigated per task — see
 `docker-desktop-unavailable` in Claude's project memory). `src/s3.ts`
-(`createS3Client`) was only typechecked/linted/built, never actually connected
-to a running MinIO.
-Impact: low — thin wrapper around `@aws-sdk/client-s3`'s constructor, not
-consumed by any running code path yet (first real use is CR-027 GPX upload or
-CR-086's cover image pipeline).
-Workaround: none needed yet — nothing calls this code.
-Next action: verify a real connection (e.g. `docker compose up minio` + a
-`PutObject`/`GetObject` round trip, or exercise it from whichever of CR-027/
-CR-086 consumes it first) before or during whichever CR wires this client into
-a real code path.
+(`createS3Client`) was only typechecked/linted/built through CR-006.
+Update 2026-09-15 (CR-027, "GPX upload"): this is now `apps/api`'s first real
+S3 consumer (`plugins/s3.ts`, `modules/rides/route-storage.ts`) — a real,
+non-trivial code path (upload/download/delete with a timeout + bounded
+retry, ADR-015) exists and is exercised by 18 `route.routes.test.ts` tests,
+but every one of them mocks `@aws-sdk/client-s3`'s `S3Client.send` (same
+technique CR-008 used for `maps-2gis`'s `fetch`) — none has ever run against
+a real MinIO. Live-verified via curl instead that the _degraded_ path is
+correct: with no `S3_*` env configured, `POST /v1/rides/:id/route` returns
+`503 route_storage_unavailable` (not a 500, not a hang), and no orphaned
+`routes` row was left behind (upload happens before the DB insert).
+Impact: medium now (was low) — a real feature (GPX upload) depends on this
+client actually working against production S3/MinIO, unlike CR-006's
+dormant wrapper. `CR-086`'s cover image pipeline will hit the identical gap.
+Workaround: none needed for correctness — the degraded-response contract
+(`503 route_storage_unavailable`) is itself verified; only the _successful_
+upload/download/delete round trip against a real store is unverified.
+Next action: the first session with a working Docker daemon should run
+`docker compose up -d minio`, confirm a real `PutObject`/`GetObject`/
+`DeleteObject` round trip against it (e.g. via `route-storage.ts`'s
+functions directly, or a full `POST /v1/rides/:id/route` → download → delete
+walkthrough), before trusting this in any CR-086 or production-facing work.
 
 ### KI-016 — 2GIS Geocoder/Routing response parsing is unverified against a live API
 
@@ -399,6 +412,47 @@ no ticket number of its own in `docs/tasks.md`. Needs one added (same
 "real gap, add a ticket" discipline as KI-024/KI-025) before or alongside
 ADR-007's real email delivery, since a screen with no email pointing at it is
 only marginally more useful than today's curl workaround.
+
+### KI-034 — `routes.distanceKm`/`elevationGainMeters` (GPX-computed) and `rides.distanceKm`/`elevationGainMeters` (organizer-entered) are not reconciled
+
+Status: open. Discovered: 2026-09-15 (CR-027, "GPX upload" session).
+Problem: `PATCH /v1/rides/:id` (CR-018) lets an organizer manually enter
+`distanceKm`/`elevationGainMeters` on the `Ride` row itself. CR-027 adds a
+second, independent computation of the same two figures on the new `Route`
+row, derived from the actual uploaded GPX track (haversine distance sum,
+positive-elevation-delta sum). Neither writes to the other — an organizer who
+uploads a GPX after already entering manual figures (or vice versa) can end
+up with two different numbers for the same ride, shown in different places
+(`EditRideForm`'s fields vs. `RouteUploadForm`'s summary card).
+Impact: low today — `/rides/[id]` (ride detail) still only reads `Ride`'s own
+fields (CR-023 predates `Route`), so a viewer never sees both numbers side by
+side yet; the mismatch is only visible to the organizer across two screens.
+Will matter more once a ride-detail screen shows route data too (CR-028/029).
+Workaround: none needed — both figures are individually correct for what
+they measure (one is the organizer's stated summary, the other is the GPX's
+actual measurement); nothing currently conflates them.
+Next action: CR-029 ("Route metadata") is the ticket named in
+`.claude/context/current-task.md`'s CR-027 investigation as the place to
+decide this deliberately (e.g. auto-fill `Ride`'s fields from `Route` on
+upload, prefer one as authoritative for display, or show both with distinct
+labels) — not a default to pick silently inside CR-027 itself.
+
+### KI-035 — No live 2GIS/route-rendering read of `Route.geometry` yet; only a summary is exposed
+
+Status: open. Discovered: 2026-09-15 (CR-027, "GPX upload" session).
+Problem: `GET /v1/rides/:id`'s additive `route` field is a summary only
+(`RouteSummary` — id/fileName/size/distance/elevation/pointCount), not the
+full `geometry` polyline (`.claude/context/current-task.md`'s CR-027 scoping
+note: no consumer for the full point array exists yet, and shipping it on
+every ride-detail response would needlessly bloat the payload).
+Impact: none today — nothing renders a route map/elevation profile yet.
+Workaround: none needed.
+Next action: CR-028 ("Route rendering") decides how the full geometry is
+served (a dedicated endpoint, or the full array added to a screen-specific
+response) once it actually builds the map/elevation-profile UI — likely
+blocked on the same missing `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` credential as
+KI-031, for the map half specifically (an elevation profile chart doesn't
+need 2GIS at all and could ship independently).
 
 ---
 

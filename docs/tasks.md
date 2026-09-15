@@ -231,7 +231,13 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
 
 ## Route
 
-- [ ] CR-027 GPX upload
+- [x] CR-027 GPX upload — done 2026-09-15: `routes` table (`packages/db`,
+      `rideId` unique FK → `rides`), `POST`/`PATCH`/`DELETE
+/v1/rides/:id/route` (draft-only, multipart, ADR-015's size/streaming
+      decision) + `GET /v1/rides/:id/route/download` (new, fulfilling
+      `docs/product.md`'s "downloadable track" promise). No live MinIO in
+      this environment (KI-015) — S3 code path unit-tested with the client
+      mocked, not live-verified. See `docs/changelog.md`.
 - [ ] CR-028 Route rendering
 - [ ] CR-029 Route metadata
 - [ ] CR-030 Stops
@@ -337,7 +343,8 @@ Found during the 2026-09-11 audit, cheaper before the related feature is built.
       built-in types + index strategy — needed by CR-026 — decided together
       with CR-026 (ADR-014, 2026-09-15): plain lat/lng columns + a bbox range
       query, not PostGIS. See `docs/decisions.md`.
-- [ ] CR-085 GPX parsing must not block the event loop: size limit, streaming or worker —
-      needed by CR-027
+- [x] CR-085 GPX parsing must not block the event loop: size limit, streaming or worker —
+      needed by CR-027 — decided together with CR-027 (ADR-015, 2026-09-15): 10 MB
+      upload cap + streaming SAX parse, no worker thread. See `docs/decisions.md`.
 - [ ] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
       (direct S3 vs proxy) — needed by CR-017
