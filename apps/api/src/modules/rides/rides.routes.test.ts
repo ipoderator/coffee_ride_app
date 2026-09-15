@@ -1227,4 +1227,538 @@ describe('/v1/rides', () => {
       await app.close();
     });
   });
+
+  describe('POST /v1/rides/:id/cancel', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/cancel`,
+        headers: { origin: WEB_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('returns 404 ride_not_found for a non-existent id', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/cancel`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it("returns 404 ride_not_found for another organizer's ride", async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'published' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const stranger = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/cancel`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: stranger.rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it('rejects cancelling a draft ride with 409 ride_not_cancellable', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/cancel`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_cancellable');
+
+      await app.close();
+    });
+
+    // CR-090/CR-022: `docs/product.md`'s Cancellation line names only
+    // `published`/`registration_open`/`registration_closed` — `started` was
+    // deliberately left out of `CANCELLABLE_STATUSES` when this endpoint was built.
+    // Reconfirmed here now that `started` is actually reachable, not just assumed.
+    it('rejects cancelling a started ride with 409 ride_not_cancellable', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'started' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/cancel`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_cancellable');
+
+      await app.close();
+    });
+
+    // `docs/product.md`'s Lifecycle: all three of `published`/`registration_open`/
+    // `registration_closed` are valid cancellation sources, unlike every other
+    // transition's single valid source status.
+    it.each(['published', 'registration_open', 'registration_closed'] as const)(
+      'cancels a %s ride and returns it with status cancelled',
+      async (sourceStatus) => {
+        const app = await buildApp(testEnv);
+        const { userId, rawToken } = await registerAndLogin(app, {
+          withOrganizerProfile: true,
+        });
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: rawToken },
+          payload: VALID_PAYLOAD,
+        });
+        await app.db
+          .update(rides)
+          .set({ status: sourceStatus })
+          .where(eq(rides.id, created.json().ride.id));
+
+        const response = await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${created.json().ride.id}/cancel`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: rawToken },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.ride.status).toBe('cancelled');
+        expect(body.ride.updatedBy).toBe(userId);
+
+        const [row] = await app.db
+          .select()
+          .from(rides)
+          .where(eq(rides.id, created.json().ride.id));
+        expect(row?.status).toBe('cancelled');
+        expect(row?.updatedBy).toBe(userId);
+
+        await app.close();
+      },
+    );
+
+    it('rejects a mismatched Origin with 403 (CSRF)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'published' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/cancel`,
+        headers: { origin: 'https://evil.example' },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('csrf_origin_mismatch');
+
+      await app.close();
+    });
+  });
+
+  describe('POST /v1/rides/:id/start', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/start`,
+        headers: { origin: WEB_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('returns 404 ride_not_found for a non-existent id', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/start`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it("returns 404 ride_not_found for another organizer's ride", async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'registration_closed' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const stranger = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/start`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: stranger.rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it('rejects starting a published ride with 409 ride_not_startable', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'published' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/start`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_startable');
+
+      await app.close();
+    });
+
+    it('starts a registration_closed ride and returns it with status started', async () => {
+      const app = await buildApp(testEnv);
+      const { userId, rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'registration_closed' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/start`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.ride.status).toBe('started');
+      expect(body.ride.updatedBy).toBe(userId);
+
+      const [row] = await app.db
+        .select()
+        .from(rides)
+        .where(eq(rides.id, created.json().ride.id));
+      expect(row?.status).toBe('started');
+      expect(row?.updatedBy).toBe(userId);
+
+      await app.close();
+    });
+
+    it('rejects a mismatched Origin with 403 (CSRF)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'registration_closed' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/start`,
+        headers: { origin: 'https://evil.example' },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('csrf_origin_mismatch');
+
+      await app.close();
+    });
+  });
+
+  describe('POST /v1/rides/:id/finish', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/finish`,
+        headers: { origin: WEB_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('returns 404 ride_not_found for a non-existent id', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/finish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it("returns 404 ride_not_found for another organizer's ride", async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'started' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const stranger = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/finish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: stranger.rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+
+      await app.close();
+    });
+
+    it('rejects finishing a registration_closed ride with 409 ride_not_finishable', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'registration_closed' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/finish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_finishable');
+
+      await app.close();
+    });
+
+    it('finishes a started ride and returns it with status finished', async () => {
+      const app = await buildApp(testEnv);
+      const { userId, rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'started' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/finish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.ride.status).toBe('finished');
+      expect(body.ride.updatedBy).toBe(userId);
+
+      const [row] = await app.db
+        .select()
+        .from(rides)
+        .where(eq(rides.id, created.json().ride.id));
+      expect(row?.status).toBe('finished');
+      expect(row?.updatedBy).toBe(userId);
+
+      await app.close();
+    });
+
+    it('rejects a mismatched Origin with 403 (CSRF)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      await app.db
+        .update(rides)
+        .set({ status: 'started' })
+        .where(eq(rides.id, created.json().ride.id));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${created.json().ride.id}/finish`,
+        headers: { origin: 'https://evil.example' },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('csrf_origin_mismatch');
+
+      await app.close();
+    });
+  });
 });

@@ -8,12 +8,15 @@ import {
 import { requireAuth } from '../../plugins/auth.js';
 import { rideResponseSchema } from './ride-response.schema.js';
 import {
+  cancelRide,
   closeRegistration,
   createRide,
+  finishRide,
   getRideForOwner,
   listOwnRides,
   openRegistration,
   publishRide,
+  startRide,
   updateRideDraft,
 } from './rides.service.js';
 
@@ -172,6 +175,69 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const ride = await closeRegistration(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-021 ("Cancel ride"): `published/registration_open/registration_closed ->
+  // cancelled`. Same ownership rule as every other transition; 409
+  // `ride_not_cancellable` for any other status (`draft`/`started`/`finished`/
+  // already-`cancelled`).
+  app.post(
+    '/:id/cancel',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await cancelRide(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-090 ("Start ride"): `registration_closed -> started`, resolving KI-027. Same
+  // ownership rule as every other transition; 409 `ride_not_startable` for any other
+  // status.
+  app.post(
+    '/:id/start',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await startRide(app.db, request.user!.id, request.params.id);
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-022 ("Finish ride"): `started -> finished`, the last lifecycle transition.
+  // Same ownership rule as every other transition; 409 `ride_not_finishable` for any
+  // other status.
+  app.post(
+    '/:id/finish',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await finishRide(
         app.db,
         request.user!.id,
         request.params.id,

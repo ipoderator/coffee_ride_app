@@ -15,6 +15,13 @@ const VARIANT_STYLES = {
     'bg-primary text-on-primary hover:opacity-90 disabled:hover:opacity-100',
   secondary:
     'border border-border-input bg-bg-raised text-text hover:bg-bg disabled:hover:bg-bg-raised',
+  // CR-021 ("Cancel ride"): `docs/design.md`'s one exception to the calm palette —
+  // `danger` (`#D42B20`/`#FF5A4F`) is the only token allowed as a solid fill outside
+  // `StatusBadge`'s own single solid-fill case (CR-065). Additive variant —
+  // `.claude/rules/extensibility.md`: `variant` still defaults to `primary`, no
+  // existing call site changes.
+  danger:
+    'bg-danger text-on-danger hover:opacity-90 disabled:hover:opacity-100',
 } as const;
 
 export type ButtonVariant = keyof typeof VARIANT_STYLES;

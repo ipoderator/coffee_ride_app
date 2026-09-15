@@ -645,3 +645,40 @@ ownership rules as `publish`, no `emailVerified` gate) + `POST
 /v1/rides/:id/close-registration` (`registration_open -> registration_closed`,
 CR-020 itself). `/organizer/rides/[id]/edit` gained both actions as
 status-conditional buttons, same pattern CR-019 established for "Опубликовать".
+
+### KI-027 — No ticket transitions a ride into `started`
+
+Resolved: 2026-09-15 (CR-090, its own new ticket, built together with CR-022
+"Finish ride" — same "add a preceding ticket" pattern as KI-024/KI-025).
+Discovered: 2026-09-15 (CR-022 session, checking the plan before implementing).
+Problem: `docs/product.md`'s Lifecycle is `draft → published →
+registration_open → registration_closed → started → finished`, but
+`docs/tasks.md`'s Rides section had no ticket owning entry into `started` —
+CR-021 ("Cancel ride") deliberately left it out of `CANCELLABLE_STATUSES` (per
+`docs/product.md`'s Cancellation line), and CR-022 ("Finish ride") was the
+next unchecked ticket with no reachable source state to transition out of.
+Checked whether `started` might instead be an automatic (time-based)
+transition rather than an organizer action before deciding this was a real
+gap: `docs/product.md`'s organizer-capabilities bullet list doesn't name
+"start" explicitly, but it also doesn't name "open/close registration"
+explicitly (only "manage registrations and waitlist" generically), and those
+turned out to be real, separate, organizer-triggered tickets (CR-089/CR-020)
+— so the omission doesn't prove `start` is non-manual. No scheduled-job/cron
+ticket or infrastructure exists anywhere in the repo that could drive an
+automatic transition either.
+Impact: none while open — `started` was unreachable, but nothing consumed it
+yet either (no participant-facing feature reads ride status beyond the
+`RIDE_STATUS_TERMS` label map). Would have blocked CR-022, which is exactly
+what surfaced it.
+Fix: added CR-090 ("Start ride") to `docs/tasks.md`'s Rides section and built
+it in the same session as CR-022, immediately before it: `POST
+/v1/rides/:id/start` (`registration_closed -> started`, same ownership rules
+as every other transition, no `emailVerified` gate) + `POST
+/v1/rides/:id/finish` (`started -> finished`, CR-022 itself). Reconfirmed by
+a new test (not just inspection) that a `started` ride still correctly
+rejects `POST .../cancel` with `409 ride_not_cancellable` — `CANCELLABLE_
+STATUSES` was already correct from CR-021, this only exercises the path
+first now that `started` is reachable. `/organizer/rides/[id]/edit` gained
+"Начать заезд"/"Завершить заезд" buttons, no confirmation guard (unlike
+`cancel` — both are forward-only steps with a further continuation in the
+normal case).

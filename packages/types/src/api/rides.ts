@@ -182,3 +182,22 @@ export interface OpenRegistrationResponse {
 export interface CloseRegistrationResponse {
   ride: Ride;
 }
+
+// CR-021 ("Cancel ride"): same shape as the other transition responses — no request
+// body, `:id` param only. Unlike `publish`/`open-registration`/`close-registration`,
+// this transition accepts three valid source statuses
+// (`published`/`registration_open`/`registration_closed`), all resolved server-side
+// against `docs/product.md`'s Lifecycle section — never a client-supplied status.
+export interface CancelRideResponse {
+  ride: Ride;
+}
+
+// CR-090 ("Start ride") / CR-022 ("Finish ride"): same shape as every other
+// transition response — no request body, `:id` param only.
+export interface StartRideResponse {
+  ride: Ride;
+}
+
+export interface FinishRideResponse {
+  ride: Ride;
+}

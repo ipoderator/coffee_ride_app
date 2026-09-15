@@ -104,6 +104,36 @@ const RIDE_REGISTRATION_NOT_CLOSABLE = () =>
     'Only a ride with open registration can have it closed.',
   );
 
+// CR-021 ("Cancel ride"): distinct from every other 409 code above — the only
+// transition with three valid source statuses at once (`docs/product.md`'s
+// Lifecycle: `published/registration_open/registration_closed -> cancelled`), so this
+// one code covers `draft`/`started`/`finished`/already-`cancelled` alike.
+const RIDE_NOT_CANCELLABLE = () =>
+  new RideServiceError(
+    'ride_not_cancellable',
+    409,
+    'Ride is not cancellable',
+    'Only a published, registration-open, or registration-closed ride can be cancelled.',
+  );
+
+// CR-090 ("Start ride") / CR-022 ("Finish ride"): one code per action, same
+// convention as every other ride-lifecycle transition.
+const RIDE_NOT_STARTABLE = () =>
+  new RideServiceError(
+    'ride_not_startable',
+    409,
+    'Ride is not startable',
+    'Only a ride with closed registration can be started.',
+  );
+
+const RIDE_NOT_FINISHABLE = () =>
+  new RideServiceError(
+    'ride_not_finishable',
+    409,
+    'Ride is not finishable',
+    'Only a started ride can be finished.',
+  );
+
 const INVALID_CURSOR = () =>
   new RideServiceError(
     'invalid_cursor',
@@ -493,6 +523,133 @@ export async function closeRegistration(
       updatedAt: new Date(),
       updatedBy: userId,
     })
+    .where(eq(rides.id, rideId))
+    .returning();
+  if (!updated) {
+    throw new Error('Ride update returned no row.');
+  }
+  return toPublicRide(updated);
+}
+
+const CANCELLABLE_STATUSES = [
+  'published',
+  'registration_open',
+  'registration_closed',
+] as const;
+
+/**
+ * CR-021 ("Cancel ride"): `published/registration_open/registration_closed ->
+ * cancelled` (`docs/product.md`'s Lifecycle section) — the only transition with more
+ * than one valid source status. Same ownership resolution as every other transition
+ * (404 `ride_not_found` either way), no `emailVerified` gate (same reasoning as
+ * {@link openRegistration}/{@link closeRegistration} — only `publish` is named by
+ * `.claude/rules/security.md`).
+ */
+export async function cancelRide(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (
+    !CANCELLABLE_STATUSES.includes(
+      existing.status as (typeof CANCELLABLE_STATUSES)[number],
+    )
+  ) {
+    throw RIDE_NOT_CANCELLABLE();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({ status: 'cancelled', updatedAt: new Date(), updatedBy: userId })
+    .where(eq(rides.id, rideId))
+    .returning();
+  if (!updated) {
+    throw new Error('Ride update returned no row.');
+  }
+  return toPublicRide(updated);
+}
+
+/**
+ * CR-090 ("Start ride"): `registration_closed -> started`, resolving KI-027
+ * (nothing previously transitioned a ride into `started` at all — same shape of gap
+ * as KI-024/KI-025). Same ownership resolution as every other transition (404
+ * `ride_not_found` either way), no `emailVerified` gate.
+ */
+export async function startRide(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (existing.status !== 'registration_closed') {
+    throw RIDE_NOT_STARTABLE();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({ status: 'started', updatedAt: new Date(), updatedBy: userId })
+    .where(eq(rides.id, rideId))
+    .returning();
+  if (!updated) {
+    throw new Error('Ride update returned no row.');
+  }
+  return toPublicRide(updated);
+}
+
+/**
+ * CR-022 ("Finish ride"): `started -> finished`, the last lifecycle transition. Same
+ * ownership resolution and no-`emailVerified`-gate reasoning as {@link startRide}.
+ */
+export async function finishRide(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [existing] = await db
+    .select({ status: rides.status })
+    .from(rides)
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .limit(1);
+  if (!existing) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (existing.status !== 'started') {
+    throw RIDE_NOT_FINISHABLE();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({ status: 'finished', updatedAt: new Date(), updatedBy: userId })
     .where(eq(rides.id, rideId))
     .returning();
   if (!updated) {

@@ -150,8 +150,23 @@ POST `/v1/rides/:id/close-registration` — **implemented (CR-020)**. Same
 `registration_open`-only: `409 ride_registration_not_closable` for any other status.
 `200` → `{ ride }` with `status: 'registration_closed'`. No request body.
 
-POST `/v1/rides/:id/cancel`
-POST `/v1/rides/:id/finish`
+POST `/v1/rides/:id/cancel` — **implemented (CR-021)**. Same 401/404-ownership
+rule as `publish`/`open-registration`/`close-registration`, no `emailVerified`
+gate. Three valid source statuses (`docs/product.md`'s Lifecycle): `published`,
+`registration_open`, `registration_closed` — `409 ride_not_cancellable` for any
+other status (`draft`/`started`/`finished`/already-`cancelled`). `200` →
+`{ ride }` with `status: 'cancelled'`. No request body.
+
+POST `/v1/rides/:id/start` — **implemented (CR-090)**. Same 401/404-ownership
+rule as every other transition, no `emailVerified` gate.
+`registration_closed`-only: `409 ride_not_startable` for any other status.
+`200` → `{ ride }` with `status: 'started'`. No request body.
+
+POST `/v1/rides/:id/finish` — **implemented (CR-022)**. Same 401/404-ownership
+rule as every other transition, no `emailVerified` gate. `started`-only: `409
+ride_not_finishable` for any other status. `200` → `{ ride }` with
+`status: 'finished'` — the terminal, non-cancelled end of the lifecycle. No
+request body.
 
 ## Registration
 

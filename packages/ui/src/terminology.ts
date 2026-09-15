@@ -347,4 +347,17 @@ export const RIDE_EDIT_TERMS = {
   closeRegistration: 'Закрыть регистрацию',
   closeRegistrationPending: 'Закрытие регистрации…',
   closeRegistrationSuccess: 'Регистрация закрыта.',
+  // CR-021 ("Cancel ride").
+  cancel: 'Отменить заезд',
+  cancelPending: 'Отмена…',
+  cancelSuccess: 'Заезд отменён.',
+  cancelConfirm:
+    'Отменить заезд? Это действие необратимо, участники увидят статус «Отменён».',
+  // CR-090 ("Start ride") / CR-022 ("Finish ride").
+  start: 'Начать заезд',
+  startPending: 'Запуск…',
+  startSuccess: 'Заезд начат.',
+  finish: 'Завершить заезд',
+  finishPending: 'Завершение…',
+  finishSuccess: 'Заезд завершён.',
 } as const;

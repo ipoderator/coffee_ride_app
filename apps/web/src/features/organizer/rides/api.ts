@@ -1,14 +1,17 @@
 import {
   createRideRequestSchema,
   updateRideRequestSchema,
+  type CancelRideResponse,
   type CloseRegistrationResponse,
   type CreateRideRequest,
   type CreateRideResponse,
+  type FinishRideResponse,
   type ListRidesResponse,
   type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
   type Ride,
+  type StartRideResponse,
   type UpdateRideRequest,
   type UpdateRideResponse,
 } from 'types';
@@ -16,12 +19,15 @@ import { ApiError } from '@/lib/api/errors';
 
 export { createRideRequestSchema, updateRideRequestSchema, ApiError };
 export type {
+  CancelRideResponse,
   CloseRegistrationResponse,
   CreateRideRequest,
   CreateRideResponse,
+  FinishRideResponse,
   ListRidesResponse,
   OpenRegistrationResponse,
   PublishRideResponse,
+  StartRideResponse,
   UpdateRideRequest,
   UpdateRideResponse,
 };
@@ -174,4 +180,59 @@ export async function closeRegistration(
   }
 
   return body as CloseRegistrationResponse;
+}
+
+/**
+ * CR-021 ("Cancel ride"): `published/registration_open/registration_closed ->
+ * cancelled`. Throws `ApiError` on any non-2xx response, including the expected
+ * `ride_not_cancellable` 409.
+ */
+export async function cancelRide(id: string): Promise<CancelRideResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/cancel`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as CancelRideResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as CancelRideResponse;
+}
+
+/**
+ * CR-090 ("Start ride"): `registration_closed -> started`. Throws `ApiError` on any
+ * non-2xx response, including the expected `ride_not_startable` 409.
+ */
+export async function startRide(id: string): Promise<StartRideResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/start`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as StartRideResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as StartRideResponse;
+}
+
+/**
+ * CR-022 ("Finish ride"): `started -> finished`. Throws `ApiError` on any non-2xx
+ * response, including the expected `ride_not_finishable` 409.
+ */
+export async function finishRide(id: string): Promise<FinishRideResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/finish`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as FinishRideResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as FinishRideResponse;
 }

@@ -346,6 +346,36 @@ registration_closed`). Same ownership resolution as `publish` (404
 publish button. No `packages/db` schema change — both enum values already
 existed since CR-017.
 
+CR-021 (2026-09-15, `docs/changelog.md`): `modules/rides/` gained `POST /v1/
+rides/:id/cancel` (`published/registration_open/registration_closed ->
+cancelled` — the only transition with three valid source statuses). Same
+ownership resolution as every prior transition (404 `ride_not_found` either
+way); no `emailVerified` gate. One new 409 code, `ride_not_cancellable`,
+covering every other status at once (unlike the other transitions' one-code-
+per-single-status pattern). No `packages/db` schema change — `cancelled`
+already existed in the `ride_status` enum since CR-017. `packages/ui`'s
+`Button` gained an additive `danger` variant (`docs/design.md`'s one bright-
+red exception to the calm palette). `apps/web`'s `EditRideForm` gained a
+"Отменить заезд" button (`variant="danger"`, rendered for the three
+cancellable statuses) guarded by a native `window.confirm()` — the first
+lifecycle action with any confirmation step, a deliberate departure from
+CR-019/CR-020's precedent (see `docs/changelog.md`'s CR-021 entry for the
+reasoning).
+
+CR-090/CR-022 (2026-09-15, `docs/changelog.md`): `modules/rides/` gained
+`POST /v1/rides/:id/start` (`registration_closed -> started`, resolving
+KI-027 — same shape of gap as KI-024/KI-025) and `POST /v1/rides/:id/finish`
+(`started -> finished`, the lifecycle's terminal non-cancelled state). Same
+ownership resolution as every prior transition; no `emailVerified` gate. Two
+new 409 codes, one per action: `ride_not_startable`/`ride_not_finishable`.
+No `packages/db` schema change — both enum values already existed since
+CR-017. `apps/web`'s `EditRideForm` gained "Начать заезд"/"Завершить заезд"
+buttons, no confirmation guard (unlike `cancel` — both are forward-only
+steps with a further continuation in the normal case). The ride lifecycle
+(`draft` through `cancelled`/`finished`) is now fully implemented end to
+end — every status in `packages/db`'s `ride_status` enum is reachable
+through a real endpoint.
+
 ## Target structure
 
 apps/

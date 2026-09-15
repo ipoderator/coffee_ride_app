@@ -184,8 +184,24 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       only `publish` is named by `.claude/rules/security.md`.
       `/organizer/rides/[id]/edit` gained the matching "Открыть
       регистрацию"/"Закрыть регистрацию" buttons.
-- [ ] CR-021 Cancel ride
-- [ ] CR-022 Finish ride
+- [x] CR-021 Cancel ride — done 2026-09-15: `POST /v1/rides/:id/cancel`
+      (`published`/`registration_open`/`registration_closed → cancelled`,
+      `docs/product.md`'s Lifecycle). Same ownership rule as every other
+      transition (404 `ride_not_found` either way); one new 409 code,
+      `ride_not_cancellable`, covering every other status. New `Button`
+      `danger` variant; `/organizer/rides/[id]/edit` gained a red "Отменить
+      заезд" button guarded by a native `window.confirm()`.
+- [x] CR-090 Start ride (new ticket, added this session — see
+      `.claude/context/known-issues.md` KI-027) — done 2026-09-15: a new
+      endpoint takes a ride from `registration_closed` to `started`,
+      resolving KI-027 (no ticket previously transitioned a ride into that
+      state at all — same shape of gap as KI-024/KI-025).
+- [x] CR-022 Finish ride — done 2026-09-15, together with CR-090: a new
+      `POST /:id/finish` endpoint (`started → finished`, the last lifecycle
+      transition). Same ownership rule as every other transition; neither
+      new endpoint gates on `emailVerified`. `/organizer/rides/[id]/edit`
+      gained "Начать заезд"/"Завершить заезд" buttons, no confirmation
+      guard (unlike `cancel` — both are forward-only steps).
 - [ ] CR-023 Ride detail
 - [ ] CR-024 Ride list
 - [ ] CR-025 Filters

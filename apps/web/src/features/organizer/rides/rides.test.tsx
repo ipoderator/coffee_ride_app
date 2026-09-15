@@ -6,12 +6,15 @@ import { RidesList } from './components/RidesList';
 import { EditRideForm } from './components/EditRideForm';
 import {
   ApiError,
+  cancelRide,
   closeRegistration,
   createRide,
+  finishRide,
   getRide,
   listMyRides,
   openRegistration,
   publishRide,
+  startRide,
   updateRide,
 } from './api';
 
@@ -26,6 +29,9 @@ vi.mock('./api', async () => {
     publishRide: vi.fn(),
     openRegistration: vi.fn(),
     closeRegistration: vi.fn(),
+    cancelRide: vi.fn(),
+    startRide: vi.fn(),
+    finishRide: vi.fn(),
   };
 });
 
@@ -36,6 +42,9 @@ const updateRideMock = vi.mocked(updateRide);
 const publishRideMock = vi.mocked(publishRide);
 const openRegistrationMock = vi.mocked(openRegistration);
 const closeRegistrationMock = vi.mocked(closeRegistration);
+const cancelRideMock = vi.mocked(cancelRide);
+const startRideMock = vi.mocked(startRide);
+const finishRideMock = vi.mocked(finishRide);
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -241,6 +250,9 @@ describe('EditRideForm', () => {
     publishRideMock.mockReset();
     openRegistrationMock.mockReset();
     closeRegistrationMock.mockReset();
+    cancelRideMock.mockReset();
+    startRideMock.mockReset();
+    finishRideMock.mockReset();
   });
 
   it('shows a not-found state for a ride that does not exist or is not owned by the caller', async () => {
@@ -457,6 +469,148 @@ describe('EditRideForm', () => {
 
     expect(
       screen.queryByRole('button', { name: 'Закрыть регистрацию' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(['published', 'registration_open', 'registration_closed'] as const)(
+    'shows a cancel button for a %s ride',
+    async (rideStatus) => {
+      getRideMock.mockResolvedValue({
+        ride: { ...baseRide, status: rideStatus },
+      });
+
+      render(<EditRideForm rideId="ride-1" />);
+      await screen.findByDisplayValue(baseRide.title);
+
+      expect(
+        screen.getByRole('button', { name: 'Отменить заезд' }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('shows no cancel button for a draft ride', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByRole('button', { name: 'Отменить заезд' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does nothing if the cancel confirmation is dismissed', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить заезд' }));
+
+    expect(cancelRideMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels a published ride after confirmation and shows a success message', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+    cancelRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'cancelled' },
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить заезд' }));
+
+    expect(await screen.findByText('Заезд отменён.')).toBeInTheDocument();
+    expect(cancelRideMock).toHaveBeenCalledWith('ride-1');
+    expect(
+      screen.queryByRole('button', { name: 'Отменить заезд' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows no cancel button for a started ride (reconfirms CR-021's scope)", async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'started' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByRole('button', { name: 'Отменить заезд' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('starts a registration_closed ride and shows a success message', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_closed' },
+    });
+    startRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'started' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Начать заезд' }));
+
+    expect(await screen.findByText('Заезд начат.')).toBeInTheDocument();
+    expect(startRideMock).toHaveBeenCalledWith('ride-1');
+    expect(
+      screen.queryByRole('button', { name: 'Начать заезд' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Завершить заезд' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no start button for a draft or started ride', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByRole('button', { name: 'Начать заезд' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('finishes a started ride and shows a success message', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'started' },
+    });
+    finishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'finished' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
+
+    expect(await screen.findByText('Заезд завершён.')).toBeInTheDocument();
+    expect(finishRideMock).toHaveBeenCalledWith('ride-1');
+    expect(
+      screen.queryByRole('button', { name: 'Завершить заезд' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows no finish button for a registration_closed or finished ride', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_closed' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByRole('button', { name: 'Завершить заезд' }),
     ).not.toBeInTheDocument();
   });
 });

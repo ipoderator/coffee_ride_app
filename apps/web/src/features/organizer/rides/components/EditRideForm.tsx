@@ -25,13 +25,22 @@ import {
 } from '@/lib/datetime/zoned-time';
 import {
   ApiError,
+  cancelRide,
   closeRegistration,
+  finishRide,
   getRide,
   openRegistration,
   publishRide,
+  startRide,
   updateRide,
   updateRideRequestSchema,
 } from '../api';
+
+const CANCELLABLE_STATUSES: ReadonlyArray<Ride['status']> = [
+  'published',
+  'registration_open',
+  'registration_closed',
+];
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -109,6 +118,9 @@ export function EditRideForm({ rideId }: { rideId: string }) {
     useState(false);
   const [isOpeningRegistration, setIsOpeningRegistration] = useState(false);
   const [isClosingRegistration, setIsClosingRegistration] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +282,76 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       setFormError(RIDE_EDIT_TERMS.loadError);
     } finally {
       setIsClosingRegistration(false);
+    }
+  }
+
+  /**
+   * CR-021 ("Cancel ride"): the only lifecycle action with no forward continuation
+   * (`docs/product.md`'s Lifecycle has nothing after `cancelled`) and, per
+   * `docs/design.md`, the one status the calm palette deliberately breaks its own
+   * rule for — a native `confirm()` guard is a minimal, proportionate safeguard
+   * against a one-click irreversible action, not a new Dialog component
+   * (`.claude/context/current-task.md`).
+   */
+  async function handleCancel() {
+    if (isCancelling) return;
+    if (!window.confirm(RIDE_EDIT_TERMS.cancelConfirm)) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsCancelling(true);
+
+    try {
+      const response = await cancelRide(rideId);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.cancelSuccess);
+    } catch {
+      setFormError(RIDE_EDIT_TERMS.loadError);
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  /** CR-090 ("Start ride"): `registration_closed -> started`. No confirmation guard,
+   * unlike `handleCancel` — this is a forward-only step with a further continuation
+   * (leads to `finish`), not the one dead-end action `docs/design.md` singles out. */
+  async function handleStart() {
+    if (isStarting) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsStarting(true);
+
+    try {
+      const response = await startRide(rideId);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.startSuccess);
+    } catch {
+      setFormError(RIDE_EDIT_TERMS.loadError);
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
+  /** CR-022 ("Finish ride"): `started -> finished`, the last lifecycle transition. */
+  async function handleFinish() {
+    if (isFinishing) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsFinishing(true);
+
+    try {
+      const response = await finishRide(rideId);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.finishSuccess);
+    } catch {
+      setFormError(RIDE_EDIT_TERMS.loadError);
+    } finally {
+      setIsFinishing(false);
     }
   }
 
@@ -598,6 +680,46 @@ export function EditRideForm({ rideId }: { rideId: string }) {
             {isClosingRegistration
               ? RIDE_EDIT_TERMS.closeRegistrationPending
               : RIDE_EDIT_TERMS.closeRegistration}
+          </Button>
+        )}
+
+        {CANCELLABLE_STATUSES.includes(ride.status) && (
+          <Button
+            type="button"
+            variant="danger"
+            isLoading={isCancelling}
+            onClick={handleCancel}
+            className="self-start"
+          >
+            {isCancelling
+              ? RIDE_EDIT_TERMS.cancelPending
+              : RIDE_EDIT_TERMS.cancel}
+          </Button>
+        )}
+
+        {ride.status === 'registration_closed' && (
+          <Button
+            type="button"
+            variant="secondary"
+            isLoading={isStarting}
+            onClick={handleStart}
+            className="self-start"
+          >
+            {isStarting ? RIDE_EDIT_TERMS.startPending : RIDE_EDIT_TERMS.start}
+          </Button>
+        )}
+
+        {ride.status === 'started' && (
+          <Button
+            type="button"
+            variant="secondary"
+            isLoading={isFinishing}
+            onClick={handleFinish}
+            className="self-start"
+          >
+            {isFinishing
+              ? RIDE_EDIT_TERMS.finishPending
+              : RIDE_EDIT_TERMS.finish}
           </Button>
         )}
       </form>

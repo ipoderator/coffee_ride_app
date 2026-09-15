@@ -34,9 +34,17 @@ completed 2026-09-14, together with CR-059's remaining scope (gating organizer
 publish on `emailVerified`, `.claude/rules/security.md`). CR-089 (Open
 registration — new ticket, added this session per KI-025's own "next action")
 and CR-020 (Close registration) also completed 2026-09-14, together, in that
-order (CR-020 had nothing to close without CR-089 existing first). Rides
-section now stands at CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020 done,
-CR-021 (Cancel ride) next.
+order (CR-020 had nothing to close without CR-089 existing first). CR-021
+(Cancel ride) also completed 2026-09-15: `POST /v1/rides/:id/cancel`
+(`published`/`registration_open`/`registration_closed → cancelled`, the only
+transition with three valid source statuses). CR-090 (Start ride — new
+ticket, added this session per KI-027's own "next action") and CR-022
+(Finish ride) also completed 2026-09-15, together, in that order (CR-022 had
+no reachable source state without CR-090 existing first). Rides section is
+now fully done: CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/
+CR-090/CR-022 — the full ride lifecycle (`draft` through
+`cancelled`/`finished`) is implemented end to end. CR-023 (Ride detail,
+participant-facing) next.
 
 ## Implemented
 
@@ -513,6 +521,75 @@ endpoints) and the `browser-automation` skill against a real `next dev`
 server + `apps/api` (published -> open -> closed, screenshot-confirmed final
 read-only state, 0 console errors during the flow itself).
 
+Cancel ride landed 2026-09-15 (CR-021, see `docs/changelog.md`): `POST /v1/
+rides/:id/cancel` (`apps/api/src/modules/rides`) — the only lifecycle
+transition with three valid source statuses at once (`docs/product.md`'s
+Lifecycle: `published/registration_open/registration_closed -> cancelled`).
+One new 409 code, `ride_not_cancellable`, covers every other status
+(`draft`/`started`/`finished`/already-`cancelled`). Same ownership rules as
+every prior transition (404 `ride_not_found` either way), no `emailVerified`
+gate (same reasoning as `open-registration`/`close-registration`). No
+`packages/db` migration — `cancelled` already existed in the `ride_status` pg
+enum since CR-017. New `packages/ui` `Button` `danger` variant (additive —
+`variant` still defaults to `primary`) — `docs/design.md`'s one bright-red
+exception to the calm palette. `/organizer/rides/[id]/edit` gained a red
+"Отменить заезд" button (rendered for the three cancellable statuses),
+guarded by a native `window.confirm()` — a deliberate, documented departure
+from CR-019/CR-020's "no confirmation, no Dialog component yet" precedent:
+cancellation is the one lifecycle step with no forward continuation, and
+`docs/design.md` explicitly singles it out as needing to stay impossible to
+miss, so a plain `confirm()` (no new component/dependency) is a proportionate
+safeguard against a one-click irreversible action. 8 new `apps/api` tests
+(100 total, was 92); 6 new `apps/web` tests (69 total, was 63). Live-verified
+via curl (401/404 non-existent/404 stranger's-ride/409 `ride_not_cancellable`
+from `draft`/200 from each of the three valid source statuses, all
+cross-checked against a direct DB read/403 CSRF) and the `browser-automation`
+skill against a real `next dev` server + `apps/api` (login -> organizer
+profile -> create ride -> publish -> click "Отменить заезд" -> native
+`confirm()` dialog intercepted and accepted -> success message + "Отменён"
+badge, form fully disabled) — no console errors beyond the expected benign
+`organizers/me` 404 (no profile yet, same pattern documented since CR-015).
+
+Start + Finish ride landed 2026-09-15 (CR-090/CR-022, see
+`docs/changelog.md`): resolved KI-027 (opened this session — no ticket
+transitioned a ride into `started` at all, same shape of gap as
+KI-024/KI-025) by adding CR-090 ("Start ride") to `docs/tasks.md`'s Rides
+section and building it together with CR-022 ("Finish ride"), since CR-022
+had no reachable source state without it. `POST /v1/rides/:id/start`
+(`registration_closed -> started`) and `POST /v1/rides/:id/finish` (`started
+-> finished`, the lifecycle's terminal non-cancelled state), both in
+`apps/api/src/modules/rides`. Same ownership rules as every prior transition
+(404 `ride_not_found` either way); neither gates on `emailVerified`. Two new
+409 codes, one per action: `ride_not_startable`/`ride_not_finishable`. No
+`packages/db` migration — both enum values already existed since CR-017.
+Checked before adding CR-090 whether `started` might instead be an
+automatic/time-based transition (would have let `finish` source from
+`registration_closed` directly) — no scheduled-job/cron infrastructure or
+ticket exists anywhere in the repo, and `docs/product.md`'s organizer-
+capabilities list omitting "start" doesn't prove it's non-manual (it omits
+"open/close registration" too, and those are real manual tickets); concluded
+the same "add the missing preceding ticket" fix as KI-024/KI-025.
+`/organizer/rides/[id]/edit` gained "Начать заезд"/"Завершить заезд"
+buttons, no confirmation guard (unlike `cancel` — both are forward-only
+steps). Reconfirmed by a new test that a `started` ride still correctly
+rejects `POST .../cancel` with `409 ride_not_cancellable` (CR-021's own
+`CANCELLABLE_STATUSES` was already correct; `started` just wasn't reachable
+to exercise the path until now). 13 new `apps/api` tests (113 total, was
+100); 5 new `apps/web` tests (74 total, was 69). Live-verified via curl
+against a real Postgres + `apps/api` (register → verify → login → create
+organizer profile → ride driven through publish/open-registration/close-
+registration → `start`: 401/404/200/409 already-started → `cancel` on the
+now-`started` ride: 409 `ride_not_cancellable` → `finish`: 200/409 already-
+finished → a second organizer's 404 on both endpoints → 403 CSRF on both,
+all cross-checked against direct DB reads) and a full browser walkthrough
+via the `browser-automation` skill against a real `next dev` server +
+`apps/api` (login → edit screen on a `registration_closed` ride → "Начать
+заезд" → 200, success message, button flipped to "Завершить заезд" →
+clicked it → 200, success message "Заезд завершён.", "Завершён" badge, no
+action button remaining) — 0 console errors during the flow itself. The ride
+lifecycle (`draft` through `cancelled`/`finished`) is now fully implemented
+end to end.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -610,12 +687,13 @@ None.
 
 ## Next
 
-CR-021 — Cancel ride (`docs/tasks.md` Rides section, next after
-CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020). CR-022 (Finish ride) is the
-remaining lifecycle transition after it, then CR-023 (Ride detail,
-participant-facing) and CR-024 (Ride list, public discovery — distinct from
-CR-088's "My rides", organizer-scoped and already done). KI-025 is resolved —
-`registration_open`/`registration_closed` are both reachable now.
+CR-023 — Ride detail, participant-facing (`docs/tasks.md` Rides section,
+next after CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/
+CR-022 — the Rides section's organizer-facing lifecycle work is now fully
+done). Then CR-024 (Ride list, public discovery — distinct from CR-088's "My
+rides", organizer-scoped and already done). KI-025/KI-027 are both
+resolved — every lifecycle status (`registration_open`/`registration_closed`/
+`started`) is reachable now.
 
 ## Important decisions
 
@@ -635,7 +713,8 @@ See `docs/decisions.md`. Notably:
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
   warm neutral base with one muted teal-green accent; metric presentation modeled on
   Strava/TrainingPeaks/Rouvy. One exception: `danger` is a bright red (`#D42B20` /
-  `#FF5A4F`), reserved for cancellation and failure, allowed as a filled badge.
+  `#FF5A4F`), reserved for cancellation and failure, allowed as a filled badge
+  (`StatusBadge`, CR-065) and, since CR-021, a filled `Button` (`variant="danger"`).
 
 ## Known limitations
 
@@ -732,6 +811,23 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   are still the only remaining unimplemented lifecycle transitions
   (CR-021/CR-022); KI-026 (no `/verify-email` screen) is unaffected —
   neither new endpoint gates on `emailVerified`.
+- new (CR-021): finishing a ride is now the only remaining unimplemented
+  lifecycle transition (CR-022). KI-026 (no `/verify-email` screen) is
+  unaffected — `cancel` doesn't gate on `emailVerified` either. No organizer
+  UI exists yet to see _why_ a ride was cancelled (no reason/note field in
+  `docs/product.md`'s Ride fields) — not a gap this ticket introduces, since
+  the product spec never asked for one; flagging only in case a future ticket
+  (participant-facing cancellation notice, CR-023/CR-040s notifications)
+  needs it and assumes it already exists.
+- new (CR-090/CR-022): KI-027 resolved — `started` is reachable now, and the
+  full ride lifecycle (`draft` through `cancelled`/`finished`) is
+  implemented end to end for the first time. KI-026 (no `/verify-email`
+  screen) is unaffected — neither `start` nor `finish` gates on
+  `emailVerified`. The same "no reason/note field" caveat CR-021 flagged for
+  cancellation applies identically to `finish` — `docs/product.md`'s Ride
+  fields have no post-ride notes/results field, so there's nothing yet for a
+  future participant-facing "ride summary" screen to show beyond the status
+  itself; not a gap this ticket introduces.
 
 ## Do not break
 
@@ -751,4 +847,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-14 (CR-089/CR-020)
+2026-09-15 (CR-090/CR-022)
