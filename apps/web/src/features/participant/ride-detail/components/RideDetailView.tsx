@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Ride } from 'types';
+import type { Ride, RouteGeometryPoint, RouteSummary } from 'types';
 import {
   BICYCLE_TYPE_TERMS,
   Card,
@@ -19,12 +19,79 @@ import {
   METRIC_TERMS,
   RIDE_DETAIL_TERMS,
   RIDE_STATUS_TERMS,
+  ROUTE_RENDERING_TERMS,
   Skeleton,
   StatusBadge,
 } from 'ui';
-import { ApiError, getRideDetail } from '../api';
+import { ApiError, getRideDetail, getRouteGeometry } from '../api';
+import { ElevationProfileChart } from './ElevationProfileChart';
+import { RouteMapPlaceholder } from './RouteMapPlaceholder';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
+type GeometryStatus = 'loading' | 'ready' | 'error';
+
+/**
+ * CR-028: the "Маршрут" section, shown only when `route` (the ride's `RouteSummary`)
+ * is non-null. Fetches the full point array separately from the ride's own load
+ * (`GetRideResponse.route` deliberately omits `geometry` — KI-035) so a route-render
+ * failure degrades locally instead of blanking the rest of the already-loaded page
+ * (`.claude/rules/resilience.md`).
+ */
+function RouteSection({
+  rideId,
+  route,
+}: {
+  rideId: string;
+  route: RouteSummary;
+}) {
+  const [status, setStatus] = useState<GeometryStatus>('loading');
+  const [points, setPoints] = useState<RouteGeometryPoint[]>([]);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus('loading');
+
+    getRouteGeometry(rideId)
+      .then((response) => {
+        if (cancelled) return;
+        setPoints(response.points);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatus('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rideId, route.id, attempt]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold text-text">
+        {ROUTE_RENDERING_TERMS.sectionTitle}
+      </h2>
+      <RouteMapPlaceholder />
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
+          {ROUTE_RENDERING_TERMS.elevationProfileLabel}
+        </p>
+        {status === 'loading' && <Skeleton className="h-40 w-full" />}
+        {status === 'error' && (
+          <ErrorState
+            message={ROUTE_RENDERING_TERMS.elevationProfileLoadError}
+            tone="warning"
+            variant="inline"
+            onRetry={() => setAttempt((n) => n + 1)}
+          />
+        )}
+        {status === 'ready' && <ElevationProfileChart points={points} />}
+      </div>
+    </div>
+  );
+}
 
 /**
  * `/rides/[id]` (`docs/design.md` §8 "Ride detail", CR-023). Public — no
@@ -38,6 +105,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [ride, setRide] = useState<Ride | null>(null);
   const [organizerName, setOrganizerName] = useState<string>('');
+  const [route, setRoute] = useState<RouteSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +115,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         if (cancelled) return;
         setRide(response.ride);
         setOrganizerName(response.organizer.name);
+        setRoute(response.route);
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -185,6 +254,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
           />
         )}
       </div>
+
+      {route ? <RouteSection rideId={rideId} route={route} /> : null}
     </div>
   );
 }

@@ -439,20 +439,21 @@ labels) — not a default to pick silently inside CR-027 itself.
 
 ### KI-035 — No live 2GIS/route-rendering read of `Route.geometry` yet; only a summary is exposed
 
-Status: open. Discovered: 2026-09-15 (CR-027, "GPX upload" session).
+Status: resolved 2026-09-15 (CR-028, "Route rendering" — the "next action" this
+entry itself named). Discovered: 2026-09-15 (CR-027, "GPX upload" session).
 Problem: `GET /v1/rides/:id`'s additive `route` field is a summary only
 (`RouteSummary` — id/fileName/size/distance/elevation/pointCount), not the
 full `geometry` polyline (`.claude/context/current-task.md`'s CR-027 scoping
 note: no consumer for the full point array exists yet, and shipping it on
 every ride-detail response would needlessly bloat the payload).
-Impact: none today — nothing renders a route map/elevation profile yet.
-Workaround: none needed.
-Next action: CR-028 ("Route rendering") decides how the full geometry is
-served (a dedicated endpoint, or the full array added to a screen-specific
-response) once it actually builds the map/elevation-profile UI — likely
-blocked on the same missing `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` credential as
-KI-031, for the map half specifically (an elevation profile chart doesn't
-need 2GIS at all and could ship independently).
+Resolution: new `GET /v1/rides/:id/route/geometry` endpoint (`{ points:
+RouteGeometryPoint[] }`), a separate, opt-in fetch only `/rides/[id]`'s route
+section makes — same viewer-visibility rule as `GET /v1/rides/:id`/`.../
+route/download`, no S3 call (`Route.geometry` is already in the DB row).
+Live-verified against a real Postgres: owner sees a draft ride's geometry, a
+stranger gets `404 ride_not_found` for the same draft ride, and any viewer
+(including no session) sees it once published — cross-checked byte-for-byte
+against the inserted `routes.geometry` value.
 
 ---
 
@@ -814,7 +815,9 @@ blindly.
 
 ### KI-031 — No live 2GIS MapGL rendering yet; `/`'s map view is a degraded placeholder
 
-Status: open. Discovered: 2026-09-15 (CR-026, "Map discovery" session).
+Status: open — widened 2026-09-15 (CR-028, "Route rendering"): `/rides/[id]`'s new
+route map section hits the identical gap, same reasoning, second surface.
+Discovered: 2026-09-15 (CR-026, "Map discovery" session).
 Problem: no `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` is configured anywhere in this
 environment (`.env.example` only — grepped `apps/web/src`, no matches), so a
 real 2GIS MapGL JS integration could not be built and live-verified this
@@ -826,14 +829,21 @@ Impact: medium — `/`'s "Карта" tab (CR-026's `DiscoveryViewToggle`) alway
 shows `RideMapPlaceholder` (`ErrorState`, `tone="warning"`, `variant="inline"`
 — `.claude/rules/resilience.md`'s required degraded-state pattern) instead of
 an actual map, regardless of whether any ride has coordinates. The list view
-is fully unaffected.
-Workaround: none needed for the list-based discovery journey — the
-placeholder never blocks it, per its own design.
+is fully unaffected. Update 2026-09-15 (CR-028): `/rides/[id]`'s new "Маршрут"
+section shows its own independent `RouteMapPlaceholder` instance
+(`features/participant/ride-detail/`, not shared with discovery's — per
+`.claude/rules/extensibility.md`'s feature-boundary rule) for the same
+reason. The elevation profile half of that same section does not need 2GIS
+and ships as a real, live-verified chart (resolves KI-035).
+Workaround: none needed for the list-based discovery journey or for a ride's
+elevation profile — neither placeholder blocks anything, per its own design.
 Next action: once a real `MAPS_2GIS_MAPGL_KEY`/`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`
 pair exists, build the actual render layer `.claude/rules/maps.md` describes
 (a `packages/maps-core` render-layer type + a `packages/maps-2gis`
 implementation loading the real MapGL script) and wire markers from each
-ride's `startLat`/`startLng`. Blocked on KI-016 (same missing credential).
+ride's `startLat`/`startLng` (discovery) and `Route.geometry` (ride detail —
+both placeholders need replacing, not just the first one built). Blocked on
+KI-016 (same missing credential).
 
 ### KI-032 — No geocode-by-address UI; ride coordinates are entered manually
 

@@ -249,6 +249,15 @@ the raw GPX bytes, `Content-Type: application/gpx+xml`,
 `Content-Disposition: attachment; filename="<original filename>"`. `503
 route_storage_unavailable` on a storage failure, same as `POST`/`PATCH`.
 
+GET `/v1/rides/:id/route/geometry` — **implemented (CR-028, "Route rendering")**.
+Resolves KI-035. Same viewer-visibility rule as `.../download` (`resolveOptionalUser`:
+the ride's owner always, anyone else only once the ride has left `draft`). `404
+route_not_found` if the ride has no route. `200` → `{ points }`
+(`RouteGeometryPoint[]`: `lat`/`lng`/`elevationMeters` — the full ordered track,
+separate from `GET /v1/rides/:id`'s `route` summary field, which deliberately has no
+`geometry`). No S3 call — the geometry is already in the `routes` row from `POST/PATCH
+.../route`, so there is no `route_storage_unavailable` case here.
+
 POST `/v1/rides/:id/stops`
 PATCH `/v1/rides/:id/stops/:stopId`
 DELETE `/v1/rides/:id/stops/:stopId`

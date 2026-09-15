@@ -608,4 +608,120 @@ describe('/v1/rides/:id/route', () => {
       await app.close();
     });
   });
+
+  describe('GET /v1/rides/:id/route/geometry', () => {
+    it('returns 404 ride_not_found for a non-existent id (no cookie)', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${randomUUID()}/route/geometry`,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('returns 404 route_not_found when no route has been uploaded yet', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/route/geometry`,
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('route_not_found');
+      await app.close();
+    });
+
+    it('lets the owner read a draft ride’s geometry', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      const uploaded = multipartGpxBody(VALID_GPX);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': uploaded.contentType },
+        cookies: { session: rawToken },
+        payload: uploaded.body,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/route/geometry`,
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const { points } = response.json();
+      expect(points).toHaveLength(2);
+      expect(points[0]).toEqual({
+        lat: 55.75,
+        lng: 37.6,
+        elevationMeters: 100,
+      });
+      expect(points[1]).toEqual({
+        lat: 55.7545,
+        lng: 37.6,
+        elevationMeters: 150,
+      });
+      await app.close();
+    });
+
+    it("hides a stranger's draft ride geometry with 404", async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      const uploaded = multipartGpxBody(VALID_GPX);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': uploaded.contentType },
+        cookies: { session: rawToken },
+        payload: uploaded.body,
+      });
+      const { rawToken: strangerToken } = await registerAndLogin(app);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/route/geometry`,
+        cookies: { session: strangerToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('lets any viewer read a published ride’s geometry without a session', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      const uploaded = multipartGpxBody(VALID_GPX);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': uploaded.contentType },
+        cookies: { session: rawToken },
+        payload: uploaded.body,
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/route/geometry`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().points).toHaveLength(2);
+      await app.close();
+    });
+  });
 });

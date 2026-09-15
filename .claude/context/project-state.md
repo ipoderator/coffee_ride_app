@@ -72,8 +72,15 @@ route/download` endpoint, and a new `/organizer/rides/[id]/route` screen.
 No live MinIO in this environment (KI-015, widened) — the S3 code path is
 real and unit-tested with the client mocked, live-verified only for its
 degraded (`503 route_storage_unavailable`) response, not a successful
-upload. The Route section has CR-028 ("Route rendering"), CR-029 ("Route
-metadata"), CR-030 ("Stops"), and CR-031 ("Route points") remaining.
+upload. CR-028 ("Route rendering") also completed 2026-09-15: `GET
+/v1/rides/:id/route/geometry` (resolves KI-035, no S3 call — reads
+`Route.geometry` straight from the DB) and a "Маршрут" section on
+`/rides/[id]` — a hand-built inline-SVG elevation profile chart (real,
+live-verified) plus a degraded route-map placeholder (KI-031 widened, same
+missing 2GIS MapGL credential as CR-026's discovery map). `apps/web` gained
+its first real dependency on `packages/maps-core` (type-only `LatLng`
+import). The Route section has CR-029 ("Route metadata"), CR-030 ("Stops"),
+and CR-031 ("Route points") remaining.
 
 ## Implemented
 
@@ -1046,6 +1053,12 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   how the polyline/elevation-profile UI reads it). The S3 upload/download/
   delete code path is real now but only unit-tested with the S3 client
   mocked — never live-verified against MinIO (KI-015, widened, not new).
+- new (CR-028): KI-035 resolved — `GET /v1/rides/:id/route/geometry` serves
+  the full point array, live-verified end to end (visibility rules +
+  content). KI-031 widened — `/rides/[id]`'s new route map section hits the
+  same missing-2GIS-credential gap CR-026 found for discovery, a second
+  surface, not a new root cause. `apps/web` gained its first real dependency
+  on `packages/maps-core` (type-only).
 
 ## Do not break
 
@@ -1065,4 +1078,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-027/CR-085)
+2026-09-15 (CR-028)

@@ -1,8 +1,12 @@
-import type { GetRideResponse, ProblemDetails } from 'types';
+import type {
+  GetRideResponse,
+  GetRouteGeometryResponse,
+  ProblemDetails,
+} from 'types';
 import { ApiError } from '@/lib/api/errors';
 
 export { ApiError };
-export type { GetRideResponse };
+export type { GetRideResponse, GetRouteGeometryResponse };
 
 const RIDES_ENDPOINT = '/api/v1/rides';
 
@@ -26,4 +30,26 @@ export async function getRideDetail(id: string): Promise<GetRideResponse> {
   }
 
   return body as GetRideResponse;
+}
+
+/**
+ * CR-028 ("Route rendering"), resolving KI-035: the full ordered `Route.geometry`
+ * array behind `GetRideResponse.route`'s summary. Same unauthenticated-friendly
+ * shape as {@link getRideDetail} — the endpoint itself enforces the same
+ * viewer-visibility rule. `RideDetailView` only calls this once `ride.route` is
+ * non-null, so `route_not_found` is not an expected outcome in normal use.
+ */
+export async function getRouteGeometry(
+  rideId: string,
+): Promise<GetRouteGeometryResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/route/geometry`);
+
+  const body = (await response.json()) as
+    GetRouteGeometryResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as GetRouteGeometryResponse;
 }

@@ -126,6 +126,9 @@ importers:
       lucide-react:
         specifier: ^1.45.0
         version: 1.45.0(react@19.3.0)
+      maps-core:
+        specifier: workspace:*
+        version: link:../../packages/maps-core
       next:
         specifier: ^15.5.25
         version: 15.5.25(@playwright/test@1.63.0)(@types/node@24.13.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

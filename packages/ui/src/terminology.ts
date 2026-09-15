@@ -449,3 +449,18 @@ export const RIDE_ROUTE_TERMS = {
   gpxFileTooLarge: 'Файл превышает допустимый размер.',
   storageUnavailable: 'Загрузка недоступна. Попробуйте ещё раз позже.',
 } as const;
+
+/**
+ * `/rides/[id]`'s "Маршрут" section (CR-028, `docs/design.md` §6 "Elevation
+ * profile"/§8 "route + profile"). Participant-facing — distinct from `RIDE_ROUTE_TERMS`
+ * above (CR-027's organizer-facing upload screen). No live 2GIS credential in this
+ * environment (KI-031/KI-016), so `mapUnavailable` is a real, live-verified degraded
+ * state, not a placeholder for a future one.
+ */
+export const ROUTE_RENDERING_TERMS = {
+  sectionTitle: 'Маршрут',
+  elevationProfileLabel: 'Профиль высоты',
+  elevationProfileLoadError:
+    'Не удалось загрузить профиль высоты. Попробуйте ещё раз.',
+  mapUnavailable: 'Карта маршрута временно недоступна.',
+} as const;

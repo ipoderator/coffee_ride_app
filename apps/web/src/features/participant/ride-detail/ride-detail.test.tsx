@@ -1,18 +1,32 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Ride } from 'types';
+import type { Ride, RouteSummary } from 'types';
 import { RideDetailView } from './components/RideDetailView';
-import { ApiError, getRideDetail } from './api';
+import { ApiError, getRideDetail, getRouteGeometry } from './api';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
   return {
     ...actual,
     getRideDetail: vi.fn(),
+    getRouteGeometry: vi.fn(),
   };
 });
 
 const getRideDetailMock = vi.mocked(getRideDetail);
+const getRouteGeometryMock = vi.mocked(getRouteGeometry);
+
+const baseRoute: RouteSummary = {
+  id: 'route-1',
+  rideId: 'ride-1',
+  gpxFileName: 'route.gpx',
+  gpxFileSizeBytes: 2048,
+  distanceKm: 42.3,
+  elevationGainMeters: 350,
+  pointCount: 3,
+  createdAt: '2027-01-01T00:00:00.000Z',
+  updatedAt: '2027-01-01T00:00:00.000Z',
+};
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -41,6 +55,7 @@ const baseRide: Ride = {
 describe('RideDetailView', () => {
   beforeEach(() => {
     getRideDetailMock.mockReset();
+    getRouteGeometryMock.mockReset();
   });
 
   it('shows a not-found state for a non-existent/draft ride', async () => {
@@ -123,5 +138,68 @@ describe('RideDetailView', () => {
     expect(screen.queryByText('Средний темп')).not.toBeInTheDocument();
     expect(screen.queryByText('Длительность')).not.toBeInTheDocument();
     expect(screen.queryByText('Лимит участников')).not.toBeInTheDocument();
+  });
+
+  it('omits the "Маршрут" section entirely when no route has been uploaded', async () => {
+    getRideDetailMock.mockResolvedValue({
+      ride: baseRide,
+      organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: null,
+    });
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    await screen.findByText(baseRide.title);
+    expect(screen.queryByText('Маршрут')).not.toBeInTheDocument();
+    expect(getRouteGeometryMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the route map placeholder and elevation profile once a route exists', async () => {
+    getRideDetailMock.mockResolvedValue({
+      ride: baseRide,
+      organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: baseRoute,
+    });
+    getRouteGeometryMock.mockResolvedValue({
+      points: [
+        { lat: 55.75, lng: 37.6, elevationMeters: 100 },
+        { lat: 55.7545, lng: 37.6, elevationMeters: 150 },
+        { lat: 55.759, lng: 37.6, elevationMeters: 120 },
+      ],
+    });
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    expect(await screen.findByText('Маршрут')).toBeInTheDocument();
+    expect(getRouteGeometryMock).toHaveBeenCalledWith('ride-1');
+    // Degraded map placeholder (KI-031, no live 2GIS credential) — always shown.
+    expect(
+      await screen.findByText('Карта маршрута временно недоступна.'),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('img', { name: /Профиль высоты/ }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('shows a retryable degraded state when the geometry fetch fails', async () => {
+    getRideDetailMock.mockResolvedValue({
+      ride: baseRide,
+      organizer: { id: 'org-1', name: 'Гравийный клуб' },
+      route: baseRoute,
+    });
+    getRouteGeometryMock.mockRejectedValue(new Error('network error'));
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить профиль высоты. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+    // The rest of the page (title, other metrics) stays intact — a route-render
+    // failure degrades locally, it does not blank the page.
+    expect(screen.getByText(baseRide.title)).toBeInTheDocument();
   });
 });

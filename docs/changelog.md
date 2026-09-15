@@ -1835,3 +1835,91 @@ an elevation-profile chart from `Route.geometry` doesn't need 2GIS and could
 ship independently; alternatively CR-029 ("Route metadata") to resolve
 KI-034 deliberately, or CR-030/CR-031 (Stops/RoutePoint) which have no
 dependency on CR-028 at all.
+
+## 2026-09-15 — CR-028 — Route rendering
+
+`docs/tasks.md`'s Route section, second ticket. Resolves KI-035 (full
+`Route.geometry` exposure) and widens KI-031 (no live 2GIS MapGL credential)
+to a second surface.
+
+API: `apps/api/src/modules/rides/` gained `GET /v1/rides/:id/route/geometry`
+— same viewer-visibility rule as `GET /v1/rides/:id`/`.../route/download`
+(`resolveOptionalUser`: owner always, others only once the ride has left
+`draft`), `404 route_not_found` if no route exists. No S3 call — unlike
+`.../download`, the geometry is already in the `routes` row from CR-027's
+upload, so there is no `route_storage_unavailable` case for this endpoint.
+`packages/types` gained `RouteGeometryPoint` (domain) and
+`GetRouteGeometryResponse` (API).
+
+Web: `apps/web` gained its first real dependency on `packages/maps-core`
+(`docs/design.md` §9: `ElevationProfile` "consumes `packages/maps-core`
+types only") — no runtime code crosses the boundary, only the type-only
+`LatLng` import, so KI-017 (raw-TS-source exports) doesn't apply. New
+`features/participant/ride-detail/lib/elevation-profile.ts`: pure haversine
+distance + evenly-spaced downsampling (cap 200 points — a real GPX track can
+have thousands, ADR-015), computed at full resolution before downsampling so
+the chart's x-axis stays faithful to the real path. New
+`components/ElevationProfileChart.tsx`: hand-built inline SVG area chart
+(no charting library added — same "hand-vendor something this simple"
+discipline as KI-020's `Skeleton`/`Button`), matching `docs/design.md` §6's
+full spec (muted `primary` fill at ~15% opacity, 1.5px stroke, y-axis floor
+not forced to zero, pointer-move hover tooltip, `role="img"` +
+descriptive `aria-label` as the chart's own accessible summary — the
+"keyboard-accessible numeric alternative" the spec calls for is the existing
+`MetricTile` distance/elevation figures elsewhere on the page, not a second
+control on the chart itself). New `components/RouteMapPlaceholder.tsx`: a
+second, independent instance of the same degraded `ErrorState` pattern
+discovery's `RideMapPlaceholder` (CR-026) already established — a new
+instance, not a shared import, per `.claude/rules/extensibility.md`'s
+feature-module boundary (`features/participant/ride-detail/` may not reach
+into `features/participant/discovery/`'s internals). `RideDetailView.tsx`
+gained a "Маршрут" section, rendered only when `ride.route` (the existing
+`RouteSummary`) is non-null; the geometry fetch runs in its own effect with
+its own loading/error/retry state, independent of the ride's own load state,
+so a route-render failure degrades locally instead of blanking the rest of
+the already-loaded page (`.claude/rules/resilience.md`).
+`packages/ui/src/terminology.ts` gained `ROUTE_RENDERING_TERMS`
+(participant-facing — distinct from CR-027's organizer-facing
+`RIDE_ROUTE_TERMS`).
+
+Tests: 5 new `apps/api` tests (`route.routes.test.ts` — ownership/draft-
+visibility/not-found/success for the new endpoint) — 156 total, was 151. 11
+new `apps/web` tests (8 in a new `elevation-profile.test.ts` covering
+haversine distance, downsampling, and the full profile-building pipeline
+including a 5000-point downsampling case; 3 in `ride-detail.test.tsx` — the
+section's absence with no route, its presence with a working chart/
+placeholder, and the retryable degraded state on a geometry-fetch failure) —
+106 total, was 95.
+
+Validation: `turbo run lint typecheck test` (19 tasks, `--force` to bypass
+cache) all green across all 8 packages, against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`.
+`apps/web build`/`apps/api build`/`packages/types build`/`packages/maps-core
+build` all green, run separately (same known local `turbo run build` +
+stale-`.next` race as CR-027, not a regression, CI unaffected).
+`format:check`/`lint:root` clean after one `prettier --write` pass (cosmetic
+only, 6 files). Live check via curl against a real Postgres + a freshly
+started `apps/api`: the new endpoint's full viewer-visibility contract
+verified end to end — `404 ride_not_found` for a non-existent id, `404
+route_not_found` for an owned ride with no route (including immediately
+after an upload attempt that itself 503'd on unconfigured S3 — no orphaned
+row), and, once a route row existed (inserted directly, since MinIO stays
+unreachable in this environment — KI-015, same standing constraint), `200`
+with the exact stored points for the owner on a draft ride, `404
+ride_not_found` for a stranger on that same draft ride, and `200` for both
+the stranger and an unauthenticated request once the ride was published.
+Live browser-verified via the `browser-automation` skill against a real
+`next dev` server + `apps/api`: `/rides/[id]` for the published ride showed
+the "Маршрут" heading, the degraded map notice text, and a real elevation
+chart (`svg[role=img]` with an accurate computed `aria-label`, 2 `<path>`
+elements) — 0 console errors, 0 failed requests. All test data (route row,
+ride, organizer profile, both test users) deleted from the scratch DB by id/
+email afterward; both dev server processes stopped.
+
+Known limitations: KI-035 resolved; KI-031 widened (second degraded-map
+surface, same missing credential). No new issues.
+
+Next logical task: CR-029 ("Route metadata") — resolves KI-034 (`Route`/
+`Ride` distance-elevation reconciliation) deliberately; alternatively
+CR-030/CR-031 (Stops/RoutePoint), which have no dependency on CR-028 or
+CR-029.

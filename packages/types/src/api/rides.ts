@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { BICYCLE_TYPES, type Ride } from '../domain/ride.js';
-import type { RouteSummary } from '../domain/route.js';
+import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -314,4 +314,11 @@ export interface StartRideResponse {
 
 export interface FinishRideResponse {
   ride: Ride;
+}
+
+// CR-028 ("Route rendering"), resolving KI-035: `GET /v1/rides/:id/route/geometry`'s
+// response — the full ordered point array `GetRideResponse.route` (a summary only)
+// deliberately omits.
+export interface GetRouteGeometryResponse {
+  points: RouteGeometryPoint[];
 }

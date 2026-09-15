@@ -58,3 +58,16 @@ export const routeSummaryResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+// CR-028 ("Route rendering"), resolving KI-035: `GET /v1/rides/:id/route/geometry`'s
+// response — the full ordered point array, separate from `routeSummaryResponseSchema`
+// (which deliberately has no `geometry` field — see that schema's own comment).
+export const routeGeometryResponseSchema = z.object({
+  points: z.array(
+    z.object({
+      lat: z.number(),
+      lng: z.number(),
+      elevationMeters: z.number().nullable(),
+    }),
+  ),
+});

@@ -238,7 +238,12 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       `docs/product.md`'s "downloadable track" promise). No live MinIO in
       this environment (KI-015) — S3 code path unit-tested with the client
       mocked, not live-verified. See `docs/changelog.md`.
-- [ ] CR-028 Route rendering
+- [x] CR-028 Route rendering — done 2026-09-15: `GET /v1/rides/:id/route/geometry`
+      (resolves KI-035, same viewer-visibility rule as ride detail/download), a
+      hand-built inline-SVG elevation profile chart on `/rides/[id]`
+      (`docs/design.md` §6), and a degraded route-map placeholder (KI-031 widened —
+      no live 2GIS MapGL credential, same constraint CR-026 hit). See
+      `docs/changelog.md`.
 - [ ] CR-029 Route metadata
 - [ ] CR-030 Stops
 - [ ] CR-031 Route points

@@ -396,6 +396,24 @@ participant limit, omitting (not em-dashing) anything still `null`.
 route/stops/services/requirements/registration action have no data model
 yet (CR-027..036), and no discovery screen links here yet (CR-024).
 
+CR-028 ("Route rendering", 2026-09-15): `modules/rides/` gained `GET /v1/rides/:id/
+route/geometry` (resolves KI-035, same viewer-visibility rule as `GET /v1/rides/:id`/
+`.../route/download`, no S3 call — `Route.geometry` is already in the DB row from
+CR-027). `apps/web` gained its **first real dependency on `packages/maps-core`**
+(`docs/design.md` §9: `ElevationProfile` "consumes `packages/maps-core` types
+only") — `features/participant/ride-detail/` gained `lib/elevation-profile.ts`
+(pure haversine-distance + downsampling functions, `maps-core`'s `LatLng` extended
+with `elevationMeters`), `components/ElevationProfileChart.tsx` (hand-built inline
+SVG area chart, no charting library — `docs/design.md` §6's full spec: muted
+`primary` fill, y-axis floor not forced to zero, hover/touch tooltip), and
+`components/RouteMapPlaceholder.tsx` (a second, independent degraded-`ErrorState`
+instance — `.claude/rules/extensibility.md` forbids reusing discovery's own
+`RideMapPlaceholder` across feature modules). `/rides/[id]` gained a "Маршрут"
+section, shown only when `ride.route` is non-null, with its own independent
+loading/error/retry state so a geometry-fetch failure degrades locally instead of
+blanking the rest of the page. No live 2GIS MapGL credential in this environment
+(KI-031, widened — second surface hitting the same gap as CR-026's discovery map).
+
 ## Target structure
 
 apps/

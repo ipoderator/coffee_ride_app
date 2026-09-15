@@ -5,11 +5,13 @@ import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
   GetRideResponse,
+  GetRouteGeometryResponse,
   ListPublicRidesQuery,
   ListPublicRidesResponse,
   ListRidesQuery,
   ListRidesResponse,
   Ride,
+  RouteGeometryPoint,
   RouteSummary,
   UpdateRideRequest,
 } from 'types';
@@ -1101,4 +1103,46 @@ export async function getRouteDownload(
     if (err instanceof RouteStorageError) throw ROUTE_STORAGE_UNAVAILABLE();
     throw err;
   }
+}
+
+/**
+ * CR-028 ("Route rendering"), resolving KI-035: the full ordered point array behind
+ * `GetRideResponse.route`'s summary. Same viewer-visibility rule as
+ * {@link getRouteDownload} — but unlike it, no S3 call: `Route.geometry` is already in
+ * the DB row from CR-027's upload, so there is no `route_storage_unavailable` case
+ * here.
+ */
+export async function getRouteGeometry(
+  db: DbClient,
+  userId: string | null,
+  rideId: string,
+): Promise<GetRouteGeometryResponse> {
+  const [row] = await db
+    .select({
+      status: rides.status,
+      organizerUserId: organizerProfiles.userId,
+    })
+    .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(eq(rides.id, rideId))
+    .limit(1);
+  if (!row) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const isOwner = userId !== null && row.organizerUserId === userId;
+  if (!isOwner && row.status === 'draft') {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [routeRow] = await db
+    .select({ geometry: routes.geometry })
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+  if (!routeRow) {
+    throw ROUTE_NOT_FOUND();
+  }
+
+  return { points: routeRow.geometry as RouteGeometryPoint[] };
 }

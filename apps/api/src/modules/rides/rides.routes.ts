@@ -11,6 +11,7 @@ import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import {
   rideOrganizerSummarySchema,
   rideResponseSchema,
+  routeGeometryResponseSchema,
   routeSummaryResponseSchema,
   rideWithOrganizerResponseSchema,
 } from './ride-response.schema.js';
@@ -23,6 +24,7 @@ import {
   finishRide,
   getRideForViewer,
   getRouteDownload,
+  getRouteGeometry,
   listOwnRides,
   listPublicRides,
   openRegistration,
@@ -422,6 +424,29 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         .header('Content-Disposition', `attachment; filename="${filename}"`)
         .type('application/gpx+xml')
         .send(body);
+    },
+  );
+
+  // CR-028 ("Route rendering"), resolving KI-035: the full ordered point array behind
+  // `GET /:id`'s `route` summary. Same viewer-visibility rule as `.../download`; no S3
+  // call (`Route.geometry` is already in the DB row), so no `route_storage_unavailable`
+  // case here.
+  app.get(
+    '/:id/route/geometry',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: routeGeometryResponseSchema },
+      },
+      preHandler: resolveOptionalUser,
+    },
+    async (request, reply) => {
+      const geometry = await getRouteGeometry(
+        app.db,
+        request.user?.id ?? null,
+        request.params.id,
+      );
+      return reply.status(200).send(geometry);
     },
   );
 };
