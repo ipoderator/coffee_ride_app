@@ -380,3 +380,17 @@ export const RIDE_DETAIL_TERMS = {
   priceLabel: 'Стоимость участия',
   participantLimitLabel: 'Лимит участников',
 } as const;
+
+/**
+ * `/` (CR-024, `docs/design.md` §8 "Discovery" — the list-only slice of it; the map
+ * toggle is CR-026, filters are CR-025). `GET /v1/rides` only ever returns non-draft
+ * rides, so there is no "unauthorized" state here, unlike every cabinet list.
+ */
+export const RIDE_DISCOVERY_TERMS = {
+  pageTitle: 'Заезды',
+  loadError: 'Не удалось загрузить заезды. Попробуйте ещё раз.',
+  emptyTitle: 'Пока нет заездов',
+  emptyDescription:
+    'Загляните позже — организаторы скоро опубликуют новые заезды.',
+  organizedByLabel: 'Организатор',
+} as const;

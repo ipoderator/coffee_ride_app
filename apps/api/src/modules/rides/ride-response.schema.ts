@@ -35,3 +35,10 @@ export const rideOrganizerSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
 });
+
+// CR-024 ("Ride list", public discovery): each item of `GET /v1/rides` carries the
+// same organizer summary `GET /v1/rides/:id` already embeds — reuses both existing
+// pieces, no new shape invented.
+export const rideWithOrganizerResponseSchema = rideResponseSchema.extend({
+  organizer: rideOrganizerSummarySchema,
+});

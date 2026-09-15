@@ -1,9 +1,10 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { organizerProfiles, rides, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
   GetRideResponse,
+  ListPublicRidesResponse,
   ListRidesQuery,
   ListRidesResponse,
   Ride,
@@ -286,6 +287,69 @@ export async function listOwnRides(
       : null;
 
   return { items: page.map(toPublicRide), nextCursor };
+}
+
+/**
+ * CR-024 ("Ride list", public discovery): every ride that has left `draft`, for
+ * *any* viewer — unlike {@link listOwnRides}, no session is ever consulted
+ * (`docs/api.md`: "no auth"), so there is no owner-sees-their-own-drafts exception
+ * like {@link getRideForViewer}'s. "published+" means the same thing here as it does
+ * there: any status except `draft` (`.claude/context/current-task.md`).
+ *
+ * Same cursor pagination and `(createdAt desc, id desc)` sort key as
+ * {@link listOwnRides} — `apps/api/src/lib/cursor.ts` anticipated this endpoint
+ * reusing it. Each item carries its organizer's public `{ id, name }`, same join
+ * {@link getRideForViewer} already does for a single ride.
+ */
+export async function listPublicRides(
+  db: DbClient,
+  query: ListRidesQuery,
+): Promise<ListPublicRidesResponse> {
+  const limit = clampLimit(query.limit);
+  const conditions = [ne(rides.status, 'draft')];
+  if (query.cursor) {
+    let cursorKey;
+    try {
+      cursorKey = decodeCursor(query.cursor);
+    } catch (error) {
+      if (error instanceof CursorError) throw INVALID_CURSOR();
+      throw error;
+    }
+    conditions.push(
+      sql`(${rides.createdAt}, ${rides.id}) < (${cursorKey.createdAt}::timestamptz, ${cursorKey.id}::uuid)`,
+    );
+  }
+
+  const rows = await db
+    .select({
+      ride: rides,
+      organizerId: organizerProfiles.id,
+      organizerName: organizerProfiles.name,
+    })
+    .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(and(...conditions))
+    .orderBy(desc(rides.createdAt), desc(rides.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({
+          createdAt: last.ride.createdAt.toISOString(),
+          id: last.ride.id,
+        })
+      : null;
+
+  return {
+    items: page.map((row) => ({
+      ...toPublicRide(row.ride),
+      organizer: { id: row.organizerId, name: row.organizerName },
+    })),
+    nextCursor,
+  };
 }
 
 /**

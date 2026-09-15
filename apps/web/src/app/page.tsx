@@ -1,13 +1,15 @@
-// Bootstrap placeholder (CR-002). Real screens follow docs/design.md and the
-// feature-module structure in .claude/rules/extensibility.md starting at CR-011 —
-// this page only proves the app builds and renders.
+import { RIDE_DISCOVERY_TERMS } from 'ui';
+import { DiscoveryList } from '@/features/participant/discovery/components/DiscoveryList';
+
+// `/` (CR-024, `docs/design.md` §8 "Discovery"): replaces the CR-002 bootstrap
+// placeholder. List-only slice — no map toggle (CR-026) or filters (CR-025) yet.
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center">
-      <h1 className="text-2xl font-semibold">Coffee Ride</h1>
-      <p className="text-text-secondary">
-        Платформа собирается. Скоро здесь будут заезды.
-      </p>
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
+      <h1 className="text-2xl font-semibold text-text">
+        {RIDE_DISCOVERY_TERMS.pageTitle}
+      </h1>
+      <DiscoveryList />
     </main>
   );
 }

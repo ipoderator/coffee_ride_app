@@ -1504,3 +1504,78 @@ field correctly formatted — 42,3 км / 350 м / 24,5 км/ч / 2 ч 30 мин
 requests; a non-existent id renders the not-found state, not a crash, with
 only the expected 404 fetch itself in the console). Test account/ride
 deleted from the scratch DB afterward.
+
+## 2026-09-15 — CR-024 — Ride list (public discovery)
+
+Summary: `GET /v1/rides` (`apps/api/src/modules/rides`), the collection root
+under the existing `ridesRoutes` prefix — fully public, no `preHandler` at
+all (`docs/api.md` already committed to "no auth" for this endpoint before
+this session). Same "published+" rule CR-023 established for the single-ride
+endpoint: every status except `draft` (`cancelled`/`finished` included).
+New `listPublicRides` in `rides.service.ts` — same cursor pagination and
+`(createdAt desc, id desc)` sort key as CR-088's `/mine` (`apps/api/src/lib/
+cursor.ts`'s docstring had already anticipated this endpoint reusing it),
+joins `organizer_profiles` like `getRideForViewer` so each item carries
+`organizer: { id, name }`, same reasoning as CR-023 (`docs/product.md`
+Principle 2, no separate public organizer-read endpoint). `packages/types`
+gained `PublicRide`/`ListPublicRidesResponse`; `ride-response.schema.ts`
+gained `rideWithOrganizerResponseSchema` (`rideResponseSchema.extend`).
+`apps/web` gained its second fully public feature module,
+`features/participant/discovery/` (`api.ts`, `components/{RideCard,
+DiscoveryList}.tsx`) — `RideCard` is deliberately feature-local, not
+`packages/ui`, per `docs/design.md` §9's component inventory. `RideCard`
+shows title/`StatusBadge`/organizer name/start date-time/the canonical
+"first three" metrics (distance/elevation/pace, never duration, per
+`docs/design.md` §6) omitting whichever is `null`/price, links to
+`/rides/[id]` (CR-023) — closing half of KI-028 ("no discovery entry point
+links here yet"), the other half (route/stops/services/requirements/
+registration on the detail screen itself) stays open. `apps/web/src/app/
+page.tsx` replaces the CR-002 bootstrap placeholder with
+`<DiscoveryList />` — this is `docs/design.md`'s `/` Discovery screen (the
+list-only slice; map toggle is CR-026, filters are CR-025). No "load more"
+control yet — same precedent CR-088's `/mine` list already established
+(the API is already cursor-paginated for when a `Pagination` component
+exists). `apps/web/src/app/page.test.tsx` (the CR-002 bootstrap smoke test)
+removed — real behavioral coverage now lives in the new feature module's
+`discovery.test.tsx`, same "no test file per top-level page" precedent
+`/organizer`/`/me` already follow (their feature components carry the real
+tests).
+Sort-order decision documented in `.claude/context/current-task.md` and
+recorded as new KI-029: `startsAt`-based ordering (arguably more useful for
+"find a ride to join") was considered and rejected for this ticket — `asc`
+would put old past rides before upcoming ones on page 1, `desc` is only
+directionally better; neither has product-doc backing yet, so `createdAt
+desc` (identical to `/mine`) was kept and the gap deferred to CR-025
+("Filters").
+Files: `apps/api/src/modules/rides/{rides.service.ts,rides.routes.ts,
+ride-response.schema.ts,rides.routes.test.ts}`; `packages/types/src/api/
+rides.ts`; `packages/ui/src/terminology.ts`; `apps/web/src/features/
+participant/discovery/{api.ts,components/{RideCard.tsx,
+DiscoveryList.tsx},discovery.test.tsx}`; `apps/web/src/app/page.tsx`
+(replaced); `apps/web/src/app/page.test.tsx` (removed); `docs/api.md`,
+`docs/tasks.md`, `.claude/context/known-issues.md`.
+Decisions: none new — no ADR needed (additive endpoint reusing existing
+cursor/organizer-embed patterns, no schema/architecture change).
+Validation: `turbo run lint typecheck build test` (25 tasks) against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`
+(Docker Desktop still unavailable in this environment): green. `apps/api`
+gained 4 new tests in a new `GET /v1/rides (public discovery, CR-024)`
+block (120 total, was 116); `apps/web` gained 4 new tests in
+`discovery.test.tsx` and lost 1 (the removed bootstrap smoke test) — 81
+total, was 78. `format:check`/`lint:root` clean after one `prettier
+--write` pass (cosmetic only). Live-verified via curl against a real
+Postgres + a freshly started `apps/api` (empty-collection `200`; a draft
+ride correctly excluded; six rides driven through every non-draft status —
+`published`/`registration_open`/`registration_closed`/`started`/`finished`/
+`cancelled` — all appeared with the correct `organizer`, cross-checked
+against a direct DB read; `limit`/`cursor` pagination followed across a
+real second page; a malformed cursor → `400 invalid_cursor`) and a full
+browser walkthrough via the `browser-automation` skill against a real
+`next dev` server + `apps/api` (unauthenticated: `/` rendered both a
+`published` and a `cancelled` test ride as cards with correct title/status/
+organizer/metrics/price, the draft ride did not appear anywhere on the
+page; clicked into the published card, correctly navigated to
+`/rides/[id]` and rendered its full detail — 0 console errors, 0 failed
+requests). Test accounts/rides deleted from the scratch DB afterward.
+Follow-up: CR-025 ("Filters") is next per `docs/tasks.md`'s Rides section
+order — also the ticket that should resolve KI-029's ordering gap.

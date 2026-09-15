@@ -298,6 +298,183 @@ describe('/v1/rides', () => {
     });
   });
 
+  describe('GET /v1/rides (public discovery, CR-024)', () => {
+    it('returns an empty page when there are no rides at all, no cookie needed', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({ method: 'GET', url: '/v1/rides' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ items: [], nextCursor: null });
+
+      await app.close();
+    });
+
+    it('never includes a draft ride, even with no filter applied', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: VALID_PAYLOAD,
+      });
+
+      const response = await app.inject({ method: 'GET', url: '/v1/rides' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().items).toEqual([]);
+
+      await app.close();
+    });
+
+    it('includes every non-draft status, each with the organizer summary cross-checked against the DB, and excludes a draft', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      const [organizerProfile] = await app.db
+        .select({ id: organizerProfiles.id })
+        .from(organizerProfiles)
+        .where(eq(organizerProfiles.userId, owner.userId));
+
+      async function createRide(title: string) {
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: { ...VALID_PAYLOAD, title },
+        });
+        return created.json().ride.id as string;
+      }
+      async function transition(rideId: string, action: string) {
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/${action}`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+        });
+      }
+
+      const draftId = await createRide('Черновик');
+
+      const publishedId = await createRide('Опубликован');
+      await transition(publishedId, 'publish');
+
+      const openId = await createRide('Регистрация открыта');
+      await transition(openId, 'publish');
+      await transition(openId, 'open-registration');
+
+      const closedId = await createRide('Регистрация закрыта');
+      await transition(closedId, 'publish');
+      await transition(closedId, 'open-registration');
+      await transition(closedId, 'close-registration');
+
+      const startedId = await createRide('Начался');
+      await transition(startedId, 'publish');
+      await transition(startedId, 'open-registration');
+      await transition(startedId, 'close-registration');
+      await transition(startedId, 'start');
+
+      const finishedId = await createRide('Завершён');
+      await transition(finishedId, 'publish');
+      await transition(finishedId, 'open-registration');
+      await transition(finishedId, 'close-registration');
+      await transition(finishedId, 'start');
+      await transition(finishedId, 'finish');
+
+      const cancelledId = await createRide('Отменён');
+      await transition(cancelledId, 'publish');
+      await transition(cancelledId, 'cancel');
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?limit=50',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      const byId = new Map(
+        (
+          body.items as Array<{
+            id: string;
+            status: string;
+            organizer: unknown;
+          }>
+        ).map((item) => [item.id, item]),
+      );
+
+      expect(byId.has(draftId)).toBe(false);
+      expect(byId.get(publishedId)?.status).toBe('published');
+      expect(byId.get(openId)?.status).toBe('registration_open');
+      expect(byId.get(closedId)?.status).toBe('registration_closed');
+      expect(byId.get(startedId)?.status).toBe('started');
+      expect(byId.get(finishedId)?.status).toBe('finished');
+      expect(byId.get(cancelledId)?.status).toBe('cancelled');
+      expect(byId.get(publishedId)?.organizer).toEqual({
+        id: organizerProfile!.id,
+        name: 'Гравийный клуб',
+      });
+
+      await app.close();
+    });
+
+    it('paginates newest-created first and rejects a malformed cursor with 400 invalid_cursor', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+
+      async function createPublished(title: string) {
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: { ...VALID_PAYLOAD, title },
+        });
+        const rideId = created.json().ride.id as string;
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/publish`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+        });
+        return rideId;
+      }
+
+      const first = await createPublished('Первый');
+      const second = await createPublished('Второй');
+
+      const page1 = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?limit=1',
+      });
+      expect(page1.statusCode).toBe(200);
+      const body1 = page1.json();
+      expect(body1.items).toHaveLength(1);
+      expect(body1.items[0].id).toBe(second);
+      expect(body1.nextCursor).not.toBeNull();
+
+      const page2 = await app.inject({
+        method: 'GET',
+        url: `/v1/rides?limit=1&cursor=${encodeURIComponent(body1.nextCursor)}`,
+      });
+      expect(page2.statusCode).toBe(200);
+      const body2 = page2.json();
+      expect(body2.items).toHaveLength(1);
+      expect(body2.items[0].id).toBe(first);
+      expect(body2.nextCursor).toBeNull();
+
+      const malformed = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?cursor=not-a-valid-cursor',
+      });
+      expect(malformed.statusCode).toBe(400);
+      expect(malformed.json().code).toBe('invalid_cursor');
+
+      await app.close();
+    });
+  });
+
   describe('GET /v1/rides/mine', () => {
     it('rejects a request with no session cookie with 401', async () => {
       const app = await buildApp(testEnv);

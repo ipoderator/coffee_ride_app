@@ -212,7 +212,9 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       exist today; route/stops/services/requirements/registration action
       have no data model yet (CR-027..036, see
       `.claude/context/known-issues.md` KI-028).
-- [ ] CR-024 Ride list
+- [x] CR-024 Ride list — done 2026-09-15: `GET /v1/rides` (public discovery,
+      no auth), `apps/web`'s `/` (replaces the CR-002 bootstrap placeholder).
+      See `docs/changelog.md`.
 - [ ] CR-025 Filters
 - [ ] CR-026 Map discovery
 

@@ -683,9 +683,10 @@ first now that `started` is reachable. `/organizer/rides/[id]/edit` gained
 `cancel` — both are forward-only steps with a further continuation in the
 normal case).
 
-### KI-028 — Ride detail is missing route/stops/services/requirements/registration and a discovery entry point
+### KI-028 — Ride detail is missing route/stops/services/requirements/registration
 
-Status: open. Discovered: 2026-09-15 (CR-023 session).
+Status: open — narrowed 2026-09-15 (CR-024 closed the "no discovery entry
+point" half). Discovered: 2026-09-15 (CR-023 session).
 Problem: `docs/design.md`'s `/rides/[id]` spec names "Cover, metrics, route +
 profile, stops, services, requirements, organizer, registration action" —
 CR-023 could only build the pieces that have a real data model today (core
@@ -693,19 +694,36 @@ CR-023 could only build the pieces that have a real data model today (core
 `RideService` have no tables (CR-027..031, `RideRequirement`/`RideService`
 don't even have CR numbers yet — KI-021's sibling gap) and `Registration`
 doesn't exist either (CR-032+), so there is no registered-participant count
-and no register/cancel action on the screen. Separately, no discovery
-screen links into `/rides/[id]` yet — `docs/design.md`'s `/` (Discovery) is
-still CR-002's placeholder, and CR-024 ("Ride list") is the ticket that
-builds it — same "screen built before its real entry point" shape as
-KI-024 (CR-017's `/organizer/rides/new` before CR-088's list existed).
+and no register/cancel action on the screen.
 Impact: none today — the screen is reachable and correct for what exists;
-these are gaps to close by later tickets, not defects in this one. A
-participant can only reach `/rides/[id]` via a direct link today (e.g. one
-an organizer shares manually), not through in-app discovery.
+these are gaps to close by later tickets, not defects in this one.
 Workaround: none needed — every field CR-023 does show reflects real,
 current data; the screen omits what it can't yet know rather than showing
 a fake placeholder.
-Next action: CR-024 (discovery list, links into this screen) is the
-immediate next ticket. CR-027..031 add route/stops/services/requirements to
-the screen; CR-032..036 add the registered-participant count and
-register/cancel action.
+Next action: CR-027..031 add route/stops/services/requirements to the
+screen; CR-032..036 add the registered-participant count and register/
+cancel action.
+Update 2026-09-15 (CR-024): resolved the other half of this issue — `/`
+(Discovery) now lists every published+ ride as a `RideCard` linking into
+`/rides/[id]`, so a participant no longer needs a direct link to reach it.
+
+### KI-029 — Discovery list isn't ordered by upcoming-soonest, and past rides aren't segregated
+
+Status: open. Discovered: 2026-09-15 (CR-024 session).
+Problem: `GET /v1/rides` (and `apps/web`'s `/` built on top of it) sorts
+`(createdAt desc, id desc)` — the same cursor key `/mine` (CR-088) already
+used, reused as-is for simplicity. A discovery feed's more useful ordering
+would be "soonest-upcoming ride first", ideally with already-`finished`/
+`cancelled` rides (past `startsAt`) segregated from what's actually joinable.
+Considered `startsAt asc`/`desc` while building this ticket: `asc` puts old
+past rides _before_ upcoming ones on page 1 (actively wrong); `desc` is
+directionally better (all future rides precede all past ones) but still
+shows the furthest-future ride first, not the soonest. Excluding/reordering
+around "now" is a real filtering decision with no product-doc backing yet.
+Impact: low today — very few rides exist in any environment this ticket
+would be tested against, so `createdAt desc` and "upcoming first" mostly
+coincide by accident. Will matter once the list has enough rides spanning
+past and future.
+Workaround: none needed yet.
+Next action: CR-025 ("Filters") is the natural ticket to add this — either
+a default "upcoming only" filter, a smarter default sort, or both.

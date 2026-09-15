@@ -83,6 +83,17 @@ export type ListRidesQuery = z.infer<typeof listRidesQuerySchema>;
 
 export type ListRidesResponse = Paginated<Ride>;
 
+// CR-024 ("Ride list", public discovery): `GET /v1/rides` — unlike `/mine`, this
+// endpoint is fully public (no session ever consulted) and only ever returns
+// non-`draft` rides (`.claude/context/current-task.md`'s "published+" rule, same one
+// CR-023 established for `GET /v1/rides/:id`). Each item carries its organizer's
+// public identity, same reasoning as `GetRideResponse` (`docs/product.md` Principle
+// 2: "complete ride record, not a link out") — a `RideCard` needs the organizer's
+// name and there is still no separate public organizer-read endpoint.
+export type PublicRide = Ride & { organizer: RideOrganizerSummary };
+
+export type ListPublicRidesResponse = Paginated<PublicRide>;
+
 // CR-018 ("Edit draft"): every field CR-017 deliberately left `null` at creation,
 // still all independently optional (a future caller could send a sparse patch even
 // though `EditRideForm` always submits the full current state,

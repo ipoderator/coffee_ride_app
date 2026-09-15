@@ -9,6 +9,7 @@ import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import {
   rideOrganizerSummarySchema,
   rideResponseSchema,
+  rideWithOrganizerResponseSchema,
 } from './ride-response.schema.js';
 import {
   cancelRide,
@@ -17,6 +18,7 @@ import {
   finishRide,
   getRideForViewer,
   listOwnRides,
+  listPublicRides,
   openRegistration,
   publishRide,
   startRide,
@@ -33,6 +35,13 @@ const rideDetailResponseSchema = z.object({
 });
 const listRidesResponseSchema = z.object({
   items: z.array(rideResponseSchema),
+  nextCursor: z.string().nullable(),
+});
+// CR-024 ("Ride list", public discovery): each item additionally carries `organizer`
+// — distinct from `listRidesResponseSchema` (`/mine`, no organizer needed since the
+// caller already knows it's their own).
+const listPublicRidesResponseSchema = z.object({
+  items: z.array(rideWithOrganizerResponseSchema),
   nextCursor: z.string().nullable(),
 });
 const rideIdParamsSchema = z.object({
@@ -59,6 +68,24 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const ride = await createRide(app.db, request.user!.id, request.body);
       return reply.status(201).send({ ride });
+    },
+  );
+
+  // CR-024 ("Ride list", public discovery): every ride that has left `draft`, for
+  // any viewer — no `preHandler` at all, `docs/api.md` names this endpoint "no
+  // auth" outright (distinct from `/:id`'s `resolveOptionalUser`, which still needs
+  // to know *whether* a session exists so an owner can see their own draft).
+  app.get(
+    '/',
+    {
+      schema: {
+        querystring: listRidesQuerySchema,
+        response: { 200: listPublicRidesResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const page = await listPublicRides(app.db, request.query);
+      return reply.status(200).send(page);
     },
   );
 

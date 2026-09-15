@@ -46,7 +46,11 @@ CR-090/CR-022 — the full ride lifecycle (`draft` through
 `cancelled`/`finished`) is implemented end to end. CR-023 (Ride detail,
 participant-facing) also completed 2026-09-15: `GET /v1/rides/:id` extended
 from owner-only to serve any viewer, and `apps/web`'s first fully public
-screen, `/rides/[id]`. CR-024 (Ride list, public discovery) next.
+screen, `/rides/[id]`. CR-024 (Ride list, public discovery) also completed
+2026-09-15: `GET /v1/rides` (fully public, "published+" statuses), and
+`apps/web`'s `/` (replaces the CR-002 bootstrap placeholder) — the ride
+lifecycle's Rides section now has every ticket done through CR-024; CR-025
+(Filters) next.
 
 ## Implemented
 
@@ -632,6 +636,43 @@ a direct DB read) and a full browser walkthrough via the
 not-found state, not a crash, with only the expected 404 fetch itself in
 the console).
 
+Ride list (public discovery) landed 2026-09-15 (CR-024, see
+`docs/changelog.md`): `GET /v1/rides` (`apps/api/src/modules/rides`), the
+collection root under the existing `ridesRoutes` prefix — fully public, no
+`preHandler` at all (`docs/api.md` already committed to "no auth" before
+this session). Same "published+" rule CR-023 established for the
+single-ride endpoint: every status except `draft`. New `listPublicRides`
+reuses CR-088's `(createdAt desc, id desc)` cursor key unchanged and joins
+`organizer_profiles` like `getRideForViewer` so each item carries
+`organizer: { id, name }` (`docs/product.md` Principle 2, same reasoning as
+CR-023). `packages/types` gained `PublicRide`/`ListPublicRidesResponse`.
+`apps/web` gained its second fully public feature module,
+`features/participant/discovery/` — `RideCard` is deliberately
+feature-local (`docs/design.md` §9), not `packages/ui`; shows title/status/
+organizer/the canonical "first three" metrics (distance/elevation/pace,
+never duration)/price, links to `/rides/[id]` (CR-023). `apps/web/src/app/
+page.tsx` replaces the CR-002 bootstrap placeholder with `<DiscoveryList
+/>` — `docs/design.md`'s `/` Discovery screen (list-only slice; map toggle
+is CR-026, filters are CR-025). No "load more" control yet, same precedent
+CR-088's `/mine` list already established. KI-028 narrowed (the "no
+discovery entry point" half is resolved; route/stops/services/
+requirements/registration on the detail screen stays open). New KI-029:
+the list sorts `createdAt desc` (identical to `/mine`), not by
+upcoming-soonest — `startsAt`-based ordering was considered and rejected
+this session (`asc` puts old past rides before upcoming ones; `desc` is
+only directionally better), deferred to CR-025 ("Filters"). 4 new
+`apps/api` tests (120 total, was 116); `apps/web` gained 4 new tests and
+lost 1 (the removed CR-002 bootstrap smoke test) — 81 total, was 78.
+Live-verified via curl against a real Postgres + `apps/api` (empty
+collection, a draft ride excluded, six rides driven through every
+non-draft status all appearing with the correct organizer cross-checked
+against a direct DB read, pagination followed across a real second page, a
+malformed cursor 400) and a full browser walkthrough via the
+`browser-automation` skill against a real `next dev` server + `apps/api`
+(unauthenticated: `/` rendered a published and a cancelled test ride as
+cards, the draft ride did not appear, clicking a card correctly navigated
+into `/rides/[id]`) — 0 console errors, 0 failed requests.
+
 Version control is live: git repository on branch `main`, remote `origin` =
 `https://github.com/ipoderator/coffee_ride_app` (public).
 
@@ -729,11 +770,10 @@ None.
 
 ## Next
 
-CR-024 — Ride list, public discovery (`docs/tasks.md` Rides section, next
-after CR-017/CR-088/CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/
-CR-022/CR-023 — distinct from CR-088's "My rides", organizer-scoped and
-already done). CR-024 is also `/rides/[id]`'s (CR-023) first real entry
-point from within the app — nothing links there yet (KI-028).
+CR-025 — Filters (`docs/tasks.md` Rides section, next after CR-017/CR-088/
+CR-016/CR-018/CR-019/CR-089/CR-020/CR-021/CR-090/CR-022/CR-023/CR-024, all
+done). Also the natural ticket to resolve KI-029 (discovery isn't ordered
+by upcoming-soonest).
 
 ## Important decisions
 
@@ -870,11 +910,15 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   itself; not a gap this ticket introduces.
 - new (CR-023): KI-028 — route/stops/services/requirements/registration
   action have no data model yet (CR-027..036) so `/rides/[id]` can't show
-  them; no discovery screen links into `/rides/[id]` yet either (CR-024,
-  the immediate next ticket). Neither is a regression — every field the
-  screen does show is real. `GET /v1/rides/:id`'s visibility change (owner-
-  only -> any viewer once non-`draft`) is additive for the one existing
-  caller (`EditRideForm`, always the owner); no other caller exists yet.
+  them. `GET /v1/rides/:id`'s visibility change (owner-only -> any viewer
+  once non-`draft`) is additive for the one existing caller (`EditRideForm`,
+  always the owner); no other caller exists yet.
+- new (CR-024): KI-028 narrowed — the "no discovery entry point" half is
+  resolved (`/` now links every published+ ride into `/rides/[id]`); the
+  route/stops/services/requirements/registration half stays open. New
+  KI-029: the discovery list sorts `createdAt desc` (identical to `/mine`),
+  not by upcoming-soonest — deferred to CR-025 ("Filters"), the immediate
+  next ticket.
 
 ## Do not break
 
@@ -894,4 +938,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-023)
+2026-09-15 (CR-024)
