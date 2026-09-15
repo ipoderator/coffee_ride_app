@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { organizerProfiles, rides, routes, stops, users } from 'db/schema';
+import {
+  organizerProfiles,
+  rides,
+  routePoints,
+  routes,
+  stops,
+  users,
+} from 'db/schema';
 import type { DbClient } from 'db';
 import type {
   CreateRideRequest,
+  CreateRoutePointRequest,
   CreateStopRequest,
   GetRideResponse,
   GetRouteGeometryResponse,
@@ -13,9 +21,11 @@ import type {
   ListRidesResponse,
   Ride,
   RouteGeometryPoint,
+  RoutePoint,
   RouteSummary,
   Stop,
   UpdateRideRequest,
+  UpdateRoutePointRequest,
   UpdateStopRequest,
 } from 'types';
 import {
@@ -191,6 +201,18 @@ const STOP_NOT_FOUND = () =>
     'No stop with that id exists for this ride.',
   );
 
+// CR-031 ("Route points"): distinct from `STOP_NOT_FOUND`/`RIDE_NOT_FOUND` — the ride
+// itself was already resolved (ownership + draft-only checked via
+// `resolveOwnDraftRide`) by the time this fires. Same resource-enumeration-safe shape,
+// covers both "no such route point" and "belongs to a different ride".
+const ROUTE_POINT_NOT_FOUND = () =>
+  new RideServiceError(
+    'route_point_not_found',
+    404,
+    'Route point not found',
+    'No route point with that id exists for this ride.',
+  );
+
 const GPX_FILE_MISSING = () =>
   new RideServiceError(
     'gpx_file_missing',
@@ -249,6 +271,21 @@ function toStop(row: typeof stops.$inferSelect): Stop {
     lng: row.lng,
     durationMinutes: row.durationMinutes,
     position: row.position,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    updatedBy: row.updatedBy,
+  };
+}
+
+function toRoutePoint(row: typeof routePoints.$inferSelect): RoutePoint {
+  return {
+    id: row.id,
+    rideId: row.rideId,
+    type: row.type,
+    label: row.label,
+    description: row.description,
+    lat: row.lat,
+    lng: row.lng,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
@@ -553,11 +590,21 @@ export async function getRideForViewer(
     .where(eq(stops.rideId, rideId))
     .orderBy(asc(stops.position));
 
+  // CR-031 ("Route points"): additive `routePoints` array, same embedding precedent
+  // as `stops` above — but ordered by `createdAt`, not a `position` column (typed map
+  // pins have no meaningful manual order, `.claude/context/current-task.md`).
+  const routePointRows = await db
+    .select()
+    .from(routePoints)
+    .where(eq(routePoints.rideId, rideId))
+    .orderBy(asc(routePoints.createdAt));
+
   return {
     ride: toPublicRide(row.ride),
     organizer: { id: row.organizerId, name: row.organizerName },
     route: routeRow ? toRouteSummary(routeRow) : null,
     stops: stopRows.map(toStop),
+    routePoints: routePointRows.map(toRoutePoint),
   };
 }
 
@@ -1328,5 +1375,98 @@ export async function deleteStop(
     .returning({ id: stops.id });
   if (!deleted) {
     throw STOP_NOT_FOUND();
+  }
+}
+
+/**
+ * CR-031 ("Route points"): adds a new typed marker to a draft ride's route. Same
+ * ownership + draft-only gate as {@link createStop} ({@link resolveOwnDraftRide}).
+ * Unlike {@link createStop}, no server-assigned position — a route point is a typed
+ * pin, not an ordered itinerary entry (`.claude/context/current-task.md`), so this is
+ * a plain single-row insert with no transaction needed.
+ */
+export async function createRoutePoint(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  input: CreateRoutePointRequest,
+): Promise<RoutePoint> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [inserted] = await db
+    .insert(routePoints)
+    .values({
+      rideId,
+      type: input.type,
+      label: input.label ?? null,
+      description: input.description ?? null,
+      lat: input.lat,
+      lng: input.lng,
+      updatedBy: userId,
+    })
+    .returning();
+  if (!inserted) {
+    throw new Error('Route point insert returned no row.');
+  }
+  return toRoutePoint(inserted);
+}
+
+/**
+ * CR-031: edits a draft ride's route point — any subset of `type`/`label`/
+ * `description`/`lat`/`lng` (same PATCH semantics as {@link updateStop}). `404
+ * route_point_not_found` if the id doesn't exist or belongs to a different ride.
+ */
+export async function updateRoutePoint(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  routePointId: string,
+  patch: UpdateRoutePointRequest,
+): Promise<RoutePoint> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const values: Partial<typeof routePoints.$inferInsert> = {
+    updatedAt: new Date(),
+    updatedBy: userId,
+  };
+  if (patch.type !== undefined) values.type = patch.type;
+  if (patch.label !== undefined) values.label = patch.label;
+  if (patch.description !== undefined) values.description = patch.description;
+  if (patch.lat !== undefined) values.lat = patch.lat;
+  if (patch.lng !== undefined) values.lng = patch.lng;
+
+  const [updated] = await db
+    .update(routePoints)
+    .set(values)
+    .where(
+      and(eq(routePoints.id, routePointId), eq(routePoints.rideId, rideId)),
+    )
+    .returning();
+  if (!updated) {
+    throw ROUTE_POINT_NOT_FOUND();
+  }
+  return toRoutePoint(updated);
+}
+
+/**
+ * CR-031: removes a draft ride's route point. `404 route_point_not_found` if the id
+ * doesn't exist or belongs to a different ride.
+ */
+export async function deleteRoutePoint(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  routePointId: string,
+): Promise<void> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [deleted] = await db
+    .delete(routePoints)
+    .where(
+      and(eq(routePoints.id, routePointId), eq(routePoints.rideId, rideId)),
+    )
+    .returning({ id: routePoints.id });
+  if (!deleted) {
+    throw ROUTE_POINT_NOT_FOUND();
   }
 }

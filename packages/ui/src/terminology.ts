@@ -2,7 +2,12 @@
 // for user-visible strings derived from a domain enum — the database keeps English
 // enums, the UI maps through here. Do not invent synonyms per screen.
 
-import type { BicycleType, DifficultyLevel, RideStatus } from 'types';
+import type {
+  BicycleType,
+  DifficultyLevel,
+  RideStatus,
+  RoutePointType,
+} from 'types';
 
 // `RideStatus`/`BicycleType`/`DifficultyLevel` themselves moved to `packages/types`
 // (CR-017, `.claude/context/current-task.md`): `apps/api` needs the same enums for
@@ -12,7 +17,7 @@ import type { BicycleType, DifficultyLevel, RideStatus } from 'types';
 // that imported these types from this module before CR-017 has to change its import
 // path. Only the Russian label maps below are genuinely UI-layer and stay defined
 // here.
-export type { BicycleType, DifficultyLevel, RideStatus };
+export type { BicycleType, DifficultyLevel, RideStatus, RoutePointType };
 
 export type StatusTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger';
 
@@ -502,4 +507,50 @@ export const STOPS_TERMS = {
   deleteConfirm: 'Удалить остановку? Это действие необратимо.',
   loadError: 'Не удалось сохранить остановку. Попробуйте ещё раз.',
   notEditable: 'Остановки можно менять только у черновика заезда.',
+} as const;
+
+/**
+ * CR-031 ("Route points"): the eight marker types `docs/database.md`'s `RoutePoint`
+ * names, same "database keeps English enums, UI maps through here" rule as
+ * `BICYCLE_TYPE_TERMS`/`RIDE_STATUS_TERMS` above.
+ */
+export const ROUTE_POINT_TYPE_TERMS: Record<RoutePointType, string> = {
+  start: 'Старт',
+  finish: 'Финиш',
+  stop: 'Остановка',
+  danger: 'Опасный участок',
+  water: 'Вода',
+  food: 'Еда',
+  technical: 'Техническая точка',
+  other: 'Другое',
+};
+
+/**
+ * `/organizer/rides/[id]/route`'s route-points management, alongside `StopsSection`
+ * (`docs/design.md` §8 groups "GPX upload, stops, route points" on one screen). No
+ * participant-facing list exists for this ticket — route points are map pins, and the
+ * map itself is a documented degraded placeholder pending a live 2GIS credential
+ * (KI-031); see `.claude/context/current-task.md`'s scope decision.
+ */
+export const ROUTE_POINT_TERMS = {
+  sectionTitle: 'Точки маршрута',
+  emptyTitle: 'Точки маршрута ещё не добавлены',
+  emptyDescription: 'Например, опасный участок или родник на маршруте.',
+  addButton: 'Добавить точку',
+  typeLabel: 'Тип',
+  labelLabel: 'Название',
+  descriptionLabel: 'Описание',
+  latLabel: 'Широта',
+  lngLabel: 'Долгота',
+  save: 'Сохранить',
+  savePending: 'Сохранение…',
+  saveSuccess: 'Точка маршрута сохранена.',
+  cancel: 'Отмена',
+  edit: 'Изменить',
+  delete: 'Удалить',
+  deletePending: 'Удаление…',
+  deleteSuccess: 'Точка маршрута удалена.',
+  deleteConfirm: 'Удалить точку маршрута? Это действие необратимо.',
+  loadError: 'Не удалось сохранить точку маршрута. Попробуйте ещё раз.',
+  notEditable: 'Точки маршрута можно менять только у черновика заезда.',
 } as const;

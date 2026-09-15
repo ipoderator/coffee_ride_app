@@ -10,8 +10,8 @@ MVP. Foundation, Design-foundations, and Auth phases complete. Rides: full organ
 lifecycle (`draft → published → registration_open → registration_closed → started →
 finished`, plus `cancelled`) implemented end to end; public discovery with filters and
 a map view; GPX route upload/rendering/distance-elevation reconciliation; named
-organizer-curated stops. Route section remaining: CR-031 (Route points) — see
-`docs/tasks.md`.
+organizer-curated stops; typed organizer-placed route points (map pins). Route section
+of `docs/tasks.md` is now fully complete — next section is Registration (CR-032).
 
 ## Current task
 
@@ -42,12 +42,12 @@ Argon2id, DB-backed sessions per ADR-013, CSRF via Origin/Referer check on every
 `/v1` method), `users` (profile PATCH), `organizers` (OrganizerProfile CRUD, create
 gated on `emailVerified`), `rides` (create/edit draft, every lifecycle transition,
 owner's "mine" list, public list + detail with filters/bbox/pagination, GPX route
-upload/download/geometry, distance/elevation reconciliation, stop CRUD — draft-only,
-embedded as an additive `stops` array on ride detail). Auth endpoints are rate-limited
-in-memory only (KI-014 — no live Redis yet).
+upload/download/geometry, distance/elevation reconciliation, stop CRUD and route-point
+CRUD — both draft-only, embedded as additive `stops`/`routePoints` arrays on ride
+detail). Auth endpoints are rate-limited in-memory only (KI-014 — no live Redis yet).
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
-`sessions`, `organizer_profiles`, `rides`, `routes`, `stops`.
+`sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -74,8 +74,8 @@ None.
 
 ## Next
 
-`docs/tasks.md` Route section: CR-031 ("Route points" — organizer-placed typed
-markers, distinct from `Stop`) — the last remaining Route ticket.
+`docs/tasks.md` Route section is now fully done. Next is the Registration section,
+starting with CR-032 ("Register").
 
 ## Important decisions
 
@@ -121,7 +121,8 @@ items:
 - No live 2GIS credential — geocoding and MapGL rendering are unverified against a
   real account; every map surface shows a real degraded state instead (KI-016,
   KI-031). No geocode-by-address UI (KI-032); a ride's finish point has no coordinates
-  (KI-033).
+  (KI-033); route points have no participant-facing UI yet, API + organizer management
+  only, pending real map rendering (KI-036).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
   no in-app recovery path (KI-026).
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
@@ -149,4 +150,4 @@ items:
 
 ## Last updated
 
-2026-09-15 (CR-030)
+2026-09-15 (CR-031)

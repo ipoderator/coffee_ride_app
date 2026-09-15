@@ -17,3 +17,4 @@ export * from './organizer-profile.js';
 export * from './ride.js';
 export * from './route.js';
 export * from './stop.js';
+export * from './route-point.js';

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BICYCLE_TYPES, RIDE_STATUSES } from 'types';
+import { BICYCLE_TYPES, RIDE_STATUSES, ROUTE_POINT_TYPES } from 'types';
 
 // The one "ride over the wire" shape (CLAUDE.md: no duplicate concepts). CR-017
 // ("Create ride") only ever returns a row with `title`/`bicycleType`/`startsAt`/
@@ -83,6 +83,23 @@ export const stopResponseSchema = z.object({
   lng: z.number(),
   durationMinutes: z.number().nullable(),
   position: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  updatedBy: z.string().nullable(),
+});
+
+// CR-031 ("Route points"): the one "route point over the wire" shape, embedded as an
+// array in `GET /v1/rides/:id`'s response and returned by `POST`/`PATCH
+// .../route-points`. No `position` field, unlike `stopResponseSchema` — see
+// `.claude/context/current-task.md`'s scope decision.
+export const routePointResponseSchema = z.object({
+  id: z.string(),
+  rideId: z.string(),
+  type: z.enum(ROUTE_POINT_TYPES),
+  label: z.string().nullable(),
+  description: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
   updatedBy: z.string().nullable(),

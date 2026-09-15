@@ -3,10 +3,12 @@ import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createRideRequestSchema,
+  createRoutePointRequestSchema,
   createStopRequestSchema,
   listPublicRidesQuerySchema,
   listRidesQuerySchema,
   updateRideRequestSchema,
+  updateRoutePointRequestSchema,
   updateStopRequestSchema,
 } from 'types';
 import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
@@ -14,6 +16,7 @@ import {
   rideOrganizerSummarySchema,
   rideResponseSchema,
   routeGeometryResponseSchema,
+  routePointResponseSchema,
   routeSummaryResponseSchema,
   rideWithOrganizerResponseSchema,
   stopResponseSchema,
@@ -23,8 +26,10 @@ import {
   cancelRide,
   closeRegistration,
   createRide,
+  createRoutePoint,
   createStop,
   deleteRoute,
+  deleteRoutePoint,
   deleteStop,
   finishRide,
   getRideForViewer,
@@ -37,6 +42,7 @@ import {
   replaceRoute,
   startRide,
   updateRideDraft,
+  updateRoutePoint,
   updateStop,
   uploadRoute,
 } from './rides.service.js';
@@ -82,17 +88,26 @@ const rideResponseWrapper = z.object({ ride: rideResponseSchema });
 // alongside the unchanged `ride` field — additive, every other endpoint keeps
 // `rideResponseWrapper` as-is. CR-027 ("GPX upload") added `route` (nullable summary,
 // same additive discipline). CR-030 ("Stops") added `stops` (array, same discipline).
+// CR-031 ("Route points") added `routePoints` (array, same discipline).
 const rideDetailResponseSchema = z.object({
   ride: rideResponseSchema,
   organizer: rideOrganizerSummarySchema,
   route: routeSummaryResponseSchema.nullable(),
   stops: z.array(stopResponseSchema),
+  routePoints: z.array(routePointResponseSchema),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 const stopResponseWrapper = z.object({ stop: stopResponseSchema });
 const stopIdParamsSchema = z.object({
   id: z.uuid('id must be a valid ride id.'),
   stopId: z.uuid('stopId must be a valid stop id.'),
+});
+const routePointResponseWrapper = z.object({
+  routePoint: routePointResponseSchema,
+});
+const routePointIdParamsSchema = z.object({
+  id: z.uuid('id must be a valid ride id.'),
+  routePointId: z.uuid('routePointId must be a valid route point id.'),
 });
 const listRidesResponseSchema = z.object({
   items: z.array(rideResponseSchema),
@@ -525,6 +540,73 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.user!.id,
         request.params.id,
         request.params.stopId,
+      );
+      return reply.status(204).send();
+    },
+  );
+
+  // CR-031 ("Route points"): adds a typed marker to a draft ride's route. Same
+  // draft-only ownership gate as `POST .../stops`. No `position` — see
+  // `rides.service.ts`'s `createRoutePoint`.
+  app.post(
+    '/:id/route-points',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: createRoutePointRequestSchema,
+        response: { 201: routePointResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const routePoint = await createRoutePoint(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.body,
+      );
+      return reply.status(201).send({ routePoint });
+    },
+  );
+
+  // CR-031: edits a draft ride's route point. `404 route_point_not_found` if the id
+  // doesn't exist or belongs to a different ride.
+  app.patch(
+    '/:id/route-points/:routePointId',
+    {
+      schema: {
+        params: routePointIdParamsSchema,
+        body: updateRoutePointRequestSchema,
+        response: { 200: routePointResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const routePoint = await updateRoutePoint(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.params.routePointId,
+        request.body,
+      );
+      return reply.status(200).send({ routePoint });
+    },
+  );
+
+  // CR-031: removes a draft ride's route point. `404 route_point_not_found` if the id
+  // doesn't exist or belongs to a different ride.
+  app.delete(
+    '/:id/route-points/:routePointId',
+    {
+      schema: { params: routePointIdParamsSchema },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      await deleteRoutePoint(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.params.routePointId,
       );
       return reply.status(204).send();
     },

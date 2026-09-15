@@ -3,14 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouteUploadForm } from './components/RouteUploadForm';
 import {
   ApiError,
+  createRoutePoint,
   createStop,
   deleteRoute,
+  deleteRoutePoint,
   deleteStop,
   getRideRouteState,
   replaceRoute,
   syncRideMetricsFromRoute,
+  updateRoutePoint,
   updateStop,
   uploadRoute,
+  type RoutePoint,
   type RouteSummary,
   type Stop,
 } from './api';
@@ -27,6 +31,9 @@ vi.mock('./api', async () => {
     createStop: vi.fn(),
     updateStop: vi.fn(),
     deleteStop: vi.fn(),
+    createRoutePoint: vi.fn(),
+    updateRoutePoint: vi.fn(),
+    deleteRoutePoint: vi.fn(),
   };
 });
 
@@ -38,6 +45,9 @@ const syncRideMetricsFromRouteMock = vi.mocked(syncRideMetricsFromRoute);
 const createStopMock = vi.mocked(createStop);
 const updateStopMock = vi.mocked(updateStop);
 const deleteStopMock = vi.mocked(deleteStop);
+const createRoutePointMock = vi.mocked(createRoutePoint);
+const updateRoutePointMock = vi.mocked(updateRoutePoint);
+const deleteRoutePointMock = vi.mocked(deleteRoutePoint);
 
 const baseStop: Stop = {
   id: 'stop-1',
@@ -48,6 +58,19 @@ const baseStop: Stop = {
   lng: 37.618,
   durationMinutes: 15,
   position: 0,
+  createdAt: '2027-01-01T00:00:00.000Z',
+  updatedAt: '2027-01-01T00:00:00.000Z',
+  updatedBy: null,
+};
+
+const baseRoutePoint: RoutePoint = {
+  id: 'route-point-1',
+  rideId: 'ride-1',
+  type: 'water',
+  label: 'Родник у моста',
+  description: null,
+  lat: 55.751,
+  lng: 37.618,
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',
   updatedBy: null,
@@ -120,6 +143,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: null,
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -145,6 +169,7 @@ describe('RouteUploadForm', () => {
         elevationGainMeters: null,
         route: null,
         stops: [],
+        routePoints: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
@@ -152,6 +177,7 @@ describe('RouteUploadForm', () => {
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: baseRoute,
         stops: [],
+        routePoints: [],
       });
     uploadRouteMock.mockResolvedValue(baseRoute);
 
@@ -181,6 +207,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: null,
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -201,6 +228,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: null,
       route: null,
       stops: [],
+      routePoints: [],
     });
     uploadRouteMock.mockRejectedValue(
       new ApiError({
@@ -237,6 +265,7 @@ describe('RouteUploadForm', () => {
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: baseRoute,
         stops: [],
+        routePoints: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
@@ -244,6 +273,7 @@ describe('RouteUploadForm', () => {
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: replaced,
         stops: [],
+        routePoints: [],
       });
     replaceRouteMock.mockResolvedValue(replaced);
 
@@ -264,6 +294,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
     deleteRouteMock.mockResolvedValue(undefined);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -285,6 +316,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
     vi.spyOn(window, 'confirm').mockReturnValue(false);
 
@@ -303,6 +335,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -327,6 +360,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: 1234,
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -349,6 +383,7 @@ describe('RouteUploadForm', () => {
         elevationGainMeters: 1234,
         route: baseRoute,
         stops: [],
+        routePoints: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
@@ -356,6 +391,7 @@ describe('RouteUploadForm', () => {
         elevationGainMeters: baseRoute.elevationGainMeters,
         route: baseRoute,
         stops: [],
+        routePoints: [],
       });
     syncRideMetricsFromRouteMock.mockResolvedValue(undefined);
 
@@ -390,6 +426,7 @@ describe('RouteUploadForm', () => {
       elevationGainMeters: 1234,
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -420,6 +457,7 @@ describe('StopsSection (CR-030)', () => {
       elevationGainMeters: null,
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -445,6 +483,7 @@ describe('StopsSection (CR-030)', () => {
       elevationGainMeters: null,
       route: null,
       stops: [baseStop, second],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -463,6 +502,7 @@ describe('StopsSection (CR-030)', () => {
         elevationGainMeters: null,
         route: null,
         stops: [],
+        routePoints: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
@@ -470,6 +510,7 @@ describe('StopsSection (CR-030)', () => {
         elevationGainMeters: null,
         route: null,
         stops: [baseStop],
+        routePoints: [],
       });
     createStopMock.mockResolvedValue(baseStop);
 
@@ -507,6 +548,7 @@ describe('StopsSection (CR-030)', () => {
         elevationGainMeters: null,
         route: null,
         stops: [baseStop],
+        routePoints: [],
       })
       .mockResolvedValueOnce({
         status: 'draft',
@@ -514,6 +556,7 @@ describe('StopsSection (CR-030)', () => {
         elevationGainMeters: null,
         route: null,
         stops: [],
+        routePoints: [],
       });
     deleteStopMock.mockResolvedValue(undefined);
 
@@ -534,6 +577,7 @@ describe('StopsSection (CR-030)', () => {
       elevationGainMeters: null,
       route: null,
       stops: [baseStop],
+      routePoints: [],
     });
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -543,6 +587,161 @@ describe('StopsSection (CR-030)', () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Добавить остановку' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Удалить' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('RoutePointsSection (CR-031)', () => {
+  beforeEach(() => {
+    getRideRouteStateMock.mockReset();
+    createRoutePointMock.mockReset();
+    updateRoutePointMock.mockReset();
+    deleteRoutePointMock.mockReset();
+  });
+
+  it('shows the empty state and an add button for a draft ride with no route points', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+      stops: [],
+      routePoints: [],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText('Точки маршрута ещё не добавлены'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Добавить точку' }),
+    ).toBeInTheDocument();
+  });
+
+  it('lists an existing route point by type and label', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+      stops: [],
+      routePoints: [baseRoutePoint],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText('Вода · Родник у моста'),
+    ).toBeInTheDocument();
+  });
+
+  it('adds a new route point through the form', async () => {
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [],
+        routePoints: [],
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [],
+        routePoints: [baseRoutePoint],
+      });
+    createRoutePointMock.mockResolvedValue(baseRoutePoint);
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Точки маршрута ещё не добавлены');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить точку' }));
+    fireEvent.change(screen.getByLabelText('Тип'), {
+      target: { value: 'water' },
+    });
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: baseRoutePoint.label },
+    });
+    fireEvent.change(screen.getByLabelText('Широта'), {
+      target: { value: String(baseRoutePoint.lat) },
+    });
+    fireEvent.change(screen.getByLabelText('Долгота'), {
+      target: { value: String(baseRoutePoint.lng) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(
+      await screen.findByText('Точка маршрута сохранена.'),
+    ).toBeInTheDocument();
+    expect(createRoutePointMock).toHaveBeenCalledWith('ride-1', {
+      type: 'water',
+      label: baseRoutePoint.label,
+      description: null,
+      lat: baseRoutePoint.lat,
+      lng: baseRoutePoint.lng,
+    });
+  });
+
+  it('deletes a route point after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [],
+        routePoints: [baseRoutePoint],
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+        stops: [],
+        routePoints: [],
+      });
+    deleteRoutePointMock.mockResolvedValue(undefined);
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Вода · Родник у моста');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+
+    expect(
+      await screen.findByText('Точка маршрута удалена.'),
+    ).toBeInTheDocument();
+    expect(deleteRoutePointMock).toHaveBeenCalledWith(
+      'ride-1',
+      baseRoutePoint.id,
+    );
+    confirmSpy.mockRestore();
+  });
+
+  it('hides add/edit/delete controls for a non-draft ride', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'published',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+      stops: [],
+      routePoints: [baseRoutePoint],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText('Вода · Родник у моста'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Добавить точку' }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Удалить' }),

@@ -2077,3 +2077,97 @@ profiles/users) deleted from the scratch DB by id/email afterward.
 Follow-up: CR-031 ("Route points" — the organizer-placed typed markers
 distinct from `Stop`, per `docs/database.md`) is next per `docs/tasks.md`'s
 Route section order.
+
+## 2026-09-15 — CR-031 — Route points
+
+Summary: seventh domain table, `RoutePoint` — organizer-placed typed markers
+(`start`/`finish`/`stop`/`danger`/`water`/`food`/`technical`/`other`,
+`docs/database.md`'s own list) along a ride's route, distinct from `Stop`
+(named rest points with duration, shown in route order) and from
+`Route.geometry` (the raw GPX polyline). Unlike CR-030, `docs/api.md` had no
+pre-sketched endpoint shapes for this one — designed this session by close
+analogy to the `Stop` precedent (same screen, same draft-only gate, same
+"no separate read endpoint" embedding pattern).
+
+Fields: `type` (required enum), `label` (optional, ≤140 chars — a marker's
+own short name, since two markers can share a `type`), `description`
+(optional, ≤500 chars), `lat`/`lng` (required, standard range — a marker's
+whole reason for existing is a location). No `position`/reorder concept and
+no per-type uniqueness constraint: unlike `Stop`, a route point is a typed
+map pin meant to render by `type`, not an ordered itinerary entry, and a
+real route can legitimately carry more than one marker of the same type
+(e.g. two `water` points). Display order is `createdAt asc`.
+
+New endpoints: `POST`/`PATCH`/`DELETE /v1/rides/:id/route-points[/:id]` —
+same auth/ownership/draft-only gate as `.../stops` (`resolveOwnDraftRide`,
+`409 ride_not_editable` once published), one new error code
+(`route_point_not_found`, 404, same resource-enumeration-safe shape as
+`stop_not_found`). `GET /v1/rides/:id` gained an additive `routePoints:
+RoutePoint[]` field, same embedding precedent as `route`/`stops`.
+
+Scope decision — no participant-facing UI: `docs/design.md` §8's
+participant ride-detail row names "route + profile, stops, services,
+requirements..." — no route-points list is named there (unlike `Stop`,
+which got an explicit `StopList`). A route point is a map pin, and the map
+itself is already a documented degraded placeholder pending a live 2GIS
+credential (KI-031). Ships as API + organizer management UI
+(`RoutePointsSection`, wired into the existing `RouteUploadForm` screen
+alongside `StopsSection`) only; flagged forward as KI-036 rather than left
+as a silent gap — the natural next step is plotting `routePoints` as map
+markers once real MapGL rendering lands, not a new text list.
+
+Files: `packages/db/src/schema/route-point.ts` (new, `route_point_type` pg
+enum) + `schema/index.ts` + migration `0008_worthless_mesmero.sql`;
+`packages/types/src/domain/route-point.ts` (new) + `src/index.ts`;
+`packages/types/src/api/rides.ts` (+`createRoutePointRequestSchema`/
+`updateRoutePointRequestSchema`, `GetRideResponse.routePoints`);
+`apps/api/src/modules/rides/` (`ride-response.schema.ts` +`routePointResponseSchema`; `rides.service.ts` +`toRoutePoint`/
+`ROUTE_POINT_NOT_FOUND`/`createRoutePoint`/`updateRoutePoint`/
+`deleteRoutePoint`, extended `getRideForViewer`; `rides.routes.ts` +3
+routes; new `route-points.routes.test.ts`, 14 tests); `apps/web/src/
+features/organizer/route/` (`api.ts` +6 functions/types; new
+`components/RoutePointsSection.tsx`, wired into `RouteUploadForm.tsx`;
+`route.test.tsx` +5 tests, +`routePoints: []`/`[baseRoutePoint]` on every
+mocked response); `packages/ui/src/terminology.ts`
+(+`ROUTE_POINT_TYPE_TERMS`, +`ROUTE_POINT_TERMS`); `apps/web/src/features/
+participant/ride-detail/ride-detail.test.tsx` (+`routePoints: []` on every
+mocked response, no behavior change); `docs/api.md`, `docs/database.md`,
+`docs/tasks.md`, `.claude/context/known-issues.md` (+KI-036).
+
+Decisions: none new at the ADR level — the field-scope/no-position/no-
+participant-UI decisions above are ticket-level, same tier as CR-030's own
+scope decisions, recorded here and in `current-task.md`.
+
+Known limitations: KI-036 (no participant-facing route-points UI yet,
+deliberate — see above). No other new gap; `route_point_not_found` follows
+the same resource-enumeration-safe precedent every other nested-resource
+404 in this module already uses.
+
+Tests: 14 new `apps/api` tests (new `route-points.routes.test.ts`) — 188
+total, was 174. 5 new `apps/web` tests (new `RoutePointsSection` suite in
+`route.test.tsx`) — 121 total, was 116.
+
+Validation: `turbo run lint typecheck build test --force` (25 tasks, all 8
+workspace members) green against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`.
+`format:check`/`lint:root` clean after one `prettier --write` pass
+(cosmetic, 3 files). Live-verified via curl against a real Postgres + a
+freshly started `apps/api`: register → verify → login → create organizer →
+create draft ride → create `start` point → create `water` point →
+`GET /v1/rides/:id` returned both, `createdAt`-ordered → invalid `type`
+400 → `PATCH` the `water` point to `danger` (clearing nothing else) 200 →
+`DELETE` 204 → repeat `DELETE` 404 `route_point_not_found` → publish the
+ride → `POST .../route-points` 409 `ride_not_editable` — the remaining
+`start` point cross-checked against a direct DB read. Live browser-verified
+via the `browser-automation` skill against a real `next dev` server +
+`apps/api`: opened the add form, selected type "Опасный участок", filled
+label/lat/lng, saved (screenshotted — Tailwind/`Card`/`Button` styling
+matches `StopsSection`), confirmed the list entry read "Опасный участок ·
+Крутой спуск", deleted it after confirming the browser dialog, confirmed
+the empty state returned — 0 console errors, DB cross-checked empty after
+delete. All test data (rides/organizer profiles/users) deleted from the
+scratch DB afterward.
+
+Follow-up: CR-031 was the last remaining Route-section ticket
+(`docs/tasks.md`) — next up is the Registration section, starting with
+CR-032 ("Register").

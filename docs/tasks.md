@@ -259,7 +259,14 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       Organizer manages stops on the existing route screen; participants see
       them as a numbered list on the ride detail page. See
       `docs/changelog.md`.
-- [ ] CR-031 Route points
+- [x] CR-031 Route points — done 2026-09-15: seventh domain table (`type`/`label`/
+      `description`/`lat`/`lng`, no `position` — a typed map pin, not an ordered
+      itinerary entry, unlike `Stop`), new create/edit/delete endpoints, draft-only
+      same as stops/GPX upload, plus an additive `routePoints` array on the ride
+      detail response. Organizer manages route points on the existing route screen;
+      no participant-facing list yet (route points are map markers, and the map
+      itself is a documented degraded placeholder pending a live 2GIS credential,
+      KI-031/KI-036). See `docs/changelog.md`.
 
 ## Registration
 

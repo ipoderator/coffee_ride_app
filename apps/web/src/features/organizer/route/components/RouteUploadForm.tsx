@@ -20,9 +20,11 @@ import {
   routeDownloadUrl,
   syncRideMetricsFromRoute,
   uploadRoute,
+  type RoutePoint,
   type RouteSummary,
   type Stop,
 } from '../api';
+import { RoutePointsSection } from './RoutePointsSection';
 import { StopsSection } from './StopsSection';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
@@ -46,6 +48,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   >(null);
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
+  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     setRideElevationGainMeters(state.elevationGainMeters);
     setRoute(state.route);
     setStops(state.stops);
+    setRoutePoints(state.routePoints);
   }, [rideId]);
 
   useEffect(() => {
@@ -391,6 +395,13 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
       <StopsSection
         rideId={rideId}
         stops={stops}
+        isDraft={isDraft}
+        onChange={reload}
+      />
+
+      <RoutePointsSection
+        rideId={rideId}
+        routePoints={routePoints}
         isDraft={isDraft}
         onChange={reload}
       />

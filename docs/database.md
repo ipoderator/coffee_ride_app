@@ -65,9 +65,18 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   not a row-per-point table; see the next line), `createdAt`/`updatedAt`,
   `updatedBy` (audit trail).
 - RoutePoint — start/finish/stop/danger/water/food/technical/other: a small set of
-  organizer-placed _typed_ markers along the route (CR-031, not yet built) — distinct
-  from `Route.geometry` above, which is the raw GPX-derived polyline (potentially
-  thousands of points, always read/written as one unit, never one row per point).
+  organizer-placed _typed_ markers along the route (CR-031): `id`, `rideId` (FK →
+  Ride, `ON DELETE CASCADE`), `type` (not null, pg enum — the eight values above),
+  `label` (nullable — a marker's own short name, since two markers can share a
+  `type`, e.g. two `water` points), `description` (nullable), `lat`/`lng` (not null,
+  numeric(9,6), range-checked — same reasoning as `Stop`: a marker's whole reason for
+  existing is a location), `createdAt`/`updatedAt`/`updatedBy` (audit trail). No
+  `position` — unlike `Stop`, a route point is a typed map pin, not an ordered
+  itinerary entry, so display order is `createdAt` and more than one marker of the
+  same `type` is allowed. No separate read endpoint — exposed as an additive
+  `routePoints` array on `GET /v1/rides/:id`. Distinct from `Route.geometry` above,
+  which is the raw GPX-derived polyline (potentially thousands of points, always
+  read/written as one unit, never one row per point).
 - Stop — named planned stop with location and duration (CR-030): `id`, `rideId` (FK →
   Ride, `ON DELETE CASCADE`), `name` (not null), `description` (nullable),
   `lat`/`lng` (not null, numeric(9,6), range-checked — required, unlike `Ride`'s own

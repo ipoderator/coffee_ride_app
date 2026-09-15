@@ -107,6 +107,7 @@ describe('RideDetailView', () => {
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -144,6 +145,7 @@ describe('RideDetailView', () => {
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -162,6 +164,7 @@ describe('RideDetailView', () => {
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -177,6 +180,7 @@ describe('RideDetailView', () => {
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
     getRouteGeometryMock.mockResolvedValue({
       points: [
@@ -207,6 +211,7 @@ describe('RideDetailView', () => {
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: baseRoute,
       stops: [],
+      routePoints: [],
     });
     getRouteGeometryMock.mockRejectedValue(new Error('network error'));
 
@@ -237,6 +242,7 @@ describe('RideDetailView', () => {
           position: 1,
         },
       ],
+      routePoints: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);
@@ -253,6 +259,7 @@ describe('RideDetailView', () => {
       organizer: { id: 'org-1', name: 'Гравийный клуб' },
       route: null,
       stops: [],
+      routePoints: [],
     });
 
     render(<RideDetailView rideId="ride-1" />);

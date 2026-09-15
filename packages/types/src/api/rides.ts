@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BICYCLE_TYPES, type Ride } from '../domain/ride.js';
 import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
 import type { Stop } from '../domain/stop.js';
+import { ROUTE_POINT_TYPES, type RoutePoint } from '../domain/route-point.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -72,11 +73,15 @@ export interface RideOrganizerSummary {
 // additive-field discipline; `null` when no GPX has been uploaded yet.
 // CR-030 ("Stops"): additive `stops` array, ordered by `position` — same "no separate
 // read endpoint, embed it in the ride detail response" precedent as `route` (CR-027).
+// CR-031 ("Route points"): additive `routePoints` array, same embedding precedent —
+// ordered by `createdAt` (display order isn't meaningful for typed map pins, unlike
+// `stops`' `position`).
 export interface GetRideResponse {
   ride: Ride;
   organizer: RideOrganizerSummary;
   route: RouteSummary | null;
   stops: Stop[];
+  routePoints: RoutePoint[];
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real
@@ -400,4 +405,83 @@ export type UpdateStopRequest = z.infer<typeof updateStopRequestSchema>;
 
 export interface UpdateStopResponse {
   stop: Stop;
+}
+
+// CR-031 ("Route points", `.claude/context/current-task.md`): no `position` field,
+// unlike `createStopRequestSchema` — a route point is a typed map pin, not an ordered
+// itinerary entry.
+export const createRoutePointRequestSchema = z.object({
+  type: z.enum(
+    ROUTE_POINT_TYPES,
+    'type must be one of: start, finish, stop, danger, water, food, technical, other.',
+  ),
+  label: z
+    .string()
+    .trim()
+    .min(1, 'Label cannot be empty.')
+    .max(140, 'Label must be at most 140 characters.')
+    .nullable()
+    .optional(),
+  description: z
+    .string()
+    .trim()
+    .max(500, 'Description must be at most 500 characters.')
+    .nullable()
+    .optional(),
+  lat: z
+    .number()
+    .min(-90, 'lat must be between -90 and 90.')
+    .max(90, 'lat must be between -90 and 90.'),
+  lng: z
+    .number()
+    .min(-180, 'lng must be between -180 and 180.')
+    .max(180, 'lng must be between -180 and 180.'),
+});
+export type CreateRoutePointRequest = z.infer<
+  typeof createRoutePointRequestSchema
+>;
+
+export interface CreateRoutePointResponse {
+  routePoint: RoutePoint;
+}
+
+// CR-031: every field independently optional, same PATCH-semantics precedent as
+// `updateStopRequestSchema`.
+export const updateRoutePointRequestSchema = z.object({
+  type: z
+    .enum(
+      ROUTE_POINT_TYPES,
+      'type must be one of: start, finish, stop, danger, water, food, technical, other.',
+    )
+    .optional(),
+  label: z
+    .string()
+    .trim()
+    .min(1, 'Label cannot be empty.')
+    .max(140, 'Label must be at most 140 characters.')
+    .nullable()
+    .optional(),
+  description: z
+    .string()
+    .trim()
+    .max(500, 'Description must be at most 500 characters.')
+    .nullable()
+    .optional(),
+  lat: z
+    .number()
+    .min(-90, 'lat must be between -90 and 90.')
+    .max(90, 'lat must be between -90 and 90.')
+    .optional(),
+  lng: z
+    .number()
+    .min(-180, 'lng must be between -180 and 180.')
+    .max(180, 'lng must be between -180 and 180.')
+    .optional(),
+});
+export type UpdateRoutePointRequest = z.infer<
+  typeof updateRoutePointRequestSchema
+>;
+
+export interface UpdateRoutePointResponse {
+  routePoint: RoutePoint;
 }

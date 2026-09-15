@@ -1,14 +1,17 @@
 import type {
+  CreateRoutePointRequest,
   CreateStopRequest,
   ProblemDetails,
+  RoutePoint,
   RouteSummary,
   Stop,
+  UpdateRoutePointRequest,
   UpdateStopRequest,
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
 
 export { ApiError };
-export type { RouteSummary, Stop };
+export type { RoutePoint, RouteSummary, Stop };
 
 const RIDES_ENDPOINT = '/api/v1/rides';
 
@@ -19,7 +22,8 @@ const RIDES_ENDPOINT = '/api/v1/rides';
  * draft-only gate) and `route` are read here; CR-029 ("Route metadata") also reads
  * the ride's own `distanceKm`/`elevationGainMeters` — already present on the same
  * response — to detect a mismatch against `route`'s GPX-computed figures. CR-030
- * ("Stops") also reads the additive `stops` array, same embedding precedent.
+ * ("Stops") also reads the additive `stops` array, same embedding precedent. CR-031
+ * ("Route points") also reads the additive `routePoints` array, same precedent again.
  */
 export async function getRideRouteState(rideId: string): Promise<{
   status: string;
@@ -27,6 +31,7 @@ export async function getRideRouteState(rideId: string): Promise<{
   elevationGainMeters: number | null;
   route: RouteSummary | null;
   stops: Stop[];
+  routePoints: RoutePoint[];
 }> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}`);
   const body = (await response.json()) as
@@ -38,6 +43,7 @@ export async function getRideRouteState(rideId: string): Promise<{
         };
         route: RouteSummary | null;
         stops: Stop[];
+        routePoints: RoutePoint[];
       }
     | ProblemDetails;
 
@@ -52,6 +58,7 @@ export async function getRideRouteState(rideId: string): Promise<{
     };
     route: RouteSummary | null;
     stops: Stop[];
+    routePoints: RoutePoint[];
   };
   return {
     status: parsed.ride.status,
@@ -59,6 +66,7 @@ export async function getRideRouteState(rideId: string): Promise<{
     elevationGainMeters: parsed.ride.elevationGainMeters,
     route: parsed.route,
     stops: parsed.stops,
+    routePoints: parsed.routePoints,
   };
 }
 
@@ -106,6 +114,60 @@ export async function deleteStop(
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/stops/${stopId}`, {
     method: 'DELETE',
   });
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
+}
+
+/** 409 `ride_not_editable` unless the ride is still `draft`. */
+export async function createRoutePoint(
+  rideId: string,
+  input: CreateRoutePointRequest,
+): Promise<RoutePoint> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/route-points`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const body = (await response.json()) as
+    { routePoint: RoutePoint } | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as { routePoint: RoutePoint }).routePoint;
+}
+
+/** 404 `route_point_not_found` if the id doesn't exist or belongs to a different ride. */
+export async function updateRoutePoint(
+  rideId: string,
+  routePointId: string,
+  patch: UpdateRoutePointRequest,
+): Promise<RoutePoint> {
+  const response = await fetch(
+    `${RIDES_ENDPOINT}/${rideId}/route-points/${routePointId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    },
+  );
+  const body = (await response.json()) as
+    { routePoint: RoutePoint } | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as { routePoint: RoutePoint }).routePoint;
+}
+
+export async function deleteRoutePoint(
+  rideId: string,
+  routePointId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${RIDES_ENDPOINT}/${rideId}/route-points/${routePointId}`,
+    { method: 'DELETE' },
+  );
   if (!response.ok) {
     const body = (await response.json()) as ProblemDetails;
     throw new ApiError(body);

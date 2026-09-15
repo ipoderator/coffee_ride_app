@@ -286,6 +286,31 @@ ordered by `position` — same "no separate read endpoint, embed it in the ride 
 response" precedent as `route` (CR-027). Same viewer-visibility rule as the rest of
 that response.
 
+POST `/v1/rides/:id/route-points` — **implemented (CR-031, "Route points")**. Not in
+an earlier contract sketch — designed this session by close analogy to `POST
+.../stops`. Same auth/ownership/draft-only rules (`resolveOwnDraftRide`): `404
+ride_not_found` if the ride doesn't exist or isn't the caller's, `409
+ride_not_editable` once it has left `draft`. Body: `{ type, label?, description?,
+lat, lng }` — `type` is one of `start`/`finish`/`stop`/`danger`/`water`/`food`/
+`technical`/`other` (`docs/database.md`'s list); `lat`/`lng` are required, same
+reasoning as `Stop`. Unlike `POST .../stops`, no server-assigned `position` — a route
+point is a typed map pin, not an ordered itinerary entry, so more than one marker of
+the same `type` is allowed (e.g. two `water` points). `201` → `{ routePoint }`.
+
+PATCH `/v1/rides/:id/route-points/:routePointId` — **implemented (CR-031)**. Same
+draft-only gate. Any subset of `type`/`label`/`description`/`lat`/`lng`. `404
+route_point_not_found` if the id doesn't exist or belongs to a different ride (same
+resource-enumeration-safe shape as `stop_not_found`). `200` → `{ routePoint }`.
+
+DELETE `/v1/rides/:id/route-points/:routePointId` — **implemented (CR-031)**. Same
+draft-only gate; `404 route_point_not_found` as above. `204` on success.
+
+`GET /v1/rides/:id`'s response gained an additive `routePoints: RoutePoint[]` field
+(CR-031), ordered by `createdAt` (a route point has no `position` — order isn't
+meaningful for typed map pins) — same embedding precedent as `stops`/`route`. Same
+viewer-visibility rule as the rest of that response. No participant-facing UI reads
+this array yet — see `docs/database.md`'s `RoutePoint` entry and KI-036.
+
 ## Updates
 
 POST `/v1/rides/:id/updates`

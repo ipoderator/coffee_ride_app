@@ -440,6 +440,25 @@ screen grouping); `features/participant/ride-detail/` gained
 stop's `lat`/`lng` are plain required numbers, same as `Ride.startLat/Lng`,
 not yet rendered on any map (KI-031 unaffected).
 
+CR-031 ("Route points", 2026-09-15): `packages/db` gained its seventh
+table, `route_points` (`rideId` FK → `rides` `ON DELETE CASCADE`, a
+`route_point_type` pg enum, no `position`/uniqueness constraint — a route
+point is a typed map pin, not an ordered itinerary entry like `stops`, so
+more than one marker of the same `type` is allowed). `modules/rides/`
+gained `POST`/`PATCH`/`DELETE /v1/rides/:id/route-points(/:routePointId)`
+— same `resolveOwnDraftRide` gate as `stops`/GPX upload, one new error code
+(`route_point_not_found`, 404). `getRideForViewer`'s response gained an
+additive `routePoints: RoutePoint[]` array (ordered by `createdAt`, not a
+`position` column) — same embedding precedent as `stops`/`route`.
+`features/organizer/route/` gained `components/RoutePointsSection.tsx`
+(add/edit/delete UI with a type select, rendered alongside `StopsSection`).
+No participant-facing component this ticket (KI-036) — `docs/design.md`
+§8's participant ride-detail row names no route-points list, unlike
+`Stop`'s explicit `StopList`; a route point is map-pin data meant for real
+MapGL rendering, still blocked on KI-031's missing live 2GIS credential.
+No new `packages/maps-core`/`maps-2gis` dependency, same reasoning as
+`stops`.
+
 ## Target structure
 
 apps/
