@@ -1,7 +1,12 @@
-import { and, eq, sql } from 'drizzle-orm';
-import { organizerProfiles, registrations, rides } from 'db/schema';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import {
+  organizerProfiles,
+  registrations,
+  rides,
+  waitlistEntries,
+} from 'db/schema';
 import type { DbClient } from 'db';
-import type { Registration } from 'types';
+import type { Registration, WaitlistEntry } from 'types';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -66,6 +71,33 @@ const REGISTRATION_NOT_FOUND = () =>
     'You do not have an active registration for this ride.',
   );
 
+// CR-036 ("Waitlist"): joining the queue only makes sense once there is no open spot
+// — a ride with an unlimited (`null`) `participantLimit`, or one that still has room,
+// should be registered for directly instead.
+const RIDE_NOT_FULL = () =>
+  new RegistrationServiceError(
+    'ride_not_full',
+    409,
+    'Ride is not full',
+    'This ride still has open spots — register instead of joining the waitlist.',
+  );
+
+const WAITLIST_ENTRY_ALREADY_EXISTS = () =>
+  new RegistrationServiceError(
+    'waitlist_entry_already_exists',
+    409,
+    'Waitlist entry already exists',
+    'You are already on the waitlist for this ride.',
+  );
+
+const WAITLIST_ENTRY_NOT_FOUND = () =>
+  new RegistrationServiceError(
+    'waitlist_entry_not_found',
+    404,
+    'Waitlist entry not found',
+    'You are not on the waitlist for this ride.',
+  );
+
 export function toRegistration(
   row: typeof registrations.$inferSelect,
 ): Registration {
@@ -77,6 +109,21 @@ export function toRegistration(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+  };
+}
+
+export function toWaitlistEntry(
+  row: typeof waitlistEntries.$inferSelect,
+): WaitlistEntry {
+  return {
+    id: row.id,
+    rideId: row.rideId,
+    userId: row.userId,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    promotedAt: row.promotedAt ? row.promotedAt.toISOString() : null,
   };
 }
 
@@ -197,33 +244,201 @@ export async function createRegistration(
  * CR-033 ("Cancel registration"). No status gate beyond "an active registration
  * exists" — nothing in `docs/product.md`/`docs/database.md` restricts cancellation to
  * a particular ride status (`.claude/context/current-task.md`'s scope decision).
+ *
+ * CR-036 ("Waitlist") extends this with auto-promotion: cancelling frees exactly one
+ * spot, so — inside the same transaction, under the same `rides` row lock
+ * {@link createRegistration}/{@link joinWaitlist} use — the oldest `waiting` entry (if
+ * any) for this ride is promoted into a brand-new active `Registration`. This is what
+ * makes "waitlist consistency" atomic with the cancellation that caused it
+ * (`.claude/rules/database.md`/`.claude/rules/resilience.md`), not a separate step
+ * that could observe a stale state.
  */
 export async function cancelRegistration(
   db: DbClient,
   userId: string,
   rideId: string,
 ): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Locks the same row `createRegistration`/`joinWaitlist` lock, so a concurrent
+    // join/register for this ride can't race with the promotion below.
+    await tx
+      .select({ id: rides.id })
+      .from(rides)
+      .where(eq(rides.id, rideId))
+      .for('update')
+      .limit(1);
+
+    const [existing] = await tx
+      .select({ id: registrations.id })
+      .from(registrations)
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.userId, userId),
+          eq(registrations.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (!existing) {
+      throw REGISTRATION_NOT_FOUND();
+    }
+
+    await tx
+      .update(registrations)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(registrations.id, existing.id));
+
+    const [oldestWaiting] = await tx
+      .select({ id: waitlistEntries.id, userId: waitlistEntries.userId })
+      .from(waitlistEntries)
+      .where(
+        and(
+          eq(waitlistEntries.rideId, rideId),
+          eq(waitlistEntries.status, 'waiting'),
+        ),
+      )
+      .orderBy(asc(waitlistEntries.createdAt))
+      .limit(1);
+    if (oldestWaiting) {
+      await tx
+        .update(waitlistEntries)
+        .set({
+          status: 'promoted',
+          promotedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(waitlistEntries.id, oldestWaiting.id));
+      await tx.insert(registrations).values({
+        rideId,
+        userId: oldestWaiting.userId,
+        status: 'active',
+      });
+    }
+  });
+}
+
+/**
+ * CR-036 ("Waitlist"). Joining only makes sense once the ride is genuinely full — the
+ * same `SELECT ... FOR UPDATE` lock {@link createRegistration} uses re-checks
+ * `registration_open`, then re-derives capacity itself rather than trusting a stale
+ * `409 ride_full` the caller might be reacting to (`.claude/context/current-task.md`).
+ */
+export async function joinWaitlist(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<WaitlistEntry> {
+  await resolveVisibleRideStatus(db, userId, rideId);
+
+  const inserted = await db.transaction(async (tx) => {
+    const [rideRow] = await tx
+      .select({
+        status: rides.status,
+        participantLimit: rides.participantLimit,
+      })
+      .from(rides)
+      .where(eq(rides.id, rideId))
+      .for('update')
+      .limit(1);
+    if (!rideRow || rideRow.status !== 'registration_open') {
+      throw RIDE_REGISTRATION_NOT_OPEN();
+    }
+
+    const [existingActive] = await tx
+      .select({ id: registrations.id })
+      .from(registrations)
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.userId, userId),
+          eq(registrations.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (existingActive) {
+      throw REGISTRATION_ALREADY_EXISTS();
+    }
+
+    const [existingWaiting] = await tx
+      .select({ id: waitlistEntries.id })
+      .from(waitlistEntries)
+      .where(
+        and(
+          eq(waitlistEntries.rideId, rideId),
+          eq(waitlistEntries.userId, userId),
+          eq(waitlistEntries.status, 'waiting'),
+        ),
+      )
+      .limit(1);
+    if (existingWaiting) {
+      throw WAITLIST_ENTRY_ALREADY_EXISTS();
+    }
+
+    if (rideRow.participantLimit !== null) {
+      const [countRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(registrations)
+        .where(
+          and(
+            eq(registrations.rideId, rideId),
+            eq(registrations.status, 'active'),
+          ),
+        );
+      if ((countRow?.count ?? 0) < rideRow.participantLimit) {
+        throw RIDE_NOT_FULL();
+      }
+    } else {
+      // Unlimited capacity: never actually "full", so a waitlist can never apply.
+      throw RIDE_NOT_FULL();
+    }
+
+    const [row] = await tx
+      .insert(waitlistEntries)
+      .values({ rideId, userId, status: 'waiting' })
+      .returning();
+    if (!row) {
+      throw new Error('Waitlist entry insert returned no row.');
+    }
+    return row;
+  });
+
+  return toWaitlistEntry(inserted);
+}
+
+/**
+ * CR-036 ("Waitlist"). No status gate beyond "a waiting entry exists" — same
+ * "cancellation stays available" discipline `cancelRegistration` already uses.
+ */
+export async function leaveWaitlist(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<void> {
   const [existing] = await db
-    .select({ id: registrations.id })
-    .from(registrations)
+    .select({ id: waitlistEntries.id })
+    .from(waitlistEntries)
     .where(
       and(
-        eq(registrations.rideId, rideId),
-        eq(registrations.userId, userId),
-        eq(registrations.status, 'active'),
+        eq(waitlistEntries.rideId, rideId),
+        eq(waitlistEntries.userId, userId),
+        eq(waitlistEntries.status, 'waiting'),
       ),
     )
     .limit(1);
   if (!existing) {
-    throw REGISTRATION_NOT_FOUND();
+    throw WAITLIST_ENTRY_NOT_FOUND();
   }
 
   await db
-    .update(registrations)
+    .update(waitlistEntries)
     .set({
       status: 'cancelled',
       cancelledAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(registrations.id, existing.id));
+    .where(eq(waitlistEntries.id, existing.id));
 }

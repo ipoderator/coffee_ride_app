@@ -12,8 +12,8 @@ finished`, plus `cancelled`) implemented end to end; public discovery with filte
 a map view; GPX route upload/rendering/distance-elevation reconciliation; named
 organizer-curated stops; typed organizer-placed route points (map pins). Route section
 of `docs/tasks.md` is fully complete. Registration section: register/cancel/capacity/
-duplicate-protection (CR-032..035) done; waitlist (CR-036), organizer participant list
-(CR-037), and "My registrations" (CR-091, newly added) remain.
+duplicate-protection (CR-032..035) and waitlist with auto-promotion (CR-036) done;
+organizer participant list (CR-037) and "My registrations" (CR-091) remain.
 
 ## Current task
 
@@ -50,13 +50,16 @@ upload/download/geometry, distance/elevation reconciliation, stop CRUD and route
 CRUD — both draft-only, embedded as additive `stops`/`routePoints` arrays on ride
 detail), `registrations` (its own capability module, `POST`/`DELETE
 /v1/rides/:id/register` — capacity + duplicate protection via one `SELECT ... FOR
-UPDATE` row lock, no auto-waitlist; embedded as additive `registrationsCount`/
-`viewerRegistration` on ride detail). Auth endpoints are rate-limited in-memory only
-(KI-014 — no live Redis yet).
+UPDATE` row lock; `POST`/`DELETE /v1/rides/:id/waitlist` (CR-036) — joining requires
+the ride to actually be full, re-derived server-side; cancelling a registration
+auto-promotes the oldest waiting entry (FIFO) into a fresh active registration inside
+the same transaction/row lock; embedded as additive `registrationsCount`/
+`viewerRegistration`/`viewerWaitlistEntry` on ride detail). Auth endpoints are
+rate-limited in-memory only (KI-014 — no live Redis yet).
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
 `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`,
-`registrations`.
+`registrations`, `waitlist_entries`.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -83,9 +86,8 @@ None.
 
 ## Next
 
-`docs/tasks.md` Registration section: CR-032..035 done. Next is CR-036 ("Waitlist"),
-or CR-037 ("Organizer participant list")/CR-091 ("My registrations") if picked up
-first — none has a hard dependency on the others.
+`docs/tasks.md` Registration section: CR-032..036 done. Next is CR-037 ("Organizer
+participant list") or CR-091 ("My registrations") — no hard dependency between them.
 
 ## Important decisions
 
@@ -163,4 +165,4 @@ items:
 
 ## Last updated
 
-2026-09-15 (CR-032/CR-033/CR-034/CR-035)
+2026-09-15 (CR-036)

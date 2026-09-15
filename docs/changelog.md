@@ -2314,3 +2314,137 @@ deleted from the DB afterward.
 Follow-up: `docs/tasks.md`'s Registration section has CR-036 ("Waitlist"),
 CR-037 ("Organizer participant list"), and the newly added CR-091 ("My
 registrations") remaining.
+
+## 2026-09-15 — CR-036 — Waitlist
+
+Summary: ninth domain table, `WaitlistEntry` — a participant can join a full ride's
+queue and leave it again; cancelling an active registration now atomically promotes
+the oldest waiting entry into a fresh active registration, closing the gap CR-032
+deliberately left open ("full ride → 409, not auto-waitlist").
+
+Lives inside the existing `registrations` capability module rather than a new one
+(`.claude/context/current-task.md`): promotion touches both `Registration` and
+`WaitlistEntry` in one transaction, and keeping both concepts in the same module avoids
+one module reaching into another's internals (`.claude/rules/resilience.md`).
+
+`packages/db`: `waitlist_entries` (`rideId`/`userId` FKs cascade-delete, `status` pg
+enum `waiting`/`promoted`/`cancelled` default `waiting`, `createdAt`/`updatedAt`
+`timestamptz`, `cancelledAt`/`promotedAt` nullable with CHECK constraints tying each to
+its status — same audit-trail discipline as `registrations.cancelledAt`). No `position`
+column, unlike `Stop` — queue order is `createdAt` ascending, with no reordering use
+case to justify a manual column. A partial unique index on `(rideId, userId) WHERE
+status = 'waiting'` mirrors `registrations`' own duplicate-protection index — only one
+waiting row per (ride, user) at a time, so leaving and rejoining the queue is a fresh
+row, not a resurrected one. Migration `0010_nappy_speed.sql`, applied to the local
+`coffee_ride_dev` scratch database.
+
+`packages/types`: `WaitlistEntry`/`WaitlistEntryStatus`/`WAITLIST_ENTRY_STATUSES` (new
+domain type), `CreateWaitlistEntryResponse` (new API type), `GetRideResponse` gained an
+additive `viewerWaitlistEntry` field (the caller's own `waiting` entry, `null` if none/
+unauthenticated/promoted/cancelled) — same embedding precedent CR-032 established for
+`viewerRegistration`, deliberately no `waitlistCount` this ticket (nothing
+participant-facing needs a total queue size; CR-037's organizer participant list is the
+natural place for that if ever asked for).
+
+`apps/api`: two new routes in the existing `registrations` module — `POST`/`DELETE
+/v1/rides/:id/waitlist`. `joinWaitlist` reuses `createRegistration`'s `SELECT ... FOR
+UPDATE` lock on the `rides` row, then re-derives capacity itself rather than trusting a
+stale client-side `409 ride_full` — `409 ride_not_full` if there's still an open spot
+or the ride has no `participantLimit` at all (an unlimited ride is never "full", so a
+waitlist can never apply to it), `409 registration_already_exists` if the caller
+already has an active registration, `409 waitlist_entry_already_exists` for a duplicate
+join. `leaveWaitlist` mirrors `cancelRegistration`'s "no status gate beyond an entry
+existing" discipline. The real new mechanism: `cancelRegistration` now opens a
+transaction, locks the same `rides` row, cancels the registration, then looks up the
+oldest `waiting` entry for that ride (`ORDER BY created_at ASC LIMIT 1`) and — if one
+exists — marks it `promoted` (`promotedAt` set) and inserts a brand-new active
+`Registration` for that user, all inside the one transaction. This is what makes
+"waitlist consistency" atomic with the cancellation that caused it
+(`.claude/rules/database.md`/`.claude/rules/resilience.md`), not a separate step that
+could observe a stale state. `GET /v1/rides/:id` gained the additive
+`viewerWaitlistEntry` field described above. 14 new Vitest tests (join happy path,
+`ride_not_full` for both an open-spot ride and an unlimited one, `registration_already_
+exists`, `waitlist_entry_already_exists`, draft-non-owner/unauthenticated → 404/401,
+leave happy path + rejoin, `waitlist_entry_not_found`, and two auto-promotion tests —
+one confirming FIFO order across three participants, one confirming a cancellation with
+no one waiting is a no-op).
+
+`packages/ui`: `REGISTRATION_ACTION_TERMS` gained `joinWaitlist` ("Встать в список
+ожидания") and `leaveWaitlist` ("Покинуть список ожидания") — `docs/design.md` §13's
+fixed four-term Registration list didn't anticipate a separate join/leave
+call-to-action (only the `waitlisted` state label and the now-unused `full` label), so
+both new terms were appended to that list rather than reusing `waitlisted` for a CTA it
+doesn't semantically fit ("you are on the waitlist" vs. "join the waitlist" are
+different statements). `full` ("Мест не осталось") is now unused in code but left
+defined — `docs/design.md` still names it, and removing a defined term isn't this
+ticket's call to make unilaterally.
+
+`apps/web`: `RegistrationButton` gained a third state — full + no viewer registration/
+waitlist entry shows an active "Встать в список ожидания" button (previously a
+disabled "Мест не осталось" placeholder, since no waitlist existed yet); a waiting
+entry shows the disabled "waitlisted" label plus a "Покинуть список ожидания" button,
+rendered even once registration has closed (same "stays available" rule cancel already
+followed). `RideDetailView` plumbs `viewerWaitlistEntry` through. One real correctness
+fix made along the way, not shipped as a latent bug: cancelling a registration used to
+optimistically decrement `registrationsCount` locally, which is now wrong whenever the
+cancellation silently promotes someone else into the freed spot server-side (the count
+doesn't actually drop) — `onChange`'s cancel branch now refetches the ride detail
+instead of guessing, while the register branch keeps its safe optimistic increment
+(registering never has this side effect on anyone else's count). 10 new/updated
+`apps/web` tests (the old "disabled full state" test was replaced, not just left
+alongside a new one, since the behavior it asserted no longer exists).
+
+Validation: `turbo run lint typecheck build test --force` — 25/25 tasks green across
+all 9 workspace members. `apps/api`: 212 tests (was 198, +14). `apps/web`: 126 tests
+(was 125, net +1 after replacing the obsolete "full" test and adding two new ones).
+`packages/ui`: unchanged at 85 tests — `terminology.test.ts`'s existing fixed-object
+assertion was updated in place for the two new terms, not a new test case.
+`pnpm format:check`/`lint:root` clean. One environment
+gotcha hit and resolved, not a code defect: sourcing the root `.env` (which sets
+`NODE_ENV=development`, needed for `apps/api`'s dev server) into the same shell before
+running `next build` makes the production build crash during static export
+(`<Html> should not be imported outside of pages/_document`, on `/404`/`/_error`) —
+confirmed this reproduces identically on `main` before any of this session's changes,
+so it's a pre-existing environment quirk, not a regression; the fix is simply not
+carrying a `development`-valued `NODE_ENV` into a `next build` invocation
+(`NODE_ENV=production pnpm --filter web build`), not a code or dependency change.
+
+Live-verified via curl against a real Postgres + `apps/api`: organizer creates a ride
+with `participantLimit: 1`, publishes, opens registration; participant 1 registers
+(201, fills the only spot); participant 2's registration is rejected (409 `ride_full`);
+participant 2 joins the waitlist (201); participant 3 joins the waitlist too (201);
+participant 2's duplicate join is rejected (409 `waitlist_entry_already_exists`); ride
+detail as participant 3 shows `registrationsCount: 1` and their own `waiting` entry;
+participant 1 cancels (204) — ride detail as participant 2 now shows an active
+`viewerRegistration` and `viewerWaitlistEntry: null` (promoted), while participant 3
+still shows `viewerWaitlistEntry` with `status: 'waiting'` (not promoted — FIFO order
+respected); participant 3 leaves the waitlist (204), then a second leave attempt
+correctly 404s (`waitlist_entry_not_found`). All scratch test data (rides/users) deleted
+from the DB afterward, confirmed by a direct count query.
+
+Files: `packages/db/src/schema/waitlist-entry.ts` (new) + migration
+`0010_nappy_speed.sql`, `schema/index.ts`; `packages/types/src/domain/
+waitlist-entry.ts` (new), `src/api/{registrations,rides}.ts`, `src/index.ts`;
+`apps/api/src/modules/registrations/` (new: `waitlist-entry-response.schema.ts`;
+extended: `registrations.service.ts` — `toWaitlistEntry`/`joinWaitlist`/
+`leaveWaitlist`, `cancelRegistration` promotion logic; `registrations.routes.ts`;
+`registrations.routes.test.ts`), `apps/api/src/modules/rides/{rides.service,
+ride-response.schema,rides.routes}.ts` (additive `viewerWaitlistEntry`);
+`packages/ui/src/terminology.ts` + `terminology.test.ts` (two new terms);
+`apps/web/src/features/participant/ride-detail/{api,ride-detail.test}.tsx`,
+`components/{RegistrationButton,RideDetailView}.tsx`; `docs/{api,database,design,
+tasks}.md`, `.claude/context/{project-state,current-task}.md`.
+
+Decisions: none new at the ADR level — this implements `docs/product.md` MVP #8
+("waitlist") and the organizer capability "manage registrations and waitlist" already
+named there; no schema/API-contract pattern was invented beyond what `Registration`
+(CR-032) already established.
+
+Known limitations: none new. CR-037 ("Organizer participant list") still needs its own
+waitlist-visibility design (a `WaitlistTable`, `docs/design.md` line 260/282) — not
+reused from this ticket's participant-only shape. CR-038/039 (Communication section)
+still own actually notifying a promoted participant; today they only find out by
+revisiting `/rides/[id]`.
+
+Follow-up: `docs/tasks.md`'s Registration section has CR-037 ("Organizer participant
+list") and CR-091 ("My registrations") remaining.

@@ -13,6 +13,7 @@ import {
 } from 'types';
 import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import { registrationResponseSchema } from '../registrations/registration-response.schema.js';
+import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-response.schema.js';
 import {
   rideOrganizerSummarySchema,
   rideResponseSchema,
@@ -91,7 +92,8 @@ const rideResponseWrapper = z.object({ ride: rideResponseSchema });
 // same additive discipline). CR-030 ("Stops") added `stops` (array, same discipline).
 // CR-031 ("Route points") added `routePoints` (array, same discipline).
 // CR-032 ("Register") added `registrationsCount`/`viewerRegistration` (same
-// discipline — see `rides.service.ts`'s `getRideForViewer`).
+// discipline — see `rides.service.ts`'s `getRideForViewer`). CR-036 ("Waitlist")
+// added `viewerWaitlistEntry` (same discipline).
 const rideDetailResponseSchema = z.object({
   ride: rideResponseSchema,
   organizer: rideOrganizerSummarySchema,
@@ -100,6 +102,7 @@ const rideDetailResponseSchema = z.object({
   routePoints: z.array(routePointResponseSchema),
   registrationsCount: z.number(),
   viewerRegistration: registrationResponseSchema.nullable(),
+  viewerWaitlistEntry: waitlistEntryResponseSchema.nullable(),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 const stopResponseWrapper = z.object({ stop: stopResponseSchema });

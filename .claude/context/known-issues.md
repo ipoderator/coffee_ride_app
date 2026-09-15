@@ -508,6 +508,43 @@ Next action: added CR-091 to `docs/tasks.md`'s Registration section
 `GET /v1/registrations/mine` (or equivalent) joined with ride summaries, plus
 the `/me/rides` screen.
 
+### KI-038 — `next build` crashes if a `development`-valued `NODE_ENV` reaches it from the shell
+
+Status: open (documented workaround, no code fix needed). Discovered: 2026-09-15
+(CR-036, "Waitlist" session, while running the full `turbo run ... build` validation
+pass).
+Problem: this project's root `.env` sets `NODE_ENV=development` (needed for
+`apps/api`'s dev server / `packages/db` migrations to run in dev mode). Sourcing that
+file into the shell (`set -a && source .env && set +a`, the pattern this and prior
+sessions use to get `DATABASE_URL`/etc. into `pnpm`/`turbo` commands) and then running
+`next build` in the same shell makes `apps/web`'s production build crash during static
+export: `Error: <Html> should not be imported outside of pages/_document`, on both
+`/404` and `/_error`. Confirmed via `git stash` that this reproduces identically
+against `main` at the last commit before this session's changes — a pre-existing
+environment/tooling interaction, not a regression this or any other CR introduced.
+Root cause: Next.js only forces `NODE_ENV=production` for `next build` when the
+variable isn't already set; an explicitly inherited `development` value survives and
+changes internal prerendering behavior for the auto-generated `/404`/`/_error` pages
+(the pages-router-style error/document code path), which the app-router-only, no
+`pages/` directory setup in `apps/web` doesn't otherwise exercise. Not caused by a
+stale `.next`/`.turbo`/`node_modules/.cache` — clearing all three and retrying still
+failed under an inherited `NODE_ENV=development`; passed immediately once `NODE_ENV`
+was overridden to `production` for that one command.
+Impact: medium — any session that sources the root `.env` for other reasons (DB
+migrations, `apps/api` env vars) and then runs `turbo run build` or `pnpm --filter web
+build` in the _same_ shell will see a spurious `web:build` failure that looks
+code-related but isn't.
+Workaround: run `apps/web`'s build with `NODE_ENV=production` explicitly overriding
+whatever the shell inherited, e.g. `NODE_ENV=production pnpm --filter web build`, or
+export the other needed variables (`DATABASE_URL` etc.) individually instead of
+sourcing the whole `.env` file before a build. `turbo run build` alone (without first
+sourcing `.env` into the same shell) does not hit this either, since nothing sets
+`NODE_ENV` for it in that case.
+Next action: none required — this is a shell/invocation-order gotcha, not a bug in
+`apps/web`'s own code or config. Worth remembering for any future session's validation
+pass: don't reuse a `source .env`'d shell for both `apps/api` DB work and `apps/web`
+builds without overriding `NODE_ENV` for the latter.
+
 ---
 
 ## Resolved

@@ -1,5 +1,6 @@
 import type {
   CreateRegistrationResponse,
+  CreateWaitlistEntryResponse,
   GetRideResponse,
   GetRouteGeometryResponse,
   ProblemDetails,
@@ -9,6 +10,7 @@ import { ApiError } from '@/lib/api/errors';
 export { ApiError };
 export type {
   CreateRegistrationResponse,
+  CreateWaitlistEntryResponse,
   GetRideResponse,
   GetRouteGeometryResponse,
 };
@@ -87,6 +89,43 @@ export async function registerForRide(
  */
 export async function cancelRideRegistration(rideId: string): Promise<void> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/register`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
+}
+
+/**
+ * CR-036 ("Waitlist"). Throws `ApiError` on any non-2xx response —
+ * `unauthorized` (401), `ride_registration_not_open`/`ride_not_full`/
+ * `registration_already_exists`/`waitlist_entry_already_exists` (409).
+ */
+export async function joinRideWaitlist(
+  rideId: string,
+): Promise<CreateWaitlistEntryResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/waitlist`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as
+    CreateWaitlistEntryResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as CreateWaitlistEntryResponse;
+}
+
+/**
+ * CR-036 ("Waitlist"). `204` no body on success. Throws `ApiError` on any non-2xx
+ * response — `unauthorized` (401) or `waitlist_entry_not_found` (404).
+ */
+export async function leaveRideWaitlist(rideId: string): Promise<void> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/waitlist`, {
     method: 'DELETE',
   });
 

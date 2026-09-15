@@ -8,6 +8,7 @@ import {
   routes,
   stops,
   users,
+  waitlistEntries,
 } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
@@ -29,7 +30,10 @@ import type {
   UpdateRoutePointRequest,
   UpdateStopRequest,
 } from 'types';
-import { toRegistration } from '../registrations/registrations.service.js';
+import {
+  toRegistration,
+  toWaitlistEntry,
+} from '../registrations/registrations.service.js';
 import {
   CursorError,
   clampLimit,
@@ -627,6 +631,24 @@ export async function getRideForViewer(
         .limit(1)
     : [];
 
+  // CR-036 ("Waitlist"): additive `viewerWaitlistEntry` (the caller's own `waiting`
+  // queue entry, `null` if none/unauthenticated/promoted/cancelled), same embedding
+  // precedent as `viewerRegistration` above. Reuses `registrations.service.ts`'s
+  // `toWaitlistEntry` mapper rather than duplicating it.
+  const viewerWaitlistEntryRows = userId
+    ? await db
+        .select()
+        .from(waitlistEntries)
+        .where(
+          and(
+            eq(waitlistEntries.rideId, rideId),
+            eq(waitlistEntries.userId, userId),
+            eq(waitlistEntries.status, 'waiting'),
+          ),
+        )
+        .limit(1)
+    : [];
+
   return {
     ride: toPublicRide(row.ride),
     organizer: { id: row.organizerId, name: row.organizerName },
@@ -636,6 +658,9 @@ export async function getRideForViewer(
     registrationsCount: countRow?.count ?? 0,
     viewerRegistration: viewerRegistrationRows[0]
       ? toRegistration(viewerRegistrationRows[0])
+      : null,
+    viewerWaitlistEntry: viewerWaitlistEntryRows[0]
+      ? toWaitlistEntry(viewerWaitlistEntryRows[0])
       : null,
   };
 }

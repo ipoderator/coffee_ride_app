@@ -211,7 +211,8 @@ for a non-existent ride _or_ someone else's still-`draft` one. `409
 ride_registration_not_open` for any other status (a ride is only registrable while
 `registration_open`). `409 registration_already_exists` if the caller already has an
 active registration for this ride. `409 ride_full` once active registrations reach
-`participantLimit` (no auto-waitlist — CR-036 owns that, not this ticket). Bundles
+`participantLimit` (no auto-waitlist — joining the queue is a separate, explicit
+action, `POST .../waitlist` below). Bundles
 CR-034 ("Capacity enforcement") and CR-035 ("Duplicate protection"): a single
 `SELECT ... FOR UPDATE` on the `rides` row inside the transaction serializes every
 concurrent registration attempt for the same ride, making the duplicate check, the
@@ -231,12 +232,40 @@ later re-registration is a fresh row. `204`, no body.
 GET `/v1/rides/:id` (CR-016/CR-018/CR-023) gained two additive fields alongside
 `route`/`stops`/`routePoints`: `registrationsCount` (active registrations for this
 ride) and `viewerRegistration` (the caller's own active registration, `null` if none
-or unauthenticated).
+or unauthenticated). CR-036 ("Waitlist") added a third: `viewerWaitlistEntry` (the
+caller's own `waiting` queue entry, `null` if none/unauthenticated/promoted/
+cancelled).
+
+POST `/v1/rides/:id/waitlist` — **implemented (CR-036, "Waitlist")**. Same auth
+requirement and resource-enumeration-safe `404 ride_not_found` as `POST .../register`.
+`409 ride_registration_not_open` for any status other than `registration_open`. `409
+registration_already_exists` if the caller already has an active registration for
+this ride (register/cancel instead — a spot is already theirs). `409 ride_not_full`
+if the ride still has an open spot, or has no `participantLimit` at all — call
+`POST .../register` instead of joining a queue for a spot that isn't scarce. `409
+waitlist_entry_already_exists` if the caller already has a `waiting` entry. Re-derives
+capacity itself inside the same `SELECT ... FOR UPDATE` lock `POST .../register`
+uses, rather than trusting a stale `409 ride_full` the client might be reacting to.
+`201` → `{ waitlistEntry }` (`WaitlistEntry`: `id`/`rideId`/`userId`/`status`/
+`createdAt`/`updatedAt`/`cancelledAt`/`promotedAt`). No request body.
+
+DELETE `/v1/rides/:id/waitlist` — **implemented (CR-036, "Waitlist")**. Same auth
+requirement as `POST`. `404 waitlist_entry_not_found` if the caller has no `waiting`
+entry for this ride. No status gate beyond "a waiting entry exists" — same "stays
+available even after the organizer closes registration" discipline as
+`DELETE .../register`. Sets `status: 'cancelled'` + `cancelledAt`, does not delete the
+row. `204`, no body.
+
+**Auto-promotion**: `DELETE /v1/rides/:id/register` (cancellation) now also promotes
+the oldest `waiting` entry (FIFO, by `createdAt`) for that ride — if one exists — into
+a brand-new active `Registration`, inside the same transaction/row lock as the
+cancellation itself. The promoted `WaitlistEntry` is marked `status: 'promoted'` +
+`promotedAt` (terminal, kept as a row). This is not a separate endpoint; it is a side
+effect of cancellation, invisible to the cancelling caller's own response.
 
 GET `/v1/rides/:id/participants` — collection, paginated. Not yet implemented
-(CR-037, "Organizer participant list").
-POST `/v1/rides/:id/waitlist` — not yet implemented (CR-036, "Waitlist").
-DELETE `/v1/rides/:id/waitlist` — not yet implemented (CR-036).
+(CR-037, "Organizer participant list") — will need its own waitlist-visibility design,
+not reused from this ticket's participant-facing shape.
 
 ## Route
 

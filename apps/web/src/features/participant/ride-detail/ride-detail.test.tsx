@@ -88,6 +88,7 @@ function baseDetailResponse(
     routePoints: [],
     registrationsCount: 0,
     viewerRegistration: null,
+    viewerWaitlistEntry: null,
     ...overrides,
   };
 }
@@ -291,7 +292,7 @@ describe('RideDetailView', () => {
       expect(await screen.findByText('Зарегистрироваться')).toBeInTheDocument();
     });
 
-    it('shows a disabled "full" state once capacity is reached', async () => {
+    it('offers joining the waitlist once capacity is reached', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: {
@@ -305,8 +306,32 @@ describe('RideDetailView', () => {
 
       render(<RideDetailView rideId="ride-1" />);
 
-      const button = await screen.findByText('Мест не осталось');
-      expect(button.closest('button')).toBeDisabled();
+      const button = await screen.findByText('Встать в список ожидания');
+      expect(button.closest('button')).not.toBeDisabled();
+    });
+
+    it('shows the waitlisted state and a leave-waitlist action when the viewer is queued, even once registration has closed', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_closed' },
+          viewerWaitlistEntry: {
+            id: 'waitlist-entry-1',
+            rideId: 'ride-1',
+            userId: 'user-1',
+            status: 'waiting',
+            createdAt: '2027-01-01T00:00:00.000Z',
+            updatedAt: '2027-01-01T00:00:00.000Z',
+            cancelledAt: null,
+            promotedAt: null,
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const waitlistedLabel = await screen.findByText('В списке ожидания');
+      expect(waitlistedLabel.closest('button')).toBeDisabled();
+      expect(screen.getByText('Покинуть список ожидания')).toBeInTheDocument();
     });
 
     it('offers cancellation when the viewer already has an active registration, even once registration has closed', async () => {

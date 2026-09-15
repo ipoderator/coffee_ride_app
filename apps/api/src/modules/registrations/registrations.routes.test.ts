@@ -404,3 +404,392 @@ describe('/v1/rides/:id/register', () => {
     });
   });
 });
+
+describe('/v1/rides/:id/waitlist', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  afterAll(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  describe('POST /v1/rides/:id/waitlist', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it('rejects a non-existent ride with 404 ride_not_found', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${randomUUID()}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it("hides a non-owner's still-draft ride behind 404 ride_not_found", async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        openRegistration: false,
+      });
+      const { rawToken: participantToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('rejects a published-but-not-registration_open ride with 409 ride_registration_not_open', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app, {
+        openRegistration: false,
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: organizerToken },
+      });
+      const { rawToken: participantToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_registration_not_open');
+      await app.close();
+    });
+
+    it('rejects joining a ride that still has open spots with 409 ride_not_full', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 2,
+      });
+      const { rawToken: participantToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_full');
+      await app.close();
+    });
+
+    it('rejects joining a ride with no participantLimit with 409 ride_not_full', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app);
+      const { rawToken: participantToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('ride_not_full');
+      await app.close();
+    });
+
+    it('rejects joining while already actively registered with 409 registration_already_exists', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: participantToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('registration_already_exists');
+      await app.close();
+    });
+
+    it('joins a full ride and reflects it on GET /v1/rides/:id', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: firstToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      const { rawToken: secondToken, userId: secondUserId } =
+        await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const waitlistEntry = response.json().waitlistEntry;
+      expect(waitlistEntry.rideId).toBe(rideId);
+      expect(waitlistEntry.userId).toBe(secondUserId);
+      expect(waitlistEntry.status).toBe('waiting');
+      expect(waitlistEntry.promotedAt).toBeNull();
+
+      const detail = await getRideDetail(app, rideId, secondToken);
+      expect(detail.json().viewerWaitlistEntry.id).toBe(waitlistEntry.id);
+
+      await app.close();
+    });
+
+    it('rejects a duplicate waiting entry with 409 waitlist_entry_already_exists', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: firstToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      const { rawToken: secondToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('waitlist_entry_already_exists');
+      await app.close();
+    });
+  });
+
+  describe('DELETE /v1/rides/:id/waitlist', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${randomUUID()}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+      });
+
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it('rejects leaving a waitlist the caller never joined with 404 waitlist_entry_not_found', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app);
+      const { rawToken: participantToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('waitlist_entry_not_found');
+      await app.close();
+    });
+
+    it('leaves the waitlist and allows rejoining', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: firstToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      const { rawToken: secondToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+
+      const left = await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+      expect(left.statusCode).toBe(204);
+
+      const afterLeave = await getRideDetail(app, rideId, secondToken);
+      expect(afterLeave.json().viewerWaitlistEntry).toBeNull();
+
+      const rejoined = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+      expect(rejoined.statusCode).toBe(201);
+
+      await app.close();
+    });
+  });
+
+  describe('auto-promotion on cancellation', () => {
+    it('promotes the oldest waiting entry into an active registration when a spot frees up', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: firstToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+
+      // Two participants queue up, in order.
+      const { rawToken: secondToken, userId: secondUserId } =
+        await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+      const { rawToken: thirdToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: thirdToken },
+      });
+
+      // The first participant cancels, freeing exactly one spot.
+      const cancelled = await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      expect(cancelled.statusCode).toBe(204);
+
+      // The second (oldest waiting) participant was promoted, not the third.
+      const secondDetail = await getRideDetail(app, rideId, secondToken);
+      expect(secondDetail.json().viewerRegistration).not.toBeNull();
+      expect(secondDetail.json().viewerRegistration.userId).toBe(secondUserId);
+      expect(secondDetail.json().viewerWaitlistEntry).toBeNull();
+      expect(secondDetail.json().registrationsCount).toBe(1);
+
+      const thirdDetail = await getRideDetail(app, rideId, thirdToken);
+      expect(thirdDetail.json().viewerRegistration).toBeNull();
+      expect(thirdDetail.json().viewerWaitlistEntry).not.toBeNull();
+      expect(thirdDetail.json().viewerWaitlistEntry.status).toBe('waiting');
+
+      // The promoted waitlist entry itself is marked `promoted`, not deleted —
+      // verified indirectly: a fresh waitlist join from the same (now-registered)
+      // user must be rejected as already-registered, not treated as a fresh queue
+      // entry, and joining is impossible anyway since the ride is full again.
+      const rejoinAttempt = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+      expect(rejoinAttempt.statusCode).toBe(409);
+      expect(rejoinAttempt.json().code).toBe('registration_already_exists');
+
+      await app.close();
+    });
+
+    it('does nothing when there is no one waiting', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: firstToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+
+      const cancelled = await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      expect(cancelled.statusCode).toBe(204);
+
+      const detail = await getRideDetail(app, rideId, firstToken);
+      expect(detail.json().registrationsCount).toBe(0);
+
+      await app.close();
+    });
+  });
+});

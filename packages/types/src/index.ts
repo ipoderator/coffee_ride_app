@@ -17,3 +17,4 @@ export * from './domain/route.js';
 export * from './domain/stop.js';
 export * from './domain/route-point.js';
 export * from './domain/registration.js';
+export * from './domain/waitlist-entry.js';

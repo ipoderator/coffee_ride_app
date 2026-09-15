@@ -4,6 +4,7 @@ import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
 import type { Stop } from '../domain/stop.js';
 import { ROUTE_POINT_TYPES, type RoutePoint } from '../domain/route-point.js';
 import type { Registration } from '../domain/registration.js';
+import type { WaitlistEntry } from '../domain/waitlist-entry.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -82,6 +83,10 @@ export interface RideOrganizerSummary {
 // `viewerRegistration` (the caller's own active registration, `null` if none or
 // unauthenticated) — same "no separate read endpoint, embed it" precedent as
 // `route`/`stops`/`routePoints`.
+// CR-036 ("Waitlist"): additive `viewerWaitlistEntry` (the caller's own `waiting`
+// queue entry, `null` if none/unauthenticated/promoted/cancelled) — same precedent.
+// No `waitlistCount` this ticket — nothing participant-facing needs a total queue
+// size yet (`.claude/context/current-task.md`).
 export interface GetRideResponse {
   ride: Ride;
   organizer: RideOrganizerSummary;
@@ -90,6 +95,7 @@ export interface GetRideResponse {
   routePoints: RoutePoint[];
   registrationsCount: number;
   viewerRegistration: Registration | null;
+  viewerWaitlistEntry: WaitlistEntry | null;
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real

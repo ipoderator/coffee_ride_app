@@ -2,13 +2,19 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import { requireAuth } from '../../plugins/auth.js';
 import { registrationResponseSchema } from './registration-response.schema.js';
+import { waitlistEntryResponseSchema } from './waitlist-entry-response.schema.js';
 import {
   cancelRegistration,
   createRegistration,
+  joinWaitlist,
+  leaveWaitlist,
 } from './registrations.service.js';
 
 const registrationResponseWrapper = z.object({
   registration: registrationResponseSchema,
+});
+const waitlistEntryResponseWrapper = z.object({
+  waitlistEntry: waitlistEntryResponseSchema,
 });
 const rideIdParamsSchema = z.object({
   id: z.uuid('id must be a valid ride id.'),
@@ -61,6 +67,45 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       await cancelRegistration(app.db, request.user!.id, request.params.id);
+      return reply.status(204).send();
+    },
+  );
+
+  // CR-036 ("Waitlist"). `404 ride_not_found` (non-existent/someone else's `draft`),
+  // `409 ride_registration_not_open`, `409 registration_already_exists` (already
+  // actively registered), `409 ride_not_full` (there's still an open spot — register
+  // instead), `409 waitlist_entry_already_exists`.
+  app.post(
+    '/:id/waitlist',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 201: waitlistEntryResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const waitlistEntry = await joinWaitlist(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(201).send({ waitlistEntry });
+    },
+  );
+
+  // CR-036 ("Waitlist"). `404 waitlist_entry_not_found` if the caller has no waiting
+  // entry for this ride.
+  app.delete(
+    '/:id/waitlist',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      await leaveWaitlist(app.db, request.user!.id, request.params.id);
       return reply.status(204).send();
     },
   );

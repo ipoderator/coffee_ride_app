@@ -116,6 +116,8 @@ describe('REGISTRATION_ACTION_TERMS', () => {
       cancel: 'Отменить регистрацию',
       waitlisted: 'В списке ожидания',
       full: 'Мест не осталось',
+      joinWaitlist: 'Встать в список ожидания',
+      leaveWaitlist: 'Покинуть список ожидания',
     });
   });
 });

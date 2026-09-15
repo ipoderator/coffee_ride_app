@@ -371,7 +371,8 @@ maps through this table. Do not invent synonyms per screen.
 Участники.
 
 **Registration:** Зарегистрироваться · Отменить регистрацию · В списке ожидания ·
-Мест не осталось.
+Мест не осталось · Встать в список ожидания (CR-036) · Покинуть список ожидания
+(CR-036).
 
 Tone of voice: neutral and factual, «вы» without capitalization, no exclamation marks, no
 marketing enthusiasm. Errors state what happened and what to do next, and never blame the

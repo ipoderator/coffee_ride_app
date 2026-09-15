@@ -117,7 +117,12 @@ export const DIFFICULTY_LEVEL_TERMS: Record<DifficultyLevel, string> = {
  * either — same provisional-key caveat as {@link RideServiceKey}.
  */
 export type RegistrationActionKey =
-  'register' | 'cancel' | 'waitlisted' | 'full';
+  | 'register'
+  | 'cancel'
+  | 'waitlisted'
+  | 'full'
+  | 'joinWaitlist'
+  | 'leaveWaitlist';
 
 export const REGISTRATION_ACTION_TERMS: Record<RegistrationActionKey, string> =
   {
@@ -125,6 +130,8 @@ export const REGISTRATION_ACTION_TERMS: Record<RegistrationActionKey, string> =
     cancel: 'Отменить регистрацию',
     waitlisted: 'В списке ожидания',
     full: 'Мест не осталось',
+    joinWaitlist: 'Встать в список ожидания',
+    leaveWaitlist: 'Покинуть список ожидания',
   };
 
 /**

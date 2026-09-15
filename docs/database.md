@@ -102,7 +102,24 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   `apps/api/src/modules/registrations/registrations.service.ts`. No separate read
   endpoint — exposed as additive `registrationsCount`/`viewerRegistration` fields on
   `GET /v1/rides/:id`.
-- WaitlistEntry — user waiting for a place. Not implemented yet (CR-036).
+- WaitlistEntry — user waiting for a place (CR-036, "Waitlist"): `id`, `rideId` (FK →
+  Ride, `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`), `status` (not
+  null, pg enum `waiting`/`promoted`/`cancelled`, default `waiting`), `createdAt`/
+  `updatedAt` (`timestamptz`), `cancelledAt` (nullable, set only when `status` becomes
+  `cancelled` — enforced by a CHECK), `promotedAt` (nullable, set only when `status`
+  becomes `promoted` — enforced by a CHECK). Queue order is `createdAt` ascending, no
+  separate `position` column — a waitlist has no reordering use case, unlike
+  `Stop.position`. A partial unique index on `(rideId, userId) WHERE status =
+'waiting'` mirrors `Registration`'s duplicate-protection pattern: only one waiting
+  row per (ride, user) at a time, any number of promoted/cancelled ones. Joining
+  requires the ride to actually be full (re-derived server-side, not trusted from a
+  stale client-side `409 ride_full`) — see
+  `apps/api/src/modules/registrations/registrations.service.ts`'s `joinWaitlist`.
+  Cancelling an active `Registration` promotes the oldest `waiting` entry (if any) into
+  a fresh active `Registration`, inside the same transaction/row lock as the
+  cancellation itself (`cancelRegistration`) — this is what makes "waitlist
+  consistency" atomic, per `.claude/rules/resilience.md`. No separate read endpoint —
+  exposed as an additive `viewerWaitlistEntry` field on `GET /v1/rides/:id`.
 - RideUpdate — organizer message.
 - Notification — delivery record.
 - Review — participant feedback.
@@ -112,6 +129,7 @@ Important invariants:
 - ride has organizer;
 - active duplicate registration is forbidden;
 - capacity is server-side and atomic;
+- waitlist promotion on cancellation is atomic with the cancellation itself (CR-036);
 - private participant data is restricted.
 
 ## Time

@@ -7,6 +7,7 @@ import type {
   RouteGeometryPoint,
   RouteSummary,
   Stop,
+  WaitlistEntry,
 } from 'types';
 import {
   BICYCLE_TYPE_TERMS,
@@ -119,6 +120,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [registrationsCount, setRegistrationsCount] = useState(0);
   const [viewerRegistration, setViewerRegistration] =
     useState<Registration | null>(null);
+  const [viewerWaitlistEntry, setViewerWaitlistEntry] =
+    useState<WaitlistEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +135,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         setStops(response.stops);
         setRegistrationsCount(response.registrationsCount);
         setViewerRegistration(response.viewerRegistration);
+        setViewerWaitlistEntry(response.viewerWaitlistEntry);
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -280,12 +284,28 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         participantLimit={ride.participantLimit}
         registrationsCount={registrationsCount}
         viewerRegistration={viewerRegistration}
+        viewerWaitlistEntry={viewerWaitlistEntry}
         onChange={(registration) => {
           setViewerRegistration(registration);
-          setRegistrationsCount((count) =>
-            registration ? count + 1 : Math.max(0, count - 1),
-          );
+          if (registration) {
+            setRegistrationsCount((count) => count + 1);
+            return;
+          }
+          // CR-036 ("Waitlist"): cancelling may have silently promoted the oldest
+          // waiting entry into the freed spot server-side, so the count might not
+          // actually have gone down — refetch instead of guessing
+          // (`.claude/rules/database.md`: "live status, not stale coordination").
+          getRideDetail(rideId)
+            .then((response) => {
+              setRegistrationsCount(response.registrationsCount);
+              setViewerWaitlistEntry(response.viewerWaitlistEntry);
+            })
+            .catch(() => {
+              // Best-effort refresh only — the cancellation itself already
+              // succeeded; a stale count here is not worth surfacing an error for.
+            });
         }}
+        onWaitlistChange={setViewerWaitlistEntry}
       />
 
       {route ? <RouteSection rideId={rideId} route={route} /> : null}

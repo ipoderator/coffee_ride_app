@@ -19,3 +19,4 @@ export * from './route.js';
 export * from './stop.js';
 export * from './route-point.js';
 export * from './registration.js';
+export * from './waitlist-entry.js';

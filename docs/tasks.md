@@ -293,7 +293,16 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       (`409 registration_already_exists`), backed by a DB-level partial unique
       index (`registrations_ride_id_user_id_active_unique`) as the invariant
       backstop.
-- [ ] CR-036 Waitlist
+- [x] CR-036 Waitlist — done 2026-09-15: ninth domain table (`waitlist_entries`:
+      `rideId`/`userId`/`status` `waiting`/`promoted`/`cancelled`/`cancelledAt`/
+      `promotedAt`, queue order is `createdAt` ascending, no `position` column), new
+      `POST`/`DELETE /v1/rides/:id/waitlist` in the existing `registrations` module,
+      plus an additive `viewerWaitlistEntry` field on `GET /v1/rides/:id`. Joining
+      requires the ride to actually be full (`409 ride_not_full` otherwise — register
+      instead). `DELETE /v1/rides/:id/register` (cancellation) now auto-promotes the
+      oldest waiting entry into a fresh active registration, inside the same
+      transaction/row lock as the cancellation. `RegistrationButton` gained a third
+      state (join/leave waitlist). See `docs/changelog.md`.
 - [ ] CR-037 Organizer participant list
 - [ ] CR-091 "My registrations" (`/me/rides`, `docs/design.md`'s screen inventory)
       — new ticket, added this session (see `.claude/context/known-issues.md`
