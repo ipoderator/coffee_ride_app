@@ -448,6 +448,16 @@ export const RIDE_ROUTE_TERMS = {
   gpxInvalid: 'Файл не распознан как корректный GPX-трек.',
   gpxFileTooLarge: 'Файл превышает допустимый размер.',
   storageUnavailable: 'Загрузка недоступна. Попробуйте ещё раз позже.',
+  // CR-029 ("Route metadata", resolves KI-034): shown only when the ride's own
+  // distance/elevation (organizer-entered, `EditRideForm`) diverge from the
+  // uploaded track's computed values — an upload with both fields still empty
+  // auto-fills them server-side, so this note is the deliberate-mismatch case only.
+  metricsMismatch:
+    'Дистанция или набор высоты заезда отличаются от данных трека.',
+  metricsMismatchRide: 'В заезде указано',
+  metricsMismatchTrack: 'по треку',
+  metricsSyncAction: 'Использовать данные трека',
+  metricsSyncSuccess: 'Дистанция и набор высоты заезда обновлены из трека.',
 } as const;
 
 /**

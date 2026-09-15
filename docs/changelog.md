@@ -1923,3 +1923,81 @@ Next logical task: CR-029 ("Route metadata") — resolves KI-034 (`Route`/
 `Ride` distance-elevation reconciliation) deliberately; alternatively
 CR-030/CR-031 (Stops/RoutePoint), which have no dependency on CR-028 or
 CR-029.
+
+## 2026-09-15 — CR-029 — Route metadata
+
+`docs/tasks.md`'s Route section, third ticket. `docs/tasks.md` names it bare
+("Route metadata") — its scope comes from KI-034, which explicitly names
+this ticket as where to decide the `Route`/`Ride` distance-elevation
+reconciliation deliberately.
+
+Decision: two-part resolution rather than a single "pick one number" call —
+(1) auto-fill for the common case: `POST /v1/rides/:id/route` (first upload
+only) now fills whichever of `Ride.distanceKm`/`elevationGainMeters` is
+still `null` from the GPX-computed values, independently per field, inside
+the same DB transaction as the route insert (`db.transaction`, same pattern
+`auth.service.ts` already uses) — an organizer who never manually entered a
+figure never sees two numbers at all. Never overwrites an already-entered
+value (the exact concern CR-027 flagged when it deliberately skipped this).
+`PATCH .../route` (replace) does **not** auto-fill — by then `Ride`'s fields
+already reflect something real, and re-filling on every replace would be
+indistinguishable from always trusting the track. (2) explicit opt-in for
+the remaining edge case: the organizer's own `/organizer/rides/[id]/route`
+screen shows a reconciliation note with a "Использовать данные трека"
+action when the two have genuinely diverged — reuses the existing `PATCH
+/v1/rides/:id` (CR-018) directly, no new endpoint. `/rides/[id]`'s
+participant-facing display is unchanged (still reads `Ride`'s fields, the
+precedent CR-023/CR-028 already established — "the chart is an
+illustration, the number is the fact," `docs/design.md` §6).
+
+API: `apps/api/src/modules/rides/rides.service.ts`'s `uploadRoute` now wraps
+its route insert in `db.transaction(...)`; within it, reads the ride's
+current `distanceKm`/`elevationGainMeters` and conditionally `UPDATE`s only
+the `null` ones. No schema change, no new endpoint, no ADR (a business-logic
+policy decision, not an architecture change).
+
+Web: `apps/web/src/features/organizer/route/api.ts`'s `getRideRouteState`
+now also returns the ride's own `distanceKm`/`elevationGainMeters` (already
+on the same `GET /v1/rides/:id` response, just not previously extracted);
+new `syncRideMetricsFromRoute(rideId, metrics)` (own fetch, not imported
+from `features/organizer/rides/` — `.claude/rules/extensibility.md`).
+`RouteUploadForm.tsx` now reloads its full state (not just the mutation
+response) after every upload/replace/sync, so its mismatch check always
+reflects what the server actually did rather than a locally-guessed copy of
+the auto-fill logic; a `hasMetricsMismatch` check (`rides.distanceKm`/
+`routes.distanceKm` share the same `numeric(6,1)` precision server-side, so
+a plain `!==` is exact) drives a new inline note + sync button, shown only
+while the ride is still a draft (matching every other mutating control on
+this screen). `packages/ui/src/terminology.ts`'s `RIDE_ROUTE_TERMS` gained
+five new entries for this note.
+
+Tests: 4 new `apps/api` tests (`route.routes.test.ts` — both-null auto-fill,
+fill-only-the-unset-field, no-change-when-both-already-set, replace-never-
+touches-ride) — 160 total, was 156. 3 new `apps/web` tests
+(`route.test.tsx` — mismatch note + button shown, sync action adopts the
+track's figures and clears the note, sync action hidden for a non-draft
+ride) — 109 total, was 106.
+
+Validation: `turbo run lint typecheck test --force` (19 tasks, all 8
+packages) green against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`.
+`apps/web build`/`apps/api build` both green. `format:check`/`lint:root`
+clean after one `prettier --write` pass (cosmetic, one file). Live-verified
+via curl against a real Postgres + a freshly started `apps/api`: a real
+upload attempt correctly 503'd (S3 unreachable, KI-015) and left the ride's
+fields untouched (transaction never partially applies); since a live upload
+can't complete in this environment, a `routes` row was inserted directly to
+exercise the reconciliation flow end to end — a manually-entered mismatch
+was visible on `GET /v1/rides/:id`, and `PATCH` with the route's own values
+(the sync button's exact action) resolved it. Live browser-verified via the
+`browser-automation` skill against a real `next dev` server + `apps/api`
+(same origin as `WEB_ORIGIN`, required for the CSRF check the sync button's
+`PATCH` goes through): the mismatch note and button rendered correctly with
+a real mismatch present; clicking it showed the success message and the
+note disappeared — 0 console errors, 0 failed requests. All test data
+deleted from the scratch DB by id/email afterward.
+
+Known limitations: KI-034 resolved. No new issues.
+
+Next logical task: CR-030 ("Stops") or CR-031 ("Route points") — neither
+depends on CR-028/CR-029; `docs/tasks.md`'s order puts CR-030 first.

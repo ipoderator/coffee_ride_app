@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -18,6 +18,7 @@ import {
   getRideRouteState,
   replaceRoute,
   routeDownloadUrl,
+  syncRideMetricsFromRoute,
   uploadRoute,
   type RouteSummary,
 } from '../api';
@@ -29,10 +30,18 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
  * `EditRideForm` uses for the rest of ride configuration — download stays available
  * at any status (viewer-visibility rule mirrors `GET /v1/rides/:id`,
  * `.claude/context/current-task.md`), only upload/replace/delete require `draft`.
+ *
+ * CR-029 ("Route metadata", resolves KI-034): also tracks the ride's own
+ * `distanceKm`/`elevationGainMeters` (`Ride`'s organizer-entered fields, distinct
+ * from `route`'s GPX-computed ones) to show a reconciliation note when they diverge.
  */
 export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rideStatus, setRideStatus] = useState<string | null>(null);
+  const [rideDistanceKm, setRideDistanceKm] = useState<number | null>(null);
+  const [rideElevationGainMeters, setRideElevationGainMeters] = useState<
+    number | null
+  >(null);
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
@@ -40,15 +49,20 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [isPending, setIsPending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const reload = useCallback(async () => {
+    const state = await getRideRouteState(rideId);
+    setRideStatus(state.status);
+    setRideDistanceKm(state.distanceKm);
+    setRideElevationGainMeters(state.elevationGainMeters);
+    setRoute(state.route);
+  }, [rideId]);
+
   useEffect(() => {
     let cancelled = false;
 
-    getRideRouteState(rideId)
-      .then((state) => {
-        if (cancelled) return;
-        setRideStatus(state.status);
-        setRoute(state.route);
-        setStatus('ready');
+    reload()
+      .then(() => {
+        if (!cancelled) setStatus('ready');
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -65,7 +79,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [rideId]);
+  }, [reload]);
 
   function resetMessages() {
     setFormError(null);
@@ -110,10 +124,17 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     setIsPending(true);
     try {
       const isReplace = route !== null;
-      const uploaded = isReplace
-        ? await replaceRoute(rideId, file)
-        : await uploadRoute(rideId, file);
-      setRoute(uploaded);
+      if (isReplace) {
+        await replaceRoute(rideId, file);
+      } else {
+        await uploadRoute(rideId, file);
+      }
+      // Re-fetches rather than trusting the upload response alone: a first upload
+      // may have auto-filled the ride's own distanceKm/elevationGainMeters
+      // (CR-029, resolves KI-034) — reloading keeps this screen's mismatch check
+      // accurate against what the server actually did, not a locally-guessed copy
+      // of its auto-fill logic.
+      await reload();
       setSuccessMessage(
         isReplace
           ? RIDE_ROUTE_TERMS.replaceSuccess
@@ -137,6 +158,25 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
       await deleteRoute(rideId);
       setRoute(null);
       setSuccessMessage(RIDE_ROUTE_TERMS.deleteSuccess);
+    } catch (error) {
+      handleUploadError(error);
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function handleSync() {
+    if (isPending || !route) return;
+
+    resetMessages();
+    setIsPending(true);
+    try {
+      await syncRideMetricsFromRoute(rideId, {
+        distanceKm: route.distanceKm,
+        elevationGainMeters: route.elevationGainMeters,
+      });
+      await reload();
+      setSuccessMessage(RIDE_ROUTE_TERMS.metricsSyncSuccess);
     } catch (error) {
       handleUploadError(error);
     } finally {
@@ -178,6 +218,14 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const elevation = route
     ? formatElevationParts(route.elevationGainMeters)
     : null;
+  // CR-029 ("Route metadata", resolves KI-034): `rides.distanceKm`/
+  // `routes.distanceKm` share the same `numeric(6,1)` precision server-side (and
+  // likewise `elevationGainMeters` is a plain `integer` on both), so a direct `!==`
+  // is exact — no floating-point tolerance needed.
+  const hasMetricsMismatch =
+    route !== null &&
+    (rideDistanceKm !== route.distanceKm ||
+      rideElevationGainMeters !== route.elevationGainMeters);
 
   return (
     <div className="flex flex-col gap-4">
@@ -228,6 +276,34 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
                 {RIDE_ROUTE_TERMS.download}
               </a>
             </div>
+            {hasMetricsMismatch && (
+              <div className="flex flex-col gap-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
+                <p className="text-sm text-warning">
+                  {RIDE_ROUTE_TERMS.metricsMismatch}
+                </p>
+                <p className="text-sm text-text-secondary">
+                  {RIDE_ROUTE_TERMS.metricsMismatchRide}:{' '}
+                  {formatDistanceParts(rideDistanceKm).value}{' '}
+                  {formatDistanceParts(rideDistanceKm).unit} ·{' '}
+                  {formatElevationParts(rideElevationGainMeters).value}{' '}
+                  {formatElevationParts(rideElevationGainMeters).unit}
+                  {' — '}
+                  {RIDE_ROUTE_TERMS.metricsMismatchTrack}: {distance!.value}{' '}
+                  {distance!.unit} · {elevation!.value} {elevation!.unit}
+                </p>
+                {isDraft && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    isLoading={isPending}
+                    onClick={handleSync}
+                    className="self-start"
+                  >
+                    {RIDE_ROUTE_TERMS.metricsSyncAction}
+                  </Button>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="flex flex-col gap-1">

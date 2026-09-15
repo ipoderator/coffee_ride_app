@@ -415,7 +415,8 @@ only marginally more useful than today's curl workaround.
 
 ### KI-034 — `routes.distanceKm`/`elevationGainMeters` (GPX-computed) and `rides.distanceKm`/`elevationGainMeters` (organizer-entered) are not reconciled
 
-Status: open. Discovered: 2026-09-15 (CR-027, "GPX upload" session).
+Status: resolved 2026-09-15 (CR-029, "Route metadata" — its own named "next
+action"). Discovered: 2026-09-15 (CR-027, "GPX upload" session).
 Problem: `PATCH /v1/rides/:id` (CR-018) lets an organizer manually enter
 `distanceKm`/`elevationGainMeters` on the `Ride` row itself. CR-027 adds a
 second, independent computation of the same two figures on the new `Route`
@@ -431,11 +432,21 @@ Will matter more once a ride-detail screen shows route data too (CR-028/029).
 Workaround: none needed — both figures are individually correct for what
 they measure (one is the organizer's stated summary, the other is the GPX's
 actual measurement); nothing currently conflates them.
-Next action: CR-029 ("Route metadata") is the ticket named in
-`.claude/context/current-task.md`'s CR-027 investigation as the place to
-decide this deliberately (e.g. auto-fill `Ride`'s fields from `Route` on
-upload, prefer one as authoritative for display, or show both with distinct
-labels) — not a default to pick silently inside CR-027 itself.
+Resolution: `POST /v1/rides/:id/route` (first upload only) now auto-fills
+whichever of `Ride.distanceKm`/`elevationGainMeters` is still `null` from
+the parsed GPX, in the same DB transaction as the route insert — this
+resolves the common case (most rides never accumulate two numbers at all).
+For the remaining edge case (an organizer's already-entered figure that
+turns out to differ from the track), the organizer's own route screen
+(`RouteUploadForm`) shows both values with an explicit "Использовать данные
+трека" action that reuses the existing `PATCH /v1/rides/:id` (no new
+endpoint) — a deliberate opt-in, never a silent overwrite.
+`PATCH .../route` (replace) still never touches `Ride`'s fields, so
+replacing a track with a very different one cannot silently change numbers
+the organizer already relied on. Live-verified against a real Postgres +
+browser: a failed upload (S3 unreachable, KI-015) leaves `Ride`'s fields
+untouched; a manually created mismatch shows the note with both values; the
+sync action updates `Ride` to match and the note disappears.
 
 ### KI-035 — No live 2GIS/route-rendering read of `Route.geometry` yet; only a summary is exposed
 

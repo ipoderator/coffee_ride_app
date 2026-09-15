@@ -414,6 +414,16 @@ loading/error/retry state so a geometry-fetch failure degrades locally instead o
 blanking the rest of the page. No live 2GIS MapGL credential in this environment
 (KI-031, widened — second surface hitting the same gap as CR-026's discovery map).
 
+CR-029 ("Route metadata", 2026-09-15, resolves KI-034): `rides.service.ts`'s
+`uploadRoute` gained this codebase's **third real `db.transaction(...)` use**
+(after `auth.service.ts`'s `registerUser`/`changePassword`) — the route insert and a
+conditional `Ride.distanceKm`/`elevationGainMeters` auto-fill (only whichever field
+is still `null`) now commit atomically. No schema change, no new endpoint —
+`features/organizer/route/`'s `RouteUploadForm.tsx` reuses the existing `PATCH
+/v1/rides/:id` for its new "adopt track figures" action, reloading its full state
+after every mutation instead of trusting a locally-guessed copy of the server's
+auto-fill logic.
+
 ## Target structure
 
 apps/

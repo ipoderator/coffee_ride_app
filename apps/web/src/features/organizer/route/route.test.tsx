@@ -6,6 +6,7 @@ import {
   deleteRoute,
   getRideRouteState,
   replaceRoute,
+  syncRideMetricsFromRoute,
   uploadRoute,
   type RouteSummary,
 } from './api';
@@ -18,6 +19,7 @@ vi.mock('./api', async () => {
     uploadRoute: vi.fn(),
     replaceRoute: vi.fn(),
     deleteRoute: vi.fn(),
+    syncRideMetricsFromRoute: vi.fn(),
   };
 });
 
@@ -25,6 +27,7 @@ const getRideRouteStateMock = vi.mocked(getRideRouteState);
 const uploadRouteMock = vi.mocked(uploadRoute);
 const replaceRouteMock = vi.mocked(replaceRoute);
 const deleteRouteMock = vi.mocked(deleteRoute);
+const syncRideMetricsFromRouteMock = vi.mocked(syncRideMetricsFromRoute);
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -49,6 +52,7 @@ describe('RouteUploadForm', () => {
     uploadRouteMock.mockReset();
     replaceRouteMock.mockReset();
     deleteRouteMock.mockReset();
+    syncRideMetricsFromRouteMock.mockReset();
   });
 
   it('shows a not-found state for a non-existent/foreign ride', async () => {
@@ -83,7 +87,12 @@ describe('RouteUploadForm', () => {
   });
 
   it('shows the empty state and an upload control for a draft ride with no route', async () => {
-    getRideRouteStateMock.mockResolvedValue({ status: 'draft', route: null });
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+    });
 
     render(<RouteUploadForm rideId="ride-1" />);
 
@@ -96,7 +105,24 @@ describe('RouteUploadForm', () => {
   });
 
   it('uploads a GPX file and shows the computed summary', async () => {
-    getRideRouteStateMock.mockResolvedValue({ status: 'draft', route: null });
+    // First call: initial load, no route. Second: `RouteUploadForm` reloads after a
+    // successful upload rather than trusting the upload response alone — this
+    // mirrors the server's own CR-029 auto-fill (an empty ride's distanceKm/
+    // elevationGainMeters get filled from the track), so the reload here returns a
+    // ride whose own fields now match the route's, not a mismatch.
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: null,
+        elevationGainMeters: null,
+        route: null,
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: baseRoute.distanceKm,
+        elevationGainMeters: baseRoute.elevationGainMeters,
+        route: baseRoute,
+      });
     uploadRouteMock.mockResolvedValue(baseRoute);
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -110,10 +136,21 @@ describe('RouteUploadForm', () => {
     expect(await screen.findByText('Маршрут загружен.')).toBeInTheDocument();
     expect(screen.getByText('120')).toBeInTheDocument();
     expect(uploadRouteMock).toHaveBeenCalledWith('ride-1', expect.any(File));
+    // No mismatch note — the reload reflects the server's own auto-fill.
+    expect(
+      screen.queryByText(
+        'Дистанция или набор высоты заезда отличаются от данных трека.',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('shows a validation error without calling the API when no file is selected', async () => {
-    getRideRouteStateMock.mockResolvedValue({ status: 'draft', route: null });
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+    });
 
     render(<RouteUploadForm rideId="ride-1" />);
     await screen.findByText('Маршрут ещё не загружен');
@@ -127,7 +164,12 @@ describe('RouteUploadForm', () => {
   });
 
   it('shows the degraded storage-unavailable notice, not a hard error', async () => {
-    getRideRouteStateMock.mockResolvedValue({ status: 'draft', route: null });
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      route: null,
+    });
     uploadRouteMock.mockRejectedValue(
       new ApiError({
         type: 'https://coffee-ride.example/errors/route_storage_unavailable',
@@ -151,15 +193,24 @@ describe('RouteUploadForm', () => {
   });
 
   it('replaces an existing route', async () => {
-    getRideRouteStateMock.mockResolvedValue({
-      status: 'draft',
-      route: baseRoute,
-    });
     const replaced = {
       ...baseRoute,
       gpxFileName: 'new-track.gpx',
       pointCount: 200,
     };
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: baseRoute.distanceKm,
+        elevationGainMeters: baseRoute.elevationGainMeters,
+        route: baseRoute,
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: baseRoute.distanceKm,
+        elevationGainMeters: baseRoute.elevationGainMeters,
+        route: replaced,
+      });
     replaceRouteMock.mockResolvedValue(replaced);
 
     render(<RouteUploadForm rideId="ride-1" />);
@@ -175,6 +226,8 @@ describe('RouteUploadForm', () => {
   it('deletes the route after confirmation', async () => {
     getRideRouteStateMock.mockResolvedValue({
       status: 'draft',
+      distanceKm: baseRoute.distanceKm,
+      elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
     });
     deleteRouteMock.mockResolvedValue(undefined);
@@ -193,6 +246,8 @@ describe('RouteUploadForm', () => {
   it('does not delete when the confirmation is dismissed', async () => {
     getRideRouteStateMock.mockResolvedValue({
       status: 'draft',
+      distanceKm: baseRoute.distanceKm,
+      elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
     });
     vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -208,6 +263,8 @@ describe('RouteUploadForm', () => {
   it('hides upload/replace/delete controls for a non-draft ride, keeps the download link', async () => {
     getRideRouteStateMock.mockResolvedValue({
       status: 'published',
+      distanceKm: baseRoute.distanceKm,
+      elevationGainMeters: baseRoute.elevationGainMeters,
       route: baseRoute,
     });
 
@@ -224,5 +281,85 @@ describe('RouteUploadForm', () => {
     expect(
       screen.getByRole('link', { name: 'Скачать трек (GPX)' }),
     ).toHaveAttribute('href', '/api/v1/rides/ride-1/route/download');
+  });
+
+  it('shows a mismatch note with a sync action when the ride and track figures diverge (CR-029)', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: 99.9,
+      elevationGainMeters: 1234,
+      route: baseRoute,
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText(
+        'Дистанция или набор высоты заезда отличаются от данных трека.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Использовать данные трека' }),
+    ).toBeInTheDocument();
+  });
+
+  it('adopts the track’s figures onto the ride when the sync action is used (CR-029)', async () => {
+    getRideRouteStateMock
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: 99.9,
+        elevationGainMeters: 1234,
+        route: baseRoute,
+      })
+      .mockResolvedValueOnce({
+        status: 'draft',
+        distanceKm: baseRoute.distanceKm,
+        elevationGainMeters: baseRoute.elevationGainMeters,
+        route: baseRoute,
+      });
+    syncRideMetricsFromRouteMock.mockResolvedValue(undefined);
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByRole('button', { name: 'Использовать данные трека' });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Использовать данные трека' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Дистанция и набор высоты заезда обновлены из трека.',
+      ),
+    ).toBeInTheDocument();
+    expect(syncRideMetricsFromRouteMock).toHaveBeenCalledWith('ride-1', {
+      distanceKm: baseRoute.distanceKm,
+      elevationGainMeters: baseRoute.elevationGainMeters,
+    });
+    // The mismatch note is gone now that the reload reflects matching figures.
+    expect(
+      screen.queryByText(
+        'Дистанция или набор высоты заезда отличаются от данных трека.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the mismatch note but hides the sync action for a non-draft ride (CR-029)', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'published',
+      distanceKm: 99.9,
+      elevationGainMeters: 1234,
+      route: baseRoute,
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText(
+        'Дистанция или набор высоты заезда отличаются от данных трека.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Использовать данные трека' }),
+    ).not.toBeInTheDocument();
   });
 });

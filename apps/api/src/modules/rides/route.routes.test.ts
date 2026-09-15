@@ -333,6 +333,100 @@ describe('/v1/rides/:id/route', () => {
       await app.close();
     });
 
+    it('auto-fills the ride’s distanceKm/elevationGainMeters when both are unset (CR-029)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      const { body, contentType } = multipartGpxBody(VALID_GPX);
+
+      const uploaded = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': contentType },
+        cookies: { session: rawToken },
+        payload: body,
+      });
+      const route = uploaded.json().route;
+
+      const ride = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}`,
+        cookies: { session: rawToken },
+      });
+      expect(ride.json().ride.distanceKm).toBe(route.distanceKm);
+      expect(ride.json().ride.elevationGainMeters).toBe(
+        route.elevationGainMeters,
+      );
+
+      await app.close();
+    });
+
+    it('fills only the still-unset field when the organizer already entered one (CR-029)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { distanceKm: 99.9 },
+      });
+      const { body, contentType } = multipartGpxBody(VALID_GPX);
+
+      const uploaded = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': contentType },
+        cookies: { session: rawToken },
+        payload: body,
+      });
+      const route = uploaded.json().route;
+
+      const ride = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}`,
+        cookies: { session: rawToken },
+      });
+      // The organizer's own distanceKm is preserved, not overwritten...
+      expect(ride.json().ride.distanceKm).toBe(99.9);
+      // ...but elevationGainMeters, left unset, is filled from the track.
+      expect(ride.json().ride.elevationGainMeters).toBe(
+        route.elevationGainMeters,
+      );
+
+      await app.close();
+    });
+
+    it('changes neither field when the organizer already entered both (CR-029)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { distanceKm: 99.9, elevationGainMeters: 1234 },
+      });
+      const { body, contentType } = multipartGpxBody(VALID_GPX);
+
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': contentType },
+        cookies: { session: rawToken },
+        payload: body,
+      });
+
+      const ride = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}`,
+        cookies: { session: rawToken },
+      });
+      expect(ride.json().ride.distanceKm).toBe(99.9);
+      expect(ride.json().ride.elevationGainMeters).toBe(1234);
+
+      await app.close();
+    });
+
     it('rejects a second upload with 409 route_already_exists', async () => {
       const app = await buildApp(testEnv);
       const { rawToken, rideId } = await registerAndLogin(app);
@@ -476,6 +570,55 @@ describe('/v1/rides/:id/route', () => {
       expect(route.pointCount).toBe(1);
       // Best-effort delete of the old S3 object after the DB row is updated.
       expect(s3Store.size).toBe(1);
+
+      await app.close();
+    });
+
+    it("never touches the ride's own distanceKm/elevationGainMeters, even a first-upload auto-fill (CR-029)", async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      const first = multipartGpxBody(VALID_GPX);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': first.contentType },
+        cookies: { session: rawToken },
+        payload: first.body,
+      });
+      const afterFirstUpload = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}`,
+        cookies: { session: rawToken },
+      });
+      const autoFilledDistance = afterFirstUpload.json().ride.distanceKm;
+      const autoFilledElevation =
+        afterFirstUpload.json().ride.elevationGainMeters;
+      expect(autoFilledDistance).not.toBeNull();
+
+      // A very different track — if replace auto-filled again, these numbers would
+      // change; they must not.
+      const singlePointGpx =
+        '<?xml version="1.0"?><gpx><trk><trkseg>' +
+        '<trkpt lat="10.0" lon="10.0"><ele>5000</ele></trkpt>' +
+        '</trkseg></trk></gpx>';
+      const second = multipartGpxBody(singlePointGpx);
+      await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': second.contentType },
+        cookies: { session: rawToken },
+        payload: second.body,
+      });
+
+      const afterReplace = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}`,
+        cookies: { session: rawToken },
+      });
+      expect(afterReplace.json().ride.distanceKm).toBe(autoFilledDistance);
+      expect(afterReplace.json().ride.elevationGainMeters).toBe(
+        autoFilledElevation,
+      );
 
       await app.close();
     });

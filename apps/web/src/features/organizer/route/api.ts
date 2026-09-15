@@ -9,25 +9,69 @@ const RIDES_ENDPOINT = '/api/v1/rides';
 /**
  * CR-027 ("GPX upload"): this feature module doesn't have its own `GET .../route`
  * endpoint — the route summary is an additive field on `GET /v1/rides/:id`'s
- * response (`.claude/context/current-task.md`'s scoping note). Only `route` and the
- * ride's own `status` (needed for the draft-only gate) are read here.
+ * response (`.claude/context/current-task.md`'s scoping note). `status` (the
+ * draft-only gate) and `route` are read here; CR-029 ("Route metadata") also reads
+ * the ride's own `distanceKm`/`elevationGainMeters` — already present on the same
+ * response — to detect a mismatch against `route`'s GPX-computed figures.
  */
 export async function getRideRouteState(rideId: string): Promise<{
   status: string;
+  distanceKm: number | null;
+  elevationGainMeters: number | null;
   route: RouteSummary | null;
 }> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}`);
   const body = (await response.json()) as
-    { ride: { status: string }; route: RouteSummary | null } | ProblemDetails;
+    | {
+        ride: {
+          status: string;
+          distanceKm: number | null;
+          elevationGainMeters: number | null;
+        };
+        route: RouteSummary | null;
+      }
+    | ProblemDetails;
 
   if (!response.ok) {
     throw new ApiError(body as ProblemDetails);
   }
   const parsed = body as {
-    ride: { status: string };
+    ride: {
+      status: string;
+      distanceKm: number | null;
+      elevationGainMeters: number | null;
+    };
     route: RouteSummary | null;
   };
-  return { status: parsed.ride.status, route: parsed.route };
+  return {
+    status: parsed.ride.status,
+    distanceKm: parsed.ride.distanceKm,
+    elevationGainMeters: parsed.ride.elevationGainMeters,
+    route: parsed.route,
+  };
+}
+
+/**
+ * CR-029 ("Route metadata"): lets the organizer adopt the uploaded track's
+ * distance/elevation onto the ride itself when the two have diverged — reuses
+ * `PATCH /v1/rides/:id` (CR-018) directly rather than a new endpoint; own fetch call
+ * rather than importing `features/organizer/rides/`'s client
+ * (`.claude/rules/extensibility.md`: feature modules don't reach into each other).
+ */
+export async function syncRideMetricsFromRoute(
+  rideId: string,
+  metrics: { distanceKm: number; elevationGainMeters: number },
+): Promise<void> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(metrics),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
 }
 
 async function uploadOrReplace(

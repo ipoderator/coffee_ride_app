@@ -6,145 +6,123 @@ complete
 
 ## Task ID
 
-CR-028 — Route rendering
+CR-029 — Route metadata
 
 ## Goal
 
-`docs/tasks.md`'s Route section: next unchecked ticket after CR-027 ("GPX upload").
-`docs/design.md` §8's `/rides/[id]` spec names "route + profile" as part of ride
-detail; §9 names `RideMap`/`ElevationProfile` as feature-local components consuming
-`packages/maps-core` types only; §6 has a full "Elevation profile" spec (area chart,
-distance × elevation, muted `primary` fill, hover/touch, keyboard-accessible numeric
-alternative). `.claude/context/known-issues.md`'s KI-035 names this ticket as the one
-that decides how `Route.geometry` gets exposed beyond the CR-027 summary.
-
-Selected via the same "next unchecked box" discipline `/next` has used since CR-023 —
-Route is the section CR-027 started, CR-028 is its next ticket.
+`docs/tasks.md`'s Route section: next unchecked ticket after CR-028 ("Route
+rendering"). `docs/tasks.md` names it bare ("CR-029 Route metadata") — its actual
+scope comes from `.claude/context/known-issues.md`'s KI-034, which explicitly names
+this ticket as "the place to decide this deliberately": `Route.distanceKm`/
+`elevationGainMeters` (GPX-computed, CR-027) and `Ride.distanceKm`/
+`elevationGainMeters` (organizer-entered, CR-018) are two independent numbers for the
+same ride, never reconciled. Now that CR-028 put both on screen at once
+(`/rides/[id]`'s `MetricTile` reads `Ride`'s fields; the elevation chart is built from
+`Route.geometry`), the mismatch is more visible than KI-034 predicted, making this the
+right next ticket.
 
 ## Investigation before deciding scope
 
-- **KI-035** (full geometry exposure): resolved inline, same precedent as
-  CR-084/CR-085's own tickets — a new `GET /v1/rides/:id/route/geometry` endpoint,
-  same viewer-visibility rule as `GET /v1/rides/:id`/`.../route/download`
-  (`resolveOptionalUser`: owner always, others only once the ride has left `draft`).
-  Not folded into the existing `route` summary field on `GET /v1/rides/:id` — the
-  point array can be thousands of entries (CR-027's own reasoning for why it wasn't
-  shipped there originally), so it stays a separate, opt-in fetch only the rendering
-  screen makes. `404 route_not_found` if no route exists — same code the download
-  endpoint already uses for the same fact.
-- **Map half (KI-031/KI-016)**: no live `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` in this
-  environment — same blocker CR-026 hit. Per `.claude/CLAUDE.md`'s stop conditions
-  ("the failure depends on an unavailable external service/credential") and the
-  CR-026 precedent (ship what's verifiable, degrade the rest, document the known
-  issue rather than stopping the whole ticket): the route map renders a degraded
-  `ErrorState` placeholder (`tone="warning"`, `variant="inline"`), not a live MapGL
-  render. KI-031 stays open, widened to cover this second surface, not a new issue.
-- **Elevation profile half**: does not need 2GIS at all (`docs/design.md` §6's spec is
-  pure geometry — distance × elevation from `Route.geometry`) — buildable and
-  live-verifiable this session. `docs/design.md` §9: `ElevationProfile` "consumes
-  `packages/maps-core` types only" — `apps/web` gains `maps-core` as a real dependency
-  (first consumer; allowed by `.claude/rules/architecture.md`'s "web → maps-core"),
-  and the chart's point prop type is built from `maps-core`'s `LatLng` extended with
-  `elevationMeters`.
-- **No charting library exists in `apps/web`** (checked `package.json`) — same
-  "hand-vendor something this simple" discipline `packages/ui`'s `Skeleton`/`Button`
-  used (KI-020) rather than adding a new dependency for one inline SVG area chart.
-  Cumulative distance along the track (the chart's x-axis) is computed client-side
-  from the raw `lat`/`lng` points via haversine — a small, pure, duplicated-on-purpose
-  formula (same tier as `apps/web`'s own `zoned-time.ts` vs. `apps/api`'s date logic;
-  `apps/web` cannot import `apps/api`'s `gpx.ts` — separate deployable). The
-  authoritative distance/elevation numbers stay `Route`'s own server-computed
-  `distanceKm`/`elevationGainMeters` (already shown via `MetricTile` once wired in) —
-  `docs/design.md` §6: "the chart is an illustration, the number is the fact," so
-  chart-side imprecision from downsampling is acceptable.
-- **Downsampling**: a real GPX can have thousands of points (CR-027/ADR-015's own
-  scoping). Rendering an SVG path from an unbounded point count is a real, if small,
-  performance concern (same "don't do unbounded work" spirit as ADR-015) — the chart
-  downsamples to at most 200 evenly-spaced points before building the path. Purely a
-  rendering simplification; does not touch the stored `Route.geometry` or the
-  authoritative computed metrics.
-- **Keyboard-accessible alternative** (`docs/design.md` §6: "the numeric summary is
-  always present in text"): already satisfied once `RideDetailView` wires in
-  `route.elevationGainMeters`/`route.distanceKm` via the existing `MetricTile`
-  pattern — no separate accessible-alternative UI needed beyond that plus an
-  `aria-label`/`role="img"` summary on the chart `<svg>` itself.
-- **Feature-module boundary** (`.claude/rules/extensibility.md`): CR-027's
-  `RouteMapPlaceholder`/upload UI live in `features/organizer/route/` (a different
-  feature module, organizer-facing). This ticket's map placeholder is a **new**,
-  small, participant-facing component in `features/participant/ride-detail/` —
-  feature modules must not import each other's internals, so this is a second,
-  independent instance of the same `ErrorState` degraded pattern, not a shared
-  import, consistent with how `RideMapPlaceholder` already exists once for
-  `features/participant/discovery/` alone.
+- **Which number is "the fact" today**: CR-023/CR-028 already made an implicit choice
+  — `/rides/[id]`'s `MetricTile` row reads `Ride.distanceKm`/`elevationGainMeters`
+  (organizer-entered), not `Route`'s computed ones; `docs/design.md` §6 itself frames
+  the elevation _chart_ (built from `Route.geometry`) as "an illustration," the
+  _number_ as "the fact" — and the number shown today is `Ride`'s. This ticket keeps
+  that precedent rather than flipping which field is authoritative for participant-
+  facing display (a bigger, unrequested behavior change with no product-doc backing
+  either way).
+- **Reconciliation options KI-034 itself lists**: (a) auto-fill `Ride`'s fields from
+  `Route` on upload, (b) prefer one as authoritative for display, (c) show both with
+  distinct labels. Chosen: (a) for the common case (an organizer who never manually
+  entered a figure gets it filled in for free, so most rides never have two numbers
+  at all) + a scoped version of (c) for the remaining edge case (an organizer who
+  _did_ enter a figure that turns out to differ from the uploaded track) — surfaced
+  only on the organizer's own route screen, with an explicit opt-in action to adopt
+  the track's numbers, not a silent overwrite and not a second UI investment on the
+  participant-facing screen (which already only shows one number, `Ride`'s, by the
+  precedent above).
+- **Auto-fill scope**: only on `POST .../route` (first upload for a ride), only for
+  a field that is currently `null` — never overwrites a value the organizer already
+  typed (the exact concern CR-027's own investigation flagged when it deliberately
+  did _not_ do this). Independent per field: an organizer may have set `distanceKm`
+  manually but left `elevationGainMeters` empty, or vice versa. `PATCH .../route`
+  (replace) does **not** auto-fill — by the time a route is replaced, `Ride`'s fields
+  already reflect _something_ (either the organizer's own entry or a prior auto-fill),
+  and silently changing them again on every replace would be indistinguishable from
+  always trusting the track over the organizer, which is exactly the behavior this
+  ticket avoids for the general case.
+- **No new endpoint for the "adopt track numbers" action**: `PATCH /v1/rides/:id`
+  (CR-018) already accepts `distanceKm`/`elevationGainMeters` — the organizer's route
+  screen reuses it directly (a small dedicated fetch call in that feature's own
+  `api.ts`, not a cross-feature import — `.claude/rules/extensibility.md`). No new
+  API surface, no new DB column, no ADR (a business-logic/product policy decision,
+  not an architecture change — same tier as CR-027's own several non-ADR scoping
+  calls, e.g. "download via API, not a pre-signed URL").
+- **Precision check**: `rides.distanceKm`/`routes.distanceKm` are both
+  `numeric(6,1)`; `rides.elevationGainMeters`/`routes.elevationGainMeters` are both
+  plain `integer` (`packages/db/src/schema/{ride,route}.ts`) — same precision/scale
+  on both sides, so a plain `!==` mismatch check on the frontend is exact, no
+  floating-point-tolerance logic needed.
+- **Transaction**: the route insert + the conditional `rides` auto-fill update must
+  commit together (an upload that "succeeds" but leaves `Ride` half-updated would be
+  a new, worse inconsistency than the one being fixed) — `db.transaction(...)`, same
+  pattern already used in `auth.service.ts`'s `registerUser`/`changePassword`.
 
 ## Scoping decisions
 
-- **`packages/types`**: `domain/route.ts` gains `RouteGeometryPoint` (`lat`/`lng`/
-  `elevationMeters: number | null` — mirrors `apps/api`'s `gpx.ts` shape).
-  `api/rides.ts` gains `GetRouteGeometryResponse { points: RouteGeometryPoint[] }`.
-- **`apps/api`**: `ride-response.schema.ts` gains `routeGeometryResponseSchema`.
-  `rides.service.ts` gains `getRouteGeometry(db, userId, rideId)` — same
-  ownership/visibility query as `getRouteDownload`, minus the S3 call (geometry is
-  already in the DB row from CR-027, no storage round trip, no
-  `route_storage_unavailable` case). `rides.routes.ts` gains
-  `GET /:id/route/geometry`.
-- **`apps/web`**: `apps/web/package.json` gains `maps-core` dependency.
-  `features/participant/ride-detail/` gains:
-  - `lib/elevation-profile.ts` — pure functions: haversine distance, downsampling,
-    `buildElevationProfile(points, maxSamples = 200)`.
-  - `components/ElevationProfileChart.tsx` — inline SVG area chart per
-    `docs/design.md` §6 (`fill-primary/15`, `stroke-primary` 1.5px, y-axis floor not
-    forced to zero, hover/touch tooltip via pointer move).
-  - `components/RouteMapPlaceholder.tsx` — degraded `ErrorState`, same pattern as
-    discovery's, independent instance (feature-boundary rule above).
-  - `api.ts` gains `getRouteGeometry(rideId)`.
-  - `RideDetailView.tsx` wires in a new "Маршрут" section, shown only when
-    `ride.route` (the existing `RouteSummary`) is non-null: fetches geometry lazily
-    (separate `useEffect`, keyed by route id), shows loading/error/success states for
-    that fetch independently from the ride's own load state (a route-rendering
-    failure must not blank the rest of the page — `.claude/rules/resilience.md`).
-- **`packages/ui/src/terminology.ts`**: new `ROUTE_RENDERING_TERMS` block
-  (participant-facing — distinct from CR-027's organizer-facing `RIDE_ROUTE_TERMS`).
+- **`apps/api/src/modules/rides/rides.service.ts`**: `uploadRoute` wraps its route
+  insert in `db.transaction(...)`; inside the same transaction, reads the ride's
+  current `distanceKm`/`elevationGainMeters` and conditionally `UPDATE`s only the
+  `null` ones to the parsed GPX values (`updatedAt`/`updatedBy` set, same convention
+  as every other `rides` mutation). `replaceRoute`/`deleteRoute` unchanged — no
+  auto-fill, no auto-clear.
+- **`apps/web/src/features/organizer/route/`**: `api.ts`'s `getRideRouteState` gains
+  `distanceKm`/`elevationGainMeters` in its returned shape (already available on the
+  same `GET /v1/rides/:id` response, just not previously extracted here); new
+  `syncRideMetricsFromRoute(rideId, { distanceKm, elevationGainMeters })` (a small
+  `PATCH /v1/rides/:id` call, own fetch, not imported from `features/organizer/
+rides/`). `RouteUploadForm.tsx`: when a route exists and either field differs from
+  the ride's own, an inline note shows both values with a "Использовать данные
+  трека" button; clicking it calls the new API function and updates local state
+  (loading/error handled via the same `isPending`/`formError` machinery already in
+  the component).
+- **`packages/ui/src/terminology.ts`**: new entries in the existing `RIDE_ROUTE_TERMS`
+  block (organizer-facing, same screen CR-027 already put this terminology in).
 
 ## Requirements
 
-- `packages/types/src/domain/route.ts`, `packages/types/src/api/rides.ts`.
-- `apps/api/src/modules/rides/{ride-response.schema.ts,rides.service.ts,
-rides.routes.ts,route.routes.test.ts}`.
-- `apps/web/package.json`; `apps/web/src/features/participant/ride-detail/
-{api.ts,lib/elevation-profile.ts (new),lib/elevation-profile.test.ts (new),
-components/{ElevationProfileChart.tsx (new),RouteMapPlaceholder.tsx (new),
-RideDetailView.tsx},ride-detail.test.tsx}`.
+- `apps/api/src/modules/rides/{rides.service.ts,route.routes.test.ts}`.
+- `apps/web/src/features/organizer/route/{api.ts,components/RouteUploadForm.tsx,
+route.test.tsx}`.
 - `packages/ui/src/terminology.ts`.
-- `docs/api.md`, `docs/tasks.md`, `.claude/context/known-issues.md`.
+- `docs/api.md` (note the auto-fill behavior on `POST .../route`), `docs/tasks.md`,
+  `.claude/context/known-issues.md` (resolve KI-034).
 
 ## Acceptance criteria
 
-- `GET /v1/rides/:id/route/geometry`: same 404 `ride_not_found`/visibility rule as
-  ride detail; 404 `route_not_found` if no route; 200 → full ordered point array for
-  the owner and for any viewer once the ride has left `draft`.
-- `/rides/[id]` shows an elevation profile chart when a route exists, matching
-  `docs/design.md` §6's visual spec; omits the whole "Маршрут" section when
-  `ride.route` is `null` (no route uploaded yet) — not an empty/broken chart.
-- A geometry-fetch failure shows a local degraded/error state with retry, without
-  blanking the rest of the ride detail page.
-- Map half renders the degraded placeholder unconditionally (no live MapGL attempt),
-  consistent with KI-031.
+- Uploading a GPX for a ride with `distanceKm`/`elevationGainMeters` both `null`
+  fills both from the parsed track, in the same DB transaction as the route insert.
+- Uploading when only one of the two is already set fills only the other.
+- Uploading when both are already set changes neither.
+- Replacing an existing route (`PATCH .../route`) never touches `Ride`'s fields,
+  regardless of whether they were auto-filled or organizer-entered.
+- The organizer's route screen shows an "adopt track numbers" affordance only when a
+  real mismatch exists, and using it updates both the ride and the screen's own
+  displayed values, with the note disappearing afterward.
 - `turbo run lint typecheck test build` green; `format:check`/`lint:root` clean.
-- Live check: curl sequence for the new endpoint's ownership/draft-gate/not-found
-  behavior against a real Postgres, plus a browser walkthrough of `/rides/[id]` for a
-  ride with an uploaded route (elevation chart renders, map placeholder shows).
+- Live check: curl sequence proving the auto-fill/no-overwrite/no-touch-on-replace
+  behavior against a real Postgres, plus a browser walkthrough of the mismatch note
+  and sync action.
 
 ## Planned files
 
-See Requirements above — same list.
+Same as Requirements above.
 
 ## Implementation progress
 
 - [x] Plan written (this file)
-- [x] `packages/types` changes
-- [x] `apps/api` endpoint/service/tests
-- [x] `apps/web` chart/placeholder/wiring/tests
+- [x] `apps/api` auto-fill logic + tests
+- [x] `apps/web` mismatch note + sync action + tests
 - [x] `packages/ui` terminology
 - [x] Full validation
 - [x] Live check
@@ -153,75 +131,69 @@ See Requirements above — same list.
 
 ## Validation
 
-- `pnpm --filter api exec vitest run`: 8 files, 156 tests, all green (5 new
-  `route.routes.test.ts` tests for the geometry endpoint).
-- `pnpm --filter web exec vitest run`: 11 files, 106 tests, all green (8 new
-  `elevation-profile.test.ts`, 3 new `ride-detail.test.tsx`).
+- `pnpm --filter api exec vitest run route.routes`: 27 tests, all green (4
+  new — both-null auto-fill, fill-only-the-unset-field, no-change-when-both-
+  set, replace-never-touches-ride).
+- `pnpm --filter web exec vitest run route.test`: 13 tests, all green (3 new
+  — mismatch note + sync button shown, sync action adopts track figures and
+  clears the note, sync action hidden for a non-draft ride).
 - `turbo run lint typecheck test --force` (19 tasks, all 8 packages): all
   green against a real Postgres.
-- `pnpm --filter web build` / `pnpm --filter api build` / `pnpm --filter
-types build` / `pnpm --filter maps-core build`: all green, run separately
-  (same known local `turbo run build`-vs-stale-`.next` race CR-027 already
-  documented — not a regression, CI unaffected).
+- `pnpm --filter web build` / `pnpm --filter api build`: both green.
 - `pnpm format:check`/`pnpm lint:root`: clean after one `prettier --write`
-  pass (cosmetic only, 6 files).
+  pass (this file only, cosmetic).
 - Live check via curl against a real Postgres + a freshly started `apps/api`
-  (no `S3_*` configured): registered/verified/logged in, created an
-  organizer profile and a draft ride. `GET .../route/geometry` on a
-  non-existent id → `404 ride_not_found`; on the fresh ride with no route →
-  `404 route_not_found`; an upload attempt correctly 503'd
-  (`route_storage_unavailable`, S3 unreachable — KI-015 standing
-  constraint) and geometry stayed `404 route_not_found` afterward (no
-  orphaned row). Since MinIO can't be reached in this environment, a
-  `routes` row was inserted directly via `psql` to exercise the endpoint's
-  actual success path (this endpoint has no S3 dependency at all, unlike
-  upload/download, so this validates the real code path, not a substitute
-  for it): owner on a draft ride → `200` with the exact stored points; a
-  second registered user (stranger) on that same draft ride → `404
-ride_not_found`; after publish, the stranger and a fully unauthenticated
-  request both → `200` with the same points. Every response matched its
-  documented contract exactly.
+  (no `S3_*` configured): a real multipart upload attempt correctly 503'd
+  (S3 unreachable, KI-015) and left the ride's `distanceKm`/
+  `elevationGainMeters` untouched (still `null`) — confirms the transaction
+  never partially applies. Since a real upload can't complete in this
+  environment, a `routes` row was inserted directly via `psql` (same
+  technique CR-028 used) to exercise the reconciliation flow end to end: set
+  the ride's `distanceKm` to a different value via `PATCH` (simulating an
+  organizer entry), confirmed `GET /v1/rides/:id` shows the mismatch
+  (`ride.distanceKm` vs `route.distanceKm`), then called `PATCH` with the
+  route's own values (exactly what the frontend's sync button does) and
+  confirmed the ride now matches. The auto-fill transaction itself (the part
+  that can't be curl-exercised without live S3) is verified by the Vitest
+  suite above against this same real Postgres database, not mocked.
 - Live browser check via the `browser-automation` skill against a real
-  `next dev` server + `apps/api`: `/rides/[id]` for the published test ride
-  showed the "Маршрут" heading, "Карта маршрута временно недоступна."
-  (degraded placeholder, expected — no live 2GIS credential), and a real
-  `<svg role="img">` elevation chart with an accurate computed
-  `aria-label` ("Профиль высоты: от 100 до 150 м на протяжении 1.2 км") and
-  2 `<path>` elements (area fill + stroke line) — matches `docs/design.md`
-  §6's visual spec (screenshot reviewed). 0 console errors, 0 failed
-  network requests. All test data (route row, ride, organizer profile, two
-  users) deleted from the scratch DB by id/email afterward; both dev server
-  processes stopped.
+  `next dev` server + `apps/api` (same origin as `WEB_ORIGIN`, required for
+  the CSRF check the sync button's `PATCH` goes through): loaded the
+  organizer's route screen with a real mismatch present — the note and
+  "Использовать данные трека" button rendered with the correct values;
+  clicking it showed the success message and the note disappeared. 0
+  console errors, 0 failed requests, in both the mismatch-present and
+  mismatch-resolved states. All test data (route row, ride, organizer
+  profile, user) deleted from the scratch DB by id/email afterward; both dev
+  server processes stopped.
 - Every acceptance criterion from above is met.
 
 ## Discovered issues
 
-- None beyond the two known issues this ticket itself resolves/widens
-  (KI-035 resolved, KI-031 widened — both recorded in
-  `.claude/context/known-issues.md` with full detail, not repeated here).
+- Testing note, not a product bug: an early browser-check attempt against a
+  `next dev` server on a different port than the API's configured
+  `WEB_ORIGIN` correctly got `403 csrf_origin_mismatch` on the sync button's
+  `PATCH` — the CSRF protection (`.claude/rules/security.md`, ADR-013)
+  working exactly as designed, not a defect. Re-ran with matching ports.
 
 ## Final result
 
-CR-028 ("Route rendering") complete. `apps/api` gained `GET /v1/rides/:id/
-route/geometry` (resolves KI-035), reading `Route.geometry` straight from
-the DB with the same viewer-visibility rule as ride detail/download and no
-S3 dependency. `apps/web` gained its first real dependency on
-`packages/maps-core` (type-only `LatLng` import, per `docs/design.md` §9)
-and a new "Маршрут" section on `/rides/[id]`: a hand-built inline-SVG
-elevation profile chart (`docs/design.md` §6's full spec — muted fill,
-non-zero-forced y-axis floor, hover tooltip, accessible `aria-label`) built
-from pure haversine-distance + downsampling functions, and a degraded route
-map placeholder (KI-031 widened — same missing 2GIS MapGL credential as
-CR-026's discovery map, a second surface of the same known gap, not a new
-root cause). The section is shown only when a route exists and degrades
-locally (independent loading/error/retry state) on a geometry-fetch
-failure, per `.claude/rules/resilience.md`. All acceptance criteria met;
-full validation suite green (lint/typecheck/test/build across all 8
-packages); live-verified end to end over both curl (the new endpoint's full
-visibility contract, including the actual success path via a directly
-inserted route row since MinIO stays unreachable in this environment) and a
-real browser session (rendered chart + placeholder, 0 console errors).
-`docs/tasks.md`, `docs/changelog.md`, `docs/api.md`,
-`.claude/context/{project-state,architecture-map,known-issues}.md` all
+CR-029 ("Route metadata") complete, resolving KI-034. `apps/api`'s
+`uploadRoute` now wraps its route insert in a DB transaction and, within it,
+auto-fills whichever of `Ride.distanceKm`/`elevationGainMeters` is still
+`null` from the parsed GPX — independently per field, only on the first
+upload, never overwriting an organizer-entered value. `replaceRoute` is
+unchanged (never touches `Ride`'s fields). `apps/web`'s `RouteUploadForm`
+(organizer's route screen) now shows a reconciliation note with a
+"Использовать данные трека" action when the ride's own figures genuinely
+diverge from the uploaded track's — the action reuses the existing `PATCH
+/v1/rides/:id` (no new endpoint), and the screen reloads its state after any
+mutation (upload/replace/sync) so it never trusts a locally-guessed copy of
+the server's own auto-fill logic. All acceptance criteria met; full
+validation suite green (lint/typecheck/test/build across all 8 packages);
+live-verified end to end over both curl (transaction safety on a failed
+upload, the full mismatch → sync → resolved flow) and a real browser session
+(note rendering, sync action, 0 console errors). `docs/tasks.md`,
+`docs/changelog.md`, `docs/api.md`, `.claude/context/known-issues.md` all
 updated. Not yet committed — `git diff`/`git status` reviewed next, contains
 exactly the planned files, no unrelated changes.

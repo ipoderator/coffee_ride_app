@@ -244,7 +244,14 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       (`docs/design.md` §6), and a degraded route-map placeholder (KI-031 widened —
       no live 2GIS MapGL credential, same constraint CR-026 hit). See
       `docs/changelog.md`.
-- [ ] CR-029 Route metadata
+- [x] CR-029 Route metadata — done 2026-09-15: resolves KI-034. The first GPX
+      upload now auto-fills whichever of `Ride.distanceKm`/`elevationGainMeters`
+      is still `null` from the parsed track, in the same DB transaction as the
+      route insert — never overwrites an organizer-entered value, and a replace
+      upload never touches `Ride`'s fields. The organizer's route screen shows a
+      reconciliation note with a "Использовать данные трека" action (reuses the
+      existing ride-update endpoint, no new endpoint) when the two have
+      genuinely diverged. See `docs/changelog.md`.
 - [ ] CR-030 Stops
 - [ ] CR-031 Route points
 

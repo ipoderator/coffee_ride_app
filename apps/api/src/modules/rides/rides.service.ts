@@ -909,6 +909,13 @@ function parseUploadedGpx(buffer: Buffer) {
  * {@link replaceRoute} instead. S3 failure (or S3 not configured — KI-015) surfaces
  * as `503 route_storage_unavailable`, never a generic 500
  * (`.claude/rules/resilience.md`).
+ *
+ * CR-029 ("Route metadata", resolves KI-034): in the same transaction as the route
+ * insert, auto-fills `Ride.distanceKm`/`elevationGainMeters` from the parsed GPX —
+ * but only for whichever of the two is still `null`. Never overwrites a value the
+ * organizer already entered (CR-018), and never runs again on {@link replaceRoute} —
+ * by then `Ride`'s fields already reflect *something* (an entry or a prior auto-fill)
+ * that a silent re-fill would indistinguishably clobber.
  */
 export async function uploadRoute(
   db: DbClient,
@@ -940,23 +947,50 @@ export async function uploadRoute(
     throw err;
   }
 
-  const [inserted] = await db
-    .insert(routes)
-    .values({
-      rideId,
-      gpxFileKey: key,
-      gpxFileName: file.filename,
-      gpxFileSizeBytes: file.buffer.byteLength,
-      distanceKm: parsed.distanceKm,
-      elevationGainMeters: parsed.elevationGainMeters,
-      pointCount: parsed.pointCount,
-      geometry: parsed.geometry,
-      updatedBy: userId,
-    })
-    .returning();
-  if (!inserted) {
-    throw new Error('Route insert returned no row.');
-  }
+  const inserted = await db.transaction(async (tx) => {
+    const [route] = await tx
+      .insert(routes)
+      .values({
+        rideId,
+        gpxFileKey: key,
+        gpxFileName: file.filename,
+        gpxFileSizeBytes: file.buffer.byteLength,
+        distanceKm: parsed.distanceKm,
+        elevationGainMeters: parsed.elevationGainMeters,
+        pointCount: parsed.pointCount,
+        geometry: parsed.geometry,
+        updatedBy: userId,
+      })
+      .returning();
+    if (!route) {
+      throw new Error('Route insert returned no row.');
+    }
+
+    const [currentRide] = await tx
+      .select({
+        distanceKm: rides.distanceKm,
+        elevationGainMeters: rides.elevationGainMeters,
+      })
+      .from(rides)
+      .where(eq(rides.id, rideId))
+      .limit(1);
+    const ridePatch: Partial<typeof rides.$inferInsert> = {};
+    if (currentRide?.distanceKm === null) {
+      ridePatch.distanceKm = parsed.distanceKm;
+    }
+    if (currentRide?.elevationGainMeters === null) {
+      ridePatch.elevationGainMeters = parsed.elevationGainMeters;
+    }
+    if (Object.keys(ridePatch).length > 0) {
+      await tx
+        .update(rides)
+        .set({ ...ridePatch, updatedAt: new Date(), updatedBy: userId })
+        .where(eq(rides.id, rideId));
+    }
+
+    return route;
+  });
+
   return toRouteSummary(inserted);
 }
 

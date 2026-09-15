@@ -227,7 +227,11 @@ resilience.md`) if the S3-compatible object store is unreachable or unconfigured
 `distanceKm`/`elevationGainMeters`/`pointCount`/`createdAt`/`updatedAt`) — distance/
 elevation gain are computed from the GPX itself (haversine sum / positive-elevation-
 delta sum), independent from `Ride.distanceKm`/`elevationGainMeters`'s
-organizer-entered values (not reconciled — see `.claude/context/known-issues.md`).
+organizer-entered values. CR-029 ("Route metadata", resolves KI-034): in the same DB
+transaction as the route insert, whichever of `Ride.distanceKm`/`elevationGainMeters`
+is still `null` gets auto-filled from these computed values — independently per
+field, and only on this first upload; an already-entered value is never overwritten,
+and `PATCH .../route` (replace) never touches `Ride`'s fields either way.
 
 PATCH `/v1/rides/:id/route` — **implemented (CR-027)**. Same auth/ownership/draft-only
 rules and request shape as `POST`. `404 route_not_found` if the ride has no route yet

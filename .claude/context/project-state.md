@@ -79,8 +79,15 @@ upload. CR-028 ("Route rendering") also completed 2026-09-15: `GET
 live-verified) plus a degraded route-map placeholder (KI-031 widened, same
 missing 2GIS MapGL credential as CR-026's discovery map). `apps/web` gained
 its first real dependency on `packages/maps-core` (type-only `LatLng`
-import). The Route section has CR-029 ("Route metadata"), CR-030 ("Stops"),
-and CR-031 ("Route points") remaining.
+import). CR-029 ("Route metadata") also completed 2026-09-15, resolving
+KI-034: `POST /v1/rides/:id/route` (first upload only) auto-fills whichever
+of `Ride.distanceKm`/`elevationGainMeters` is still `null` from the
+GPX-computed values, in the same DB transaction as the route insert, never
+overwriting an organizer-entered value; the organizer's route screen shows a
+reconciliation note with a "Использовать данные трека" action (reuses the
+existing `PATCH /v1/rides/:id`, no new endpoint) for the remaining case
+where the two have genuinely diverged. The Route section has CR-030
+("Stops") and CR-031 ("Route points") remaining.
 
 ## Implemented
 
@@ -1059,6 +1066,12 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
   same missing-2GIS-credential gap CR-026 found for discovery, a second
   surface, not a new root cause. `apps/web` gained its first real dependency
   on `packages/maps-core` (type-only).
+- new (CR-029): KI-034 resolved — `POST /v1/rides/:id/route`'s first upload
+  auto-fills whichever of `Ride.distanceKm`/`elevationGainMeters` is still
+  `null` (never overwrites an entered value); the organizer's route screen
+  gained an opt-in "adopt track figures" action for the remaining
+  already-diverged case. `apps/web`'s participant-facing display is
+  unchanged (still `Ride`'s fields, same CR-023/CR-028 precedent).
 
 ## Do not break
 
@@ -1078,4 +1091,4 @@ rides/mine`); publishing/cancelling/finishing a ride are still separate,
 
 ## Last updated
 
-2026-09-15 (CR-028)
+2026-09-15 (CR-029)
