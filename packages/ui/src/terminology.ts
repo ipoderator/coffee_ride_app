@@ -378,9 +378,8 @@ export const RIDE_EDIT_TERMS = {
  * facing — distinct copy from `RIDE_EDIT_TERMS`'s organizer-only not-found message
  * (that one names "belongs to another organizer"; here a draft/non-existent/other-
  * organizer's-draft ride are all the same "not available" state to a viewer who was
- * never going to be told which). Route/stops/services/requirements/registration
- * action have no data model yet (CR-027..036) — this screen only shows core `Ride`
- * fields plus the organizer's name (`.claude/context/current-task.md`).
+ * never going to be told which). Services/requirements/waitlist still have no data
+ * model yet (CR-036..); route/stops (CR-027/030) and registration (CR-032/033) do.
  */
 export const RIDE_DETAIL_TERMS = {
   notFoundTitle: 'Заезд не найден',
@@ -389,7 +388,16 @@ export const RIDE_DETAIL_TERMS = {
   organizedByLabel: 'Организатор',
   startLabel: 'Старт',
   priceLabel: 'Стоимость участия',
-  participantLimitLabel: 'Лимит участников',
+  // CR-032 ("Register"): `METRIC_TERMS.participants` + `formatParticipantsParts`
+  // replaced this screen's old bare-number `participantLimitLabel` tile with a
+  // registered/capacity ratio ("12 из 20") — `RIDE_EDIT_TERMS.participantLimitLabel`
+  // (organizer edit form's field label) is a separate key, unaffected.
+  //
+  // Shared by `RegistrationButton`'s register/cancel actions — one generic
+  // action-failure fallback, not a dedicated string per button, same precedent as
+  // `RIDE_EDIT_TERMS.loadError` (`EditRideForm`'s publish/open/close/cancel handlers
+  // all reuse that one key too).
+  registrationActionError: 'Не удалось выполнить действие. Попробуйте ещё раз.',
 } as const;
 
 /**

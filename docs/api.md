@@ -203,11 +203,40 @@ request body.
 
 ## Registration
 
-POST `/v1/rides/:id/register`
-DELETE `/v1/rides/:id/register`
-GET `/v1/rides/:id/participants` — collection, paginated
-POST `/v1/rides/:id/waitlist`
-DELETE `/v1/rides/:id/waitlist`
+POST `/v1/rides/:id/register` — **implemented (CR-032, "Register")**. Requires a valid
+session cookie (`401 unauthorized` otherwise) — any authenticated user, not just the
+ride's organizer (every user is implicitly a participant, ADR-006). Same
+resource-enumeration-safe visibility rule as `GET /v1/rides/:id`: `404 ride_not_found`
+for a non-existent ride _or_ someone else's still-`draft` one. `409
+ride_registration_not_open` for any other status (a ride is only registrable while
+`registration_open`). `409 registration_already_exists` if the caller already has an
+active registration for this ride. `409 ride_full` once active registrations reach
+`participantLimit` (no auto-waitlist — CR-036 owns that, not this ticket). Bundles
+CR-034 ("Capacity enforcement") and CR-035 ("Duplicate protection"): a single
+`SELECT ... FOR UPDATE` on the `rides` row inside the transaction serializes every
+concurrent registration attempt for the same ride, making the duplicate check, the
+capacity check, and double-submit protection all race-free at once
+(`apps/api/src/modules/registrations/registrations.service.ts`). No request body.
+`201` → `{ registration }` (`Registration`: `id`/`rideId`/`userId`/`status`/
+`createdAt`/`updatedAt`/`cancelledAt`).
+
+DELETE `/v1/rides/:id/register` — **implemented (CR-033, "Cancel registration")**.
+Same auth requirement as `POST`. `404 registration_not_found` if the caller has no
+active registration for this ride (covers a non-existent ride the same way — no
+separate ride-existence check). No status gate beyond "an active registration
+exists" — cancellation stays available even after the organizer closes registration.
+Sets `status: 'cancelled'` + `cancelledAt`, does not delete the row (audit trail); a
+later re-registration is a fresh row. `204`, no body.
+
+GET `/v1/rides/:id` (CR-016/CR-018/CR-023) gained two additive fields alongside
+`route`/`stops`/`routePoints`: `registrationsCount` (active registrations for this
+ride) and `viewerRegistration` (the caller's own active registration, `null` if none
+or unauthenticated).
+
+GET `/v1/rides/:id/participants` — collection, paginated. Not yet implemented
+(CR-037, "Organizer participant list").
+POST `/v1/rides/:id/waitlist` — not yet implemented (CR-036, "Waitlist").
+DELETE `/v1/rides/:id/waitlist` — not yet implemented (CR-036).
 
 ## Route
 

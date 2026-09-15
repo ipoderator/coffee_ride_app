@@ -2171,3 +2171,146 @@ scratch DB afterward.
 Follow-up: CR-031 was the last remaining Route-section ticket
 (`docs/tasks.md`) — next up is the Registration section, starting with
 CR-032 ("Register").
+
+## 2026-09-15 — CR-032 / CR-033 / CR-034 / CR-035 — Register, cancel registration, capacity + duplicate protection
+
+Summary: eighth domain table, `Registration` — a participant's registration
+for a `Ride` (`docs/database.md`). Bundles four backlog tickets into one
+change: CR-032 ("Register") and CR-033 ("Cancel registration") are the two
+new endpoints; CR-034 ("Capacity enforcement") and CR-035 ("Duplicate
+protection") are delivered as part of CR-032 rather than deferred —
+`.claude/CLAUDE.md`/`.claude/rules/database.md` require registration to
+_atomically_ protect availability/capacity/duplicates from the start, the
+same "invariant baked in from day one" precedent CR-057 (password hashing,
+inside CR-011) and CR-062 (session store, inside CR-012) already used.
+
+New capability module, not folded into `rides`: unlike `Stop`/`RoutePoint`
+(organizer-authored ride configuration, reusing `resolveOwnDraftRide`),
+`Registration` is participant-initiated and explicitly named as its own
+capability in `.claude/rules/architecture.md`'s Feature boundaries list —
+new `apps/api/src/modules/registrations/`, its routes registered under the
+same `/rides` prefix as `ridesRoutes` in `routes/v1.ts` (paths are
+`/v1/rides/:id/register`; the URL shape is unaffected).
+
+Fields: `rideId`/`userId` (FK, cascade), `status` (`active`/`cancelled`,
+default `active`), `createdAt`/`updatedAt`, `cancelledAt` (nullable, set
+only on cancel — CHECK-enforced consistency with `status`). Cancelling sets
+`status`/`cancelledAt` rather than deleting the row (audit trail,
+`.claude/rules/security.md`) and lets a participant re-register later — a
+fresh row, not a resurrected one.
+
+Atomicity mechanism: one `SELECT ... FROM rides WHERE id = $1 FOR UPDATE`
+(the `rides` row only, not a join) inside `createRegistration`'s
+transaction serializes every concurrent registration attempt for the same
+ride — the second request waits for the first to commit, then sees its
+committed state. That single lock makes the duplicate check
+(`409 registration_already_exists`), the capacity check against
+`participantLimit` (`409 ride_full`), and double-submit protection all
+race-free at once, so there's no need to catch a DB constraint-violation
+error on the hot path. A partial unique index
+(`registrations_ride_id_user_id_active_unique`, `(rideId, userId) WHERE
+status = 'active'`) is the DB-level invariant backstop per
+`.claude/rules/database.md`, not a mechanism this code path relies on.
+Visibility (`404 ride_not_found` for a non-existent ride or someone else's
+still-`draft` one, same resource-enumeration-safe rule as `GET
+/v1/rides/:id`) is resolved once before the lock; `registration_open`
+status is re-checked a second time inside the lock, guarding the harmless
+race where an organizer closes registration between the two checks.
+
+Scope decision — full ride is a 409, not an auto-waitlist:
+`WaitlistEntry` doesn't exist yet (CR-036, separate ticket).
+`REGISTRATION_ACTION_TERMS.full` ("Мест не осталось") was already
+pre-scaffolded in `packages/ui/src/terminology.ts` ahead of this ticket
+(`.waitlisted` stays unused until CR-036). No extra gating on `DELETE
+.../register` beyond "an active registration exists" — nothing in
+`docs/product.md`/`docs/database.md` restricts cancellation to a
+particular ride status, so none was invented.
+
+New endpoints: `POST`/`DELETE /v1/rides/:id/register` — `requireAuth` (any
+authenticated user, not just the ride's organizer). `GET /v1/rides/:id`
+gained two additive fields: `registrationsCount` (active count) and
+`viewerRegistration` (the caller's own active registration, `null` if none
+or unauthenticated), resolved inline in `getRideForViewer` and reusing
+`registrations.service.ts`'s `toRegistration` mapper rather than
+duplicating it.
+
+Web: `RegistrationButton` on `/rides/[id]` (participant ride detail) —
+renders nothing unless the ride is `registration_open` or the viewer
+already has an active registration (so cancel stays reachable even after
+registration closes); shows the full/register/cancel state from
+`viewerRegistration`/`registrationsCount`/`participantLimit`; redirects to
+`/login` on a 401. The old bare-number "Лимит участников" tile was
+replaced with `METRIC_TERMS.participants` + the pre-existing
+`formatParticipantsParts` formatter, now showing a live "12 из 20" ratio.
+
+Scope decision — not this ticket: `GET /v1/rides/:id/participants`
+(CR-037, organizer-facing, needs its own response-minimization design);
+waitlist (CR-036); "My registrations" (`/me/rides`) — no ticket owned it
+(same shape of gap as KI-024/025/027), so a new ticket (CR-091) and a
+`known-issues.md` entry (KI-037) were added rather than silently deferring
+it; a participant can still see/cancel a registration today via the
+specific ride's `/rides/[id]` page.
+
+Files: `packages/db/src/schema/registration.ts` (new, `registration_status`
+pg enum) + `schema/index.ts` + migration `0009_perpetual_junta.sql`;
+`packages/types/src/domain/registration.ts` (new) + `src/index.ts`;
+`packages/types/src/api/registrations.ts` (new, `CreateRegistrationResponse`);
+`packages/types/src/api/rides.ts` (`GetRideResponse` +`registrationsCount`/
+`viewerRegistration`); `apps/api/src/modules/registrations/` (new:
+`registrations.service.ts`, `registration-response.schema.ts`,
+`registrations.routes.ts`, `registrations.routes.test.ts` — 10 tests);
+`apps/api/src/modules/rides/` (`rides.service.ts`'s `getRideForViewer`
+extended; `ride-response.schema.ts`/`rides.routes.ts`'s
+`rideDetailResponseSchema` extended); `apps/api/src/routes/v1.ts`
+(+`registrationsRoutes`); `apps/web/src/features/participant/ride-detail/`
+(`api.ts` +`registerForRide`/`cancelRideRegistration`; new
+`RegistrationButton.tsx`, wired into `RideDetailView.tsx`;
+`ride-detail.test.tsx` — every fixture gained `registrationsCount`/
+`viewerRegistration`, +4 new tests for the button's states); `packages/ui/
+src/terminology.ts` (`RIDE_DETAIL_TERMS` +`registrationActionError`, -the
+now-unused `participantLimitLabel` key); `docs/api.md`, `docs/database.md`,
+`docs/tasks.md` (+CR-091), `.claude/context/known-issues.md` (+KI-037).
+
+Decisions: none new at the ADR level — the module-split/locking-mechanism/
+no-auto-waitlist decisions above are ticket-level, recorded here and in
+`current-task.md`.
+
+Known limitations: KI-037 (no "My registrations" list yet, deliberate —
+see above, CR-091 tracks it). No other new gap.
+
+Tests: 10 new `apps/api` tests (new `registrations.routes.test.ts`) — 198
+total, was 188. 4 new `apps/web` tests (new "registration action" suite in
+`ride-detail.test.tsx`) — 125 total, was 121.
+
+Validation: `turbo run lint typecheck build test --force` (25 tasks, all 8
+workspace members) green against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`,
+confirmed twice (once concurrently, where one `apps/web` test flaked from
+machine resource contention — same known pattern noted in CR-031's own
+validation — and once sequentially, fully green). `format:check`/
+`lint:root` clean after one `prettier --write` pass (cosmetic, 6 files).
+Live-verified via curl against a real Postgres + `apps/api`: organizer
+creates a ride with `participantLimit: 1`, publishes, opens registration;
+participant 1 registers (201); participant 2's registration is rejected
+(409 `ride_full`); participant 1's duplicate registration is rejected (409
+`registration_already_exists`); `GET /v1/rides/:id` as participant 1 shows
+`registrationsCount: 1` and the matching `viewerRegistration`; participant
+1 cancels (204); participant 2 then successfully registers into the freed
+spot (201) — cross-checked against a direct DB read (one `cancelled` row
+with `cancelledAt` set, one fresh `active` row). Live browser-verified via
+the `browser-automation` skill against a real `next dev` server + `apps/api`
+(the pre-existing dev server was serving a stale build and was restarted):
+loaded `/rides/[id]` with a participant session cookie, clicked
+"Зарегистрироваться", confirmed the button switched to "Отменить
+регистрацию" and the participants tile went "0 из 10" → "1 из 10", clicked
+cancel, confirmed the button reverted and the tile returned to "0 из 10" —
+0 console errors; network capture showed the `POST`/`DELETE` requests
+returning `201`/`204` correctly (one `net::ERR_ABORTED` reported against
+the already-204'd `DELETE` request — a benign dev-server/browser teardown
+artifact, not a functional failure, confirmed by the correct UI state and
+DB row after). All scratch test data (rides/organizer profiles/users)
+deleted from the DB afterward.
+
+Follow-up: `docs/tasks.md`'s Registration section has CR-036 ("Waitlist"),
+CR-037 ("Organizer participant list"), and the newly added CR-091 ("My
+registrations") remaining.

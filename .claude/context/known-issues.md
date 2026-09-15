@@ -488,6 +488,26 @@ and the real map render layer is built, plot each ride's `routePoints` as
 typed markers on `/rides/[id]`'s route map — that is the natural, asked-for
 participant surface for this data, not a new textual list component.
 
+### KI-037 — No ticket builds a participant-facing "My registrations" list
+
+Status: open. Discovered: 2026-09-15 (CR-032, "Register" session).
+Problem: `docs/product.md` names "view registered rides" as a participant
+capability, and `docs/design.md` §8 lists `/me/rides` ("My registrations",
+upcoming/past tabs) in the cabinet screen inventory — but `docs/tasks.md`'s
+Registration section (CR-032..037) never owned building it, the same shape of
+gap as KI-024 ("My rides", organizer side)/KI-025/KI-027.
+Impact: low today — a participant can still see and cancel an active
+registration by revisiting the specific ride's `/rides/[id]` page (CR-032/033's
+`RegistrationButton` reads `viewerRegistration` from `GET /v1/rides/:id`), just
+not via a single list of everything they've registered for.
+Workaround: none needed — no data is missing, `registrations.user_id` already
+has an index (`registrations_user_id_idx`, added by CR-032's migration) sized
+for exactly this future query.
+Next action: added CR-091 to `docs/tasks.md`'s Registration section
+(same "real gap, add a ticket" discipline as CR-088/089/090) — a paginated
+`GET /v1/registrations/mine` (or equivalent) joined with ride summaries, plus
+the `/me/rides` screen.
+
 ---
 
 ## Resolved

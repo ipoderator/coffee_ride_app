@@ -88,8 +88,21 @@ Conceptual model. Exact columns and indexes evolve through migrations.
 /v1/rides/:id`.
 - RideRequirement — participation rules.
 - RideService — included logistics/services.
-- Registration — User ↔ Ride.
-- WaitlistEntry — user waiting for a place.
+- Registration — User ↔ Ride (CR-032, "Register"): `id`, `rideId` (FK → Ride,
+  `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`), `status` (not
+  null, pg enum `active`/`cancelled`, default `active`), `createdAt`/`updatedAt`
+  (`timestamptz`), `cancelledAt` (nullable `timestamptz`, set only when `status`
+  becomes `cancelled` — enforced by a CHECK). A cancelled registration stays a row
+  (audit trail, `.claude/rules/security.md`) rather than being deleted, so a
+  participant can re-register later — a fresh row, not a resurrected one. A partial
+  unique index on `(rideId, userId) WHERE status = 'active'` enforces "active
+  duplicate registration is forbidden" at the DB level; capacity (`participantLimit`)
+  is enforced by locking the `rides` row (`SELECT ... FOR UPDATE`) inside the same
+  transaction as the insert, not a separate constraint — see
+  `apps/api/src/modules/registrations/registrations.service.ts`. No separate read
+  endpoint — exposed as additive `registrationsCount`/`viewerRegistration` fields on
+  `GET /v1/rides/:id`.
+- WaitlistEntry — user waiting for a place. Not implemented yet (CR-036).
 - RideUpdate — organizer message.
 - Notification — delivery record.
 - Review — participant feedback.

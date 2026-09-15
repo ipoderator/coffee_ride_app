@@ -11,7 +11,9 @@ lifecycle (`draft → published → registration_open → registration_closed �
 finished`, plus `cancelled`) implemented end to end; public discovery with filters and
 a map view; GPX route upload/rendering/distance-elevation reconciliation; named
 organizer-curated stops; typed organizer-placed route points (map pins). Route section
-of `docs/tasks.md` is now fully complete — next section is Registration (CR-032).
+of `docs/tasks.md` is fully complete. Registration section: register/cancel/capacity/
+duplicate-protection (CR-032..035) done; waitlist (CR-036), organizer participant list
+(CR-037), and "My registrations" (CR-091, newly added) remain.
 
 ## Current task
 
@@ -32,9 +34,11 @@ tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Sc
 `/register`, `/login`, `/me` + `/me/profile`, `/organizer` (dashboard) + `/organizer/
 profile` + `/organizer/rides` (list/new/[id]/edit/[id]/route), `/` (public discovery —
 list/map toggle, bicycleType filter, upcoming-only sort) and `/rides/[id]` (public ride
-detail, incl. elevation profile). Cabinet shell + nav/widget registries (ADR-009) exist
-for both organizer and participant sides — one entry each so far, no feature-flag
-support yet (CR-054 generalizes this).
+detail, incl. elevation profile, stops, and a `RegistrationButton` — register/cancel/
+full states, redirects to `/login` on 401). Cabinet shell + nav/widget registries
+(ADR-009) exist for both organizer and participant sides — one entry each so far, no
+feature-flag support yet (CR-054 generalizes this). No "My registrations" list screen
+yet (KI-037/CR-091).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). Capability modules: `auth` (register/verify-email/login/logout/me,
@@ -44,10 +48,15 @@ gated on `emailVerified`), `rides` (create/edit draft, every lifecycle transitio
 owner's "mine" list, public list + detail with filters/bbox/pagination, GPX route
 upload/download/geometry, distance/elevation reconciliation, stop CRUD and route-point
 CRUD — both draft-only, embedded as additive `stops`/`routePoints` arrays on ride
-detail). Auth endpoints are rate-limited in-memory only (KI-014 — no live Redis yet).
+detail), `registrations` (its own capability module, `POST`/`DELETE
+/v1/rides/:id/register` — capacity + duplicate protection via one `SELECT ... FOR
+UPDATE` row lock, no auto-waitlist; embedded as additive `registrationsCount`/
+`viewerRegistration` on ride detail). Auth endpoints are rate-limited in-memory only
+(KI-014 — no live Redis yet).
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
-`sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`.
+`sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`,
+`registrations`.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -74,8 +83,9 @@ None.
 
 ## Next
 
-`docs/tasks.md` Route section is now fully done. Next is the Registration section,
-starting with CR-032 ("Register").
+`docs/tasks.md` Registration section: CR-032..035 done. Next is CR-036 ("Waitlist"),
+or CR-037 ("Organizer participant list")/CR-091 ("My registrations") if picked up
+first — none has a hard dependency on the others.
 
 ## Important decisions
 
@@ -123,6 +133,9 @@ items:
   KI-031). No geocode-by-address UI (KI-032); a ride's finish point has no coordinates
   (KI-033); route points have no participant-facing UI yet, API + organizer management
   only, pending real map rendering (KI-036).
+- No participant-facing "My registrations" list yet (`/me/rides`) — a participant can
+  still see/cancel a registration via the specific ride's `/rides/[id]` page (KI-037,
+  tracked as CR-091).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
   no in-app recovery path (KI-026).
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
@@ -150,4 +163,4 @@ items:
 
 ## Last updated
 
-2026-09-15 (CR-031)
+2026-09-15 (CR-032/CR-033/CR-034/CR-035)

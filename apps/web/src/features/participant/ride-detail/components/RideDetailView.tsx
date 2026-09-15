@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Ride, RouteGeometryPoint, RouteSummary, Stop } from 'types';
+import type {
+  Registration,
+  Ride,
+  RouteGeometryPoint,
+  RouteSummary,
+  Stop,
+} from 'types';
 import {
   BICYCLE_TYPE_TERMS,
   Card,
@@ -11,6 +17,7 @@ import {
   formatDistanceParts,
   formatDurationParts,
   formatElevationParts,
+  formatParticipantsParts,
   formatPriceParts,
   formatSpeedParts,
   formatTime,
@@ -25,6 +32,7 @@ import {
 } from 'ui';
 import { ApiError, getRideDetail, getRouteGeometry } from '../api';
 import { ElevationProfileChart } from './ElevationProfileChart';
+import { RegistrationButton } from './RegistrationButton';
 import { RouteMapPlaceholder } from './RouteMapPlaceholder';
 import { StopList } from './StopList';
 
@@ -108,6 +116,9 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [organizerName, setOrganizerName] = useState<string>('');
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
+  const [registrationsCount, setRegistrationsCount] = useState(0);
+  const [viewerRegistration, setViewerRegistration] =
+    useState<Registration | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +130,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         setOrganizerName(response.organizer.name);
         setRoute(response.route);
         setStops(response.stops);
+        setRegistrationsCount(response.registrationsCount);
+        setViewerRegistration(response.viewerRegistration);
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -252,11 +265,28 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         />
         {ride.participantLimit !== null && (
           <MetricTile
-            label={RIDE_DETAIL_TERMS.participantLimitLabel}
-            value={String(ride.participantLimit)}
+            label={METRIC_TERMS.participants}
+            {...formatParticipantsParts(
+              registrationsCount,
+              ride.participantLimit,
+            )}
           />
         )}
       </div>
+
+      <RegistrationButton
+        rideId={rideId}
+        rideStatus={ride.status}
+        participantLimit={ride.participantLimit}
+        registrationsCount={registrationsCount}
+        viewerRegistration={viewerRegistration}
+        onChange={(registration) => {
+          setViewerRegistration(registration);
+          setRegistrationsCount((count) =>
+            registration ? count + 1 : Math.max(0, count - 1),
+          );
+        }}
+      />
 
       {route ? <RouteSection rideId={rideId} route={route} /> : null}
 

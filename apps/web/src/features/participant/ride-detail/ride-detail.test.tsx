@@ -1,8 +1,15 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Ride, RouteSummary, Stop } from 'types';
+import type { GetRideResponse, Ride, RouteSummary, Stop } from 'types';
 import { RideDetailView } from './components/RideDetailView';
 import { ApiError, getRideDetail, getRouteGeometry } from './api';
+
+// `RegistrationButton` calls `useRouter()` (redirect-to-login on a 401) — same
+// mocking precedent as `features/auth/login/login.test.tsx`, RTL's `render()` doesn't
+// mount a real Next.js App Router.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -66,6 +73,25 @@ const baseStop: Stop = {
   updatedBy: null,
 };
 
+// CR-032 ("Register"): every fixture below is `published`, not `registration_open`,
+// so `RegistrationButton` renders nothing (`rideStatus !== 'registration_open' &&
+// !viewerRegistration`) unless a test opts in — keeps every pre-existing assertion
+// in this file about other sections unaffected by the new button.
+function baseDetailResponse(
+  overrides: Partial<GetRideResponse> = {},
+): GetRideResponse {
+  return {
+    ride: baseRide,
+    organizer: { id: 'org-1', name: 'Гравийный клуб' },
+    route: null,
+    stops: [],
+    routePoints: [],
+    registrationsCount: 0,
+    viewerRegistration: null,
+    ...overrides,
+  };
+}
+
 describe('RideDetailView', () => {
   beforeEach(() => {
     getRideDetailMock.mockReset();
@@ -102,13 +128,9 @@ describe('RideDetailView', () => {
   });
 
   it('renders the ride, organizer name, status, and every set metric', async () => {
-    getRideDetailMock.mockResolvedValue({
-      ride: baseRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: null,
-      stops: [],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({ registrationsCount: 12 }),
+    );
 
     render(<RideDetailView rideId="ride-1" />);
 
@@ -126,7 +148,9 @@ describe('RideDetailView', () => {
     // plain space before matching, so the query below uses a plain space too.
     expect(screen.getByText('2 ч 30')).toBeInTheDocument();
     expect(screen.getByText('500')).toBeInTheDocument();
-    expect(screen.getByText('20')).toBeInTheDocument();
+    // CR-032: the participant-limit tile is now a registered/capacity ratio
+    // (`formatParticipantsParts`), same NBSP-as-plain-space normalization as above.
+    expect(screen.getByText('12 из 20')).toBeInTheDocument();
     expect(screen.getByText('Гравийный')).toBeInTheDocument();
   });
 
@@ -140,13 +164,9 @@ describe('RideDetailView', () => {
       difficulty: null,
       participantLimit: null,
     };
-    getRideDetailMock.mockResolvedValue({
-      ride: mockedRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: null,
-      stops: [],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({ ride: mockedRide }),
+    );
 
     render(<RideDetailView rideId="ride-1" />);
 
@@ -155,17 +175,11 @@ describe('RideDetailView', () => {
     expect(screen.queryByText('Набор высоты')).not.toBeInTheDocument();
     expect(screen.queryByText('Средний темп')).not.toBeInTheDocument();
     expect(screen.queryByText('Длительность')).not.toBeInTheDocument();
-    expect(screen.queryByText('Лимит участников')).not.toBeInTheDocument();
+    expect(screen.queryByText('Участники')).not.toBeInTheDocument();
   });
 
   it('omits the "Маршрут" section entirely when no route has been uploaded', async () => {
-    getRideDetailMock.mockResolvedValue({
-      ride: baseRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: null,
-      stops: [],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(baseDetailResponse());
 
     render(<RideDetailView rideId="ride-1" />);
 
@@ -175,13 +189,9 @@ describe('RideDetailView', () => {
   });
 
   it('shows the route map placeholder and elevation profile once a route exists', async () => {
-    getRideDetailMock.mockResolvedValue({
-      ride: baseRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: baseRoute,
-      stops: [],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({ route: baseRoute }),
+    );
     getRouteGeometryMock.mockResolvedValue({
       points: [
         { lat: 55.75, lng: 37.6, elevationMeters: 100 },
@@ -206,13 +216,9 @@ describe('RideDetailView', () => {
   });
 
   it('shows a retryable degraded state when the geometry fetch fails', async () => {
-    getRideDetailMock.mockResolvedValue({
-      ride: baseRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: baseRoute,
-      stops: [],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({ route: baseRoute }),
+    );
     getRouteGeometryMock.mockRejectedValue(new Error('network error'));
 
     render(<RideDetailView rideId="ride-1" />);
@@ -228,22 +234,20 @@ describe('RideDetailView', () => {
   });
 
   it('renders stops in order, and omits the section entirely when there are none', async () => {
-    getRideDetailMock.mockResolvedValue({
-      ride: baseRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: null,
-      stops: [
-        baseStop,
-        {
-          ...baseStop,
-          id: 'stop-2',
-          name: 'Смотровая площадка',
-          description: null,
-          position: 1,
-        },
-      ],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({
+        stops: [
+          baseStop,
+          {
+            ...baseStop,
+            id: 'stop-2',
+            name: 'Смотровая площадка',
+            description: null,
+            position: 1,
+          },
+        ],
+      }),
+    );
 
     render(<RideDetailView rideId="ride-1" />);
 
@@ -254,17 +258,79 @@ describe('RideDetailView', () => {
   });
 
   it('omits the "Остановки" section entirely when there are no stops', async () => {
-    getRideDetailMock.mockResolvedValue({
-      ride: baseRide,
-      organizer: { id: 'org-1', name: 'Гравийный клуб' },
-      route: null,
-      stops: [],
-      routePoints: [],
-    });
+    getRideDetailMock.mockResolvedValue(baseDetailResponse());
 
     render(<RideDetailView rideId="ride-1" />);
 
     await screen.findByText(baseRide.title);
     expect(screen.queryByText('Остановки')).not.toBeInTheDocument();
+  });
+
+  describe('registration action', () => {
+    it('is hidden while registration is not open and the viewer has no registration', async () => {
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      expect(screen.queryByText('Зарегистрироваться')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Отменить регистрацию'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers registration once registration is open', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(await screen.findByText('Зарегистрироваться')).toBeInTheDocument();
+    });
+
+    it('shows a disabled "full" state once capacity is reached', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: {
+            ...baseRide,
+            status: 'registration_open',
+            participantLimit: 5,
+          },
+          registrationsCount: 5,
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const button = await screen.findByText('Мест не осталось');
+      expect(button.closest('button')).toBeDisabled();
+    });
+
+    it('offers cancellation when the viewer already has an active registration, even once registration has closed', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_closed' },
+          registrationsCount: 1,
+          viewerRegistration: {
+            id: 'registration-1',
+            rideId: 'ride-1',
+            userId: 'user-1',
+            status: 'active',
+            createdAt: '2027-01-01T00:00:00.000Z',
+            updatedAt: '2027-01-01T00:00:00.000Z',
+            cancelledAt: null,
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(
+        await screen.findByText('Отменить регистрацию'),
+      ).toBeInTheDocument();
+    });
   });
 });

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
 import {
   organizerProfiles,
+  registrations,
   rides,
   routePoints,
   routes,
@@ -28,6 +29,7 @@ import type {
   UpdateRoutePointRequest,
   UpdateStopRequest,
 } from 'types';
+import { toRegistration } from '../registrations/registrations.service.js';
 import {
   CursorError,
   clampLimit,
@@ -599,12 +601,42 @@ export async function getRideForViewer(
     .where(eq(routePoints.rideId, rideId))
     .orderBy(asc(routePoints.createdAt));
 
+  // CR-032 ("Register"): additive `registrationsCount` (active registrations —
+  // `.claude/rules/database.md`: "Live status, not stale coordination") and
+  // `viewerRegistration` (the caller's own active registration, `null` if none or
+  // unauthenticated), same embedding precedent as `route`/`stops`/`routePoints`
+  // above. Reuses `registrations.service.ts`'s `toRegistration` mapper rather than
+  // duplicating it.
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(registrations)
+    .where(
+      and(eq(registrations.rideId, rideId), eq(registrations.status, 'active')),
+    );
+  const viewerRegistrationRows = userId
+    ? await db
+        .select()
+        .from(registrations)
+        .where(
+          and(
+            eq(registrations.rideId, rideId),
+            eq(registrations.userId, userId),
+            eq(registrations.status, 'active'),
+          ),
+        )
+        .limit(1)
+    : [];
+
   return {
     ride: toPublicRide(row.ride),
     organizer: { id: row.organizerId, name: row.organizerName },
     route: routeRow ? toRouteSummary(routeRow) : null,
     stops: stopRows.map(toStop),
     routePoints: routePointRows.map(toRoutePoint),
+    registrationsCount: countRow?.count ?? 0,
+    viewerRegistration: viewerRegistrationRows[0]
+      ? toRegistration(viewerRegistrationRows[0])
+      : null,
   };
 }
 

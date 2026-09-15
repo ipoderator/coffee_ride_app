@@ -270,12 +270,38 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
 
 ## Registration
 
-- [ ] CR-032 Register
-- [ ] CR-033 Cancel registration
-- [ ] CR-034 Capacity enforcement
-- [ ] CR-035 Duplicate protection
+- [x] CR-032 Register — done 2026-09-15: eighth domain table (`registrations`:
+      `rideId`/`userId`/`status`/`cancelledAt`, `.claude/rules/database.md`), new
+      `apps/api/src/modules/registrations/` capability module,
+      `POST /v1/rides/:id/register` (`registration_open`-only, `404 ride_not_found`
+      same resource-enumeration-safe rule as ride detail), plus additive
+      `registrationsCount`/`viewerRegistration` fields on `GET /v1/rides/:id`.
+      Organizer's `RegistrationButton` on `/rides/[id]`. See `docs/changelog.md`.
+- [x] CR-033 Cancel registration — done 2026-09-15, together with CR-032:
+      `DELETE /v1/rides/:id/register`, `404 registration_not_found`, no status
+      gate beyond "an active registration exists" (not invented — nothing in
+      `docs/product.md`/`docs/database.md` restricts it further). Keeps the row
+      (`status: 'cancelled'` + `cancelledAt`) rather than deleting it.
+- [x] CR-034 Capacity enforcement — delivered as part of CR-032, not deferred:
+      `.claude/CLAUDE.md`/`.claude/rules/database.md` require registration to
+      atomically protect capacity from the start (same "invariant from day one"
+      precedent as CR-057/CR-062). A `SELECT ... FOR UPDATE` on the `rides` row
+      inside `createRegistration`'s transaction serializes concurrent attempts;
+      `409 ride_full` once active registrations reach `participantLimit`.
+- [x] CR-035 Duplicate protection — delivered as part of CR-032, same reasoning as
+      CR-034: the same row lock serializes the duplicate check
+      (`409 registration_already_exists`), backed by a DB-level partial unique
+      index (`registrations_ride_id_user_id_active_unique`) as the invariant
+      backstop.
 - [ ] CR-036 Waitlist
 - [ ] CR-037 Organizer participant list
+- [ ] CR-091 "My registrations" (`/me/rides`, `docs/design.md`'s screen inventory)
+      — new ticket, added this session (see `.claude/context/known-issues.md`
+      KI-037): no ticket in this backlog owned a participant-facing list of their
+      own registrations, the same shape of gap as KI-024/025/027. Not built this
+      session to keep CR-032's scope to register/cancel/capacity/duplicate
+      protection; a participant can still verify/cancel a registration today by
+      revisiting `/rides/[id]` directly.
 
 ## Communication
 

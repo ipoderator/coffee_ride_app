@@ -3,6 +3,7 @@ import { BICYCLE_TYPES, type Ride } from '../domain/ride.js';
 import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
 import type { Stop } from '../domain/stop.js';
 import { ROUTE_POINT_TYPES, type RoutePoint } from '../domain/route-point.js';
+import type { Registration } from '../domain/registration.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -76,12 +77,19 @@ export interface RideOrganizerSummary {
 // CR-031 ("Route points"): additive `routePoints` array, same embedding precedent —
 // ordered by `createdAt` (display order isn't meaningful for typed map pins, unlike
 // `stops`' `position`).
+// CR-032 ("Register"): additive `registrationsCount` (active registrations for this
+// ride — `.claude/rules/database.md`: "Live status, not stale coordination") and
+// `viewerRegistration` (the caller's own active registration, `null` if none or
+// unauthenticated) — same "no separate read endpoint, embed it" precedent as
+// `route`/`stops`/`routePoints`.
 export interface GetRideResponse {
   ride: Ride;
   organizer: RideOrganizerSummary;
   route: RouteSummary | null;
   stops: Stop[];
   routePoints: RoutePoint[];
+  registrationsCount: number;
+  viewerRegistration: Registration | null;
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real

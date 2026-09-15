@@ -1,4 +1,5 @@
 import type {
+  CreateRegistrationResponse,
   GetRideResponse,
   GetRouteGeometryResponse,
   ProblemDetails,
@@ -6,7 +7,11 @@ import type {
 import { ApiError } from '@/lib/api/errors';
 
 export { ApiError };
-export type { GetRideResponse, GetRouteGeometryResponse };
+export type {
+  CreateRegistrationResponse,
+  GetRideResponse,
+  GetRouteGeometryResponse,
+};
 
 const RIDES_ENDPOINT = '/api/v1/rides';
 
@@ -52,4 +57,41 @@ export async function getRouteGeometry(
   }
 
   return body as GetRouteGeometryResponse;
+}
+
+/**
+ * CR-032 ("Register"). Throws `ApiError` on any non-2xx response — `unauthorized`
+ * (401, no session — `RegistrationButton` redirects to `/login`),
+ * `ride_registration_not_open`/`registration_already_exists`/`ride_full` (409).
+ */
+export async function registerForRide(
+  rideId: string,
+): Promise<CreateRegistrationResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/register`, {
+    method: 'POST',
+  });
+
+  const body = (await response.json()) as
+    CreateRegistrationResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as CreateRegistrationResponse;
+}
+
+/**
+ * CR-033 ("Cancel registration"). `204` no body on success. Throws `ApiError` on any
+ * non-2xx response — `unauthorized` (401) or `registration_not_found` (404).
+ */
+export async function cancelRideRegistration(rideId: string): Promise<void> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/register`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
 }
