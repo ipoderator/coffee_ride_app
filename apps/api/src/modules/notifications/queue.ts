@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { Queue, Worker, type Job } from 'bullmq';
 import { CircuitBreaker } from 'resilience';
-import { createRedisClient } from '../../redis.js';
+import { createRedisClient, type RedisClient } from '../../redis.js';
+import { raceTimeout } from '../../lib/race-timeout.js';
 import type { Env } from '../../env.js';
 import {
   processNotificationJob,
@@ -21,6 +22,11 @@ declare module 'fastify' {
     // synchronous insert", so the app works identically with or without Redis
     // (this environment — KI-014, Docker unreachable, never live-verified).
     notificationQueue: NotificationQueue | null;
+    // The same producer connection `notificationQueue` uses, exposed
+    // separately for CR-051's health check (`routes/health.ts`) — a `PING` is
+    // a connection-liveness check, not a queue operation, and reusing this
+    // connection avoids opening a fourth Redis connection just to ping.
+    redis: RedisClient | null;
   }
 }
 
@@ -58,24 +64,6 @@ const ENQUEUE_BREAKER_COOLDOWN_MS = 30_000;
 // `ENQUEUE_TIMEOUT_MS` — see `onClose` below.
 const CLOSE_TIMEOUT_MS = 3000;
 
-function raceTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Notification enqueue timed out after ${ms}ms.`));
-    }, ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
-}
-
 /**
  * CR-050 ("Async notification delivery via Redis queue"). First real consumer
  * of `redis.ts`'s `createRedisClient` (its own doc comment already named this
@@ -95,6 +83,7 @@ function raceTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export function registerNotificationQueue(app: FastifyInstance, env: Env) {
   if (!env.REDIS_URL) {
     app.decorate('notificationQueue', null);
+    app.decorate('redis', null);
     return;
   }
 
@@ -105,6 +94,7 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
       'Redis connection error (notification queue producer)',
     );
   });
+  app.decorate('redis', producerConnection);
 
   const consumerConnection = createRedisClient(env.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -164,6 +154,7 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
             removeOnFail: 200,
           }),
           ENQUEUE_TIMEOUT_MS,
+          `Notification enqueue timed out after ${ENQUEUE_TIMEOUT_MS}ms.`,
         );
         enqueueBreaker.recordSuccess();
       } catch (err) {

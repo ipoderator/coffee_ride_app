@@ -21,8 +21,9 @@ the participant-facing in-app inbox (CR-041). Post-ride is now fully complete to
 participant reviews of finished rides (CR-042) and the organizer-wide rating
 aggregate they feed (CR-043). Quality (CR-044..048 — responsive/a11y/states/
 security/performance audits) is now fully complete too. Resilience is in progress:
-CR-049 (timeout/retry/circuit-breaker utilities) and CR-050 (async notification
-delivery via Redis queue) are done; CR-051/CR-052 are next.
+CR-049 (timeout/retry/circuit-breaker utilities), CR-050 (async notification
+delivery via Redis queue), and CR-051 (health check endpoint) are done; CR-052 is
+next and is the last ticket in the Resilience section.
 
 ## Current task
 
@@ -72,7 +73,9 @@ offers `onRetry`; `RideCard`/`RideDetailView`'s cover image uses `next/image`
 (still inert — `coverImageUrl` is always `null` until CR-086).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
-cursor pagination). Capability modules: `auth` (register/verify-email/login/logout/me,
+cursor pagination). `GET /health` (unversioned) reports real, bounded DB/Redis/S3
+status (`ok`/`error`/`not_configured` per dependency, overall `ok`/`degraded`),
+always `200` (CR-051). Capability modules: `auth` (register/verify-email/login/logout/me,
 Argon2id, DB-backed sessions per ADR-013, CSRF via Origin/Referer check on every unsafe
 `/v1` method), `users` (profile PATCH), `organizers` (OrganizerProfile CRUD, create
 gated on `emailVerified`), `rides` (create/edit draft, every lifecycle transition,
@@ -143,6 +146,10 @@ First real consumer of `redis.ts`'s `createRedisClient` is now `apps/api`'s
 are bounded by a hand-rolled `Promise.race` timeout rather than `callWithResilience`,
 since `bullmq`'s `Queue.add()`/`close()` accept no `AbortSignal` to race against
 (confirmed live: without it, both hang indefinitely against an unreachable Redis).
+That timeout helper now lives in `apps/api/src/lib/race-timeout.ts` (extracted from
+`queue.ts`, CR-051) since `routes/health.ts`'s DB/Redis checks hit the identical
+no-`AbortSignal` gap; its S3 check goes through `callWithResilience` directly instead,
+since the AWS SDK does honor `abortSignal`.
 
 Current test counts and per-feature detail: see the latest entries in
 `docs/changelog.md` rather than this file — a fixed number here goes stale the moment
@@ -156,10 +163,10 @@ None.
 
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), and Quality (CR-044..048) sections are all now fully
-complete. Resilience is in progress: CR-049 (timeout/retry/circuit-breaker
-utilities) and CR-050 (async notification delivery via Redis queue) are done.
-CR-051 (health check endpoint), CR-052 (frontend degraded-state handling) are
-next.
+complete. Resilience is nearly done: CR-049 (timeout/retry/circuit-breaker
+utilities), CR-050 (async notification delivery via Redis queue), and CR-051
+(health check endpoint) are done. CR-052 (frontend degraded-state handling) is the
+one remaining Resilience-section ticket, next up.
 
 ## Important decisions
 
@@ -222,6 +229,11 @@ items:
   itself is still unverified end to end in this environment (KI-014, Docker
   unreachable) — this session only verified the unreachable-Redis behavior (bounded,
   logged, never hangs).
+- `GET /health` (CR-051) live-verified in this environment: real Postgres reachable
+  (`db: "ok"`), Redis/S3 genuinely unreachable (`redis`/`s3`: `"error"`) — always
+  `200`, distinguishing a live dependency from an actual failure exactly as
+  documented. The reachable-Redis/S3 round trip itself is still unverified
+  end to end (same KI-014/KI-015 gap, unrelated to this endpoint's own correctness).
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
   are deferred, no design-doc backing yet (KI-030).
 - Provisional/deferred: `RideService`/registration-state terminology keys pending a
@@ -247,12 +259,16 @@ items:
 - notification producers falling back to a direct synchronous insert when
   `app.notificationQueue` is `null` (`REDIS_URL` unconfigured) — this is what keeps
   every existing test passing with no live Redis (CR-050);
-- the queue module's own bounded timeouts (`raceTimeout` in `queue.ts`) around
-  `bullmq` calls — `callWithResilience` does not bound them (no `AbortSignal`
-  support), so don't "simplify" this back to a bare `callWithResilience` call;
+- the shared `raceTimeout` helper (`apps/api/src/lib/race-timeout.ts`) around
+  `bullmq` calls and the DB/Redis health checks — `callWithResilience` does not
+  bound them (no `AbortSignal` support), so don't "simplify" this back to a bare
+  `callWithResilience` call;
+- `GET /health` always returning `200` with per-dependency `not_configured` vs.
+  `error` distinguished — an absent optional dependency (Redis/S3 unconfigured) must
+  never read as a failure (`.claude/rules/resilience.md`);
 - feature-module isolation between organizer/participant cabinet features
   (`.claude/rules/extensibility.md`).
 
 ## Last updated
 
-2026-09-16 (CR-050)
+2026-09-16 (CR-051)

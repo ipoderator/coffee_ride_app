@@ -15,8 +15,9 @@ for typed Zod route validation and auto-generated OpenAPI (`@fastify/swagger` +
 `@fastify/swagger-ui` at `/docs`). Global error handler produces the RFC 9457
 envelope from `docs/api.md`/ADR-011 for every non-2xx response, including Zod
 validation failures mapped into `errors[]`. `/v1` prefix wired (empty — first real
-route is CR-011); `GET /health` is a bootstrap stub (`{ status: 'ok' }`, no
-dependency checks — CR-051 replaces the handler body). Env validated at startup via
+route is CR-011); `GET /health` (CR-051) runs real, bounded DB/Redis/S3 checks and
+always returns `200` — see the CR-051 section below for the full shape. Env
+validated at startup via
 Zod (`src/env.ts`, CR-073): covers the full `.env.example` surface, refuses to boot
 in production on known placeholder/local values. TypeScript pinned to `6.0.3` (same
 ceiling as `apps/web`).
@@ -552,9 +553,9 @@ sites still normalize every failure into their own pre-existing domain error
 (`MapProviderError`, `RouteStorageError`) — `ResilienceError` never reaches a
 caller outside the integration module, so no downstream fallback behavior
 (degraded-map-state, degraded-storage response) changed shape. CR-050
-(async notification delivery)/CR-051 (health check endpoint)/CR-052 (frontend
-degraded-state handling) are the remaining Resilience-section tickets, still
-open.
+(async notification delivery)/CR-051 (health check endpoint) are done; CR-052
+(frontend degraded-state handling) is the one remaining Resilience-section
+ticket, still open.
 
 CR-050 ("Async notification delivery via Redis queue", 2026-09-16) is the first
 real consumer of `redis.ts`'s `createRedisClient` (KI-014, live-unverified in
@@ -588,6 +589,27 @@ after 5 consecutive failures so a sustained outage doesn't tax every request
 with that same timeout. No new package/dependency-direction edge — `bullmq` is
 an ordinary `apps/api` npm dependency (not a new workspace package), and
 `apps/api → resilience` already existed (CR-049).
+
+CR-051 ("Health check endpoint reporting DB/Redis/S3 status", 2026-09-16)
+replaces `routes/health.ts`'s bootstrap-stub handler with real, bounded checks:
+DB (a `select 1` round trip via `db.execute`), Redis (`.ping()` on a reused
+connection — see below), S3 (`HeadBucketCommand`). Each dependency reports
+`ok`/`error`/`not_configured`; the overall `status` is `degraded` only if any
+dependency is actually `error` — an unconfigured optional dependency
+(Redis/S3 in this environment, KI-014/KI-015) is not itself degraded. The route
+always returns `200`, per `.claude/rules/resilience.md`'s "without dying if one
+is degraded." Neither postgres.js nor ioredis honor an `AbortSignal` (the same
+gap CR-050 hit for BullMQ), so this ticket extracted CR-050's hand-rolled
+`raceTimeout` out of `queue.ts` into a new shared `apps/api/src/lib/
+race-timeout.ts` rather than duplicating it — `queue.ts` now imports the same
+helper, no behavior change. S3's `HeadBucketCommand` goes through the AWS SDK,
+which does honor `abortSignal`, so that check uses `packages/resilience`'s
+`callWithResilience` directly (timeout only, no retry/breaker — a diagnostic
+ping, deliberately not sharing `route-storage.ts`'s upload/download/delete
+breaker in either direction). `queue.ts` gained a second decoration,
+`app.redis: RedisClient | null` — the same producer Redis connection
+`notificationQueue` already owns, reused for the ping rather than opening a
+fourth connection. No new package/dependency-direction edge.
 
 ## Target structure
 

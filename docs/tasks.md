@@ -426,7 +426,10 @@ is not done (`docs/definition-of-done.md`).
       `callWithResilience` (BullMQ's `add()` doesn't honor an `AbortSignal` to race
       against) — live-verified against a genuinely unreachable Redis. See
       `docs/changelog.md`.
-- [ ] CR-051 Health check endpoint (`apps/api`) reporting DB/Redis/S3 status
+- [x] CR-051 Health check endpoint (`apps/api`) reporting DB/Redis/S3 status — done
+      2026-09-16: `GET /health` now runs a real, bounded check per dependency
+      (`ok`/`error`/`not_configured`) and always returns `200`. See
+      `docs/changelog.md`.
 - [ ] CR-052 Frontend degraded-state handling (maps/uploads unavailable)
 
 ## Extensibility foundations

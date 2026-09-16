@@ -5,26 +5,17 @@ import { loadEnv } from './env.js';
 
 // buildApp() never binds a real port (see its own comment) — every test here
 // drives the instance through Fastify's `.inject()` instead. DATABASE_URL is
-// required since CR-011 but never actually queried by these routes — the
-// `postgres` driver connects lazily, so a syntactically valid, unreachable URL
-// is enough (see `auth.routes.test.ts` for tests against a real database).
+// required since CR-011 but never actually queried by the routes exercised
+// below — the `postgres` driver connects lazily, so a syntactically valid,
+// unreachable URL is enough (see `auth.routes.test.ts` for tests against a
+// real database). `GET /health` is the one route that now does query the
+// database (CR-051) — its own coverage, including against this same
+// unreachable-DB shape, lives in `routes/health.test.ts`, not here.
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
   DATABASE_URL: 'postgresql://test:test@localhost:5432/unused',
   WEB_ORIGIN: 'http://localhost:3000',
-});
-
-describe('GET /health', () => {
-  it('returns 200 with the bootstrap status', async () => {
-    const app = await buildApp(testEnv);
-    const response = await app.inject({ method: 'GET', url: '/health' });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok' });
-
-    await app.close();
-  });
 });
 
 describe('unmatched routes', () => {

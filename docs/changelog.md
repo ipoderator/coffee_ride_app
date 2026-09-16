@@ -3092,3 +3092,60 @@ real Redis. KI-040 is resolved by this ticket (see below).
 Follow-up: CR-051 (health check endpoint — a natural future consumer of the same
 `CircuitBreaker`/connection-reachability signal this ticket introduces) and CR-052
 (frontend degraded-state handling) are the remaining Resilience-section tickets.
+
+## 2026-09-16 — CR-051 — Health check endpoint reporting DB/Redis/S3 status
+
+Summary: `GET /health` (unversioned, ADR-011) was a bootstrap-only stub (`{ status:
+'ok' }`) whose own comment already named this ticket as the one that replaces the
+handler body — `.claude/rules/resilience.md` requires it to "report the status of its
+own dependencies (DB, Redis, S3) without dying if one is degraded," and
+`docs/api.md`'s `## Health` section documents the exact contract. Now runs a real,
+bounded check per dependency and always returns `200` — this endpoint's whole purpose
+is to observe a degraded dependency, not to also fail as one.
+Response shape: `{ status: 'ok' | 'degraded', dependencies: { db, redis, s3 } }`,
+each dependency one of `'ok' | 'error' | 'not_configured'`. `not_configured` is
+deliberately distinct from `error`: Redis/S3 are optional infra (`REDIS_URL`/`S3_*`
+unset — this environment, KI-014/KI-015) and their absence is an expected degraded
+mode, not a failure to alert on; only an actual `error` on any dependency flips the
+overall `status` to `'degraded'`. `db` has no `not_configured` state —
+`DATABASE_URL` is required, so its absence is a boot-time env-validation error the
+route never observes.
+Neither postgres.js (`db.execute`) nor ioredis (`.ping()`) honor an `AbortSignal`,
+so neither is actually bounded by `packages/resilience`'s `callWithResilience` — the
+same gotcha CR-050 already hit and fixed for BullMQ's `Queue.add()`. Extracted that
+fix (`raceTimeout`, a real `Promise.race` against a plain timer) out of
+`queue.ts` into `apps/api/src/lib/race-timeout.ts` so this ticket doesn't hand-roll a
+second copy; `queue.ts` now imports it too, with no behavior change (same tests still
+pass unmodified). S3's `HeadBucketCommand` goes through the AWS SDK, which _does_
+honor `abortSignal`, so its check uses `callWithResilience` directly (timeout only —
+no retry/breaker: a diagnostic ping must not share `route-storage.ts`'s upload/
+download/delete breaker, in either direction).
+`app.redis: RedisClient | null` is a new decoration on `modules/notifications/
+queue.ts`'s existing producer Redis connection (reused, not a fourth connection
+opened just to ping) — `null` in the same "not configured is degraded, never a
+boot-time crash" shape as `app.s3`.
+Files: `apps/api/src/routes/health.ts` (real checks replacing the stub),
+`apps/api/src/routes/health.test.ts` (new, 5 tests — mocks `@aws-sdk/client-s3`'s
+`send`/`ioredis`'s `Redis`/`bullmq`'s `Queue`/`Worker`, same "mock the SDK" technique
+as `route.routes.test.ts`/`queue.test.ts`; covers not-configured, all-healthy,
+redis-error, s3-error, and a genuinely unreachable DB), `apps/api/src/lib/
+race-timeout.ts` (new, extracted from `queue.ts`), `apps/api/src/modules/
+notifications/queue.ts` (imports the extracted helper, decorates `app.redis`),
+`apps/api/src/app.test.ts` (removed the now-superseded bootstrap-stub `/health`
+test; its own comment updated to note `/health` has its own suite now).
+Decisions: none new.
+Validation: `pnpm --filter api run typecheck/lint/build` clean. `pnpm --filter api
+run test` (real local Postgres) — 265/265 passed across 15 files (260 pre-existing,
+minus the 1 removed stub test, plus 5 new `health.test.ts`). `pnpm turbo run
+typecheck lint --filter=api --filter=resilience --filter=db` clean. Live manual
+verification: booted `apps/api` with this environment's real local Postgres
+reachable and Redis/S3 genuinely unreachable (KI-014/KI-015/KI-019, Docker down) —
+`curl /health` returned `200` with `{"status":"degraded","dependencies":{"db":"ok",
+"redis":"error","s3":"error"}}`, confirming the endpoint distinguishes a live
+dependency from real failures and never fails hard, exactly as documented.
+Known limitations: none new — KI-014/KI-015 stay open at their existing scope (a
+live, _reachable_ Redis/S3 round trip is still unverified in this environment); this
+ticket only adds the diagnostic surface that would report it once one exists.
+Follow-up: CR-052 (frontend degraded-state handling) is the one remaining
+Resilience-section ticket — a natural consumer of this endpoint's `dependencies`
+detail, not just its overall `status`.
