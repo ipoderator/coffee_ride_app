@@ -303,7 +303,17 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       oldest waiting entry into a fresh active registration, inside the same
       transaction/row lock as the cancellation. `RegistrationButton` gained a third
       state (join/leave waitlist). See `docs/changelog.md`.
-- [ ] CR-037 Organizer participant list
+- [x] CR-037 Organizer participant list — done 2026-09-15: two new organizer-only,
+      paginated collection endpoints — `GET /v1/rides/:id/participants` (active
+      registrations, `createdAt asc`) and `GET /v1/rides/:id/waitlist` (adds `GET` to
+      the existing `POST`/`DELETE` path, `waiting` entries only, FIFO order). Own
+      minimal response shape (`RideParticipantSummary`: `id`/`userId`/`displayName`/
+      `createdAt`) — deliberately no phone/email
+      (`.claude/rules/security.md`). New `/organizer/rides/[id]/participants` screen
+      (`ParticipantTable`/`WaitlistTable`, `docs/design.md` §9's named components),
+      linked from `EditRideForm`. Found and fixed a real pre-existing cursor-pagination
+      bug along the way (`date_trunc` fix, see `docs/changelog.md`). See
+      `docs/changelog.md`.
 - [ ] CR-091 "My registrations" (`/me/rides`, `docs/design.md`'s screen inventory)
       — new ticket, added this session (see `.claude/context/known-issues.md`
       KI-037): no ticket in this backlog owned a participant-facing list of their

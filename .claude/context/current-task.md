@@ -6,158 +6,173 @@ complete
 
 ## Task ID
 
-CR-036 — Waitlist
+CR-037 — Organizer participant list
 
 ## Goal
 
-`docs/tasks.md` Registration section, next unchecked ticket after CR-032..035. `docs/api.md`
-pre-sketched `POST`/`DELETE /v1/rides/:id/waitlist` (not yet implemented). `docs/database.md`:
-ninth domain table, `WaitlistEntry`. `docs/product.md` MVP #8 "waitlist"; organizer capability
-"manage registrations and waitlist".
+`docs/tasks.md` Registration section, next unchecked ticket after CR-032..036.
+`docs/api.md` pre-sketches `GET /v1/rides/:id/participants` (not yet implemented,
+"will need its own waitlist-visibility design, not reused from this ticket's
+participant-facing shape"). `docs/design.md` §8: `/organizer/rides/[id]/participants`
+("Participants + waitlist"), §9 component inventory: `ParticipantTable`, `WaitlistTable`.
+`docs/product.md`: organizer capability "manage registrations and waitlist" — this
+ticket is the _view_ half (no removal/messaging action asked for by any doc).
 
 ## Scope decisions (this session, not ADR-level)
 
-- **Lives inside the existing `registrations` capability module**, not a new one:
-  `WaitlistEntry` is tightly coupled to `Registration` (promotion on cancellation touches both
-  tables in one transaction) — `.claude/rules/resilience.md` says don't let one module reach
-  into another's internals, so keeping both in `registrations.service.ts`/`.routes.ts` avoids
-  that reach-across entirely, cleaner than a new `waitlist` module calling into
-  `registrations`'s internals.
-- **Join requires the ride to actually be full**: `POST .../waitlist` re-checks
-  `participantLimit` vs. active registration count itself (inside a `SELECT ... FOR UPDATE`
-  lock on the `rides` row, same mechanism `createRegistration` uses) — `409 ride_not_full` if
-  there's still an open spot (client should call `register` instead, not join a queue for a
-  spot that already exists). Also requires `registration_open` (`409
-ride_registration_not_open` otherwise, same gate as `register`), no existing active
-  registration (`409 registration_already_exists`, reused), and no existing waiting entry
-  (`409 waitlist_entry_already_exists`).
-- **FIFO by `createdAt`, no manual `position` column**: unlike `Stop` (which needed
-  organizer-controlled manual order), a waitlist queue's order is exactly its join order —
-  storing a redundant `position` column would just be another thing to keep in sync. Queue
-  order is `ORDER BY created_at ASC` wherever it matters (promotion, a future organizer list).
-- **Auto-promotion on cancellation, inside `cancelRegistration`'s own transaction**: when an
-  active registration is cancelled, lock the `rides` row, then promote the oldest `waiting`
-  entry (if any) for that ride into a brand-new active `Registration` row, marking the
-  waitlist entry `status: 'promoted'` (terminal, keeps the row — same audit-trail discipline
-  as `Registration.cancelled`). This is what `.claude/rules/database.md`/`resilience.md` mean
-  by "waitlist consistency" enforced in one transaction, not a separate step. Promotion isn't
-  gated on the ride still being `registration_open` — the freed slot is real regardless of
-  whether new self-service registration is currently allowed; not gated on ride status being
-  non-`cancelled` either in practice, since a `cancelled` ride's registrations were never
-  cancelled through this path in a way that matters (out of scope to special-case further —
-  no doc names this edge case).
-- **`cancelRegistration`'s signature stays `Promise<void>`**: promotion is a side effect, not
-  something the caller (the cancelling participant) needs surfaced synchronously — notifying
-  the promoted participant is explicitly CR-038/039 scope (Communication section), not this
-  ticket. No behavior here silently regresses that later ticket; it'll read the same DB state.
-- **`GET /v1/rides/:id` gains one additive field**: `viewerWaitlistEntry` (the caller's own
-  `waiting` entry, `null` if none/unauthenticated/promoted/cancelled) — same embedding
-  precedent as `viewerRegistration`. No `waitlistCount` this ticket — nothing participant-facing
-  needs a total queue size yet (CR-037's organizer participant list is the natural place for
-  that, if ever asked for).
-- **`RegistrationButton` gains a third state**: full + no viewer registration/waitlist entry ->
-  "Встать в список ожидания" (join waitlist, new term); has a `waiting` entry -> "В списке
-  ожидания" label (existing `REGISTRATION_ACTION_TERMS.waitlisted`) + a secondary "Покинуть
-  список ожидания" (leave waitlist, new term) button, same layout pattern as the existing
-  register/cancel pair.
-- **Not this ticket**: `GET /v1/rides/:id/participants` + any waitlist visibility for the
-  organizer (`WaitlistTable`, CR-037); notifying a promoted participant (CR-038/039); "My
-  registrations" (CR-091, already tracked).
+- **Two endpoints, not one combined payload**: `GET /v1/rides/:id/participants`
+  (active registrations) and `GET /v1/rides/:id/waitlist` (adds a `GET` to the
+  existing `POST`/`DELETE /v1/rides/:id/waitlist` path — same resource, organizer's
+  collection view of it). Each is independently cursor-paginated per ADR-011
+  ("collections are paginated... a new collection endpoint without pagination is a
+  contract bug") — a single combined response couldn't satisfy that per sub-list.
+  Matches `docs/design.md`'s two separate components (`ParticipantTable`/
+  `WaitlistTable`) directly.
+- **Organizer-only, any ride status** — not draft-only (`resolveOwnDraftRide` doesn't
+  apply; an organizer needs this most _after_ publishing, once real registrations
+  exist). New service-local ownership check (`assertOwnRide`) mirrors
+  `rides.service.ts`'s `publishRide`-style pattern: ride's organizer must be the
+  caller, `404 ride_not_found` for both "no such ride" and "someone else's ride" —
+  same resource-enumeration-safe rule used everywhere else, reusing
+  `registrations.service.ts`'s existing `RIDE_NOT_FOUND` factory.
+- **Own response shape, deliberately minimal — no phone/email**: `.claude/rules/
+security.md` ("protect participant contact... information", "never return
+  unnecessary participant data") and `packages/db/src/schema/user.ts`'s own comment
+  on `phone` ("returned only to the profile's own owner... this is the constraint to
+  preserve once [another endpoint exposes another user's row] does") — this ticket is
+  exactly that endpoint. Shipped shape: `{ id, userId, displayName, createdAt }` per
+  row (`RideParticipantSummary`, reused for both endpoints' items) — enough to
+  identify who's who in a list, nothing an organizer could use to contact a
+  participant directly outside the app. No product doc names a "contact participant"
+  feature yet (that's Communication section, CR-038+, via in-app
+  notifications/updates, not a phone number).
+- **No stored/computed queue "position" field** — same reasoning CR-036 already
+  established for `WaitlistEntry` itself: order _is_ `createdAt asc`, returned as the
+  array's own order. A client wanting a display position can enumerate the page
+  itself; nothing asks for a stable position across pages.
+- **Participants list = `status: 'active'` registrations only**, ordered
+  `createdAt asc` (registration order — oldest first, the natural "who's been in the
+  longest" order for a management list; deliberately not `/mine`'s `createdAt desc`,
+  which is a _different_ list's own precedent for "newest draft first"). Waitlist list
+  = `status: 'waiting'` entries only, ordered `createdAt asc` (exact FIFO order,
+  matching the promotion query CR-036 already uses) — cancelled/promoted entries are
+  history, not part of the organizer's "who's currently queued" view.
+- **No "load more" pagination UI this ticket** — same precedent `RidesList`
+  (`/organizer/rides`, CR-088) and `DiscoveryView` (`/`, CR-024) already set: every
+  paginated list screen in this codebase so far fetches page one only; the API is
+  correctly cursor-paginated per ADR-011 for whenever a screen actually needs more
+  than one page. Not an oversight — matching established scope discipline.
+- **Reuses `listRidesQuerySchema`/`ListRidesQuery`** (`packages/types/src/api/
+rides.ts`, already just `{ limit?, cursor? }`) for both new endpoints' querystring
+  instead of defining a byte-identical duplicate — no participant/waitlist-specific
+  filter exists to justify a bespoke schema.
+- **Not this ticket**: removing a participant, messaging a participant, exporting the
+  list, any UI pagination beyond page one (see above).
 
 ## Endpoints
 
 ```
-POST   /v1/rides/:id/waitlist
-DELETE /v1/rides/:id/waitlist
+GET /v1/rides/:id/participants
+GET /v1/rides/:id/waitlist
 ```
 
 ## Planned files
 
-- `packages/db/src/schema/waitlist-entry.ts` (new, `waitlist_entry_status` pg enum:
-  `waiting`/`promoted`/`cancelled`) + `schema/index.ts` export + migration.
-- `packages/types/src/domain/waitlist-entry.ts` (new `WAITLIST_ENTRY_STATUSES`/
-  `WaitlistEntryStatus`/`WaitlistEntry`) + `src/index.ts` export.
-- `packages/types/src/api/registrations.ts`: add `CreateWaitlistEntryResponse`.
-- `packages/types/src/api/rides.ts`: extend `GetRideResponse` with `viewerWaitlistEntry`.
-- `apps/api/src/modules/registrations/waitlist-entry-response.schema.ts` (new).
-- `apps/api/src/modules/registrations/registrations.service.ts`: add `toWaitlistEntry`,
-  `joinWaitlist`, `leaveWaitlist`; extend `cancelRegistration` with promotion.
-- `apps/api/src/modules/registrations/registrations.routes.ts`: two new routes.
-- `apps/api/src/modules/registrations/registrations.routes.test.ts`: join happy path, not-full
-  → 409, not-open → 409, duplicate active registration → 409, duplicate waiting entry → 409,
-  draft non-owner → 404, unauthenticated → 401, leave happy path, leave-without-entry → 404,
-  promotion-on-cancel (oldest waiting entry becomes active, `promotedAt` set).
-- `apps/api/src/modules/rides/rides.service.ts`: extend `getRideForViewer`.
-- `apps/api/src/modules/rides/ride-response.schema.ts` / `rides.routes.ts`: extend response.
-- `apps/web/src/features/participant/ride-detail/api.ts`: `joinRideWaitlist`/
-  `leaveRideWaitlist` typed calls.
-- `apps/web/src/features/participant/ride-detail/components/RegistrationButton.tsx`: third
-  state.
-- `apps/web/src/features/participant/ride-detail/components/RideDetailView.tsx`: wire
-  `viewerWaitlistEntry` through.
-- `packages/ui/src/terminology.ts`: add `joinWaitlist`/`leaveWaitlist` to
-  `REGISTRATION_ACTION_TERMS`.
-- `docs/api.md`, `docs/database.md`, `docs/tasks.md`, `docs/changelog.md`,
-  `.claude/context/project-state.md`, `.claude/context/known-issues.md` if anything surfaces.
+- `packages/types/src/api/registrations.ts`: add `RideParticipantSummary`,
+  `ListRideParticipantsResponse`, `ListRideWaitlistResponse`.
+- `apps/api/src/modules/registrations/registrations.service.ts`: add `assertOwnRide`,
+  `listParticipants`, `listWaitlist`; import `users`, `asc` already imported,
+  `clampLimit`/`decodeCursor`/`encodeCursor`/`CursorError` from `../../lib/cursor.js`.
+- `apps/api/src/modules/registrations/registrations.routes.ts`: two new `GET` routes
+  (`requireAuth`), one new shared response schema
+  (`rideParticipantSummaryResponseSchema`).
+- `apps/api/src/modules/registrations/registrations.routes.test.ts`: happy path
+  (participants + waitlist, correct filtering/ordering), non-owner → 404, draft ride
+  owner still sees an (empty) list, unauthenticated → 401, pagination (`nextCursor`
+  and a second page) for at least one of the two.
+- `apps/web/src/features/organizer/participants/api.ts` (new feature module):
+  `getRideParticipants`/`getRideWaitlist` typed calls + `getRideStatus` (reads
+  `GET /v1/rides/:id`'s `ride.status`, same "no separate endpoint" precedent
+  `route/api.ts`'s `getRideRouteState` uses).
+- `apps/web/src/features/organizer/participants/components/ParticipantTable.tsx`,
+  `WaitlistTable.tsx` — loading/empty/error states (Skeleton/EmptyState/ErrorState),
+  stacked-card-on-mobile per `docs/design.md` §11 ("participant lists collapse to
+  stacked cards below `md`, never a horizontally scrolling table").
+- `apps/web/src/features/organizer/participants/participants.test.tsx`.
+- `apps/web/src/app/organizer/rides/[id]/participants/page.tsx` (new route, same
+  `CabinetShell`-inherited-auth pattern as `.../route/page.tsx`).
+- `apps/web/src/features/organizer/rides/components/EditRideForm.tsx`: add a
+  "Участники" link next to the existing "Маршрут →" link.
+- `packages/ui/src/terminology.ts`: new `PARTICIPANTS_TERMS` block; one new
+  `RIDE_EDIT_TERMS.participantsLink` entry.
+- `docs/api.md`, `docs/tasks.md`, `docs/changelog.md`,
+  `.claude/context/project-state.md`, `.claude/context/known-issues.md` if anything
+  surfaces.
 
 ## Implementation progress
 
-- [x] packages/db schema + migration (`0010_nappy_speed.sql`), applied to local
-      `coffee_ride_dev`
-- [x] packages/types (`domain/waitlist-entry.ts`, `CreateWaitlistEntryResponse`,
-      `GetRideResponse` extended)
-- [x] apps/api registrations module (join/leave/promotion)
-- [x] apps/api rides.service.ts/ride-response.schema.ts additive field
-      (`viewerWaitlistEntry`)
-- [x] apps/api tests (14 new, in existing `registrations.routes.test.ts`)
-- [x] apps/web wiring + terminology (2 new `REGISTRATION_ACTION_TERMS` keys)
-- [x] apps/web tests (replaced the obsolete "full" test, added 2 new ones)
-- [x] docs updates (api.md, database.md, design.md, tasks.md, changelog.md,
-      known-issues.md +KI-038, project-state.md)
+- [x] packages/types (`RideParticipantSummary`, two response types)
+- [x] apps/api registrations.service.ts (`assertOwnRide`, `listParticipants`,
+      `listWaitlist`, `INVALID_CURSOR`)
+- [x] apps/api registrations.routes.ts (two new `GET` routes)
+- [x] apps/api tests (9 new: 6 participants, 3 waitlist)
+- [x] apps/web feature module (`features/organizer/participants/`)
+- [x] apps/web route (`/organizer/rides/[id]/participants`) + `EditRideForm` link
+- [x] apps/web tests (5 new, `participants.test.tsx`)
+- [x] terminology additions (`PARTICIPANTS_TERMS`, `RIDE_EDIT_TERMS.participantsLink`)
+- [x] docs updates (api.md, tasks.md, changelog.md, project-state.md, known-issues.md)
 - [x] full validation (lint/typecheck/build/test)
-- [x] live verification (curl)
+- [x] live verification (curl + browser, desktop + 375px mobile)
 - [x] project-state.md update
 
 ## Validation results
 
-`turbo run lint typecheck build test --force` — 25/25 tasks green across all 9
-workspace members, against a real
-`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`. `apps/api`: 212
-tests (was 198, +14). `apps/web`: 126 tests (was 125, net +1 after replacing the
-obsolete "full" test with two new waitlist tests). `packages/ui`: unchanged at 85
-tests (existing fixed-object assertion updated in place). `pnpm format:check`/
-`lint:root` clean (one `prettier --write` pass on 2 files touched mid-session).
+`turbo run lint typecheck build test --force` (build with `NODE_ENV=production`,
+KI-038's documented workaround) green across all touched workspaces, against a real
+`DATABASE_URL=postgresql://glebchurkin@localhost:5432/coffee_ride_dev`. `apps/api`:
+221 tests (was 212, +9). `apps/web`: 131 tests (was 126, +5). `packages/ui`: 85 tests
+unchanged (no assertion needed updating — `RIDE_EDIT_TERMS`/new `PARTICIPANTS_TERMS`
+aren't under a fixed-object `toEqual` check). `pnpm format:check`/`lint:root` clean.
 
-Live-verified via curl against a real Postgres + `apps/api`: organizer creates a ride
-with `participantLimit: 1`, publishes, opens registration; participant 1 registers
-(201, fills the only spot); participant 2's registration is rejected (409 `ride_full`);
-participant 2 joins the waitlist (201); participant 3 joins too (201); participant 2's
-duplicate join is rejected (409 `waitlist_entry_already_exists`); ride detail as
-participant 3 shows `registrationsCount: 1` and their own `waiting` entry; participant
-1 cancels (204) — ride detail as participant 2 now shows an active `viewerRegistration`
-and `viewerWaitlistEntry: null` (promoted), while participant 3 still shows a `waiting`
-entry (FIFO order respected — the oldest waiting entry was promoted, not the newer
-one); participant 3 leaves the waitlist (204), a second leave attempt correctly 404s.
-All scratch data deleted from the DB afterward, confirmed by a direct count query.
+Live-verified via curl against a real Postgres + `apps/api`: a non-owner (an
+authenticated participant, not the organizer) gets `404 ride_not_found` from both new
+endpoints; unauthenticated gets `401`; organizer's `/participants` correctly shows
+only the active registrant, `/waitlist` shows the queue in FIFO order including a
+`displayName: null` participant rendered as `null` not an empty string; after the
+registered participant cancels (auto-promoting the oldest waiter), both views update
+correctly — participants now shows the promoted user, waitlist drops to one entry;
+pagination (`limit=1` + cursor) and `400 invalid_cursor` on a malformed cursor both
+verified. Browser-verified (`browser-automation` skill) at desktop and 375px mobile:
+populated page renders both sections with real data and correct Russian date
+formatting; empty-ride case shows both empty states with correct copy;
+`scrollWidth === clientWidth` at 375px (no horizontal scroll, `docs/design.md` §11).
+All scratch data (rides/organizer profile/users) deleted from the DB afterward,
+confirmed by a direct count query.
 
 ## Discovered issues
 
-KI-038 opened deliberately: sourcing the root `.env` (which sets
-`NODE_ENV=development`) into the shell before running `next build` crashes
-`apps/web`'s production build (`<Html>` outside `pages/_document`, on `/404`/
-`/_error`) — confirmed via `git stash` that this reproduces identically on `main`
-before this session's changes, so it's a pre-existing environment/tooling quirk, not a
-regression. Worked around by overriding `NODE_ENV=production` for the build command
-specifically; no code change needed or made.
+Found and fixed within this session, before shipping (not a latent bug left behind):
+`apps/api/src/lib/cursor.ts`'s established cursor pattern silently assumed
+millisecond precision on both sides of its `>`/`<` comparison, but Postgres stores
+`timestamptz` at microsecond precision. Harmless for the one existing **descending**
+consumer (`/mine`), but this ticket's two new **ascending**-order queries (`createdAt
+asc`, needed for FIFO/oldest-first semantics) are the first to combine ascending
+order with a `now()`-derived column — a row's own truncated cursor is always
+strictly less than its actual stored value, so that row always matched its own `>`
+condition and pagination would never have advanced past page one. Confirmed
+empirically against a real Postgres before fixing. Fixed locally by wrapping the
+column side in `date_trunc('milliseconds', ...)` too, in just the two new queries —
+recorded as KI-039 (resolved) in `known-issues.md` for future ascending-order cursor
+endpoints to avoid repeating.
 
 ## Final result
 
-CR-036 ("Waitlist") complete. Ninth domain table (`waitlist_entries`), two new
-endpoints (`POST`/`DELETE /v1/rides/:id/waitlist`) inside the existing `registrations`
-capability module, an additive `viewerWaitlistEntry` on ride detail, and — the core new
-mechanism — auto-promotion of the oldest waiting entry into a fresh active registration
-whenever a cancellation frees a spot, atomic with the cancellation itself. Participant
-UI (`RegistrationButton`) gained join/leave-waitlist states. All live-verified end to
-end, including FIFO promotion order across three participants. `docs/tasks.md`'s
-Registration section now has CR-037 ("Organizer participant list") and CR-091 ("My
+CR-037 ("Organizer participant list") complete. Two new organizer-only,
+cursor-paginated `GET` endpoints (`/v1/rides/:id/participants`, `/v1/rides/:id/
+waitlist`) with a deliberately minimal response shape (no phone/email, per
+`.claude/rules/security.md`). New `/organizer/rides/[id]/participants` screen
+(`ParticipantTable`/`WaitlistTable`, per `docs/design.md`'s named component
+inventory), linked from `EditRideForm`. All live-verified end to end, including
+auto-promotion correctly reflecting across both organizer views after a
+cancellation. `docs/tasks.md`'s Registration section now has only CR-091 ("My
 registrations") remaining.

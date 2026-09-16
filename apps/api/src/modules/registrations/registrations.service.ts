@@ -3,10 +3,24 @@ import {
   organizerProfiles,
   registrations,
   rides,
+  users,
   waitlistEntries,
 } from 'db/schema';
 import type { DbClient } from 'db';
-import type { Registration, WaitlistEntry } from 'types';
+import type {
+  ListRideParticipantsResponse,
+  ListRideWaitlistResponse,
+  ListRidesQuery,
+  Registration,
+  RideParticipantSummary,
+  WaitlistEntry,
+} from 'types';
+import {
+  CursorError,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+} from '../../lib/cursor.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -98,6 +112,17 @@ const WAITLIST_ENTRY_NOT_FOUND = () =>
     'You are not on the waitlist for this ride.',
   );
 
+// CR-037 ("Organizer participant list"). Same code/shape as `rides.service.ts`'s own
+// `INVALID_CURSOR` (not imported — each module owns its own domain-error factories,
+// same reasoning as `RIDE_NOT_FOUND` above).
+const INVALID_CURSOR = () =>
+  new RegistrationServiceError(
+    'invalid_cursor',
+    400,
+    'Invalid cursor',
+    'The cursor parameter is not a valid pagination cursor.',
+  );
+
 export function toRegistration(
   row: typeof registrations.$inferSelect,
 ): Registration {
@@ -156,6 +181,167 @@ async function resolveVisibleRideStatus(
     throw RIDE_NOT_FOUND();
   }
   return row.status;
+}
+
+/**
+ * CR-037 ("Organizer participant list"): unlike {@link resolveVisibleRideStatus}
+ * (any viewer, once the ride has left `draft`), the participant/waitlist lists are
+ * organizer-only at any ride status — the ride's own organizer must be the caller.
+ * Same resource-enumeration-safe `404 ride_not_found` either way (no such ride, or
+ * someone else's), same pattern `rides.service.ts`'s `publishRide` etc. use for
+ * every other organizer-only action.
+ */
+async function assertOwnRide(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  const [row] = await db
+    .select({ id: rides.id })
+    .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(and(eq(rides.id, rideId), eq(organizerProfiles.userId, userId)))
+    .limit(1);
+  if (!row) {
+    throw RIDE_NOT_FOUND();
+  }
+}
+
+function toRideParticipantSummary(row: {
+  id: string;
+  userId: string;
+  displayName: string | null;
+  createdAt: Date;
+}): RideParticipantSummary {
+  return {
+    id: row.id,
+    userId: row.userId,
+    displayName: row.displayName,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/**
+ * CR-037. Active registrations only, ordered `createdAt asc` (registration order —
+ * oldest first; deliberately not `/mine`'s `createdAt desc`, a different list's own
+ * precedent). Cursor pagination per ADR-011, same `apps/api/src/lib/cursor.ts`
+ * helper every other collection endpoint uses; ascending order means the cursor
+ * condition is `>` the last row seen, not `<` (`/mine`'s descending `<`).
+ */
+export async function listParticipants(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  query: ListRidesQuery,
+): Promise<ListRideParticipantsResponse> {
+  await assertOwnRide(db, userId, rideId);
+
+  const limit = clampLimit(query.limit);
+  const conditions = [
+    eq(registrations.rideId, rideId),
+    eq(registrations.status, 'active'),
+  ];
+  if (query.cursor) {
+    let cursorKey;
+    try {
+      cursorKey = decodeCursor(query.cursor);
+    } catch (error) {
+      if (error instanceof CursorError) throw INVALID_CURSOR();
+      throw error;
+    }
+    // `date_trunc('milliseconds', ...)` on the column side, not just the bind
+    // parameter: `cursorKey.sortValue` came from a JS `Date`'s `toISOString()`
+    // (millisecond precision), but Postgres stores `timestamptz` at microsecond
+    // precision — without truncating the column too, the row that produced the
+    // cursor always satisfies its own `>` comparison (its stored value is always
+    // >= the millisecond-truncated one), so ascending pagination would never
+    // advance past page one. `/mine`'s descending `<` cursor (`rides.service.ts`)
+    // doesn't need this: the same truncation makes a row's own comparison `<` come
+    // out false for itself, not true. Discovered live while building this ticket.
+    conditions.push(
+      sql`(date_trunc('milliseconds', ${registrations.createdAt}), ${registrations.id}) > (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: registrations.id,
+      userId: registrations.userId,
+      displayName: users.displayName,
+      createdAt: registrations.createdAt,
+    })
+    .from(registrations)
+    .innerJoin(users, eq(registrations.userId, users.id))
+    .where(and(...conditions))
+    .orderBy(asc(registrations.createdAt), asc(registrations.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({ sortValue: last.createdAt.toISOString(), id: last.id })
+      : null;
+
+  return { items: page.map(toRideParticipantSummary), nextCursor };
+}
+
+/**
+ * CR-037. `status: 'waiting'` entries only, ordered `createdAt asc` — exact FIFO
+ * order, the same one {@link cancelRegistration}'s promotion query already uses.
+ * Same organizer-only ownership gate and cursor mechanics as
+ * {@link listParticipants}.
+ */
+export async function listWaitlist(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  query: ListRidesQuery,
+): Promise<ListRideWaitlistResponse> {
+  await assertOwnRide(db, userId, rideId);
+
+  const limit = clampLimit(query.limit);
+  const conditions = [
+    eq(waitlistEntries.rideId, rideId),
+    eq(waitlistEntries.status, 'waiting'),
+  ];
+  if (query.cursor) {
+    let cursorKey;
+    try {
+      cursorKey = decodeCursor(query.cursor);
+    } catch (error) {
+      if (error instanceof CursorError) throw INVALID_CURSOR();
+      throw error;
+    }
+    // Same `date_trunc` fix as {@link listParticipants} — see its comment.
+    conditions.push(
+      sql`(date_trunc('milliseconds', ${waitlistEntries.createdAt}), ${waitlistEntries.id}) > (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: waitlistEntries.id,
+      userId: waitlistEntries.userId,
+      displayName: users.displayName,
+      createdAt: waitlistEntries.createdAt,
+    })
+    .from(waitlistEntries)
+    .innerJoin(users, eq(waitlistEntries.userId, users.id))
+    .where(and(...conditions))
+    .orderBy(asc(waitlistEntries.createdAt), asc(waitlistEntries.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({ sortValue: last.createdAt.toISOString(), id: last.id })
+      : null;
+
+  return { items: page.map(toRideParticipantSummary), nextCursor };
 }
 
 /**

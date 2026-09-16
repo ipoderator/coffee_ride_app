@@ -348,6 +348,9 @@ export const RIDE_EDIT_TERMS = {
   startLngLabel: 'Долгота старта',
   // CR-027 ("GPX upload"): link into `/organizer/rides/[id]/route`.
   routeLink: 'Маршрут →',
+  // CR-037 ("Organizer participant list"): link into
+  // `/organizer/rides/[id]/participants`.
+  participantsLink: 'Участники →',
   notEditable: 'Редактировать можно только черновик заезда.',
   save: 'Сохранить',
   savePending: 'Сохранение…',
@@ -568,4 +571,26 @@ export const ROUTE_POINT_TERMS = {
   deleteConfirm: 'Удалить точку маршрута? Это действие необратимо.',
   loadError: 'Не удалось сохранить точку маршрута. Попробуйте ещё раз.',
   notEditable: 'Точки маршрута можно менять только у черновика заезда.',
+} as const;
+
+/**
+ * `/organizer/rides/[id]/participants` (CR-037, `docs/design.md` §8 "Participants +
+ * waitlist"). Read-only — no removal/messaging action asked for by any doc
+ * (`.claude/context/current-task.md`'s scope decision). `noNameFallback` covers a
+ * participant who never set `displayName` (`packages/db/src/schema/user.ts`:
+ * nullable) — shown in place of a blank name, never an empty cell.
+ */
+export const PARTICIPANTS_TERMS = {
+  pageTitle: 'Участники',
+  loadError: 'Не удалось загрузить список участников. Попробуйте ещё раз.',
+  noNameFallback: 'Без имени',
+  participantsSectionTitle: 'Участники',
+  participantsEmptyTitle: 'Пока никто не зарегистрирован',
+  participantsEmptyDescription:
+    'Здесь появятся участники после того, как кто-то зарегистрируется на заезд.',
+  waitlistSectionTitle: 'Лист ожидания',
+  waitlistEmptyTitle: 'Лист ожидания пуст',
+  waitlistEmptyDescription:
+    'Здесь появятся участники, если заезд заполнится и кто-то встанет в очередь.',
+  joinedAtLabel: 'Дата регистрации',
 } as const;

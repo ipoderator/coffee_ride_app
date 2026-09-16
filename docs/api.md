@@ -263,9 +263,25 @@ cancellation itself. The promoted `WaitlistEntry` is marked `status: 'promoted'`
 `promotedAt` (terminal, kept as a row). This is not a separate endpoint; it is a side
 effect of cancellation, invisible to the cancelling caller's own response.
 
-GET `/v1/rides/:id/participants` — collection, paginated. Not yet implemented
-(CR-037, "Organizer participant list") — will need its own waitlist-visibility design,
-not reused from this ticket's participant-facing shape.
+GET `/v1/rides/:id/participants` — **implemented (CR-037, "Organizer participant
+list")**. Organizer-only, at any ride status (not draft-only): `401 unauthorized` with
+no session, `404 ride_not_found` for a non-existent ride or one that isn't the
+caller's (same resource-enumeration-safe rule every other organizer-only endpoint
+uses). Active registrations only, `createdAt asc` (registration order). Own response
+shape, not `Registration` — deliberately minimal (`.claude/rules/security.md`
+"protect participant contact... information"): `200` → `{ items:
+RideParticipantSummary[], nextCursor }`, each item `{ id, userId, displayName,
+createdAt }` — no phone/email. Collection, paginated per ADR-011 (`?limit=`/
+`?cursor=`, `400 invalid_cursor` for a malformed one) — no "load more" UI consumes it
+yet, same precedent `GET /v1/rides/mine`'s screen already set.
+
+GET `/v1/rides/:id/waitlist` — **implemented (CR-037)**. Adds a `GET` to the existing
+`POST`/`DELETE /v1/rides/:id/waitlist` path — the organizer's collection view of the
+same resource. Same auth/ownership/pagination rules as `GET .../participants`.
+`waiting` entries only, `createdAt asc` — exact FIFO order, the same order
+`DELETE .../register`'s auto-promotion already promotes by. Same
+`RideParticipantSummary` item shape (reused as-is — the fields needed are identical,
+only the underlying filter differs).
 
 ## Route
 

@@ -549,6 +549,44 @@ builds without overriding `NODE_ENV` for the latter.
 
 ## Resolved
 
+### KI-039 — Ascending cursor pagination could get stuck on page one for a microsecond-precision timestamp column
+
+Resolved: 2026-09-15 (CR-037, same session it was discovered in, before it ever
+shipped). Discovered: 2026-09-15 (CR-037, "Organizer participant list" — the first
+ticket to combine ascending cursor order with a `now()`-derived timestamp column).
+Problem: `apps/api/src/lib/cursor.ts`'s established pattern encodes a page
+boundary's `sortValue` from a JS `Date`'s `toISOString()` (millisecond precision),
+then compares it against the raw DB column with `>`/`<` on the next page's query.
+Postgres stores `timestamptz` at microsecond precision, so the truncated cursor is
+always `<=` the row's actual stored value. For **descending** order (`/mine`'s
+existing `<` comparison, `GET /v1/rides/mine`) this is harmless — a row's own
+truncated cursor being `<=` itself makes its own `<` check come out false, as
+intended. For **ascending** order, the row's own truncated cursor being strictly
+less than its actual value makes that same row always satisfy its own `>` check —
+with `ORDER BY ... ASC LIMIT n`, the smallest matching row is always itself, so
+pagination would never advance past page one. Confirmed empirically against a real
+Postgres (a temp-table insert + round-trip comparison in the same query) before
+fixing, not just reasoned about — see `docs/changelog.md`'s CR-037 entry.
+Impact: would have been silent and total for the two new endpoints this ticket
+shipped (`GET /v1/rides/:id/participants`/`.../waitlist`, both `createdAt asc`) —
+every "next page" request past the first would have returned the same first row
+forever. The one pre-existing ascending case, `GET /v1/rides`'s `startsAt` sort
+(CR-025), never triggered this: `startsAt` has no sub-second entropy (an
+organizer-entered value), so its rows never sit close enough together in time to
+expose the bug. `/mine`'s descending sort is immune by construction (see above).
+Resolution: `registrations.service.ts`'s two new queries wrap the _column_ side of
+the comparison in `date_trunc('milliseconds', ...)` too, so both sides are
+truncated to the same precision consistently before comparing — a genuine tie at
+millisecond precision still falls back to the `id` tiebreaker correctly. Scoped to
+just these two new queries; `apps/api/src/lib/cursor.ts`'s general contract and
+every existing consumer (`/mine`, `GET /v1/rides`) are untouched — neither needs
+this fix today, per the reasoning above.
+Next action: any future ascending-order collection endpoint sorted by a
+`now()`-derived (or otherwise microsecond-precision) timestamp column must apply
+the same `date_trunc('milliseconds', <column>)` treatment on the column side of its
+cursor comparison — do not copy `/mine`'s descending pattern verbatim and assume it
+transfers to ascending order.
+
 ### KI-R10 — Tailwind v4 never scanned `packages/ui` for utility classes
 
 Resolved: 2026-09-13 (CR-065, same session it was discovered in). Discovered:

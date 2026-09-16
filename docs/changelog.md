@@ -2448,3 +2448,111 @@ revisiting `/rides/[id]`.
 
 Follow-up: `docs/tasks.md`'s Registration section has CR-037 ("Organizer participant
 list") and CR-091 ("My registrations") remaining.
+
+## 2026-09-15 — CR-037 — Organizer participant list
+
+Summary: two new organizer-only, cursor-paginated collection endpoints —
+`GET /v1/rides/:id/participants` (active registrations, `createdAt asc`) and
+`GET /v1/rides/:id/waitlist` (adds a `GET` to the existing `POST`/`DELETE` path —
+the organizer's own collection view of the same resource; `waiting` entries only,
+exact FIFO order). Neither is draft-only — an organizer needs this view most _after_
+publishing, once real registrations exist — so ownership is checked with a new
+`assertOwnRide` helper (same resource-enumeration-safe `404 ride_not_found` pattern
+every other organizer-only endpoint already uses), not the draft-only
+`resolveOwnDraftRide` gate stops/route-points/GPX upload use.
+
+Own response shape, not `Registration`/`WaitlistEntry`: `RideParticipantSummary`
+(`packages/types`) is deliberately minimal — `id`/`userId`/`displayName`/`createdAt`,
+no phone/email. `.claude/rules/security.md` ("protect participant contact...
+information", "never return unnecessary participant data") and
+`packages/db/src/schema/user.ts`'s own comment on `phone` ("returned only to the
+profile's own owner... this is the constraint to preserve once [another endpoint
+exposes another user's row] does") both point at exactly this endpoint — no product
+doc names a "contact participant" feature yet (that's Communication section,
+CR-038+, via in-app notifications, not a phone number). One shape reused for both
+endpoints' items — the fields needed are identical, only the server-side filter
+differs.
+
+Real bug found and fixed while building this, not shipped as a latent one:
+`apps/api/src/lib/cursor.ts`'s established pattern (`JS Date.toISOString()` as the
+cursor's `sortValue`, compared with `>`/`<` against the raw DB column) silently
+assumed millisecond precision on both sides, but Postgres stores `timestamptz` at
+microsecond precision — a `Date` truncates that away. For **descending** order
+(`/mine`'s existing `<` comparison) this is harmless: a row's own truncated cursor
+is never less than its actual stored value, so the row's `<` check against itself
+comes out false, as intended. For **ascending** order — this ticket's `createdAt
+asc` (needed for "oldest first"/FIFO semantics) is the _first_ endpoint to combine
+ascending order with a `now()`-derived, microsecond-precision column (the existing
+ascending case, `GET /v1/rides`'s `startsAt`, has no sub-second entropy, so it never
+triggered this) — the truncated cursor is always strictly less than the row's own
+actual value, so that row always matches its own `>` condition and pagination never
+advances past page one. Confirmed empirically against a real Postgres (a temp-table
+insert + round-trip comparison) before fixing, not just reasoned about. Fixed
+locally in `registrations.service.ts`'s two new queries by wrapping the _column_
+side in `date_trunc('milliseconds', ...)` too, so both sides of the comparison are
+truncated to the same precision consistently — the general `cursor.ts` contract and
+every other consumer are untouched (out of scope for this ticket; `/mine` and
+`GET /v1/rides` are unaffected by construction, per the reasoning above).
+
+New `/organizer/rides/[id]/participants` screen (`apps/web`, `docs/design.md` §8/§9):
+`ParticipantTable` and `WaitlistTable` — the two named components the design doc's
+component inventory already listed — each with independent loading/empty/error
+states, rendered as stacked cards (never a table, `docs/design.md` §11's mobile
+rule). The waitlist shows a `1.`/`2.`/... position number from the returned array's
+own order — no stored/computed position field, same "order is `createdAt asc`, kept
+as row order" reasoning CR-036 already established for `WaitlistEntry` itself. No
+"load more" pagination UI — same precedent `RidesList`/`DiscoveryView` already set;
+the API is correctly paginated per ADR-011 for whenever a screen needs it. Linked
+from `EditRideForm` via a new "Участники →" link next to the existing "Маршрут →"
+one.
+
+Validation: `turbo run lint typecheck build test --force` (build with
+`NODE_ENV=production` per KI-038's documented workaround) green across all touched
+workspaces. `apps/api`: 221 tests (was 212, +9 — 6 for `/participants`, 3 for
+`/waitlist`'s organizer view). `apps/web`: 131 tests (was 126, +5, new
+`participants.test.tsx`). Two of the new `apps/api` tests needed a deliberate small
+delay between two back-to-back in-process registrations to avoid a genuine
+same-millisecond tie (the `date_trunc` fix resolves the cursor's own precision bug,
+but two _different_ rows landing in the same millisecond still fall back to the
+`id` tiebreaker, same accepted limitation `/mine` already has).
+
+Live-verified via curl against a real Postgres + `apps/api`: a stranger (an
+authenticated non-owner) gets `404 ride_not_found` from both new endpoints, an
+unauthenticated caller gets `401`; the organizer's `/participants` view correctly
+shows only the active registrant and `/waitlist` shows the queue in FIFO order,
+including a participant with no `displayName` rendering as `null` (never an empty
+string); after the registered participant cancels (auto-promoting the oldest
+waiter), both views update correctly in the same request — participants now shows
+the promoted user, waitlist drops to the one remaining entry. Also browser-verified
+(`browser-automation` skill) at both desktop and 375px mobile widths: the populated
+page renders both sections with real data and correct Russian date formatting, the
+empty-ride case shows both empty states with the correct copy, and
+`scrollWidth === clientWidth` at 375px (no horizontal scroll). All scratch data
+(rides/organizer profile/users) deleted from the DB afterward, confirmed by a direct
+count query.
+
+Files: `packages/types/src/api/registrations.ts` (`RideParticipantSummary`,
+`ListRideParticipantsResponse`, `ListRideWaitlistResponse`);
+`apps/api/src/modules/registrations/{registrations.service,registrations.routes,
+registrations.routes.test}.ts` (`assertOwnRide`, `listParticipants`, `listWaitlist`,
+`INVALID_CURSOR`, two new `GET` routes); `apps/web/src/features/organizer/
+participants/` (new: `api.ts`, `components/{ParticipantTable,WaitlistTable}.tsx`,
+`participants.test.tsx`); `apps/web/src/app/organizer/rides/[id]/participants/
+page.tsx` (new); `apps/web/src/features/organizer/rides/components/
+EditRideForm.tsx` (new link); `packages/ui/src/terminology.ts`
+(`PARTICIPANTS_TERMS`, `RIDE_EDIT_TERMS.participantsLink`); `docs/{api,tasks}.md`.
+
+Decisions: none new at the ADR level — organizer-only visibility into
+registrations/waitlist is `docs/product.md`'s existing "manage registrations and
+waitlist" capability, and the response-minimization call follows
+`.claude/rules/security.md` directly rather than inventing a new policy.
+
+Known limitations: none new. Removing a participant, messaging a participant, and
+exporting the list are all out of scope (no doc asks for them yet). `docs/tasks.md`'s
+Registration section now has only CR-091 ("My registrations") remaining.
+
+Follow-up: CR-091 (`/me/rides`) is the last open Registration-section ticket. Worth
+remembering for any future ascending-order cursor endpoint sorted by a
+microsecond-precision timestamp column: apply the same `date_trunc('milliseconds',
+...)` treatment `listParticipants`/`listWaitlist` use, not just `/mine`'s descending
+pattern.

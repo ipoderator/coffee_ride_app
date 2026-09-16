@@ -792,4 +792,262 @@ describe('/v1/rides/:id/waitlist', () => {
       await app.close();
     });
   });
+
+  describe('GET /v1/rides/:id/participants', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${randomUUID()}/participants`,
+      });
+
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it("rejects a non-owner's request with 404 ride_not_found", async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app);
+      const { rawToken: strangerToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/participants`,
+        cookies: { session: strangerToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('returns 404 ride_not_found for a non-existent ride', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken: someToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${randomUUID()}/participants`,
+        cookies: { session: someToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('the owner sees an empty list for a fresh draft ride', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app, {
+        openRegistration: false,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/participants`,
+        cookies: { session: organizerToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ items: [], nextCursor: null });
+      await app.close();
+    });
+
+    it('lists only active registrations, oldest first, excluding a cancelled one', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app);
+
+      const { rawToken: firstToken, userId: firstUserId } =
+        await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      // See the pagination test below for why this gap matters — the cursor's
+      // tiebreaker is `id`, not insertion order.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const { rawToken: secondToken, userId: secondUserId } =
+        await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+      // Registers then cancels — must not appear in the participant list.
+      const { rawToken: cancelledToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: cancelledToken },
+      });
+      await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: cancelledToken },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/participants`,
+        cookies: { session: organizerToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.items).toHaveLength(2);
+      expect(body.items.map((item: { userId: string }) => item.userId)).toEqual(
+        [firstUserId, secondUserId],
+      );
+      expect(body.items[0].displayName).toBeNull();
+      expect(body.nextCursor).toBeNull();
+      await app.close();
+    });
+
+    it('paginates and rejects a malformed cursor with 400 invalid_cursor', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app);
+
+      const { rawToken: firstToken, userId: firstUserId } =
+        await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      // The cursor's tiebreaker is `id`, not insertion order — a genuine tie on
+      // `createdAt` (two inserts landing in the same microsecond, easy for two
+      // back-to-back in-process `.inject()` calls) would make this test's ordering
+      // assumption flaky, so force a visible gap between the two registrations.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const { rawToken: secondToken, userId: secondUserId } =
+        await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+
+      const page1 = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/participants?limit=1`,
+        cookies: { session: organizerToken },
+      });
+      expect(page1.statusCode).toBe(200);
+      const body1 = page1.json();
+      expect(body1.items).toHaveLength(1);
+      expect(body1.items[0].userId).toBe(firstUserId);
+      expect(body1.nextCursor).not.toBeNull();
+
+      const page2 = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/participants?limit=1&cursor=${encodeURIComponent(body1.nextCursor)}`,
+        cookies: { session: organizerToken },
+      });
+      expect(page2.statusCode).toBe(200);
+      const body2 = page2.json();
+      expect(body2.items).toHaveLength(1);
+      expect(body2.items[0].userId).toBe(secondUserId);
+      expect(body2.nextCursor).toBeNull();
+
+      const malformed = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/participants?cursor=not-a-valid-cursor`,
+        cookies: { session: organizerToken },
+      });
+      expect(malformed.statusCode).toBe(400);
+      expect(malformed.json().code).toBe('invalid_cursor');
+      await app.close();
+    });
+  });
+
+  describe('GET /v1/rides/:id/waitlist (organizer view)', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${randomUUID()}/waitlist`,
+      });
+
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
+
+    it("rejects a non-owner's request with 404 ride_not_found", async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app);
+      const { rawToken: strangerToken } = await registerAndLoginUser(app);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/waitlist`,
+        cookies: { session: strangerToken },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('lists only waiting entries, FIFO order, excluding a promoted one', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+
+      const { rawToken: registeredToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: registeredToken },
+      });
+
+      // First queued, promoted once the registered participant cancels below —
+      // must not appear in the organizer's waitlist view afterwards.
+      const { rawToken: promotedToken } = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: promotedToken },
+      });
+      const { rawToken: waitingToken, userId: waitingUserId } =
+        await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: waitingToken },
+      });
+
+      await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: registeredToken },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/waitlist`,
+        cookies: { session: organizerToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0].userId).toBe(waitingUserId);
+      expect(body.nextCursor).toBeNull();
+      await app.close();
+    });
+  });
 });

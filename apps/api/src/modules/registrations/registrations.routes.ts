@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
+import { listRidesQuerySchema } from 'types';
 import { requireAuth } from '../../plugins/auth.js';
 import { registrationResponseSchema } from './registration-response.schema.js';
 import { waitlistEntryResponseSchema } from './waitlist-entry-response.schema.js';
@@ -8,6 +9,8 @@ import {
   createRegistration,
   joinWaitlist,
   leaveWaitlist,
+  listParticipants,
+  listWaitlist,
 } from './registrations.service.js';
 
 const registrationResponseWrapper = z.object({
@@ -18,6 +21,20 @@ const waitlistEntryResponseWrapper = z.object({
 });
 const rideIdParamsSchema = z.object({
   id: z.uuid('id must be a valid ride id.'),
+});
+
+// CR-037 ("Organizer participant list"). Own shape, not `registrationResponseSchema`/
+// `waitlistEntryResponseSchema` (`packages/types`' `RideParticipantSummary` comment
+// explains why) — reused for both `/participants` and `/waitlist`'s collection items.
+const rideParticipantSummaryResponseSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  displayName: z.string().nullable(),
+  createdAt: z.string(),
+});
+const listParticipantsResponseSchema = z.object({
+  items: z.array(rideParticipantSummaryResponseSchema),
+  nextCursor: z.string().nullable(),
 });
 
 /**
@@ -107,6 +124,54 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       await leaveWaitlist(app.db, request.user!.id, request.params.id);
       return reply.status(204).send();
+    },
+  );
+
+  // CR-037 ("Organizer participant list"). Organizer-only at any ride status —
+  // `404 ride_not_found` for a non-existent ride or one that isn't the caller's
+  // (same resource-enumeration-safe rule every other organizer-only endpoint uses).
+  // Active registrations only, `createdAt asc`.
+  app.get(
+    '/:id/participants',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        querystring: listRidesQuerySchema,
+        response: { 200: listParticipantsResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const page = await listParticipants(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.query,
+      );
+      return reply.status(200).send(page);
+    },
+  );
+
+  // CR-037. Same ownership gate as `/participants`. `waiting` entries only,
+  // `createdAt asc` — exact FIFO order, the queue's own real order.
+  app.get(
+    '/:id/waitlist',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        querystring: listRidesQuerySchema,
+        response: { 200: listParticipantsResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const page = await listWaitlist(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.query,
+      );
+      return reply.status(200).send(page);
     },
   );
 };
