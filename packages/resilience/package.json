@@ -1,5 +1,5 @@
 {
-  "name": "maps-2gis",
+  "name": "resilience",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,10 +13,6 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "maps-core": "workspace:*",
-    "resilience": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",

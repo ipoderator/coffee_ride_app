@@ -1,4 +1,5 @@
 import type { GeocodeResult, LatLng } from 'maps-core';
+import type { CircuitBreaker } from 'resilience';
 import type { TwoGisProviderConfig } from './config.js';
 import { DEFAULT_GEOCODER_BASE_URL, DEFAULT_TIMEOUT_MS } from './config.js';
 import { fetchJson } from './http.js';
@@ -31,7 +32,10 @@ function toGeocodeResult(item: {
   };
 }
 
-export function createGeocodeMethods(config: TwoGisProviderConfig) {
+export function createGeocodeMethods(
+  config: TwoGisProviderConfig,
+  breaker: CircuitBreaker,
+) {
   const baseUrl = config.geocoderBaseUrl ?? DEFAULT_GEOCODER_BASE_URL;
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -45,6 +49,7 @@ export function createGeocodeMethods(config: TwoGisProviderConfig) {
       url.toString(),
       { method: 'GET' },
       timeoutMs,
+      breaker,
     )) as GeocoderResponse;
     const items = body.result?.items ?? [];
     return items
@@ -63,6 +68,7 @@ export function createGeocodeMethods(config: TwoGisProviderConfig) {
       url.toString(),
       { method: 'GET' },
       timeoutMs,
+      breaker,
     )) as GeocoderResponse;
     const [first] = body.result?.items ?? [];
     return first ? toGeocodeResult(first) : null;

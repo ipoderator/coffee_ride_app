@@ -23,6 +23,16 @@ Every external call must have:
   request; if S3 is unreachable, surface a clear "upload unavailable" state rather than a
   generic 500.
 
+The first three (timeout, retry, circuit breaker) are one shared implementation,
+`packages/resilience`'s `callWithResilience` + `CircuitBreaker` (ADR-016, CR-049) — do
+not hand-roll a new ad hoc timeout/retry wrapper per integration. Each integration wires
+it in at its own call site (`packages/maps-2gis/src/http.ts`, `apps/api/src/modules/
+rides/route-storage.ts`), shares one `CircuitBreaker` instance across every call it
+makes (not one per call), and normalizes `ResilienceError` into its own domain error
+type at that boundary — `ResilienceError` itself never reaches a caller outside the
+integration module. The fourth (fallback/degraded behavior) stays call-site-specific —
+that decision belongs to the feature, not the shared utility.
+
 Never let an external integration's failure propagate into a failed database transaction
 that also contains critical state changes (e.g. do not wrap a notification send in the
 same transaction as a registration insert).

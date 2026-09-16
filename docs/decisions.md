@@ -461,3 +461,83 @@ If GPX file sizes or upload concurrency at production scale ever make parsing a
 measured event-loop latency problem, or if GPX processing grows beyond "parse one
 uploaded file into a geometry array" (e.g. server-side track simplification,
 batch reprocessing), reconsider a worker-thread offload then — not speculatively now.
+
+## ADR-016 — Timeout/retry/circuit-breaker utility as a shared package (`packages/resilience`)
+
+Status: Accepted.
+
+Resolves backlog item CR-049 ("Timeout/retry/circuit-breaker utilities for external
+integrations"), anticipated but explicitly deferred by CR-007 (`packages/maps-2gis`'s
+timeout-only `fetchJson`) and CR-027 (`route-storage.ts`'s ad hoc, module-scoped
+`withResilience`) — both left a comment pointing at this ticket as the generalization
+point once a second consumer needed the same shape (ADR-015's "What this does NOT
+mean").
+
+### Decision
+
+1. **A new workspace package, `packages/resilience`**, not a copy-pasted helper per
+   integration. It exports `callWithResilience` (timeout via `AbortSignal`, bounded
+   retry with jittered exponential backoff, records success/failure on an optional
+   shared `CircuitBreaker`) and `CircuitBreaker` (closed → open after N consecutive
+   failures → half-open single trial call after a cooldown → closed on trial success).
+   Pure TypeScript, zero runtime dependencies — same shape as `packages/maps-core`
+   (provider-neutral interface, no vendor coupling), except here there is no vendor to
+   be neutral about; it doesn't know `fetch` or the AWS SDK exist, it just drives an
+   `AbortSignal` and calls a passed-in `operation`.
+2. **One breaker instance per integration, not per call.** `create2GisMapProvider`
+   builds one `CircuitBreaker` shared across `geocode`/`reverseGeocode`/`getRoute`;
+   `route-storage.ts` builds one module-level breaker shared across
+   upload/download/delete. A breaker tracks "is this provider degraded", which is a
+   property of the integration as a whole — a run of failing geocode calls should also
+   short-circuit `getRoute` against the same struggling provider, not track each
+   method's health independently.
+3. **`ResilienceError` never crosses an integration's boundary.** Each call site
+   (`packages/maps-2gis/src/http.ts`, `route-storage.ts`) catches it and normalizes into
+   its own existing domain error (`MapProviderError`, `RouteStorageError`) — no caller
+   of `MapProvider` or the route-storage functions sees a new error type or has to
+   change its `catch` blocks. This was a hard constraint, not a nice-to-have: both call
+   sites already have established downstream fallback behavior (`rides.service.ts`'s
+   degraded-storage response, `MapProviderError`'s documented "caller decides the
+   fallback" contract) that this change must not disturb.
+4. **New allowed dependency edges**: `apps/api → resilience` and
+   `packages/maps-2gis → resilience` (`.claude/rules/architecture.md`). `apps/web` has
+   no external-integration call site of its own today and gains no dependency on it.
+
+### Rationale
+
+- Two real, independently-written implementations of "timeout + bounded retry" already
+  existed (`fetchJson`'s timeout-only version, `route-storage.ts`'s timeout+retry
+  version) and neither had a circuit breaker — exactly the duplication-risk both
+  call sites' own comments flagged in advance. A third integration (a future
+  notification provider, ADR-007) would have been a third hand-rolled copy without this
+  ticket.
+- A circuit breaker specifically needs to be _shared_ state across calls to mean
+  anything — a per-call or per-request instance can never observe "N consecutive
+  failures" the way a module-level singleton can. That requirement (shared, long-lived
+  state) is what makes this a real package with an explicit composition point per
+  integration, not a stateless helper function copy-pasted around.
+- Kept deliberately small: no configurable retry-on-status-code policy, no
+  distributed/Redis-backed breaker state (every `apps/api` instance today is a single
+  process — ADR-008), no metrics/observability hook. `.claude/rules/resilience.md`'s
+  "only when justified" discipline — add those when CR-051 (health checks) or real
+  multi-instance deployment (CR-075) actually needs them, not speculatively.
+
+### What this does NOT mean
+
+- It does not change either integration's documented fallback behavior — 2GIS failures
+  still let the ride be created/viewed without geocoded coordinates, S3 failures still
+  surface as a degraded-storage response, not a generic 500. This ticket only replaces
+  _how_ the timeout/retry/breaker mechanics are implemented underneath those fallbacks.
+- It does not retry non-idempotent operations. `route-storage.ts`'s PUT/GET/DELETE by
+  key and 2GIS's geocode/reverseGeocode/getRoute (a stateless calculation, even over
+  POST) are all safe to retry; nothing in this codebase currently calls
+  `callWithResilience` around a mutating, non-idempotent operation, and doing so would
+  be a misuse of the utility, not a use case it's designed for.
+
+### When to revisit
+
+If a future external integration needs retry behavior this utility doesn't support
+(e.g. respecting a provider's `Retry-After` header, retrying on specific 5xx codes but
+not others), extend `packages/resilience` itself rather than building a parallel
+mechanism next to it — the whole point of this ADR is that there is one place this
+logic lives.

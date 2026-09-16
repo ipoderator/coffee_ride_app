@@ -3,39 +3,49 @@ import {
   GetObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
+import {
+  CircuitBreaker,
+  callWithResilience,
+  ResilienceError,
+} from 'resilience';
 import type { S3Handle } from '../../plugins/s3.js';
 
 // `.claude/rules/resilience.md`: every external call needs an explicit timeout, a
-// bounded retry (idempotent operations only), and a defined fallback. CR-049 (the
-// shared timeout/retry/circuit-breaker utility for every external integration) isn't
-// built yet, so this is a small wrapper scoped to this module — the first real S3
-// consumer — not a new shared package (`.claude/context/current-task.md`'s scoping
-// note: generalize into CR-049 once a second consumer needs the same shape).
+// bounded retry (idempotent operations only), and a circuit breaker. CR-049's shared
+// `resilience` package (`packages/resilience`) provides all three; this module just
+// wires them up — PUT/GET/DELETE by key are idempotent, so a retry is safe, and one
+// breaker shared across all three tracks "is S3 degraded" as a whole, not per call.
 const TIMEOUT_MS = 8000;
-const MAX_ATTEMPTS = 2; // 1 initial + 1 retry — PUT/GET/DELETE by key are idempotent.
+const MAX_ATTEMPTS = 2; // 1 initial + 1 retry.
+const BREAKER_FAILURE_THRESHOLD = 5;
+const BREAKER_COOLDOWN_MS = 30_000;
+
+const breaker = new CircuitBreaker({
+  failureThreshold: BREAKER_FAILURE_THRESHOLD,
+  cooldownMs: BREAKER_COOLDOWN_MS,
+});
 
 export class RouteStorageError extends Error {}
 
 async function withResilience<T>(
   operation: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      return await operation(controller.signal);
-    } catch (err) {
-      lastError = err;
-    } finally {
-      clearTimeout(timer);
+  try {
+    return await callWithResilience(operation, {
+      timeoutMs: TIMEOUT_MS,
+      retries: { maxAttempts: MAX_ATTEMPTS },
+      breaker,
+    });
+  } catch (error) {
+    if (error instanceof ResilienceError) {
+      throw new RouteStorageError(
+        error.code === 'circuit_open'
+          ? 'S3 is temporarily unavailable (circuit open).'
+          : `S3 route-storage operation failed: ${error.message}`,
+      );
     }
+    throw error;
   }
-  throw new RouteStorageError(
-    `S3 route-storage operation failed after ${MAX_ATTEMPTS} attempt(s): ${
-      lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
-  );
 }
 
 function requireS3(s3: S3Handle | null): S3Handle {

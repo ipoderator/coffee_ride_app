@@ -358,7 +358,7 @@ notifications` (third participant cabinet nav entry). ADR-007 (Pending):
       `rating`/`reviewCount` on `RideOrganizerSummary` (`GET /v1/rides`,
       `GET /v1/rides/:id` — batched, not N+1, on the paginated discovery/
       my-registrations endpoints) and on `GET`/`POST`/`PATCH
-  /v1/organizers/me` (shown on `/organizer/profile`). No new endpoint —
+/v1/organizers/me` (shown on `/organizer/profile`). No new endpoint —
       same "no standalone organizer endpoint" precedent CR-023 established.
       See `docs/changelog.md`.
 
@@ -407,7 +407,16 @@ is not done (`docs/definition-of-done.md`).
 
 ## Resilience
 
-- [ ] CR-049 Timeout/retry/circuit-breaker utilities for external integrations (2GIS Maps, S3)
+- [x] CR-049 Timeout/retry/circuit-breaker utilities for external integrations
+      (2GIS Maps, S3) — done 2026-09-16: new `packages/resilience` package
+      (ADR-016) — `callWithResilience` (timeout + bounded retry with jittered
+      backoff, driven by an `AbortSignal`) and `CircuitBreaker`
+      (closed/open/half-open). `packages/maps-2gis`'s `fetchJson` and
+      `apps/api`'s `route-storage.ts` (S3) both now retry once and share one
+      breaker per integration instead of their previous
+      timeout-only/hand-rolled-retry code; both still normalize into their
+      existing domain error (`MapProviderError`/`RouteStorageError`), no
+      caller-visible contract change. See `docs/changelog.md`.
 - [ ] CR-050 Async notification delivery via Redis queue (decoupled from registration transaction)
 - [ ] CR-051 Health check endpoint (`apps/api`) reporting DB/Redis/S3 status
 - [ ] CR-052 Frontend degraded-state handling (maps/uploads unavailable)

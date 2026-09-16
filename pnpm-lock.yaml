@@ -71,6 +71,9 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
+      resilience:
+        specifier: workspace:*
+        version: link:../../packages/resilience
       sax:
         specifier: ^1.6.1
         version: 1.6.1
@@ -249,6 +252,9 @@ importers:
       maps-core:
         specifier: workspace:*
         version: link:../maps-core
+      resilience:
+        specifier: workspace:*
+        version: link:../resilience
     devDependencies:
       '@types/node':
         specifier: ^24.13.4
@@ -289,6 +295,30 @@ importers:
       typescript-eslint:
         specifier: ^8.0.0
         version: 8.70.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)
+
+  packages/resilience:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.4
+        version: 24.13.4
+      config:
+        specifier: workspace:*
+        version: link:../config
+      eslint:
+        specifier: ^9.0.0
+        version: 9.39.5(jiti@2.7.0)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.0.0
+        version: 8.70.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)
+      vite:
+        specifier: ^8.0.0
+        version: 8.3.0(@types/node@24.13.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.0(@types/node@24.13.4)(jsdom@30.0.1)(vite@8.3.0(@types/node@24.13.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   packages/types:
     dependencies:

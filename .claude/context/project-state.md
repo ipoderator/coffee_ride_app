@@ -20,8 +20,8 @@ organizer ride updates with fan-out (CR-039), ride-cancellation fan-out (CR-040)
 the participant-facing in-app inbox (CR-041). Post-ride is now fully complete too:
 participant reviews of finished rides (CR-042) and the organizer-wide rating
 aggregate they feed (CR-043). Quality (CR-044..048 — responsive/a11y/states/
-security/performance audits) is now fully complete too. Resilience (CR-049..052)
-is next.
+security/performance audits) is now fully complete too. Resilience is in progress:
+CR-049 (timeout/retry/circuit-breaker utilities) is done; CR-050..052 are next.
 
 ## Current task
 
@@ -125,7 +125,15 @@ batched not N+1 on the paginated endpoints) and on `GET`/`POST`/`PATCH
 (ADR-010) + a 2GIS REST adapter (geocode/reverseGeocode/getRoute, no SDK dependency).
 No live 2GIS credential exists in this environment, so every map-rendering surface
 (discovery map, route map) shows a real, live-verified degraded state (KI-031) rather
-than an actual MapGL render.
+than an actual MapGL render. `fetchJson` now retries once and shares one `CircuitBreaker`
+across all three methods (CR-049, below), replacing its previous timeout-only logic.
+
+**packages/resilience** (new, CR-049): shared `callWithResilience` (timeout via
+`AbortSignal` + bounded retry with jittered backoff) and `CircuitBreaker`
+(closed/open/half-open). Wired into `packages/maps-2gis` and `apps/api`'s S3
+`route-storage.ts`, replacing each integration's previous independent, partial
+implementation — both still normalize failures into their own existing domain error
+(`MapProviderError`/`RouteStorageError`), no caller-visible contract change. See ADR-016.
 
 Current test counts and per-feature detail: see the latest entries in
 `docs/changelog.md` rather than this file — a fixed number here goes stale the moment
@@ -139,9 +147,10 @@ None.
 
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), and Quality (CR-044..048) sections are all now fully
-complete. Resilience (CR-049 timeout/retry/circuit-breaker utilities, CR-050
-async notification delivery via Redis queue, CR-051 health check endpoint,
-CR-052 frontend degraded-state handling) is next.
+complete. Resilience is in progress: CR-049 (timeout/retry/circuit-breaker
+utilities) is done. CR-050 (async notification delivery via Redis queue),
+CR-051 (health check endpoint), CR-052 (frontend degraded-state handling) are
+next.
 
 ## Important decisions
 
@@ -166,6 +175,10 @@ See `docs/decisions.md`. Notably:
 - ADR-015: GPX upload is bounded by a 10 MB size cap (`@fastify/multipart`) plus a
   streaming SAX parse (`sax`), not a worker thread — revisit only if a real perf
   problem is measured at scale.
+- ADR-016: timeout/retry/circuit-breaker mechanics for external integrations live in
+  one shared package, `packages/resilience`, wired at each integration's own call
+  site (`packages/maps-2gis`, `apps/api`'s S3 route-storage module) — not
+  reimplemented per integration.
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
   warm neutral base with one muted teal-green accent. One exception: `danger` is a
   bright red, reserved for cancellation/failure (`StatusBadge`, `Button
@@ -218,9 +231,11 @@ items:
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
   `packages/maps-2gis` — `.claude/rules/maps.md`);
 - the loopback binding of infrastructure ports in `docker-compose.yml`;
+- one shared timeout/retry/circuit-breaker implementation (`packages/resilience`,
+  ADR-016) for every external integration — don't hand-roll a new ad hoc wrapper;
 - feature-module isolation between organizer/participant cabinet features
   (`.claude/rules/extensibility.md`).
 
 ## Last updated
 
-2026-09-16 (CR-044/045/046/047/048)
+2026-09-16 (CR-049)

@@ -29,6 +29,8 @@
 `packages/config`
 `packages/maps-core` (provider-neutral map interface — see ADR-010, `.claude/rules/maps.md`)
 `packages/maps-2gis` (2GIS adapter implementing `packages/maps-core`)
+`packages/resilience` (shared timeout/retry/circuit-breaker utility for external
+integrations — see ADR-016, `.claude/rules/resilience.md`)
 
 ## Backend
 
@@ -54,6 +56,10 @@ Modular monolith, not microservices — see `docs/decisions.md` ADR-008 and
 `.claude/rules/resilience.md`. Failure isolation comes from timeouts/retries/circuit
 breakers on external calls, async processing for non-critical side effects (notifications),
 and strict internal module boundaries — not from splitting into separate deployed services.
+The timeout/retry/circuit-breaker mechanism itself is one shared utility,
+`packages/resilience` (ADR-016), wired at each integration's call site
+(`packages/maps-2gis`, `apps/api`'s S3 route-storage module) rather than reimplemented
+per integration.
 
 ## Long-term rule
 

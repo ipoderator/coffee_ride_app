@@ -11,14 +11,20 @@
 - `packages/maps-core`: provider-neutral map interface (`MapProvider`) and types (ADR-010).
 - `packages/maps-2gis`: 2GIS adapter implementing `packages/maps-core`. The only package
   allowed to import the 2GIS SDK.
+- `packages/resilience`: shared timeout/retry/circuit-breaker utility for external
+  integrations (ADR-016, `.claude/rules/resilience.md`). No domain/framework
+  dependencies of its own — every integration (`packages/maps-2gis`, `apps/api`'s S3
+  route-storage module) wires it in at its own call site and normalizes its errors into
+  its own domain error type; `ResilienceError` never crosses an integration's boundary.
 
 ## Dependency direction
 
 Allowed:
 
 - web → types/ui/maps-core
-- api → db/types/maps-core
+- api → db/types/maps-core/resilience
 - db → types only when needed
+- maps-2gis → resilience
 - one composition point (web or api config, not scattered call sites) → maps-2gis, to
   wire the concrete adapter behind the maps-core interface
 

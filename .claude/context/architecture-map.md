@@ -535,6 +535,27 @@ gained `ReviewForm`/`ReviewList` inside the existing
 `features/participant/ride-detail/` module (a new "Отзывы" section on
 `/rides/[id]`, not a new route) and a rating card on `/organizer/profile`.
 
+CR-049 (Resilience) added a ninth package, `packages/resilience` (ADR-016): a
+provider-agnostic `callWithResilience` (timeout via `AbortSignal` + bounded
+retry with jittered backoff, recording success/failure on an optional shared
+`CircuitBreaker`) and `CircuitBreaker` itself (closed → open after N
+consecutive failures → half-open single trial → closed on trial success). Zero
+runtime dependencies, same "pure interface/utility, no vendor coupling" shape
+as `packages/maps-core`. Two new dependency edges
+(`.claude/rules/architecture.md`): `packages/maps-2gis → resilience` (its
+`http.ts`'s `fetchJson` now retries once and shares one breaker across
+`geocode`/`reverseGeocode`/`getRoute`, replacing its previous timeout-only
+implementation) and `apps/api → resilience` (`modules/rides/route-storage.ts`'s
+local ad hoc `withResilience` replaced by the shared utility + a module-level
+breaker shared across the GPX upload/download/delete S3 calls). Both call
+sites still normalize every failure into their own pre-existing domain error
+(`MapProviderError`, `RouteStorageError`) — `ResilienceError` never reaches a
+caller outside the integration module, so no downstream fallback behavior
+(degraded-map-state, degraded-storage response) changed shape. CR-050
+(async notification delivery)/CR-051 (health check endpoint)/CR-052 (frontend
+degraded-state handling) are the remaining Resilience-section tickets, still
+open.
+
 ## Target structure
 
 apps/

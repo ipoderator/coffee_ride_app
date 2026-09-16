@@ -1,4 +1,5 @@
 import type { LatLng, RouteRequest, RouteResult } from 'maps-core';
+import type { CircuitBreaker } from 'resilience';
 import type { TwoGisProviderConfig } from './config.js';
 import { DEFAULT_ROUTING_BASE_URL, DEFAULT_TIMEOUT_MS } from './config.js';
 import { MapProviderError } from './errors.js';
@@ -49,7 +50,10 @@ function extractGeometry(
   return points && points.length > 0 ? points : fallback;
 }
 
-export function createGetRoute(config: TwoGisProviderConfig) {
+export function createGetRoute(
+  config: TwoGisProviderConfig,
+  breaker: CircuitBreaker,
+) {
   const baseUrl = config.routingBaseUrl ?? DEFAULT_ROUTING_BASE_URL;
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -74,6 +78,7 @@ export function createGetRoute(config: TwoGisProviderConfig) {
         body: JSON.stringify(requestBody),
       },
       timeoutMs,
+      breaker,
     )) as RoutingResponse;
 
     const [route] = extractItems(body);

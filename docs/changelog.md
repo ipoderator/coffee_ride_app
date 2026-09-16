@@ -2986,3 +2986,34 @@ the tag swap alone is sufficient.
 Follow-up: CR-058, CR-060, CR-061 are the next security-hardening tickets
 (`docs/tasks.md`'s Resilience/Auth-follow-up sections); none of them were blocked
 or newly required by this task, just re-confirmed still open and in scope.
+
+## 2026-09-16 — CR-049 — Timeout/retry/circuit-breaker utilities for external integrations
+
+Summary: Both existing external-call sites (`packages/maps-2gis`'s `fetchJson`,
+`apps/api`'s S3 `route-storage.ts`) had a timeout and, in `route-storage.ts`'s case, an
+ad hoc retry — but no circuit breaker, and each had its own independent
+implementation, exactly the duplication both call sites' own comments flagged as
+CR-049's job to resolve (see ADR-015's "What this does NOT mean"). Built one shared
+package, `packages/resilience`, and wired both call sites to it: `callWithResilience`
+(timeout via `AbortSignal`, bounded retry with jittered exponential backoff) plus
+`CircuitBreaker` (closed → open after N consecutive failures → half-open single trial
+→ closed on trial success). Each integration shares one breaker instance across every
+call it makes (not per call) and normalizes `ResilienceError` into its own existing
+domain error at the boundary (`MapProviderError`, `RouteStorageError`) — no caller of
+either module saw its error-handling contract change.
+Files: `packages/resilience/` (new package — `src/circuit-breaker.ts`,
+`src/call-with-resilience.ts`, `src/errors.ts`, `src/index.ts`, plus 15 unit tests
+across two `*.test.ts` files); `packages/maps-2gis/src/{http.ts,geocode.ts,route.ts,
+provider.ts,errors.ts}` (retry + shared breaker, one breaker per `MapProvider`
+instance); `apps/api/src/modules/rides/route-storage.ts` (module-level breaker
+replacing the local `withResilience`); `packages/maps-2gis/package.json`,
+`apps/api/package.json` (new `resilience` workspace dependency).
+Decisions: ADR-016 (`docs/decisions.md`) — new shared package, new allowed dependency
+edges `apps/api → resilience` and `packages/maps-2gis → resilience`
+(`.claude/rules/architecture.md` updated); `.claude/rules/resilience.md` now points at
+the concrete implementation instead of only describing the required pattern.
+Follow-up: CR-050 (async notification delivery via Redis queue), CR-051 (health check
+endpoint reporting DB/Redis/S3 status — a natural future consumer of
+`CircuitBreaker.getState()`, not added speculatively here since nothing calls it yet),
+CR-052 (frontend degraded-state handling) are the remaining Resilience-section
+tickets, still open.
