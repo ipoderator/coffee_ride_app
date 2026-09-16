@@ -75,16 +75,29 @@ async function createOrganizerRide(
   options: {
     openRegistration?: boolean;
     participantLimit?: number;
+    // CR-091 ("My registrations"): lets a test build a ride whose `startsAt` is
+    // already in the past, needed for the `when=past` tab — every other caller of
+    // this helper keeps the default far-future date. Applied via `PATCH` (still
+    // `draft` at this point), same as `participantLimit` below.
+    startsAt?: string;
+    // CR-091: reuse an already-registered organizer's session for a second (or
+    // third, ...) ride instead of registering a fresh user + organizer profile each
+    // time — a test that needs several rides would otherwise burn through
+    // `/v1/auth/register`'s 5-per-minute rate limit (`AUTH_RATE_LIMIT`) fast.
+    organizerToken?: string;
   } = {},
 ) {
-  const { rawToken: organizerToken } = await registerAndLoginUser(app);
-  await app.inject({
-    method: 'POST',
-    url: '/v1/organizers/me',
-    headers: { origin: WEB_ORIGIN },
-    cookies: { session: organizerToken },
-    payload: { name: 'Гравийный клуб' },
-  });
+  let organizerToken = options.organizerToken;
+  if (!organizerToken) {
+    organizerToken = (await registerAndLoginUser(app)).rawToken;
+    await app.inject({
+      method: 'POST',
+      url: '/v1/organizers/me',
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: organizerToken },
+      payload: { name: 'Гравийный клуб' },
+    });
+  }
 
   const ride = await app.inject({
     method: 'POST',
@@ -99,6 +112,16 @@ async function createOrganizerRide(
     },
   });
   const rideId = ride.json().ride.id as string;
+
+  if (options.startsAt !== undefined) {
+    await app.inject({
+      method: 'PATCH',
+      url: `/v1/rides/${rideId}`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: organizerToken },
+      payload: { startsAt: options.startsAt, startTimezone: 'Europe/Moscow' },
+    });
+  }
 
   if (options.participantLimit !== undefined) {
     await app.inject({
@@ -1049,5 +1072,197 @@ describe('/v1/rides/:id/waitlist', () => {
       expect(body.nextCursor).toBeNull();
       await app.close();
     });
+  });
+});
+
+describe('GET /v1/registrations/mine', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  afterAll(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  it('rejects a request with no session cookie with 401', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine?when=upcoming',
+    });
+
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('rejects a missing/invalid when with 400', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken } = await registerAndLoginUser(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine',
+      cookies: { session: rawToken },
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('returns an empty list when the caller has no active registrations', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken } = await registerAndLoginUser(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine?when=upcoming',
+      cookies: { session: rawToken },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ items: [], nextCursor: null });
+    await app.close();
+  });
+
+  it("splits an upcoming and a past registration into the correct tab, excludes a cancelled one and another user's registration", async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken, userId } = await registerAndLoginUser(app);
+
+    // One shared organizer for all four rides — keeps this test's total
+    // `/v1/auth/register` calls under `AUTH_RATE_LIMIT`'s 5-per-minute cap.
+    const { organizerToken, rideId: upcomingRideId } =
+      await createOrganizerRide(app);
+    const { rideId: pastRideId } = await createOrganizerRide(app, {
+      organizerToken,
+      startsAt: '2020-01-01T05:00:00.000Z',
+    });
+    // A third ride the caller registers for then cancels — must appear in neither tab.
+    const { rideId: cancelledRideId } = await createOrganizerRide(app, {
+      organizerToken,
+    });
+    // A fourth ride another user registers for — must never leak into this caller's list.
+    const { rideId: otherUsersRideId } = await createOrganizerRide(app, {
+      organizerToken,
+    });
+    const { rawToken: otherToken } = await registerAndLoginUser(app);
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${otherUsersRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: otherToken },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${upcomingRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${pastRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${cancelledRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+    });
+    await app.inject({
+      method: 'DELETE',
+      url: `/v1/rides/${cancelledRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+    });
+
+    const upcoming = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine?when=upcoming',
+      cookies: { session: rawToken },
+    });
+    expect(upcoming.statusCode).toBe(200);
+    const upcomingBody = upcoming.json();
+    expect(upcomingBody.items).toHaveLength(1);
+    expect(upcomingBody.items[0].ride.id).toBe(upcomingRideId);
+    expect(upcomingBody.items[0].registration.userId).toBe(userId);
+    expect(upcomingBody.items[0].ride.organizer.name).toBe('Гравийный клуб');
+    expect(upcomingBody.nextCursor).toBeNull();
+
+    const past = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine?when=past',
+      cookies: { session: rawToken },
+    });
+    expect(past.statusCode).toBe(200);
+    const pastBody = past.json();
+    expect(pastBody.items).toHaveLength(1);
+    expect(pastBody.items[0].ride.id).toBe(pastRideId);
+    expect(pastBody.nextCursor).toBeNull();
+
+    await app.close();
+  });
+
+  it('paginates the upcoming tab soonest-first and rejects a malformed cursor with 400 invalid_cursor', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken } = await registerAndLoginUser(app);
+
+    const { rideId: soonerRideId } = await createOrganizerRide(app, {
+      startsAt: '2027-03-01T05:00:00.000Z',
+    });
+    const { rideId: laterRideId } = await createOrganizerRide(app, {
+      startsAt: '2027-08-01T05:00:00.000Z',
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${laterRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${soonerRideId}/register`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+    });
+
+    const page1 = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine?when=upcoming&limit=1',
+      cookies: { session: rawToken },
+    });
+    expect(page1.statusCode).toBe(200);
+    const body1 = page1.json();
+    expect(body1.items).toHaveLength(1);
+    expect(body1.items[0].ride.id).toBe(soonerRideId);
+    expect(body1.nextCursor).not.toBeNull();
+
+    const page2 = await app.inject({
+      method: 'GET',
+      url: `/v1/registrations/mine?when=upcoming&limit=1&cursor=${encodeURIComponent(body1.nextCursor)}`,
+      cookies: { session: rawToken },
+    });
+    expect(page2.statusCode).toBe(200);
+    const body2 = page2.json();
+    expect(body2.items).toHaveLength(1);
+    expect(body2.items[0].ride.id).toBe(laterRideId);
+    expect(body2.nextCursor).toBeNull();
+
+    const malformed = await app.inject({
+      method: 'GET',
+      url: '/v1/registrations/mine?when=upcoming&cursor=not-a-valid-cursor',
+      cookies: { session: rawToken },
+    });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().code).toBe('invalid_cursor');
+    await app.close();
   });
 });

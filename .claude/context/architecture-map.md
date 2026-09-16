@@ -459,6 +459,24 @@ MapGL rendering, still blocked on KI-031's missing live 2GIS credential.
 No new `packages/maps-core`/`maps-2gis` dependency, same reasoning as
 `stops`.
 
+CR-091 ("My registrations", 2026-09-16, resolving KI-037): `apps/api`'s
+`registrations` capability module gained a second Fastify plugin,
+`myRegistrationsRoutes` (`GET /v1/registrations/mine`), registered under its own
+`/registrations` prefix in `routes/v1.ts` — distinct from `registrationsRoutes`
+(mounted at `/rides`, every path nests under a specific ride) since this list has no
+single-ride parent and `/v1/rides/mine` was already the organizer's own-rides list
+(CR-088). `rides.service.ts`'s `toPublicRide` is now exported so
+`registrations.service.ts`'s new `listMyRegistrations` can reuse the identical `rides`
+row → `Ride` mapping — the same cross-module reuse direction `toRegistration`/
+`toWaitlistEntry` already established the other way (rides.service.ts importing from
+registrations.service.ts), so this closes the loop into a genuine (harmless, function-
+values-only) import cycle between the two. Two independently cursor-paginated tabs
+(`?when=upcoming|past`) rather than one page split client-side. `apps/web` gained
+`features/participant/my-rides/` (`MyRidesView` — Upcoming/Past tabs, `MyRideCard` —
+feature-local, not a reuse of discovery's own `RideCard` per
+`.claude/rules/extensibility.md`) and `/me/rides`; the participant cabinet nav
+registry now has two entries instead of one.
+
 ## Target structure
 
 apps/

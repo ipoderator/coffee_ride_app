@@ -241,7 +241,13 @@ const ROUTE_STORAGE_UNAVAILABLE = () =>
     'File storage is temporarily unavailable. Try again shortly.',
   );
 
-function toPublicRide(row: typeof rides.$inferSelect): Ride {
+// Exported for `registrations.service.ts`'s `listMyRegistrations` (CR-091), which
+// needs the identical `rides` row -> `Ride` mapping to build its own `PublicRide`
+// items (same reuse direction this file already takes the other way for
+// `toRegistration`/`toWaitlistEntry` — a function value only called inside another
+// function body, not at module init, so the resulting import cycle resolves fine
+// under Node's ESM live bindings).
+export function toPublicRide(row: typeof rides.$inferSelect): Ride {
   return {
     id: row.id,
     organizerId: row.organizerId,

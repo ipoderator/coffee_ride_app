@@ -4,7 +4,10 @@ import { authRoutes } from '../modules/auth/auth.routes.js';
 import { usersRoutes } from '../modules/users/users.routes.js';
 import { organizersRoutes } from '../modules/organizers/organizers.routes.js';
 import { ridesRoutes } from '../modules/rides/rides.routes.js';
-import { registrationsRoutes } from '../modules/registrations/registrations.routes.js';
+import {
+  myRegistrationsRoutes,
+  registrationsRoutes,
+} from '../modules/registrations/registrations.routes.js';
 import { registerCsrf } from '../plugins/csrf.js';
 
 // Versioned root (ADR-011): every product endpoint lives under /v1. Future
@@ -31,4 +34,8 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   await app.register(organizersRoutes, { prefix: '/organizers' });
   await app.register(ridesRoutes, { prefix: '/rides' });
   await app.register(registrationsRoutes, { prefix: '/rides' });
+  // CR-091 ("My registrations"): a second plugin from the same `registrations`
+  // capability module, mounted at its own prefix — see `myRegistrationsRoutes`'s own
+  // doc comment for why it can't nest under `/rides`.
+  await app.register(myRegistrationsRoutes, { prefix: '/registrations' });
 };

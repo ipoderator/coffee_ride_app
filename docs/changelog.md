@@ -2556,3 +2556,68 @@ remembering for any future ascending-order cursor endpoint sorted by a
 microsecond-precision timestamp column: apply the same `date_trunc('milliseconds',
 ...)` treatment `listParticipants`/`listWaitlist` use, not just `/mine`'s descending
 pattern.
+
+## 2026-09-16 — CR-091 — Registration — my registrations (`/me/rides`)
+
+Summary: closed the last open item in the Registration section (KI-037). New `GET
+/v1/registrations/mine?when=upcoming|past` — the caller's own **active** registrations
+only (a cancelled one isn't "a ride you're registered for" any more, same filter
+CR-037's participant/waitlist lists use), each joined with its ride's public+organizer
+summary (`{ registration, ride }`, reusing `Registration`/`PublicRide` as-is — no third
+shape invented). Two independently cursor-paginated tabs (`when` required, no "all"
+default), not one page split client-side — `upcoming` is `ride.startsAt >= now()`
+ordered `startsAt asc` (soonest first), `past` is `< now()` ordered `startsAt desc`
+(most recent past first); no `date_trunc('milliseconds', ...)` fix needed since
+`startsAt` is organizer-entered, not `now()`-derived. Mounted at its own
+`/v1/registrations` prefix (a new plugin, `myRegistrationsRoutes`, in the same
+`registrations` capability module) rather than nested under `/rides` — no single-ride
+parent, and `/v1/rides/mine` was already taken by the organizer's own-rides list
+(CR-088). Waitlist entries are out of scope (still visible on the specific ride's
+`/rides/[id]` page) — `docs/product.md` only names "view registered rides".
+`apps/web` gained the participant cabinet's second nav entry, `/me/rides`
+(`MyRidesView` — Upcoming/Past tabs, one page per tab, no "load more" yet, same
+precedent every other list screen already set), and a feature-local `MyRideCard` (not
+a reuse of discovery's own `RideCard` — `.claude/rules/extensibility.md` forbids a
+feature module depending on another's internals; `docs/design.md` §9 already documents
+`RideCard` as feature-local for the same reason). Read-only: cancellation stays on
+each ride's own `/rides/[id]` page, not duplicated here.
+
+Found and fixed one real bug while building this: interpolating a raw JS `Date` into a
+hand-written `sql` template for the `startsAt >=/< now()` filter threw
+`ERR_INVALID_ARG_TYPE` from the `postgres` driver — same root cause
+`rides.service.ts`'s `listOwnRides` already documents for its own cursor comparison
+(the driver only auto-serializes parameters bound through Drizzle's typed column
+helpers, not a raw `Date` in a template). Fixed by passing the ISO string with an
+explicit `::timestamptz` cast, same pattern used everywhere else in this file.
+
+Live-verified via curl against a real Postgres + `apps/api`: an organizer publishes
+and opens registration on an upcoming ride and a ride whose `startsAt` was set into
+the past; a participant registers for both; `GET .../mine?when=upcoming` returns only
+the upcoming one, `?when=past` returns only the past one, each with the correct ride/
+organizer data; no session cookie → `401`; missing `when` → `400`. All scratch data
+(rides/organizer profile/users) deleted from the DB afterward, confirmed by a direct
+count query.
+
+Files: `packages/types/src/api/registrations.ts` (`MyRegistrationSummary`,
+`myRegistrationsQuerySchema`/`MyRegistrationsQuery`, `ListMyRegistrationsResponse`);
+`apps/api/src/modules/rides/rides.service.ts` (`toPublicRide` now exported, reused by
+the new service function — same cross-module reuse direction `toRegistration`/
+`toWaitlistEntry` already established the other way); `apps/api/src/modules/
+registrations/{registrations.service,registrations.routes,registrations.routes.test}.ts`
+(`listMyRegistrations`, response schema, new `myRegistrationsRoutes` plugin, plus a
+`createOrganizerRide` test-helper extension — `startsAt`/`organizerToken` overrides —
+to build a past-dated ride and reuse one organizer across several rides within the
+`/v1/auth/register` rate limit); `apps/api/src/routes/v1.ts` (registers the new plugin
+under `/registrations`); `apps/web/src/features/participant/my-rides/` (new: `api.ts`,
+`nav.ts`, `components/{MyRidesView,MyRideCard,MyRegistrationsTabs}.tsx`,
+`my-rides.test.tsx`); `apps/web/src/lib/cabinet/participant-nav.ts` (registers the new
+nav item); `apps/web/src/app/me/rides/page.tsx` (new); `packages/ui/src/terminology.ts`
+(`CABINET_TERMS.myRegistrationsNavLabel`, `MY_REGISTRATIONS_TERMS`); `docs/{api,
+tasks}.md`.
+
+Decisions: none new at the ADR level.
+
+Known limitations: none new. `docs/tasks.md`'s Registration section (CR-032..037,
+CR-091) is now fully complete — Communication (CR-038..041) is next.
+
+Follow-up: none specific to this ticket.

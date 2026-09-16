@@ -1,7 +1,8 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
-import { listRidesQuerySchema } from 'types';
+import { listRidesQuerySchema, myRegistrationsQuerySchema } from 'types';
 import { requireAuth } from '../../plugins/auth.js';
+import { rideWithOrganizerResponseSchema } from '../rides/ride-response.schema.js';
 import { registrationResponseSchema } from './registration-response.schema.js';
 import { waitlistEntryResponseSchema } from './waitlist-entry-response.schema.js';
 import {
@@ -9,6 +10,7 @@ import {
   createRegistration,
   joinWaitlist,
   leaveWaitlist,
+  listMyRegistrations,
   listParticipants,
   listWaitlist,
 } from './registrations.service.js';
@@ -34,6 +36,18 @@ const rideParticipantSummaryResponseSchema = z.object({
 });
 const listParticipantsResponseSchema = z.object({
   items: z.array(rideParticipantSummaryResponseSchema),
+  nextCursor: z.string().nullable(),
+});
+
+// CR-091 ("My registrations", `.claude/context/current-task.md`): reuses
+// `registrationResponseSchema`/`rideWithOrganizerResponseSchema` as-is — no third
+// shape invented (`.claude/CLAUDE.md`: no duplicate concepts).
+const myRegistrationSummaryResponseSchema = z.object({
+  registration: registrationResponseSchema,
+  ride: rideWithOrganizerResponseSchema,
+});
+const listMyRegistrationsResponseSchema = z.object({
+  items: z.array(myRegistrationSummaryResponseSchema),
   nextCursor: z.string().nullable(),
 });
 
@@ -169,6 +183,38 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         app.db,
         request.user!.id,
         request.params.id,
+        request.query,
+      );
+      return reply.status(200).send(page);
+    },
+  );
+};
+
+/**
+ * CR-091 ("My registrations", `.claude/context/current-task.md`). A separate plugin
+ * from {@link registrationsRoutes} — that one is mounted at the `/rides` prefix
+ * (every path nests under a specific ride); this list has no single-ride parent, and
+ * `/v1/rides/mine` is already the organizer's own-rides list (CR-088). Registered
+ * under its own `/registrations` prefix in `routes/v1.ts`, same capability module
+ * either way (`.claude/rules/architecture.md`'s feature-boundary list).
+ */
+export const myRegistrationsRoutes: FastifyPluginAsyncZod = async (app) => {
+  // `when` required (no "all" default) — same "explicit filter, not a default that
+  // changes response shape" discipline `bicycleType` already uses for discovery.
+  // Active registrations only, each joined with its ride's public+organizer summary.
+  app.get(
+    '/mine',
+    {
+      schema: {
+        querystring: myRegistrationsQuerySchema,
+        response: { 200: listMyRegistrationsResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const page = await listMyRegistrations(
+        app.db,
+        request.user!.id,
         request.query,
       );
       return reply.status(200).send(page);

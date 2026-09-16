@@ -488,26 +488,6 @@ and the real map render layer is built, plot each ride's `routePoints` as
 typed markers on `/rides/[id]`'s route map — that is the natural, asked-for
 participant surface for this data, not a new textual list component.
 
-### KI-037 — No ticket builds a participant-facing "My registrations" list
-
-Status: open. Discovered: 2026-09-15 (CR-032, "Register" session).
-Problem: `docs/product.md` names "view registered rides" as a participant
-capability, and `docs/design.md` §8 lists `/me/rides` ("My registrations",
-upcoming/past tabs) in the cabinet screen inventory — but `docs/tasks.md`'s
-Registration section (CR-032..037) never owned building it, the same shape of
-gap as KI-024 ("My rides", organizer side)/KI-025/KI-027.
-Impact: low today — a participant can still see and cancel an active
-registration by revisiting the specific ride's `/rides/[id]` page (CR-032/033's
-`RegistrationButton` reads `viewerRegistration` from `GET /v1/rides/:id`), just
-not via a single list of everything they've registered for.
-Workaround: none needed — no data is missing, `registrations.user_id` already
-has an index (`registrations_user_id_idx`, added by CR-032's migration) sized
-for exactly this future query.
-Next action: added CR-091 to `docs/tasks.md`'s Registration section
-(same "real gap, add a ticket" discipline as CR-088/089/090) — a paginated
-`GET /v1/registrations/mine` (or equivalent) joined with ride summaries, plus
-the `/me/rides` screen.
-
 ### KI-038 — `next build` crashes if a `development`-valued `NODE_ENV` reaches it from the shell
 
 Status: open (documented workaround, no code fix needed). Discovered: 2026-09-15
@@ -1005,3 +985,27 @@ Workaround: none needed.
 Next action: add `finishLat`/`finishLng` (same ADR-014 shape) if/when a
 screen actually needs to show or query by the finish location — likely
 alongside CR-027..031 (`Route`/`RoutePoint`), not before.
+
+### KI-037 — No ticket builds a participant-facing "My registrations" list
+
+Resolved: 2026-09-16 (CR-091, its own new ticket — exactly what this entry's own
+"Next action" named). Discovered: 2026-09-15 (CR-032, "Register" session).
+Problem: `docs/product.md` names "view registered rides" as a participant
+capability, and `docs/design.md` §8 lists `/me/rides` ("My registrations",
+upcoming/past tabs) in the cabinet screen inventory — but `docs/tasks.md`'s
+Registration section (CR-032..037) never owned building it, the same shape of
+gap as KI-024 ("My rides", organizer side)/KI-025/KI-027.
+Impact: was low — a participant could always see and cancel an active
+registration by revisiting the specific ride's `/rides/[id]` page, just not via
+a single list of everything they'd registered for.
+Fix: `GET /v1/registrations/mine?when=upcoming|past` (own `/v1/registrations`
+prefix, a new `myRegistrationsRoutes` plugin in the same `registrations`
+capability module) — the caller's own active registrations, two independently
+cursor-paginated tabs, joined with each ride's public+organizer summary. `/me/
+rides` (`MyRidesView`, Upcoming/Past tabs, `MyRideCard`), a second entry in the
+participant cabinet nav registry. Read-only — cancellation stays on
+`/rides/[id]`, not duplicated here. Waitlist entries deliberately out of scope
+(no doc names them for this screen). Live-verified via curl against a real
+Postgres + `apps/api`: an upcoming and a past-dated ride each land in the
+correct tab, no session → `401`, missing `when` → `400`. See
+`docs/changelog.md`'s CR-091 entry.

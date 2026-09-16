@@ -11,10 +11,11 @@ lifecycle (`draft → published → registration_open → registration_closed �
 finished`, plus `cancelled`) implemented end to end; public discovery with filters and
 a map view; GPX route upload/rendering/distance-elevation reconciliation; named
 organizer-curated stops; typed organizer-placed route points (map pins). Route section
-of `docs/tasks.md` is fully complete. Registration section: register/cancel/capacity/
-duplicate-protection (CR-032..035), waitlist with auto-promotion (CR-036), and the
-organizer participant/waitlist list (CR-037) done; only "My registrations" (CR-091)
-remains.
+of `docs/tasks.md` is fully complete. Registration section is now fully complete too:
+register/cancel/capacity/duplicate-protection (CR-032..035), waitlist with
+auto-promotion (CR-036), organizer participant/waitlist list (CR-037), and
+participant-facing "My registrations" (CR-091) all done. Communication (CR-038..041)
+is next.
 
 ## Current task
 
@@ -32,16 +33,18 @@ Claude's project memory).
 
 **apps/web**: Next.js 15 + React 19 + TS 6.0.3, Tailwind v4 + shadcn/ui, real design
 tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Screens:
-`/register`, `/login`, `/me` + `/me/profile`, `/organizer` (dashboard) + `/organizer/
-profile` + `/organizer/rides` (list/new/[id]/edit/[id]/route/[id]/participants), `/`
-(public discovery — list/map toggle, bicycleType filter, upcoming-only sort) and
-`/rides/[id]` (public ride detail, incl. elevation profile, stops, and a
-`RegistrationButton` — register/cancel/join-or-leave-waitlist states, redirects to
-`/login` on 401). `/organizer/rides/[id]/participants` (CR-037): `ParticipantTable`/
-`WaitlistTable`, linked from `EditRideForm`. Cabinet shell + nav/widget registries
-(ADR-009) exist for both organizer and participant sides — one entry each so far, no
-feature-flag support yet (CR-054 generalizes this). No "My registrations" list screen
-yet (KI-037/CR-091).
+`/register`, `/login`, `/me` + `/me/profile` + `/me/rides`, `/organizer` (dashboard) +
+`/organizer/profile` + `/organizer/rides` (list/new/[id]/edit/[id]/route/[id]/
+participants), `/` (public discovery — list/map toggle, bicycleType filter,
+upcoming-only sort) and `/rides/[id]` (public ride detail, incl. elevation profile,
+stops, and a `RegistrationButton` — register/cancel/join-or-leave-waitlist states,
+redirects to `/login` on 401). `/organizer/rides/[id]/participants` (CR-037):
+`ParticipantTable`/`WaitlistTable`, linked from `EditRideForm`. `/me/rides` (CR-091):
+`MyRidesView`, Upcoming/Past tabs, read-only (links out to `/rides/[id]` for
+cancellation). Cabinet shell + nav/widget registries (ADR-009) exist for both
+organizer and participant sides — participant now has two entries (profile, my
+registrations), organizer still has one, no feature-flag support yet (CR-054
+generalizes this).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). Capability modules: `auth` (register/verify-email/login/logout/me,
@@ -59,8 +62,11 @@ auto-promotes the oldest waiting entry (FIFO) into a fresh active registration i
 the same transaction/row lock; embedded as additive `registrationsCount`/
 `viewerRegistration`/`viewerWaitlistEntry` on ride detail; `GET /v1/rides/:id/
 participants`/`.../waitlist` (CR-037) — organizer-only, cursor-paginated, own minimal
-`RideParticipantSummary` shape with no phone/email). Auth endpoints are rate-limited
-in-memory only (KI-014 — no live Redis yet).
+`RideParticipantSummary` shape with no phone/email; `GET /v1/registrations/mine`
+(CR-091) — the caller's own active registrations, two independently cursor-paginated
+`?when=upcoming|past` tabs, joined with each ride's public+organizer summary, own
+`/v1/registrations` URL prefix). Auth endpoints are rate-limited in-memory only
+(KI-014 — no live Redis yet).
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
 `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`,
@@ -91,8 +97,7 @@ None.
 
 ## Next
 
-`docs/tasks.md` Registration section: CR-032..037 done. Only CR-091 ("My
-registrations", `/me/rides`) remains before that section is complete — then
+`docs/tasks.md` Registration section is now fully complete (CR-032..037, CR-091).
 Communication (CR-038..041) is next.
 
 ## Important decisions
@@ -171,4 +176,4 @@ items:
 
 ## Last updated
 
-2026-09-15 (CR-037)
+2026-09-16 (CR-091)

@@ -283,6 +283,22 @@ same resource. Same auth/ownership/pagination rules as `GET .../participants`.
 `RideParticipantSummary` item shape (reused as-is — the fields needed are identical,
 only the underlying filter differs).
 
+GET `/v1/registrations/mine` — **implemented (CR-091, "My registrations")**. Requires
+a valid session cookie (`401` otherwise). Own prefix, not nested under `/rides` — this
+list has no single-ride parent, and `/v1/rides/mine` is already the organizer's
+own-rides list (CR-088). The caller's own **active** registrations only (a cancelled
+one is not "a ride you're registered for" any more, same filter
+`GET .../participants`/`.../waitlist` already use), each joined with its ride's
+public+organizer summary. `400` if `when` is missing/invalid — required, one of
+`upcoming` (`ride.startsAt >= now()`, ordered `startsAt asc`, soonest first) or `past`
+(`ride.startsAt < now()`, ordered `startsAt desc`, most recent past first); two
+independently cursor-paginated tabs, not one page split client-side. Waitlist entries
+are out of scope (still visible on the specific ride's `/rides/[id]` page). `200` →
+`{ items: MyRegistrationSummary[], nextCursor }`, each item `{ registration: Registration,
+ride: PublicRide }` — reuses both existing shapes, no third one invented. Collection,
+paginated per ADR-011 (`?limit=`/`?cursor=`, `400 invalid_cursor` for a malformed
+one).
+
 ## Route
 
 POST `/v1/rides/:id/route` — **implemented (CR-027, "GPX upload")**. Requires a valid

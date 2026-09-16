@@ -314,13 +314,12 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       linked from `EditRideForm`. Found and fixed a real pre-existing cursor-pagination
       bug along the way (`date_trunc` fix, see `docs/changelog.md`). See
       `docs/changelog.md`.
-- [ ] CR-091 "My registrations" (`/me/rides`, `docs/design.md`'s screen inventory)
-      — new ticket, added this session (see `.claude/context/known-issues.md`
-      KI-037): no ticket in this backlog owned a participant-facing list of their
-      own registrations, the same shape of gap as KI-024/025/027. Not built this
-      session to keep CR-032's scope to register/cancel/capacity/duplicate
-      protection; a participant can still verify/cancel a registration today by
-      revisiting `/rides/[id]` directly.
+- [x] CR-091 "My registrations" (`/me/rides`, `docs/design.md`'s screen inventory)
+      — done 2026-09-16: `GET /v1/registrations/mine?when=upcoming|past`, the
+      caller's own active registrations joined with each ride's public+organizer
+      summary, two independently cursor-paginated tabs. `/me/rides` (`MyRidesView`,
+      Upcoming/Past tabs), new participant nav entry. Read-only — cancellation
+      stays on `/rides/[id]`. See `docs/changelog.md`.
 
 ## Communication
 

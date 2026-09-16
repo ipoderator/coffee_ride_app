@@ -184,6 +184,8 @@ export const CABINET_TERMS = {
   homeEmptyDescription:
     'Управление профилем доступно в разделе «Профиль». Заезды и регистрации появятся здесь позже.',
   profileNavLabel: 'Профиль',
+  // CR-091 ("My registrations"): the participant cabinet's second nav entry.
+  myRegistrationsNavLabel: 'Мои регистрации',
   // CR-014: the organizer cabinet's one nav entry so far, and the CTA on the
   // participant cabinet home that's currently the only way to reach it
   // (`/organizer` itself has no dashboard content yet — CR-015).
@@ -593,4 +595,23 @@ export const PARTICIPANTS_TERMS = {
   waitlistEmptyDescription:
     'Здесь появятся участники, если заезд заполнится и кто-то встанет в очередь.',
   joinedAtLabel: 'Дата регистрации',
+} as const;
+
+/**
+ * `/me/rides` (CR-091, `docs/design.md` §8 "My registrations — Upcoming / past
+ * tabs"). Read-only, links out to each ride's own `/rides/[id]` page for cancellation
+ * (`.claude/context/current-task.md`'s scope decision) — this screen has no register/
+ * cancel action of its own.
+ */
+export const MY_REGISTRATIONS_TERMS = {
+  pageTitle: 'Мои регистрации',
+  tabUpcoming: 'Предстоящие',
+  tabPast: 'Прошедшие',
+  loadError: 'Не удалось загрузить регистрации. Попробуйте ещё раз.',
+  emptyUpcomingTitle: 'Нет предстоящих регистраций',
+  emptyUpcomingDescription:
+    'Зарегистрируйтесь на заезд в разделе «Заезды», чтобы увидеть его здесь.',
+  emptyPastTitle: 'Пока нет прошедших заездов',
+  emptyPastDescription:
+    'Здесь появятся заезды, в которых вы уже приняли участие.',
 } as const;

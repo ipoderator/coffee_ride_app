@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   organizerProfiles,
   registrations,
@@ -8,9 +8,11 @@ import {
 } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
+  ListMyRegistrationsResponse,
   ListRideParticipantsResponse,
   ListRideWaitlistResponse,
   ListRidesQuery,
+  MyRegistrationsQuery,
   Registration,
   RideParticipantSummary,
   WaitlistEntry,
@@ -21,6 +23,7 @@ import {
   decodeCursor,
   encodeCursor,
 } from '../../lib/cursor.js';
+import { toPublicRide } from '../rides/rides.service.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -342,6 +345,97 @@ export async function listWaitlist(
       : null;
 
   return { items: page.map(toRideParticipantSummary), nextCursor };
+}
+
+/**
+ * CR-091 ("My registrations", `.claude/context/current-task.md`). The caller's own
+ * active registrations, each joined with its ride's public+organizer summary
+ * (`toPublicRide`, reused from `rides.service.ts` rather than re-deriving the same
+ * 20-field mapping). Active only (`status: 'active'`) — a cancelled registration
+ * isn't "a ride you're registered for" any more, same filter
+ * {@link listParticipants}/{@link listWaitlist} already use.
+ *
+ * Two independent, server-filtered pages rather than one fetched page split
+ * client-side: `when: 'upcoming'` is `ride.startsAt >= now()`, ordered `startsAt asc`
+ * (soonest first, same convention CR-025/KI-029 set for discovery); `when: 'past'` is
+ * `ride.startsAt < now()`, ordered `startsAt desc` (most recent past first). No
+ * `date_trunc('milliseconds', ...)` cursor fix (KI-039) needed — `ride.startsAt` is
+ * organizer-entered, not a `now()`-derived microsecond-precision value.
+ */
+export async function listMyRegistrations(
+  db: DbClient,
+  userId: string,
+  query: MyRegistrationsQuery,
+): Promise<ListMyRegistrationsResponse> {
+  const limit = clampLimit(query.limit);
+  // Passed as the ISO string it already is, not a raw `Date` — same reasoning
+  // `rides.service.ts`'s `listOwnRides` documents for its own cursor comparison: the
+  // `postgres` driver only auto-serializes parameters bound through Drizzle's typed
+  // column helpers, not a raw JS `Date` interpolated into a hand-written `sql`
+  // template (throws `ERR_INVALID_ARG_TYPE`).
+  const nowIso = new Date().toISOString();
+  const isUpcoming = query.when === 'upcoming';
+
+  const conditions = [
+    eq(registrations.userId, userId),
+    eq(registrations.status, 'active'),
+    isUpcoming
+      ? sql`${rides.startsAt} >= ${nowIso}::timestamptz`
+      : sql`${rides.startsAt} < ${nowIso}::timestamptz`,
+  ];
+  if (query.cursor) {
+    let cursorKey;
+    try {
+      cursorKey = decodeCursor(query.cursor);
+    } catch (error) {
+      if (error instanceof CursorError) throw INVALID_CURSOR();
+      throw error;
+    }
+    conditions.push(
+      isUpcoming
+        ? sql`(${rides.startsAt}, ${registrations.id}) > (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`
+        : sql`(${rides.startsAt}, ${registrations.id}) < (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
+    );
+  }
+
+  const rows = await db
+    .select({
+      registration: registrations,
+      ride: rides,
+      organizerId: organizerProfiles.id,
+      organizerName: organizerProfiles.name,
+    })
+    .from(registrations)
+    .innerJoin(rides, eq(registrations.rideId, rides.id))
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(and(...conditions))
+    .orderBy(
+      isUpcoming ? asc(rides.startsAt) : desc(rides.startsAt),
+      isUpcoming ? asc(registrations.id) : desc(registrations.id),
+    )
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({
+          sortValue: last.ride.startsAt.toISOString(),
+          id: last.registration.id,
+        })
+      : null;
+
+  return {
+    items: page.map((row) => ({
+      registration: toRegistration(row.registration),
+      ride: {
+        ...toPublicRide(row.ride),
+        organizer: { id: row.organizerId, name: row.organizerName },
+      },
+    })),
+    nextCursor,
+  };
 }
 
 /**
