@@ -417,7 +417,15 @@ is not done (`docs/definition-of-done.md`).
       timeout-only/hand-rolled-retry code; both still normalize into their
       existing domain error (`MapProviderError`/`RouteStorageError`), no
       caller-visible contract change. See `docs/changelog.md`.
-- [ ] CR-050 Async notification delivery via Redis queue (decoupled from registration transaction)
+- [x] CR-050 Async notification delivery via Redis queue (decoupled from registration
+      transaction) — done 2026-09-16: new `apps/api/src/modules/notifications/queue.ts`
+      (`bullmq` producer/worker, in-process, `app.notificationQueue` nullable). Every
+      producer falls back to the pre-CR-050 direct synchronous insert when
+      `REDIS_URL` isn't configured (KI-014, still unverified live in this environment).
+      Enqueue and graceful-shutdown calls are bounded by a hand-rolled timeout, not
+      `callWithResilience` (BullMQ's `add()` doesn't honor an `AbortSignal` to race
+      against) — live-verified against a genuinely unreachable Redis. See
+      `docs/changelog.md`.
 - [ ] CR-051 Health check endpoint (`apps/api`) reporting DB/Redis/S3 status
 - [ ] CR-052 Frontend degraded-state handling (maps/uploads unavailable)
 

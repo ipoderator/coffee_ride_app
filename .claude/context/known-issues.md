@@ -95,7 +95,8 @@ Next action: CR-056.
 
 ### KI-014 — `apps/api`'s Redis client was never connected to a live Redis
 
-Status: open. Discovered: 2026-09-12 (CR-005).
+Status: open — narrowed, real consumer now exists. Discovered: 2026-09-12
+(CR-005).
 Problem: Docker's daemon did not come up in this environment (same issue as
 CR-004's Postgres validation), and unlike CR-004 there was no already-running
 local Redis to fall back to — installing one via Homebrew for this session was
@@ -109,6 +110,17 @@ Workaround: none needed yet — nothing calls this code.
 Next action: verify a real connection (e.g. `docker compose up redis` +
 `redis-cli ping`, or exercise it from whichever of CR-050/CR-058 consumes it
 first) before or during whichever CR wires this client into a real code path.
+Update 2026-09-16 (CR-050, "Async notification delivery via Redis queue"): this
+is now `apps/api`'s first real Redis consumer (`modules/notifications/queue.ts`
+— a `bullmq` producer/worker), same shape KI-015 hit with S3/CR-027. This
+session live-verified the _unreachable_-Redis behavior only (connection errors
+logged, boot never crashes, enqueue/shutdown calls are bounded and never hang
+— see `docs/changelog.md`'s CR-050 entry) — genuinely connecting to a live,
+reachable Redis and confirming a job round-trips through the worker into a real
+`notifications` row is still unverified and still blocked on this same
+Docker-unreachable constraint. Next action unchanged: the first session with a
+working Docker daemon (or an installed local Redis) should additionally confirm
+that live round trip, the way CR-004 did for Postgres.
 
 ### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
 
@@ -540,10 +552,14 @@ Next action: none required — this is a shell/invocation-order gotcha, not a bu
 pass: don't reuse a `source .env`'d shell for both `apps/api` DB work and `apps/web`
 builds without overriding `NODE_ENV` for the latter.
 
+---
+
+## Resolved
+
 ### KI-040 — Notification delivery is a same-request DB insert, not a queued async job
 
-Status: open — accepted interim posture, not a regression. Discovered: 2026-09-16
-(CR-038/039/040/041, "Communication" session).
+Resolved: 2026-09-16 (CR-050, "Async notification delivery via Redis queue").
+Discovered: 2026-09-16 (CR-038/039/040/041, "Communication" session).
 Problem: `.claude/rules/resilience.md` says notification delivery "must run
 outside the request/response cycle and outside the critical transaction" and
 names Redis as the mechanism ("the side effect is queued (Redis) and processed
@@ -570,16 +586,20 @@ Workaround: none needed for correctness — every producer's own transaction
 already committed before the notification insert runs, so a notification failure
 never loses the registration/cancellation/update itself, only the notification
 row.
-Next action: when CR-050 builds the real Redis-backed queue, move all three
-producers' notification-insert step onto it instead of the direct in-request
-insert — the `NotificationLogger`-based `try`/`catch` shape in
-`apps/api/src/modules/notifications/notifications.service.ts` is the seam to
-replace (enqueue instead of insert directly), not a rewrite of the producers
-themselves.
-
----
-
-## Resolved
+Resolution: `apps/api/src/modules/notifications/queue.ts` (`registerNotificationQueue`)
+wires a `bullmq` `Queue`/in-process `Worker`; all three producers now enqueue when
+`app.notificationQueue` is configured (`REDIS_URL` set) instead of inserting directly,
+with the previous direct-insert behavior kept as the fallback when it isn't (this
+environment — KI-014 stays open). See `docs/changelog.md`'s CR-050 entry for the real
+hang this session found and fixed while live-verifying against an unreachable Redis
+(BullMQ's `add()`/`close()` calls can hang indefinitely with no bounded timeout of
+their own — fixed with a hand-rolled `Promise.race` timeout, not
+`callWithResilience`, since BullMQ accepts no `AbortSignal` to race against).
+Next action: none for this ticket's own scope. Still owed (tracked by KI-014, not
+this entry): live verification against a real, reachable Redis that an enqueued job
+is actually consumed and inserted end to end by the worker — this session confirmed
+the _unreachable_-Redis behavior (bounded, logged, never hangs), not the _reachable_
+one.
 
 ### KI-039 — Ascending cursor pagination could get stuck on page one for a microsecond-precision timestamp column
 

@@ -21,7 +21,8 @@ the participant-facing in-app inbox (CR-041). Post-ride is now fully complete to
 participant reviews of finished rides (CR-042) and the organizer-wide rating
 aggregate they feed (CR-043). Quality (CR-044..048 — responsive/a11y/states/
 security/performance audits) is now fully complete too. Resilience is in progress:
-CR-049 (timeout/retry/circuit-breaker utilities) is done; CR-050..052 are next.
+CR-049 (timeout/retry/circuit-breaker utilities) and CR-050 (async notification
+delivery via Redis queue) are done; CR-051/CR-052 are next.
 
 ## Current task
 
@@ -95,10 +96,13 @@ fans out a `ride_update` notification to every active registrant; `GET
 /v1/notifications/mine` + `POST /v1/notifications/:id/read` under their own
 `/notifications` prefix; a `registration_confirmed` notification also fires from
 `registrations`'s `createRegistration`/waitlist-promotion, and a `ride_cancelled`
-fan-out fires from `rides`'s `cancelRide` — every producer inserts directly into
-`notifications` in the same request, right after its own transaction commits, log-
-and-swallow on failure, not a Redis queue yet, KI-040/CR-050). Auth endpoints are
-rate-limited in-memory only (KI-014 — no live Redis yet). `reviews` (CR-042, its own
+fan-out fires from `rides`'s `cancelRide` — every producer enqueues onto a `bullmq`
+queue (`modules/notifications/queue.ts`, CR-050) when `REDIS_URL` is configured, an
+in-process `Worker` in the same process does the actual insert; falls back to the
+pre-CR-050 direct synchronous insert when it isn't (this environment — KI-014,
+Docker unreachable, live Redis still unverified end to end). Log-and-swallow either
+way on failure. Auth endpoints are rate-limited in-memory only (KI-014). `reviews`
+(CR-042, its own
 capability module): `POST`/`GET /v1/rides/:id/reviews` — create is eligibility-gated
 (active registration on a `finished` ride, one review per user per ride), list is
 public/paginated; `GET /v1/rides/:id/reviews` and the DB unique index are the only
@@ -134,6 +138,11 @@ across all three methods (CR-049, below), replacing its previous timeout-only lo
 `route-storage.ts`, replacing each integration's previous independent, partial
 implementation — both still normalize failures into their own existing domain error
 (`MapProviderError`/`RouteStorageError`), no caller-visible contract change. See ADR-016.
+First real consumer of `redis.ts`'s `createRedisClient` is now `apps/api`'s
+`modules/notifications/queue.ts` (CR-050) — its enqueue and graceful-shutdown calls
+are bounded by a hand-rolled `Promise.race` timeout rather than `callWithResilience`,
+since `bullmq`'s `Queue.add()`/`close()` accept no `AbortSignal` to race against
+(confirmed live: without it, both hang indefinitely against an unreachable Redis).
 
 Current test counts and per-feature detail: see the latest entries in
 `docs/changelog.md` rather than this file — a fixed number here goes stale the moment
@@ -148,7 +157,7 @@ None.
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), and Quality (CR-044..048) sections are all now fully
 complete. Resilience is in progress: CR-049 (timeout/retry/circuit-breaker
-utilities) is done. CR-050 (async notification delivery via Redis queue),
+utilities) and CR-050 (async notification delivery via Redis queue) are done.
 CR-051 (health check endpoint), CR-052 (frontend degraded-state handling) are
 next.
 
@@ -207,10 +216,12 @@ items:
   only, pending real map rendering (KI-036).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
   no in-app recovery path (KI-026).
-- Notification delivery (CR-038..041) is a same-request DB insert right after the
-  triggering transaction commits, not a queued async job — an accepted interim
-  posture, not a regression, since in-app notifications are a same-database insert,
-  not an external-provider call (KI-040, upgrade path is CR-050).
+- Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
+  when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
+  pre-CR-050 direct synchronous insert when it isn't. Live Redis reachability
+  itself is still unverified end to end in this environment (KI-014, Docker
+  unreachable) — this session only verified the unreachable-Redis behavior (bounded,
+  logged, never hangs).
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
   are deferred, no design-doc backing yet (KI-030).
 - Provisional/deferred: `RideService`/registration-state terminology keys pending a
@@ -233,9 +244,15 @@ items:
 - the loopback binding of infrastructure ports in `docker-compose.yml`;
 - one shared timeout/retry/circuit-breaker implementation (`packages/resilience`,
   ADR-016) for every external integration — don't hand-roll a new ad hoc wrapper;
+- notification producers falling back to a direct synchronous insert when
+  `app.notificationQueue` is `null` (`REDIS_URL` unconfigured) — this is what keeps
+  every existing test passing with no live Redis (CR-050);
+- the queue module's own bounded timeouts (`raceTimeout` in `queue.ts`) around
+  `bullmq` calls — `callWithResilience` does not bound them (no `AbortSignal`
+  support), so don't "simplify" this back to a bare `callWithResilience` call;
 - feature-module isolation between organizer/participant cabinet features
   (`.claude/rules/extensibility.md`).
 
 ## Last updated
 
-2026-09-16 (CR-049)
+2026-09-16 (CR-050)

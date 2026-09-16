@@ -78,6 +78,7 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
       const registration = await createRegistration(
         app.db,
         app.log,
+        app.notificationQueue,
         request.user!.id,
         request.params.id,
       );
@@ -101,6 +102,7 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
       await cancelRegistration(
         app.db,
         app.log,
+        app.notificationQueue,
         request.user!.id,
         request.params.id,
       );

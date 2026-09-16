@@ -38,6 +38,7 @@ import {
 import {
   notifyRideCancelled,
   type NotificationLogger,
+  type NotificationQueue,
 } from '../notifications/notifications.service.js';
 import {
   getOrganizerRatingSummaries,
@@ -972,6 +973,7 @@ const CANCELLABLE_STATUSES = [
 export async function cancelRide(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   userId: string,
   rideId: string,
 ): Promise<Ride> {
@@ -1005,7 +1007,7 @@ export async function cancelRide(
     throw new Error('Ride update returned no row.');
   }
 
-  await notifyRideCancelled(db, logger, rideId);
+  await notifyRideCancelled(db, logger, queue, rideId);
 
   return toPublicRide(updated);
 }

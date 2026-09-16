@@ -27,6 +27,7 @@ import { toPublicRide } from '../rides/rides.service.js';
 import {
   createRegistrationConfirmedNotification,
   type NotificationLogger,
+  type NotificationQueue,
 } from '../notifications/notifications.service.js';
 import { getOrganizerRatingSummaries } from '../reviews/reviews.service.js';
 
@@ -487,6 +488,7 @@ export async function listMyRegistrations(
 export async function createRegistration(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   userId: string,
   rideId: string,
 ): Promise<Registration> {
@@ -549,7 +551,13 @@ export async function createRegistration(
     return row;
   });
 
-  await createRegistrationConfirmedNotification(db, logger, userId, rideId);
+  await createRegistrationConfirmedNotification(
+    db,
+    logger,
+    queue,
+    userId,
+    rideId,
+  );
 
   return toRegistration(inserted);
 }
@@ -575,6 +583,7 @@ export async function createRegistration(
 export async function cancelRegistration(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   userId: string,
   rideId: string,
 ): Promise<void> {
@@ -645,6 +654,7 @@ export async function cancelRegistration(
     await createRegistrationConfirmedNotification(
       db,
       logger,
+      queue,
       promotedUserId,
       rideId,
     );

@@ -12,6 +12,7 @@ import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerOpenApi } from './plugins/openapi.js';
 import { registerS3 } from './plugins/s3.js';
+import { registerNotificationQueue } from './modules/notifications/queue.js';
 import { healthRoutes } from './routes/health.js';
 import { v1Routes } from './routes/v1.js';
 
@@ -53,6 +54,9 @@ export async function buildApp(env: Env) {
   await registerOpenApi(app);
   registerDb(app, env);
   registerS3(app, env);
+  // Needs app.db (worker's job processor reads/writes notifications) — must come
+  // after registerDb.
+  registerNotificationQueue(app, env);
 
   // CR-027: GPX file uploads. `fileSize` is the actual event-loop-protection
   // mechanism (ADR-015) — everything past this limit is rejected by the plugin

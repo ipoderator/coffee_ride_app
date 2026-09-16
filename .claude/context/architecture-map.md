@@ -556,6 +556,39 @@ caller outside the integration module, so no downstream fallback behavior
 degraded-state handling) are the remaining Resilience-section tickets, still
 open.
 
+CR-050 ("Async notification delivery via Redis queue", 2026-09-16) is the first
+real consumer of `redis.ts`'s `createRedisClient` (KI-014, live-unverified in
+this environment, stays open — Docker still unreachable). New
+`apps/api/src/modules/notifications/queue.ts`: `registerNotificationQueue`
+decorates `app.notificationQueue: NotificationQueue | null` — `null` when
+`REDIS_URL` isn't configured, same "not configured is a degraded mode, never a
+boot-time crash" shape `plugins/s3.ts` already established for `app.s3`
+(KI-015). When configured, wires a `bullmq` `Queue` (producer) + in-process
+`Worker` (consumer) on one `notifications` queue — the worker runs inside the
+same `apps/api` Fastify process, not a second deployable service
+(`.claude/rules/resilience.md`'s "do not introduce a second deployable service
+'for resilience' without a new ADR"; ADR-008). `notifications.service.ts`'s
+three producers (`createRegistrationConfirmedNotification`, `notifyRideCancelled`,
+the fan-out inside `createRideUpdate`) now take a `queue` parameter: if
+configured, they enqueue and return (the worker's job processor,
+`processNotificationJob`, does the actual insert); if not, they fall back to
+the exact same direct synchronous insert CR-038..041 shipped — so every
+existing route-level test (none of which ever set `REDIS_URL`) keeps passing
+unmodified. Live-verified against a real (unreachable) Redis, not just
+reasoned about: naively awaiting BullMQ's `queue.add()`/`worker.close()`/
+`queue.close()` hangs indefinitely against a genuinely unreachable Redis —
+`callWithResilience`'s `timeoutMs` doesn't help here since `Queue.add()`
+accepts no `AbortSignal` to race against — so `queue.ts` wraps each in a
+hand-rolled `raceTimeout` (a real `Promise.race` against a plain timer) instead,
+bounding both the per-request enqueue latency (1.5s) and graceful shutdown
+(3s per close call) regardless of Redis reachability. A `CircuitBreaker`
+(`packages/resilience`, used directly rather than through
+`callWithResilience` for the same reason) short-circuits the enqueue path
+after 5 consecutive failures so a sustained outage doesn't tax every request
+with that same timeout. No new package/dependency-direction edge — `bullmq` is
+an ordinary `apps/api` npm dependency (not a new workspace package), and
+`apps/api → resilience` already existed (CR-049).
+
 ## Target structure
 
 apps/

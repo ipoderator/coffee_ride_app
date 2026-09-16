@@ -3017,3 +3017,78 @@ endpoint reporting DB/Redis/S3 status — a natural future consumer of
 `CircuitBreaker.getState()`, not added speculatively here since nothing calls it yet),
 CR-052 (frontend degraded-state handling) are the remaining Resilience-section
 tickets, still open.
+
+## 2026-09-16 — CR-050 — Async notification delivery via Redis queue
+
+Summary: `.claude/rules/resilience.md` requires notification delivery to run outside
+the request/response cycle via a Redis queue; KI-040 tracked the interim posture
+(CR-038..041 inserted directly into `notifications` in the same request). This ticket
+builds the real queue: a new `apps/api/src/modules/notifications/queue.ts`
+(`registerNotificationQueue`) wires a `bullmq` `Queue` (producer) + in-process `Worker`
+(consumer) on one `notifications` queue — the worker runs inside the same Fastify
+process, not a second deployable service (ADR-008; `redis.ts`'s own CR-005 doc comment
+already anticipated BullMQ as the eventual consumer). Decorates
+`app.notificationQueue: NotificationQueue | null` — `null` when `REDIS_URL` isn't
+configured, same "not configured is a degraded mode, never a boot-time crash" pattern
+`plugins/s3.ts` already established for `app.s3` (KI-015).
+`notifications.service.ts`'s three producers (`createRegistrationConfirmedNotification`,
+`notifyRideCancelled`, the fan-out inside `createRideUpdate`) now take a `queue`
+parameter: if configured, they enqueue and return immediately (the worker's job
+processor, `processNotificationJob`, does the actual insert, dispatching on job name to
+one of two raw insert functions shared with the no-queue fallback path); if not, they
+fall back to the exact same direct synchronous insert CR-038..041 shipped. Every
+existing route-level integration test exercises the fallback path unmodified (none of
+them ever configure `REDIS_URL`), so this ships with zero changes to any pre-existing
+test.
+A real bug found and fixed during this session's own live verification (not just
+reasoned about): naively awaiting BullMQ's `queue.add()` — and separately,
+`worker.close()`/`queue.close()` — hangs indefinitely against a genuinely unreachable
+Redis. `callWithResilience`'s `timeoutMs` does not help here, since it only bounds an
+operation that itself honors the `AbortSignal` it's handed (like `fetch`/the AWS SDK's
+`abortSignal` — see `route-storage.ts`), and BullMQ's API accepts no such signal.
+`redis.ts`'s bounded `maxRetriesPerRequest` doesn't help either — it bounds a command
+already queued on an established connection, not BullMQ's internal
+`waitUntilReady()` wait for a `ready` event that ioredis's (deliberately infinite, so a
+real outage self-heals without a restart) default reconnect strategy never stops
+trying to produce. Fixed with a hand-rolled `raceTimeout` (a real `Promise.race`
+against a plain timer, `queue.ts`) around both the enqueue call (1.5s bound) and each
+graceful-close call (3s bound each) — confirmed live: before the fix, a script issuing
+one `add()` call against an unreachable Redis never returned within 120s; after, it
+fails in ~1.5s. A `CircuitBreaker` (`packages/resilience`, used directly rather than
+through `callWithResilience` for the same reason) short-circuits the enqueue path
+after 5 consecutive failures (30s cooldown, same values `route-storage.ts` uses) so a
+sustained outage doesn't tax every request with that same timeout — also confirmed
+live (6th call in the failure sequence failed in 0ms, "circuit open").
+Files: `apps/api/src/modules/notifications/queue.ts` (new),
+`apps/api/src/modules/notifications/queue.test.ts` (new, 6 tests — mocked `bullmq`/
+`ioredis`, no live Redis needed, same "mock the SDK" technique `route.routes.test.ts`
+uses for `@aws-sdk/client-s3`; covers the not-configured/configured/worker-dispatch/
+circuit-breaker/bounded-shutdown paths), `apps/api/src/modules/notifications/
+notifications.service.ts` (raw insert functions split out from each producer, new
+`processNotificationJob` dispatcher, `NotificationQueue`/job-data types, `queue`
+parameter threaded through the three producers), `apps/api/src/modules/
+registrations/registrations.service.ts` (`createRegistration`/`cancelRegistration`),
+`apps/api/src/modules/rides/rides.service.ts` (`cancelRide`), three routes files
+(`registrations.routes.ts`, `rides.routes.ts`, `notifications.routes.ts` — pass
+`app.notificationQueue` through), `apps/api/src/app.ts` (`registerNotificationQueue`
+after `registerDb`), `apps/api/package.json` (new `bullmq` dependency).
+Decisions: none new at the ADR level — stays inside ADR-008 (no second deployable
+service) and reuses `packages/resilience`'s `CircuitBreaker` (ADR-016) directly rather
+than through `callWithResilience`, for the documented reason above.
+Validation: `pnpm --filter api run typecheck/lint/build` clean.
+`pnpm --filter api run test` (real local Postgres) — 261/261 passed across 14 files
+(255 pre-existing + 6 new `queue.test.ts`), all pre-existing tests unmodified. Live
+manual verification against this environment's genuinely unreachable Redis
+(KI-014): server boots cleanly with `REDIS_URL` configured and Redis unreachable (logs
+connection errors, never crashes); a standalone script exercising `registerNotificationQueue`
+directly confirmed the enqueue-timeout, circuit-breaker-open, and bounded-shutdown
+behavior described above end to end, then deleted (not committed).
+Known limitations: KI-014 (Redis never live-verified against a real, reachable
+instance in this environment) stays open — this ticket makes the not-reachable case
+behave correctly (bounded, non-hanging, logged), which is different from confirming a
+job is actually consumed and inserted end to end against a live Redis; that
+verification is still owed to the first session with a working Docker daemon or a
+real Redis. KI-040 is resolved by this ticket (see below).
+Follow-up: CR-051 (health check endpoint — a natural future consumer of the same
+`CircuitBreaker`/connection-reachability signal this ticket introduces) and CR-052
+(frontend degraded-state handling) are the remaining Resilience-section tickets.

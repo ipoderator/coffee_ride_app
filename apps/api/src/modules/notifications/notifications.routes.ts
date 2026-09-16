@@ -63,6 +63,7 @@ export const rideUpdatesRoutes: FastifyPluginAsyncZod = async (app) => {
       const rideUpdate = await createRideUpdate(
         app.db,
         app.log,
+        app.notificationQueue,
         request.user!.id,
         request.params.id,
         request.body,

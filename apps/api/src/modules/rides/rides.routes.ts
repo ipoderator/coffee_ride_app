@@ -331,6 +331,7 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
       const ride = await cancelRide(
         app.db,
         app.log,
+        app.notificationQueue,
         request.user!.id,
         request.params.id,
       );

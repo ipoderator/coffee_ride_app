@@ -72,6 +72,41 @@ export interface NotificationLogger {
   error: (obj: unknown, msg?: string) => void;
 }
 
+// CR-050 ("Async notification delivery via Redis queue"): the job vocabulary the
+// BullMQ queue/worker in `./queue.ts` speaks. Defined here, not there, so this
+// module (which owns the actual insert logic the worker calls back into) has no
+// dependency on the queue module — `queue.ts` imports these types plus
+// {@link processNotificationJob} from here, never the reverse.
+export type NotificationJobName =
+  'registration_confirmed' | 'ride_update' | 'ride_cancelled';
+
+export interface RegistrationConfirmedJobData {
+  userId: string;
+  rideId: string;
+}
+
+export interface RideUpdateJobData {
+  rideId: string;
+  rideUpdateId: string;
+}
+
+export interface RideCancelledJobData {
+  rideId: string;
+}
+
+export type NotificationJobData =
+  RegistrationConfirmedJobData | RideUpdateJobData | RideCancelledJobData;
+
+// Minimal handle every producer below needs — same "define the small interface
+// this module actually needs" pattern as {@link NotificationLogger}/`S3Handle`
+// (`plugins/s3.ts`). `null` when `REDIS_URL` isn't configured (`queue.ts`'s
+// `registerNotificationQueue`), same "not configured is a degraded mode" shape as
+// `app.s3` — every producer below falls back to today's direct synchronous insert
+// in that case, so this module works identically with or without Redis.
+export interface NotificationQueue {
+  add(name: NotificationJobName, data: NotificationJobData): Promise<void>;
+}
+
 function toRideUpdate(row: typeof rideUpdates.$inferSelect): RideUpdate {
   return {
     id: row.id,
@@ -123,26 +158,47 @@ async function assertOwnRide(
   }
 }
 
+// Raw insert, no try/catch: used both by the queue-worker's job processor (where a
+// thrown error is exactly what should happen — it drives BullMQ's own bounded
+// retry) and directly by the producer below when no queue is configured.
+async function insertRegistrationConfirmedNotification(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  await db
+    .insert(notifications)
+    .values({ userId, rideId, type: 'registration_confirmed' });
+}
+
 /**
  * CR-038 ("Registration confirmation"): fires after `createRegistration`'s
  * transaction (or `cancelRegistration`'s waitlist-promotion branch) has already
  * committed — never inside it. `.claude/rules/resilience.md`: a non-critical side
  * effect must never be able to fail or roll back the critical action that
- * triggered it. A plain DB insert, not a Redis queue
- * (`.claude/context/current-task.md`'s scope decision — CR-050 is the ticket that
- * would change this). A failure here is logged and swallowed, never rethrown —
- * the caller's registration/promotion already succeeded and must stay that way.
+ * triggered it.
+ *
+ * CR-050: if a queue is configured (`REDIS_URL` set), enqueues and returns —
+ * the actual insert happens in the worker, outside this request entirely. If
+ * not (this environment — KI-014), falls back to the same direct synchronous
+ * insert this function always did before CR-050, so behavior (and every
+ * existing test) is unchanged with no Redis present. Either way, a failure
+ * here is logged and swallowed, never rethrown — the caller's
+ * registration/promotion already succeeded and must stay that way.
  */
 export async function createRegistrationConfirmedNotification(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   userId: string,
   rideId: string,
 ): Promise<void> {
   try {
-    await db
-      .insert(notifications)
-      .values({ userId, rideId, type: 'registration_confirmed' });
+    if (queue) {
+      await queue.add('registration_confirmed', { userId, rideId });
+    } else {
+      await insertRegistrationConfirmedNotification(db, userId, rideId);
+    }
   } catch (err) {
     logger.error(
       { err, userId, rideId },
@@ -151,43 +207,62 @@ export async function createRegistrationConfirmedNotification(
   }
 }
 
+// Raw fan-out insert, no try/catch — same {@link insertRegistrationConfirmedNotification}
+// split: shared by the worker's job processor and the no-queue-configured
+// fallback path. Zero active registrants is a no-op, not an error — sending an
+// update/cancelling a ride with nobody registered yet is harmless.
+async function insertActiveRegistrantNotifications(
+  db: DbClient,
+  rideId: string,
+  type: 'ride_update' | 'ride_cancelled',
+  rideUpdateId: string | null,
+): Promise<void> {
+  const activeRegistrants = await db
+    .select({ userId: registrations.userId })
+    .from(registrations)
+    .where(
+      and(eq(registrations.rideId, rideId), eq(registrations.status, 'active')),
+    );
+  if (activeRegistrants.length === 0) return;
+
+  await db.insert(notifications).values(
+    activeRegistrants.map((row) => ({
+      userId: row.userId,
+      rideId,
+      rideUpdateId,
+      type,
+    })),
+  );
+}
+
 /**
- * Shared fan-out helper for CR-039 ("Ride updates")/CR-040 ("Cancellation
+ * Shared fan-out producer for CR-039 ("Ride updates")/CR-040 ("Cancellation
  * notification"): notifies every currently-active registrant for a ride. Same
  * "registrations only, not waitlist" scope `listParticipants`/`listMyRegistrations`
- * already established (`.claude/context/current-task.md`). Zero active
- * registrants is a no-op, not an error — sending an update/cancelling a ride with
- * nobody registered yet is harmless. Same log-and-swallow discipline as
- * {@link createRegistrationConfirmedNotification} — a notification fan-out
- * failure must never fail the ride action that triggered it.
+ * already established (`.claude/context/current-task.md`). Same CR-050
+ * enqueue-or-fall-back-to-direct-insert shape as
+ * {@link createRegistrationConfirmedNotification} — see its doc comment. Same
+ * log-and-swallow discipline either way — a notification fan-out failure must
+ * never fail the ride action that triggered it.
  */
 async function notifyActiveRegistrants(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   rideId: string,
   type: 'ride_update' | 'ride_cancelled',
   rideUpdateId: string | null,
 ): Promise<void> {
   try {
-    const activeRegistrants = await db
-      .select({ userId: registrations.userId })
-      .from(registrations)
-      .where(
-        and(
-          eq(registrations.rideId, rideId),
-          eq(registrations.status, 'active'),
-        ),
-      );
-    if (activeRegistrants.length === 0) return;
-
-    await db.insert(notifications).values(
-      activeRegistrants.map((row) => ({
-        userId: row.userId,
-        rideId,
-        rideUpdateId,
-        type,
-      })),
-    );
+    if (queue) {
+      if (type === 'ride_update') {
+        await queue.add('ride_update', { rideId, rideUpdateId: rideUpdateId! });
+      } else {
+        await queue.add('ride_cancelled', { rideId });
+      }
+    } else {
+      await insertActiveRegistrantNotifications(db, rideId, type, rideUpdateId);
+    }
   } catch (err) {
     logger.error(
       { err, rideId, type },
@@ -206,9 +281,60 @@ async function notifyActiveRegistrants(
 export async function notifyRideCancelled(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   rideId: string,
 ): Promise<void> {
-  await notifyActiveRegistrants(db, logger, rideId, 'ride_cancelled', null);
+  await notifyActiveRegistrants(
+    db,
+    logger,
+    queue,
+    rideId,
+    'ride_cancelled',
+    null,
+  );
+}
+
+/**
+ * CR-050: dispatches a job the worker in `./queue.ts` pulled off the
+ * `notifications` BullMQ queue to the matching raw insert function. Throws on
+ * failure (deliberately, unlike every producer above) — BullMQ's own bounded
+ * retry/backoff is what should react to that, and a failure surviving every
+ * retry attempt is logged by the worker's own `failed` handler
+ * (`.claude/rules/resilience.md`: a background job failure must never silently
+ * disappear).
+ */
+export async function processNotificationJob(
+  db: DbClient,
+  name: NotificationJobName,
+  data: NotificationJobData,
+): Promise<void> {
+  switch (name) {
+    case 'registration_confirmed': {
+      const { userId, rideId } = data as RegistrationConfirmedJobData;
+      await insertRegistrationConfirmedNotification(db, userId, rideId);
+      return;
+    }
+    case 'ride_update': {
+      const { rideId, rideUpdateId } = data as RideUpdateJobData;
+      await insertActiveRegistrantNotifications(
+        db,
+        rideId,
+        'ride_update',
+        rideUpdateId,
+      );
+      return;
+    }
+    case 'ride_cancelled': {
+      const { rideId } = data as RideCancelledJobData;
+      await insertActiveRegistrantNotifications(
+        db,
+        rideId,
+        'ride_cancelled',
+        null,
+      );
+      return;
+    }
+  }
 }
 
 /**
@@ -222,6 +348,7 @@ export async function notifyRideCancelled(
 export async function createRideUpdate(
   db: DbClient,
   logger: NotificationLogger,
+  queue: NotificationQueue | null,
   userId: string,
   rideId: string,
   input: CreateRideUpdateRequest,
@@ -236,7 +363,14 @@ export async function createRideUpdate(
     throw new Error('Ride update insert returned no row.');
   }
 
-  await notifyActiveRegistrants(db, logger, rideId, 'ride_update', inserted.id);
+  await notifyActiveRegistrants(
+    db,
+    logger,
+    queue,
+    rideId,
+    'ride_update',
+    inserted.id,
+  );
 
   return toRideUpdate(inserted);
 }
