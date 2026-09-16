@@ -19,6 +19,23 @@ import type {
 // here.
 export type { BicycleType, DifficultyLevel, RideStatus, RoutePointType };
 
+/**
+ * CR-043 ("Organizer rating summary"): correct Russian plural for a review count —
+ * `1 отзыв`, `2 отзыва`, `5 отзывов` (standard `n % 10`/`n % 100` cardinal rule,
+ * `docs/design.md` §7: "wrong formatting here reads as broken software").
+ */
+function formatReviewsCount(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'отзыв'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'отзыва'
+        : 'отзывов';
+  return `${count} ${word}`;
+}
+
 export type StatusTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger';
 
 export interface RideStatusTerm {
@@ -252,6 +269,12 @@ export const ORGANIZER_TERMS = {
     'Создайте профиль, чтобы публиковать заезды под своим именем.',
   dashboardWidgetCreateLink: 'Создать профиль',
   dashboardWidgetEditLink: 'Редактировать',
+  // CR-043 ("Organizer rating summary"): shown on `/organizer/profile` alongside
+  // the form, read-only — same "no reviews yet" missing-value handling as
+  // `formatRatingParts`.
+  ratingLabel: 'Рейтинг',
+  ratingNoReviews: 'Пока нет отзывов',
+  ratingReviewsCount: formatReviewsCount,
 } as const;
 
 export interface TimezoneOption {
@@ -414,6 +437,8 @@ export const RIDE_DETAIL_TERMS = {
   // `RIDE_EDIT_TERMS.loadError` (`EditRideForm`'s publish/open/close/cancel handlers
   // all reuse that one key too).
   registrationActionError: 'Не удалось выполнить действие. Попробуйте ещё раз.',
+  // CR-043 ("Organizer rating summary"): shown next to `organizedByLabel`.
+  ratingReviewsCount: formatReviewsCount,
 } as const;
 
 /**
@@ -646,6 +671,27 @@ export const RIDE_UPDATES_TERMS = {
  * no unread-count badge, no bulk "mark all read" in this ticket — click a card to
  * mark it read).
  */
+/**
+ * `/rides/[id]`'s "Отзывы" section (CR-042, `docs/design.md` §9's `ReviewForm`).
+ * `ReviewForm` shows only when the viewer is eligible (active registration on a
+ * `finished` ride) and hasn't reviewed yet — no separate "ineligible" copy is needed,
+ * the form is simply absent (`.claude/context/current-task.md`'s scope decision).
+ */
+export const REVIEWS_TERMS = {
+  sectionTitle: 'Отзывы',
+  loadError: 'Не удалось загрузить отзывы. Попробуйте ещё раз.',
+  emptyTitle: 'Пока нет отзывов',
+  emptyDescription: 'Станьте первым, кто оставит отзыв об этом заезде.',
+  ratingLabel: 'Оценка',
+  commentLabel: 'Комментарий',
+  commentPlaceholder: 'Поделитесь впечатлениями о заезде (необязательно).',
+  submit: 'Оставить отзыв',
+  submitPending: 'Отправка…',
+  submitSuccess: 'Спасибо за отзыв!',
+  submitError: 'Не удалось отправить отзыв. Попробуйте ещё раз.',
+  alreadyReviewed: 'Вы уже оставили отзыв об этом заезде.',
+} as const;
+
 export const NOTIFICATIONS_TERMS = {
   pageTitle: 'Уведомления',
   loadError: 'Не удалось загрузить уведомления. Попробуйте ещё раз.',

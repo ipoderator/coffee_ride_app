@@ -5,6 +5,7 @@ import type { Stop } from '../domain/stop.js';
 import { ROUTE_POINT_TYPES, type RoutePoint } from '../domain/route-point.js';
 import type { Registration } from '../domain/registration.js';
 import type { WaitlistEntry } from '../domain/waitlist-entry.js';
+import type { Review } from '../domain/review.js';
 import type { Paginated } from './pagination.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
@@ -64,9 +65,18 @@ export interface CreateRideResponse {
 // `GET /v1/rides/:id`'s response rather than a separate public organizer-read
 // endpoint — `docs/product.md` Principle 2, "complete ride record, not a link out"
 // (`.claude/context/current-task.md`).
+// CR-043 ("Organizer rating summary"): additive `rating`/`reviewCount`, aggregated
+// from `Review` rows across every ride this organizer has run — same "embed it here,
+// no new endpoint" precedent, reusing this one shared type rather than minting a
+// separate organizer-rating shape (`.claude/CLAUDE.md`: "Do not create duplicate
+// concepts under different names"). `rating` is `null` with `reviewCount: 0` when the
+// organizer has no reviews yet — never `0` (`docs/design.md` §6: a missing value and
+// a real zero are different facts).
 export interface RideOrganizerSummary {
   id: string;
   name: string;
+  rating: number | null;
+  reviewCount: number;
 }
 
 // CR-023: `GET /v1/rides/:id`'s response shape, extended from a bare `{ ride }` —
@@ -87,6 +97,10 @@ export interface RideOrganizerSummary {
 // queue entry, `null` if none/unauthenticated/promoted/cancelled) — same precedent.
 // No `waitlistCount` this ticket — nothing participant-facing needs a total queue
 // size yet (`.claude/context/current-task.md`).
+// CR-042 ("Review"): additive `viewerReview` (the caller's own review for this ride,
+// `null` if none/unauthenticated) — same "embed the caller's own state" precedent as
+// `viewerRegistration`/`viewerWaitlistEntry`. Lets `ReviewForm` decide "already
+// reviewed" without a second request or guessing from the public review list.
 export interface GetRideResponse {
   ride: Ride;
   organizer: RideOrganizerSummary;
@@ -96,6 +110,7 @@ export interface GetRideResponse {
   registrationsCount: number;
   viewerRegistration: Registration | null;
   viewerWaitlistEntry: WaitlistEntry | null;
+  viewerReview: Review | null;
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real

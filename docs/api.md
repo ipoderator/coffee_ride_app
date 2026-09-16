@@ -83,6 +83,10 @@ also accepts explicit `null` to clear it; `name` cannot be cleared (`NOT
 NULL`). `200` → `{ organizerProfile }`. `400 validation_error` on an invalid
 field.
 
+CR-043 ("Organizer rating summary"): all three `/v1/organizers/me` responses above
+additively carry `rating`/`reviewCount` siblings alongside `organizerProfile` — see
+`## Reviews` below.
+
 No public `GET /v1/organizers/:id` endpoint exists, and none is planned for
 just this — CR-023 ("Ride detail") embeds `{ id, name }` directly on `GET
 /v1/rides/:id`'s response instead (`docs/product.md` Principle 2: "complete
@@ -234,7 +238,8 @@ GET `/v1/rides/:id` (CR-016/CR-018/CR-023) gained two additive fields alongside
 ride) and `viewerRegistration` (the caller's own active registration, `null` if none
 or unauthenticated). CR-036 ("Waitlist") added a third: `viewerWaitlistEntry` (the
 caller's own `waiting` queue entry, `null` if none/unauthenticated/promoted/
-cancelled).
+cancelled). CR-042 ("Review") added a fourth: `viewerReview` (the caller's own
+review for this ride, `null` if none/unauthenticated — see `## Reviews` below).
 
 POST `/v1/rides/:id/waitlist` — **implemented (CR-036, "Waitlist")**. Same auth
 requirement and resource-enumeration-safe `404 ride_not_found` as `POST .../register`.
@@ -458,8 +463,30 @@ request, after its own critical transaction commits — not a Redis queue. See
 
 ## Reviews
 
-POST `/v1/rides/:id/reviews`
-GET `/v1/rides/:id/reviews` — collection, paginated
+POST `/v1/rides/:id/reviews` — **implemented (CR-042)**. Requires a valid session
+cookie (`401` otherwise). `404 ride_not_found` for a non-existent ride. `409
+ride_not_finished` unless the ride's status is `finished`. `403 not_a_participant`
+unless the caller has an _active_ registration for the ride (a cancelled registrant
+cannot review). `409 review_already_exists` on a second submission from the same
+caller for the same ride (also enforced by a DB unique index). Body: `{ rating,
+comment? }` — `rating` an integer 1-5, `comment` ≤2000 chars, nullable/omittable.
+`201` → `{ review }`.
+
+GET `/v1/rides/:id/reviews` — **implemented (CR-042)**. Public — no session cookie
+required or consulted, same "complete ride record" reasoning as `GET
+/v1/rides/:id`. `404 ride_not_found` for a non-existent ride. Cursor-paginated per
+ADR-011, newest first (`createdAt desc`). `200` → `{ items, nextCursor }`, each item
+`{ id, rideId, userId, authorName, rating, comment, createdAt }` — `authorName` only
+(no phone/email, `.claude/rules/security.md`).
+
+CR-043 ("Organizer rating summary"): no new endpoint — `avg(rating)`/`count(*)`
+across every review on any of an organizer's rides is exposed as additive
+`rating`/`reviewCount` fields on the existing `organizer: { id, name }` embed
+(`GET /v1/rides`, `GET /v1/rides/:id` — same "no standalone organizer endpoint"
+reasoning the `## Organizers` section above already established) and on
+`GET`/`POST`/`PATCH /v1/organizers/me`'s response, alongside `organizerProfile`.
+`rating` is `null` with `reviewCount: 0` for an organizer with no reviews yet — never
+a real `0` (`docs/design.md` §6).
 
 ## Health
 

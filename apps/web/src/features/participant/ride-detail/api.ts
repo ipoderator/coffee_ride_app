@@ -1,8 +1,11 @@
 import type {
   CreateRegistrationResponse,
+  CreateReviewRequest,
+  CreateReviewResponse,
   CreateWaitlistEntryResponse,
   GetRideResponse,
   GetRouteGeometryResponse,
+  ListRideReviewsResponse,
   ProblemDetails,
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
@@ -10,9 +13,11 @@ import { ApiError } from '@/lib/api/errors';
 export { ApiError };
 export type {
   CreateRegistrationResponse,
+  CreateReviewResponse,
   CreateWaitlistEntryResponse,
   GetRideResponse,
   GetRouteGeometryResponse,
+  ListRideReviewsResponse,
 };
 
 const RIDES_ENDPOINT = '/api/v1/rides';
@@ -133,4 +138,47 @@ export async function leaveRideWaitlist(rideId: string): Promise<void> {
     const body = (await response.json()) as ProblemDetails;
     throw new ApiError(body);
   }
+}
+
+/**
+ * CR-042 ("Review"). Throws `ApiError` on any non-2xx response — `unauthorized`
+ * (401), `ride_not_finished`/`review_already_exists` (409),
+ * `not_a_participant` (403), `validation_error` (400, out-of-range `rating`).
+ */
+export async function createReview(
+  rideId: string,
+  input: CreateReviewRequest,
+): Promise<CreateReviewResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const body = (await response.json()) as CreateReviewResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as CreateReviewResponse;
+}
+
+/**
+ * CR-042 ("Review"). Public — no session required, same unauthenticated-friendly
+ * shape as {@link getRideDetail}.
+ */
+export async function getRideReviews(
+  rideId: string,
+): Promise<ListRideReviewsResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/reviews`);
+
+  const body = (await response.json()) as
+    ListRideReviewsResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as ListRideReviewsResponse;
 }

@@ -2,7 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GetRideResponse, Ride, RouteSummary, Stop } from 'types';
 import { RideDetailView } from './components/RideDetailView';
-import { ApiError, getRideDetail, getRouteGeometry } from './api';
+import {
+  ApiError,
+  getRideDetail,
+  getRideReviews,
+  getRouteGeometry,
+} from './api';
 
 // `RegistrationButton` calls `useRouter()` (redirect-to-login on a 401) — same
 // mocking precedent as `features/auth/login/login.test.tsx`, RTL's `render()` doesn't
@@ -17,11 +22,13 @@ vi.mock('./api', async () => {
     ...actual,
     getRideDetail: vi.fn(),
     getRouteGeometry: vi.fn(),
+    getRideReviews: vi.fn(),
   };
 });
 
 const getRideDetailMock = vi.mocked(getRideDetail);
 const getRouteGeometryMock = vi.mocked(getRouteGeometry);
+const getRideReviewsMock = vi.mocked(getRideReviews);
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -82,13 +89,19 @@ function baseDetailResponse(
 ): GetRideResponse {
   return {
     ride: baseRide,
-    organizer: { id: 'org-1', name: 'Гравийный клуб' },
+    organizer: {
+      id: 'org-1',
+      name: 'Гравийный клуб',
+      rating: null,
+      reviewCount: 0,
+    },
     route: null,
     stops: [],
     routePoints: [],
     registrationsCount: 0,
     viewerRegistration: null,
     viewerWaitlistEntry: null,
+    viewerReview: null,
     ...overrides,
   };
 }
@@ -97,6 +110,8 @@ describe('RideDetailView', () => {
   beforeEach(() => {
     getRideDetailMock.mockReset();
     getRouteGeometryMock.mockReset();
+    getRideReviewsMock.mockReset();
+    getRideReviewsMock.mockResolvedValue({ items: [], nextCursor: null });
   });
 
   it('shows a not-found state for a non-existent/draft ride', async () => {
@@ -356,6 +371,116 @@ describe('RideDetailView', () => {
       expect(
         await screen.findByText('Отменить регистрацию'),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('reviews (CR-042/CR-043)', () => {
+    const activeRegistration = {
+      id: 'registration-1',
+      rideId: 'ride-1',
+      userId: 'user-1',
+      status: 'active' as const,
+      createdAt: '2027-01-01T00:00:00.000Z',
+      updatedAt: '2027-01-01T00:00:00.000Z',
+      cancelledAt: null,
+    };
+
+    it('shows no reviews section before the ride is finished', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ ride: { ...baseRide, status: 'started' } }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      expect(screen.queryByText('Отзывы')).not.toBeInTheDocument();
+      expect(getRideReviewsMock).not.toHaveBeenCalled();
+    });
+
+    it('shows the review form for an eligible participant who has not reviewed yet', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'finished' },
+          viewerRegistration: activeRegistration,
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(await screen.findByText('Отзывы')).toBeInTheDocument();
+      expect(screen.getByText('Оставить отзыв')).toBeInTheDocument();
+    });
+
+    it('hides the review form once the viewer has already reviewed', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'finished' },
+          viewerRegistration: activeRegistration,
+          viewerReview: {
+            id: 'review-1',
+            rideId: 'ride-1',
+            userId: 'user-1',
+            authorName: 'Иван',
+            rating: 5,
+            comment: null,
+            createdAt: '2027-06-01T00:00:00.000Z',
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText('Отзывы');
+      expect(screen.queryByText('Оставить отзыв')).not.toBeInTheDocument();
+    });
+
+    it('hides the review form for a non-participant and lists existing reviews', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ ride: { ...baseRide, status: 'finished' } }),
+      );
+      getRideReviewsMock.mockResolvedValue({
+        items: [
+          {
+            id: 'review-1',
+            rideId: 'ride-1',
+            userId: 'user-2',
+            authorName: 'Мария',
+            rating: 4,
+            comment: 'Отличный заезд!',
+            createdAt: '2027-06-01T00:00:00.000Z',
+          },
+        ],
+        nextCursor: null,
+      });
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText('Отзывы');
+      expect(screen.queryByText('Оставить отзыв')).not.toBeInTheDocument();
+      expect(await screen.findByText('Мария')).toBeInTheDocument();
+      expect(screen.getByText('Отличный заезд!')).toBeInTheDocument();
+    });
+
+    it('shows the organizer rating next to the organizer name once they have reviews', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          organizer: {
+            id: 'org-1',
+            name: 'Гравийный клуб',
+            rating: 4.5,
+            reviewCount: 3,
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      // `★` is unique to the rating text — plain `/4,5/` would also match the
+      // unrelated "24,5 км/ч" pace tile elsewhere on the page.
+      const organizerLine = screen.getByText(/★/);
+      expect(organizerLine.textContent).toContain('4,5');
+      expect(organizerLine.textContent).toContain('3 отзыва');
     });
   });
 });

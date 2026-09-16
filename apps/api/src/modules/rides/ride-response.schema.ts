@@ -33,9 +33,13 @@ export const rideResponseSchema = z.object({
 // CR-023 ("Ride detail"): the ride's public organizer identity, embedded in `GET
 // /v1/rides/:id`'s response instead of a separate public organizer-read endpoint
 // (`.claude/context/current-task.md`).
+// CR-043 ("Organizer rating summary"): additive `rating`/`reviewCount` — see
+// `RideOrganizerSummary`'s own doc comment (`packages/types/src/api/rides.ts`).
 export const rideOrganizerSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
+  rating: z.number().nullable(),
+  reviewCount: z.number(),
 });
 
 // CR-024 ("Ride list", public discovery): each item of `GET /v1/rides` carries the

@@ -122,7 +122,22 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   exposed as an additive `viewerWaitlistEntry` field on `GET /v1/rides/:id`.
 - RideUpdate — organizer message.
 - Notification — delivery record.
-- Review — participant feedback.
+- Review — participant feedback on a finished ride (CR-042): `id`, `rideId` (FK →
+  Ride, `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`; no FK to
+  `Registration` — eligibility (active registration on a `finished` ride) is a
+  service-layer check, not a DB constraint, so a later registration cancellation
+  never retroactively invalidates an already-submitted review), `rating` (not null
+  int, CHECK `1-5`), `comment` (nullable, ≤2000 chars — Zod-layer limit only, same
+  tier as `RideUpdate.message`), `createdAt` (`timestamptz`). No `updatedAt`/edit —
+  immutable, only create + list, same precedent as `RideUpdate`. A plain (non-partial)
+  unique index on `(rideId, userId)` enforces one review per participant per ride —
+  reviews have no `status`/cancel concept, unlike `Registration`/`WaitlistEntry`. No
+  separate `Review` read endpoint beyond `GET /v1/rides/:id/reviews` (public,
+  paginated) — the organizer-wide aggregate (CR-043, "Organizer rating summary":
+  `avg(rating)`/`count(*)` across every review on any of an organizer's rides,
+  computed via a join, not a denormalized column) is exposed as additive
+  `rating`/`reviewCount` fields on `RideOrganizerSummary` (`GET /v1/rides`,
+  `GET /v1/rides/:id`) and on `GET`/`POST`/`PATCH /v1/organizers/me`.
 
 Important invariants:
 

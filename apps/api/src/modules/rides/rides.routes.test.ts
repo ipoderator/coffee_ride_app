@@ -414,6 +414,8 @@ describe('/v1/rides', () => {
       expect(byId.get(publishedId)?.organizer).toEqual({
         id: organizerProfile!.id,
         name: 'Гравийный клуб',
+        rating: null,
+        reviewCount: 0,
       });
 
       await app.close();
@@ -889,6 +891,8 @@ describe('/v1/rides', () => {
             .where(eq(organizerProfiles.userId, owner.userId))
         )[0]!.id,
         name: 'Гравийный клуб',
+        rating: null,
+        reviewCount: 0,
       });
 
       const [row] = await app.db

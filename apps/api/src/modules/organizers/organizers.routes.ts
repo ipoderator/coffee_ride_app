@@ -12,8 +12,14 @@ import {
   updateOrganizerProfile,
 } from './organizers.service.js';
 
+// CR-043 ("Organizer rating summary"): additive `rating`/`reviewCount` siblings
+// alongside `organizerProfile`, same "additive field on the response wrapper, not
+// nested inside the entity" precedent `GetRideResponse` already established for
+// `organizer`/`route`/`stops`.
 const organizerProfileResponseWrapper = z.object({
   organizerProfile: organizerProfileResponseSchema,
+  rating: z.number().nullable(),
+  reviewCount: z.number(),
 });
 
 /**
@@ -36,12 +42,12 @@ export const organizersRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const organizerProfile = await createOrganizerProfile(
+      const response = await createOrganizerProfile(
         app.db,
         request.user!.id,
         request.body,
       );
-      return reply.status(201).send({ organizerProfile });
+      return reply.status(201).send(response);
     },
   );
 
@@ -52,11 +58,8 @@ export const organizersRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const organizerProfile = await getOwnOrganizerProfile(
-        app.db,
-        request.user!.id,
-      );
-      return reply.status(200).send({ organizerProfile });
+      const response = await getOwnOrganizerProfile(app.db, request.user!.id);
+      return reply.status(200).send(response);
     },
   );
 
@@ -70,12 +73,12 @@ export const organizersRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const organizerProfile = await updateOrganizerProfile(
+      const response = await updateOrganizerProfile(
         app.db,
         request.user!.id,
         request.body,
       );
-      return reply.status(200).send({ organizerProfile });
+      return reply.status(200).send(response);
     },
   );
 };

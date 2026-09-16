@@ -248,3 +248,27 @@ export function formatParticipants(
 ): string {
   return joinParts(formatParticipantsParts(current, limit));
 }
+
+/**
+ * CR-043 ("Organizer rating summary"), split: 1 decimal, comma separator, same tier
+ * as distance/speed. `reviewCount: 0` (no reviews yet) is the missing-value case —
+ * `null`/no data and "reviewed, averaged to exactly 0" are different facts, same
+ * `docs/design.md` §6 principle every other formatter here follows (there is no real
+ * 0 case anyway — `rating` is 1-5).
+ */
+export function formatRatingParts(
+  rating: Maybe<number>,
+  reviewCount: Maybe<number>,
+): MetricParts {
+  if (isMissing(rating) || isMissing(reviewCount) || reviewCount === 0)
+    return MISSING_PARTS;
+  return { value: toFixedComma(rating, 1), unit: '★' };
+}
+
+/** Organizer rating: 1 decimal, comma separator — `4,8 ★`; no reviews yet is `—`. */
+export function formatRating(
+  rating: Maybe<number>,
+  reviewCount: Maybe<number>,
+): string {
+  return joinParts(formatRatingParts(rating, reviewCount));
+}

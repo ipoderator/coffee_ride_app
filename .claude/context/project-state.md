@@ -17,8 +17,9 @@ auto-promotion (CR-036), organizer participant/waitlist list (CR-037), and
 participant-facing "My registrations" (CR-091). Communication section is now fully
 complete too: registration-confirmation/waitlist-promotion notifications (CR-038),
 organizer ride updates with fan-out (CR-039), ride-cancellation fan-out (CR-040), and
-the participant-facing in-app inbox (CR-041). Post-ride (CR-042 Review, CR-043
-Organizer rating summary) is next.
+the participant-facing in-app inbox (CR-041). Post-ride is now fully complete too:
+participant reviews of finished rides (CR-042) and the organizer-wide rating
+aggregate they feed (CR-043). Quality (CR-044..048) is next.
 
 ## Current task
 
@@ -48,10 +49,16 @@ discovery — list/map toggle, bicycleType filter, upcoming-only sort) and
 for cancellation). `/organizer/rides/[id]/updates` (CR-039): `UpdateComposer` —
 compose form + read-only history, linked from `EditRideForm`. `/me/notifications`
 (CR-041): `NotificationList`, one page newest-first, click an unread card to mark
-it read and open its ride, no unread-count badge. Cabinet shell + nav/widget
-registries (ADR-009) exist for both organizer and participant sides — participant
-now has three entries (profile, my registrations, notifications), organizer still
-has one, no feature-flag support yet (CR-054 generalizes this).
+it read and open its ride, no unread-count badge. `/rides/[id]` (CR-042) gained a
+"Отзывы" section — `ReviewForm` (own feature-local 1-5 rating picker) shown only for
+a viewer with an active registration on a `finished` ride who hasn't reviewed yet,
+plus a public `ReviewList`; the ride's organizer rating (CR-043) shows next to the
+organizer name whenever they have at least one review. `/organizer/profile`
+(`OrganizerProfileForm`) shows the same aggregate rating card once a profile exists.
+Cabinet shell + nav/widget registries (ADR-009) exist for both organizer and
+participant sides — participant now has three entries (profile, my registrations,
+notifications), organizer still has one, no feature-flag support yet (CR-054
+generalizes this).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). Capability modules: `auth` (register/verify-email/login/logout/me,
@@ -81,11 +88,19 @@ fans out a `ride_update` notification to every active registrant; `GET
 fan-out fires from `rides`'s `cancelRide` — every producer inserts directly into
 `notifications` in the same request, right after its own transaction commits, log-
 and-swallow on failure, not a Redis queue yet, KI-040/CR-050). Auth endpoints are
-rate-limited in-memory only (KI-014 — no live Redis yet).
+rate-limited in-memory only (KI-014 — no live Redis yet). `reviews` (CR-042, its own
+capability module): `POST`/`GET /v1/rides/:id/reviews` — create is eligibility-gated
+(active registration on a `finished` ride, one review per user per ride), list is
+public/paginated; `GET /v1/rides/:id/reviews` and the DB unique index are the only
+guards, no edit/delete. CR-043 ("Organizer rating summary") added no endpoint:
+`avg(rating)`/`count(*)` across an organizer's rides is additive `rating`/
+`reviewCount` on `RideOrganizerSummary` (`GET /v1/rides`, `GET /v1/rides/:id`,
+batched not N+1 on the paginated endpoints) and on `GET`/`POST`/`PATCH
+/v1/organizers/me`.
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
 `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`,
-`registrations`, `waitlist_entries`, `ride_updates`, `notifications`.
+`registrations`, `waitlist_entries`, `ride_updates`, `notifications`, `reviews`.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -112,9 +127,10 @@ None.
 
 ## Next
 
-`docs/tasks.md` Registration section (CR-032..037, CR-091) and Communication
-section (CR-038..041) are both now fully complete. Post-ride (CR-042 Review,
-CR-043 Organizer rating summary) is next.
+`docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
+and Post-ride (CR-042/CR-043) sections are all now fully complete. Quality
+(CR-044 Responsive UI, CR-045 Accessibility, CR-046 Error/loading/empty states,
+CR-047 Security review, CR-048 Performance review) is next.
 
 ## Important decisions
 
@@ -193,4 +209,4 @@ items:
 
 ## Last updated
 
-2026-09-16 (CR-038/039/040/041)
+2026-09-16 (CR-042/043)

@@ -12,6 +12,7 @@ import {
   ORGANIZER_TERMS,
   Skeleton,
   Textarea,
+  formatRating,
 } from 'ui';
 import {
   ApiError,
@@ -48,6 +49,8 @@ function toDescriptionValue(raw: string): string | null {
 export function OrganizerProfileForm() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [profile, setProfile] = useState<OrganizerProfile | null>(null);
+  const [rating, setRating] = useState<number | null>(null);
+  const [reviewCount, setReviewCount] = useState(0);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -67,6 +70,8 @@ export function OrganizerProfileForm() {
       .then((response) => {
         if (cancelled) return;
         setProfile(response.organizerProfile);
+        setRating(response.rating);
+        setReviewCount(response.reviewCount);
         setName(response.organizerProfile.name);
         setDescription(response.organizerProfile.description ?? '');
         setStatus('ready');
@@ -135,6 +140,8 @@ export function OrganizerProfileForm() {
           )
         : await updateOrganizerProfile(parsed.data);
       setProfile(response.organizerProfile);
+      setRating(response.rating);
+      setReviewCount(response.reviewCount);
       setName(response.organizerProfile.name);
       setDescription(response.organizerProfile.description ?? '');
       setSuccessMessage(
@@ -180,63 +187,89 @@ export function OrganizerProfileForm() {
   }
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <FormField
-          id="organizer-name"
-          label={ORGANIZER_TERMS.nameLabel}
-          hint={ORGANIZER_TERMS.nameHint}
-          error={fieldErrors.name}
+    <div className="flex flex-col gap-4">
+      {profile && (
+        <Card className="flex flex-col gap-1">
+          <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
+            {ORGANIZER_TERMS.ratingLabel}
+          </p>
+          {reviewCount > 0 ? (
+            <p className="text-lg font-semibold text-text">
+              {formatRating(rating, reviewCount)}{' '}
+              <span className="text-sm font-normal text-text-secondary">
+                {ORGANIZER_TERMS.ratingReviewsCount(reviewCount)}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-text-secondary">
+              {ORGANIZER_TERMS.ratingNoReviews}
+            </p>
+          )}
+        </Card>
+      )}
+
+      <Card>
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          className="flex flex-col gap-4"
         >
-          <Input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={isPending}
-          />
-        </FormField>
+          <FormField
+            id="organizer-name"
+            label={ORGANIZER_TERMS.nameLabel}
+            hint={ORGANIZER_TERMS.nameHint}
+            error={fieldErrors.name}
+          >
+            <Input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={isPending}
+            />
+          </FormField>
 
-        <FormField
-          id="organizer-description"
-          label={ORGANIZER_TERMS.descriptionLabel}
-          hint={ORGANIZER_TERMS.descriptionHint}
-          error={fieldErrors.description}
-        >
-          <Textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            disabled={isPending}
-          />
-        </FormField>
+          <FormField
+            id="organizer-description"
+            label={ORGANIZER_TERMS.descriptionLabel}
+            hint={ORGANIZER_TERMS.descriptionHint}
+            error={fieldErrors.description}
+          >
+            <Textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              disabled={isPending}
+            />
+          </FormField>
 
-        {verificationRequired && (
-          <p role="alert" className="text-sm text-danger">
-            {ORGANIZER_TERMS.emailVerificationRequired}
-          </p>
-        )}
+          {verificationRequired && (
+            <p role="alert" className="text-sm text-danger">
+              {ORGANIZER_TERMS.emailVerificationRequired}
+            </p>
+          )}
 
-        {formError && !verificationRequired && (
-          <p role="alert" className="text-sm text-danger">
-            {formError}
-          </p>
-        )}
+          {formError && !verificationRequired && (
+            <p role="alert" className="text-sm text-danger">
+              {formError}
+            </p>
+          )}
 
-        {successMessage && !formError && !verificationRequired && (
-          <p role="status" className="text-sm text-success">
-            {successMessage}
-          </p>
-        )}
+          {successMessage && !formError && !verificationRequired && (
+            <p role="status" className="text-sm text-success">
+              {successMessage}
+            </p>
+          )}
 
-        <Button type="submit" isLoading={isPending} className="self-start">
-          {isPending
-            ? profile
-              ? ORGANIZER_TERMS.saveSubmitPending
-              : ORGANIZER_TERMS.createSubmitPending
-            : profile
-              ? ORGANIZER_TERMS.saveSubmit
-              : ORGANIZER_TERMS.createSubmit}
-        </Button>
-      </form>
-    </Card>
+          <Button type="submit" isLoading={isPending} className="self-start">
+            {isPending
+              ? profile
+                ? ORGANIZER_TERMS.saveSubmitPending
+                : ORGANIZER_TERMS.createSubmitPending
+              : profile
+                ? ORGANIZER_TERMS.saveSubmit
+                : ORGANIZER_TERMS.createSubmit}
+          </Button>
+        </form>
+      </Card>
+    </div>
   );
 }

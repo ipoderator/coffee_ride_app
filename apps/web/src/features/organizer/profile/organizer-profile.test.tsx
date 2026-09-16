@@ -66,6 +66,8 @@ describe('OrganizerProfileForm', () => {
   it('loads an existing profile into the edit form', async () => {
     getOrganizerProfileMock.mockResolvedValue({
       organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
     });
 
     render(<OrganizerProfileForm />);
@@ -75,6 +77,41 @@ describe('OrganizerProfileForm', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Название')).toHaveValue('Гравийный клуб');
     expect(screen.getByLabelText('Описание')).toHaveValue('Ездим по субботам.');
+  });
+
+  it('shows "no reviews yet" for an existing profile with no reviews', async () => {
+    getOrganizerProfileMock.mockResolvedValue({
+      organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
+    });
+
+    render(<OrganizerProfileForm />);
+
+    expect(await screen.findByText('Пока нет отзывов')).toBeInTheDocument();
+  });
+
+  it('shows the aggregated rating (CR-043) for an existing profile with reviews', async () => {
+    getOrganizerProfileMock.mockResolvedValue({
+      organizerProfile: baseProfile,
+      rating: 4.5,
+      reviewCount: 3,
+    });
+
+    render(<OrganizerProfileForm />);
+
+    const ratingLine = await screen.findByText(/★/);
+    expect(ratingLine.textContent).toContain('4,5');
+    expect(await screen.findByText('3 отзыва')).toBeInTheDocument();
+  });
+
+  it('shows no rating card before a profile exists', async () => {
+    getOrganizerProfileMock.mockRejectedValue(NOT_FOUND_ERROR);
+
+    render(<OrganizerProfileForm />);
+
+    await screen.findByRole('button', { name: 'Создать профиль' });
+    expect(screen.queryByText('Рейтинг')).not.toBeInTheDocument();
   });
 
   it('shows an error state for a load failure other than "not found"', async () => {
@@ -117,6 +154,8 @@ describe('OrganizerProfileForm', () => {
     getOrganizerProfileMock.mockRejectedValue(NOT_FOUND_ERROR);
     createOrganizerProfileMock.mockResolvedValue({
       organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
     });
 
     render(<OrganizerProfileForm />);
@@ -211,9 +250,13 @@ describe('OrganizerProfileForm', () => {
   it('updates an existing organizer profile', async () => {
     getOrganizerProfileMock.mockResolvedValue({
       organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
     });
     updateOrganizerProfileMock.mockResolvedValue({
       organizerProfile: { ...baseProfile, name: 'Новое имя' },
+      rating: null,
+      reviewCount: 0,
     });
 
     render(<OrganizerProfileForm />);

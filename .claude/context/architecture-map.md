@@ -513,6 +513,28 @@ and `/organizer/rides/[id]/updates`, linked from `EditRideForm`; and
 first, click-to-read) and `/me/notifications`, the participant cabinet's third
 nav entry.
 
+CR-042/CR-043 (Post-ride) added a twelfth table, `reviews` (`rideId`/`userId` FKs
+cascade, `rating` int CHECK `1-5`, `comment` nullable, `createdAt` — no
+`updatedAt`/edit, a plain unique index on `(rideId, userId)`), and `apps/api`'s
+first `reviews` capability module (`.claude/rules/architecture.md` already named
+it, distinct from `notifications`/`ride_updates` sharing one module — this one
+gets its own): `createReview`/`listRideReviews` (`POST`/`GET
+/v1/rides/:id/reviews`, sharing the `/rides` prefix) plus
+`getOrganizerRatingSummary`/`getOrganizerRatingSummaries` (single vs. batched
+`avg(rating)`/`count(*)` join over an organizer's rides — no denormalized
+column). Cross-module dependency direction, no new cycle:
+`rides.service.ts`/`registrations.service.ts`/`organizers.service.ts` all import
+from `reviews.service.ts` (the rating-summary functions, plus `toReview` for
+`rides.service.ts`'s `viewerReview`), while `reviews.service.ts` itself imports
+only the `rides`/`registrations`/`users` **schema tables**, never those modules'
+service functions — same one-directional shape `notifications.service.ts`
+already established. CR-043 added no new endpoint: `rating`/`reviewCount` are
+additive fields on the existing `RideOrganizerSummary` embed (`GET /v1/rides`,
+`GET /v1/rides/:id`) and on `GET`/`POST`/`PATCH /v1/organizers/me`. `apps/web`
+gained `ReviewForm`/`ReviewList` inside the existing
+`features/participant/ride-detail/` module (a new "Отзывы" section on
+`/rides/[id]`, not a new route) and a rating card on `/organizer/profile`.
+
 ## Target structure
 
 apps/

@@ -47,8 +47,14 @@ export type UpdateOrganizerProfileRequest = z.infer<
 
 // One response shape for all three endpoints (create/get/update) — same
 // "no duplicate concepts" reasoning `modules/users` already follows.
+// CR-043 ("Organizer rating summary"): additive `rating`/`reviewCount`, same
+// aggregate `RideOrganizerSummary` (`./rides.js`) carries — lets `/organizer/profile`
+// show the organizer their own rating without a separate endpoint. A brand-new
+// profile (just created, or with no reviews yet) is `rating: null, reviewCount: 0`.
 export interface OrganizerProfileResponse {
   organizerProfile: OrganizerProfile;
+  rating: number | null;
+  reviewCount: number;
 }
 export type CreateOrganizerProfileResponse = OrganizerProfileResponse;
 export type GetOrganizerProfileResponse = OrganizerProfileResponse;

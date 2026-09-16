@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type {
   Registration,
+  Review,
   Ride,
   RouteGeometryPoint,
   RouteSummary,
@@ -20,6 +21,7 @@ import {
   formatElevationParts,
   formatParticipantsParts,
   formatPriceParts,
+  formatRating,
   formatSpeedParts,
   formatTime,
   MetricRow,
@@ -28,13 +30,21 @@ import {
   RIDE_DETAIL_TERMS,
   RIDE_STATUS_TERMS,
   ROUTE_RENDERING_TERMS,
+  REVIEWS_TERMS,
   Skeleton,
   StatusBadge,
 } from 'ui';
-import { ApiError, getRideDetail, getRouteGeometry } from '../api';
+import {
+  ApiError,
+  getRideDetail,
+  getRideReviews,
+  getRouteGeometry,
+} from '../api';
 import { ElevationProfileChart } from './ElevationProfileChart';
 import { RegistrationButton } from './RegistrationButton';
 import { RouteMapPlaceholder } from './RouteMapPlaceholder';
+import { ReviewForm } from './ReviewForm';
+import { ReviewList, type ReviewListStatus } from './ReviewList';
 import { StopList } from './StopList';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
@@ -104,6 +114,61 @@ function RouteSection({
 }
 
 /**
+ * CR-042 ("Review"): the "Отзывы" section, shown only once the ride is `finished`
+ * (`.claude/context/current-task.md`'s scope decision — reviews can't exist before
+ * then, `apps/api`'s `createReview` already enforces it server-side). `ReviewForm`
+ * renders only for a viewer who both has an active registration and hasn't already
+ * reviewed — its absence is the "you can't/already did" signal, no separate copy.
+ */
+function ReviewsSection({
+  rideId,
+  canReview,
+  onSubmitted,
+}: {
+  rideId: string;
+  canReview: boolean;
+  onSubmitted: (review: Review) => void;
+}) {
+  const [status, setStatus] = useState<ReviewListStatus>('loading');
+  const [reviews, setReviews] = useState<Review[]>([]);
+
+  function loadReviews() {
+    setStatus('loading');
+    getRideReviews(rideId)
+      .then((response) => {
+        setReviews(response.items);
+        setStatus('ready');
+      })
+      .catch(() => {
+        setStatus('error');
+      });
+  }
+
+  useEffect(() => {
+    loadReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rideId]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold text-text">
+        {REVIEWS_TERMS.sectionTitle}
+      </h2>
+      {canReview && (
+        <ReviewForm
+          rideId={rideId}
+          onSubmitted={(review) => {
+            onSubmitted(review);
+            loadReviews();
+          }}
+        />
+      )}
+      <ReviewList status={status} reviews={reviews} onRetry={loadReviews} />
+    </div>
+  );
+}
+
+/**
  * `/rides/[id]` (`docs/design.md` §8 "Ride detail", CR-023). Public — no
  * `CabinetShell`, no session required (`.claude/context/current-task.md`).
  * `GET /v1/rides/:id` 404s `ride_not_found` for a non-existent id, a `draft` ride, or
@@ -115,6 +180,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [ride, setRide] = useState<Ride | null>(null);
   const [organizerName, setOrganizerName] = useState<string>('');
+  const [organizerRating, setOrganizerRating] = useState<number | null>(null);
+  const [organizerReviewCount, setOrganizerReviewCount] = useState(0);
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
   const [registrationsCount, setRegistrationsCount] = useState(0);
@@ -122,6 +189,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     useState<Registration | null>(null);
   const [viewerWaitlistEntry, setViewerWaitlistEntry] =
     useState<WaitlistEntry | null>(null);
+  const [viewerReview, setViewerReview] = useState<Review | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,11 +199,14 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         if (cancelled) return;
         setRide(response.ride);
         setOrganizerName(response.organizer.name);
+        setOrganizerRating(response.organizer.rating);
+        setOrganizerReviewCount(response.organizer.reviewCount);
         setRoute(response.route);
         setStops(response.stops);
         setRegistrationsCount(response.registrationsCount);
         setViewerRegistration(response.viewerRegistration);
         setViewerWaitlistEntry(response.viewerWaitlistEntry);
+        setViewerReview(response.viewerReview);
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -206,6 +277,13 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         <h1 className="text-2xl font-semibold text-text">{ride.title}</h1>
         <p className="text-sm text-text-secondary">
           {RIDE_DETAIL_TERMS.organizedByLabel}: {organizerName}
+          {organizerReviewCount > 0 && (
+            <>
+              {' · '}
+              {formatRating(organizerRating, organizerReviewCount)}{' '}
+              {RIDE_DETAIL_TERMS.ratingReviewsCount(organizerReviewCount)}
+            </>
+          )}
         </p>
       </div>
 
@@ -311,6 +389,14 @@ export function RideDetailView({ rideId }: { rideId: string }) {
       {route ? <RouteSection rideId={rideId} route={route} /> : null}
 
       <StopList stops={stops} />
+
+      {ride.status === 'finished' && (
+        <ReviewsSection
+          rideId={rideId}
+          canReview={viewerRegistration !== null && viewerReview === null}
+          onSubmitted={setViewerReview}
+        />
+      )}
     </div>
   );
 }

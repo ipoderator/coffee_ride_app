@@ -336,14 +336,31 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       cancellation time.
 - [x] CR-041 In-app notifications — `Notification` table,
       `GET /v1/notifications/mine` + `POST /v1/notifications/:id/read`, `/me/
-    notifications` (third participant cabinet nav entry). ADR-007 (Pending):
+  notifications` (third participant cabinet nav entry). ADR-007 (Pending):
       in-app only, no email/push. Delivery is a same-request DB insert after the
       triggering transaction, not a Redis queue — see KI-040/CR-050.
 
 ## Post-ride
 
-- [ ] CR-042 Review
-- [ ] CR-043 Organizer rating summary
+- [x] CR-042 Review — done 2026-09-16: new `reviews` capability module/table
+      (`id`/`rideId`/`userId`/`rating` 1-5/`comment`/`createdAt`, plain unique
+      index on `(rideId, userId)` — no edit/delete, create + list only, same
+      precedent as `RideUpdate`). `POST /v1/rides/:id/reviews` — eligibility is
+      an _active_ registration on a `finished` ride (`403 not_a_participant`/
+      `409 ride_not_finished`), `409 review_already_exists` on a duplicate.
+      `GET /v1/rides/:id/reviews` — public, paginated. `ReviewForm`/`ReviewList`
+      (`docs/design.md` §9) on `/rides/[id]`, gated on the new additive
+      `viewerReview`/`viewerRegistration` fields on `GetRideResponse`. See
+      `docs/changelog.md`.
+- [x] CR-043 Organizer rating summary — done 2026-09-16, bundled with CR-042:
+      `avg(rating)`/`count(*)` across every review on any of an organizer's
+      rides, computed via a join (no denormalized column). Exposed as additive
+      `rating`/`reviewCount` on `RideOrganizerSummary` (`GET /v1/rides`,
+      `GET /v1/rides/:id` — batched, not N+1, on the paginated discovery/
+      my-registrations endpoints) and on `GET`/`POST`/`PATCH
+    /v1/organizers/me` (shown on `/organizer/profile`). No new endpoint —
+      same "no standalone organizer endpoint" precedent CR-023 established.
+      See `docs/changelog.md`.
 
 ## Quality
 

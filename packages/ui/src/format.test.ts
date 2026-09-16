@@ -11,6 +11,8 @@ import {
   formatParticipantsParts,
   formatPrice,
   formatPriceParts,
+  formatRating,
+  formatRatingParts,
   formatSpeed,
   formatSpeedParts,
   formatTime,
@@ -152,6 +154,22 @@ describe('formatParticipants', () => {
   });
 });
 
+describe('formatRating', () => {
+  it('formats with 1 decimal, comma separator, NBSP-joined star unit', () => {
+    expect(formatRating(4.8, 12)).toBe(`4,8${NBSP}★`);
+  });
+
+  it('renders no reviews yet as an em dash, not "0"', () => {
+    expect(formatRating(null, 0)).toBe(EM_DASH);
+    expect(formatRating(4.8, 0)).toBe(EM_DASH);
+  });
+
+  it('renders missing data as an em dash', () => {
+    expect(formatRating(null, 5)).toBe(EM_DASH);
+    expect(formatRating(undefined, undefined)).toBe(EM_DASH);
+  });
+});
+
 describe('*Parts helpers (CR-065)', () => {
   it('formatDistanceParts splits value and unit', () => {
     expect(formatDistanceParts(42.3)).toEqual({ value: '42,3', unit: 'км' });
@@ -185,6 +203,11 @@ describe('*Parts helpers (CR-065)', () => {
   it('formatPriceParts splits value and unit, free as a unit-less value', () => {
     expect(formatPriceParts(1500)).toEqual({ value: `1${NBSP}500`, unit: '₽' });
     expect(formatPriceParts(0)).toEqual({ value: 'Бесплатно', unit: '' });
+  });
+
+  it('formatRatingParts splits value and unit, no reviews as missing', () => {
+    expect(formatRatingParts(4.8, 12)).toEqual({ value: '4,8', unit: '★' });
+    expect(formatRatingParts(null, 0)).toEqual({ value: EM_DASH, unit: '' });
   });
 
   it('formatParticipantsParts has no separate unit — the ratio is the whole value', () => {

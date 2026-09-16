@@ -14,6 +14,7 @@ import {
 import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import { registrationResponseSchema } from '../registrations/registration-response.schema.js';
 import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-response.schema.js';
+import { reviewResponseSchema } from '../reviews/review-response.schema.js';
 import {
   rideOrganizerSummarySchema,
   rideResponseSchema,
@@ -103,6 +104,9 @@ const rideDetailResponseSchema = z.object({
   registrationsCount: z.number(),
   viewerRegistration: registrationResponseSchema.nullable(),
   viewerWaitlistEntry: waitlistEntryResponseSchema.nullable(),
+  // CR-042 ("Review"): additive `viewerReview`, same "caller's own state" precedent
+  // as `viewerRegistration`/`viewerWaitlistEntry` above.
+  viewerReview: reviewResponseSchema.nullable(),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 const stopResponseWrapper = z.object({ stop: stopResponseSchema });

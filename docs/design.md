@@ -224,6 +224,7 @@ in a shared formatter, not per component.
 | Time           | 24-hour                               | `07:30`                       |
 | Price          | whole rubles, NBSP thousands          | `1 500 ₽`; free = `Бесплатно` |
 | Participants   | current / limit                       | `12 из 20`                    |
+| Rating         | 1 decimal, comma separator            | `4,8 ★`; no reviews yet = `—` |
 
 - **Decimal separator is a comma**, thousands separator is a non-breaking space.
 - Value and unit are joined by a **non-breaking space** so they never wrap apart.
@@ -280,7 +281,7 @@ removing or repurposing a prop requires checking both cabinets first.
 **Feature-local (inside the feature module, not shared):**
 `RideCard`, `RideFilters`, `RideMap`, `ElevationProfile`, `StopList`, `ServiceList`,
 `RequirementList`, `RegistrationButton`, `ParticipantTable`, `WaitlistTable`,
-`UpdateComposer`, `ReviewForm`.
+`UpdateComposer`, `ReviewForm`, `ReviewList`.
 
 `RideMap` and `ElevationProfile` consume `packages/maps-core` types only — never the 2GIS
 SDK (ADR-010).

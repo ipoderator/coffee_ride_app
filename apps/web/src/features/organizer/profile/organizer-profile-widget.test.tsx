@@ -53,6 +53,8 @@ describe('OrganizerProfileWidget', () => {
   it('shows the profile summary and an edit link when one exists', async () => {
     getOrganizerProfileMock.mockResolvedValue({
       organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
     });
 
     render(<OrganizerProfileWidget />);
@@ -68,6 +70,8 @@ describe('OrganizerProfileWidget', () => {
   it('omits the description line when none is set', async () => {
     getOrganizerProfileMock.mockResolvedValue({
       organizerProfile: { ...baseProfile, description: null },
+      rating: null,
+      reviewCount: 0,
     });
 
     render(<OrganizerProfileWidget />);

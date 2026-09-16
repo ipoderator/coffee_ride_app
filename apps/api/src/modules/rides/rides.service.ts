@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
 import {
   organizerProfiles,
   registrations,
+  reviews,
   rides,
   routePoints,
   routes,
@@ -38,6 +39,11 @@ import {
   notifyRideCancelled,
   type NotificationLogger,
 } from '../notifications/notifications.service.js';
+import {
+  getOrganizerRatingSummaries,
+  getOrganizerRatingSummary,
+  toReview,
+} from '../reviews/reviews.service.js';
 import {
   CursorError,
   clampLimit,
@@ -537,11 +543,30 @@ export async function listPublicRides(
         })
       : null;
 
+  // CR-043 ("Organizer rating summary"): one batched aggregate query for every
+  // organizer on this page, not one per row — avoids N+1 on this endpoint's hot,
+  // unauthenticated discovery path.
+  const ratingByOrganizerId = await getOrganizerRatingSummaries(
+    db,
+    page.map((row) => row.organizerId),
+  );
+
   return {
-    items: page.map((row) => ({
-      ...toPublicRide(row.ride),
-      organizer: { id: row.organizerId, name: row.organizerName },
-    })),
+    items: page.map((row) => {
+      const summary = ratingByOrganizerId.get(row.organizerId) ?? {
+        rating: null,
+        reviewCount: 0,
+      };
+      return {
+        ...toPublicRide(row.ride),
+        organizer: {
+          id: row.organizerId,
+          name: row.organizerName,
+          rating: summary.rating,
+          reviewCount: summary.reviewCount,
+        },
+      };
+    }),
     nextCursor,
   };
 }
@@ -659,9 +684,38 @@ export async function getRideForViewer(
         .limit(1)
     : [];
 
+  // CR-043 ("Organizer rating summary"): additive, same `getOrganizerRatingSummary`
+  // aggregate `listPublicRides` batches for its own page of rides.
+  const ratingSummary = await getOrganizerRatingSummary(db, row.organizerId);
+
+  // CR-042 ("Review"): additive `viewerReview` (the caller's own review, `null` if
+  // none/unauthenticated), same embedding precedent as `viewerRegistration`/
+  // `viewerWaitlistEntry` above. Reuses `reviews.service.ts`'s `toReview` mapper.
+  const viewerReviewRows = userId
+    ? await db
+        .select({
+          id: reviews.id,
+          rideId: reviews.rideId,
+          userId: reviews.userId,
+          authorName: users.displayName,
+          rating: reviews.rating,
+          comment: reviews.comment,
+          createdAt: reviews.createdAt,
+        })
+        .from(reviews)
+        .innerJoin(users, eq(reviews.userId, users.id))
+        .where(and(eq(reviews.rideId, rideId), eq(reviews.userId, userId)))
+        .limit(1)
+    : [];
+
   return {
     ride: toPublicRide(row.ride),
-    organizer: { id: row.organizerId, name: row.organizerName },
+    organizer: {
+      id: row.organizerId,
+      name: row.organizerName,
+      rating: ratingSummary.rating,
+      reviewCount: ratingSummary.reviewCount,
+    },
     route: routeRow ? toRouteSummary(routeRow) : null,
     stops: stopRows.map(toStop),
     routePoints: routePointRows.map(toRoutePoint),
@@ -672,6 +726,7 @@ export async function getRideForViewer(
     viewerWaitlistEntry: viewerWaitlistEntryRows[0]
       ? toWaitlistEntry(viewerWaitlistEntryRows[0])
       : null,
+    viewerReview: viewerReviewRows[0] ? toReview(viewerReviewRows[0]) : null,
   };
 }
 

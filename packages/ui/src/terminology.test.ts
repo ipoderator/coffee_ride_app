@@ -3,6 +3,7 @@ import {
   BICYCLE_TYPE_TERMS,
   DIFFICULTY_LEVEL_TERMS,
   METRIC_TERMS,
+  ORGANIZER_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_SERVICE_TERMS,
   RIDE_STATUS_TERMS,
@@ -125,5 +126,17 @@ describe('REGISTRATION_ACTION_TERMS', () => {
 describe('UI_TERMS', () => {
   it('provides the generic retry label used by ErrorState (docs/design.md §10)', () => {
     expect(UI_TERMS.retry).toBe('Повторить');
+  });
+});
+
+describe('ORGANIZER_TERMS.ratingReviewsCount (CR-043)', () => {
+  it('applies the correct Russian cardinal plural for review counts', () => {
+    expect(ORGANIZER_TERMS.ratingReviewsCount(1)).toBe('1 отзыв');
+    expect(ORGANIZER_TERMS.ratingReviewsCount(2)).toBe('2 отзыва');
+    expect(ORGANIZER_TERMS.ratingReviewsCount(4)).toBe('4 отзыва');
+    expect(ORGANIZER_TERMS.ratingReviewsCount(5)).toBe('5 отзывов');
+    expect(ORGANIZER_TERMS.ratingReviewsCount(21)).toBe('21 отзыв');
+    expect(ORGANIZER_TERMS.ratingReviewsCount(11)).toBe('11 отзывов');
+    expect(ORGANIZER_TERMS.ratingReviewsCount(12)).toBe('12 отзывов');
   });
 });

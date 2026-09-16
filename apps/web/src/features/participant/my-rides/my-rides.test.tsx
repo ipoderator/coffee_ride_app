@@ -36,7 +36,12 @@ const baseRide: PublicRide = {
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',
   updatedBy: 'user-1',
-  organizer: { id: 'org-1', name: 'Гравийный клуб' },
+  organizer: {
+    id: 'org-1',
+    name: 'Гравийный клуб',
+    rating: null,
+    reviewCount: 0,
+  },
 };
 
 const baseItem: MyRegistrationSummary = {

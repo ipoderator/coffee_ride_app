@@ -28,6 +28,7 @@ import {
   createRegistrationConfirmedNotification,
   type NotificationLogger,
 } from '../notifications/notifications.service.js';
+import { getOrganizerRatingSummaries } from '../reviews/reviews.service.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -430,14 +431,32 @@ export async function listMyRegistrations(
         })
       : null;
 
+  // CR-043 ("Organizer rating summary"): same batched-not-N+1 precedent
+  // `rides.service.ts`'s `listPublicRides` already uses.
+  const ratingByOrganizerId = await getOrganizerRatingSummaries(
+    db,
+    page.map((row) => row.organizerId),
+  );
+
   return {
-    items: page.map((row) => ({
-      registration: toRegistration(row.registration),
-      ride: {
-        ...toPublicRide(row.ride),
-        organizer: { id: row.organizerId, name: row.organizerName },
-      },
-    })),
+    items: page.map((row) => {
+      const summary = ratingByOrganizerId.get(row.organizerId) ?? {
+        rating: null,
+        reviewCount: 0,
+      };
+      return {
+        registration: toRegistration(row.registration),
+        ride: {
+          ...toPublicRide(row.ride),
+          organizer: {
+            id: row.organizerId,
+            name: row.organizerName,
+            rating: summary.rating,
+            reviewCount: summary.reviewCount,
+          },
+        },
+      };
+    }),
     nextCursor,
   };
 }

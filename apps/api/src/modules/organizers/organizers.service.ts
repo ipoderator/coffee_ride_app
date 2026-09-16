@@ -4,8 +4,10 @@ import type { DbClient } from 'db';
 import type {
   CreateOrganizerProfileRequest,
   OrganizerProfile,
+  OrganizerProfileResponse,
   UpdateOrganizerProfileRequest,
 } from 'types';
+import { getOrganizerRatingSummary } from '../reviews/reviews.service.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `AuthServiceError` (`.claude/rules/backend.md`: route -> validation -> service ->
@@ -75,7 +77,7 @@ export async function createOrganizerProfile(
   db: DbClient,
   userId: string,
   input: CreateOrganizerProfileRequest,
-): Promise<OrganizerProfile> {
+): Promise<OrganizerProfileResponse> {
   const [userRow] = await db
     .select({ emailVerified: users.emailVerified })
     .from(users)
@@ -109,7 +111,13 @@ export async function createOrganizerProfile(
     if (!inserted) {
       throw new Error('Organizer profile insert returned no row.');
     }
-    return toPublicOrganizerProfile(inserted);
+    // A brand-new profile has no rides/reviews yet — skip the aggregate query
+    // rather than run it against a profile that cannot possibly have any.
+    return {
+      organizerProfile: toPublicOrganizerProfile(inserted),
+      rating: null,
+      reviewCount: 0,
+    };
   } catch (error) {
     // Race: two concurrent creates for the same user both pass the pre-check above.
     // The table's unique index (`organizer_profiles_user_id_unique`) is the real
@@ -125,7 +133,7 @@ export async function createOrganizerProfile(
 export async function getOwnOrganizerProfile(
   db: DbClient,
   userId: string,
-): Promise<OrganizerProfile> {
+): Promise<OrganizerProfileResponse> {
   const [row] = await db
     .select()
     .from(organizerProfiles)
@@ -134,7 +142,12 @@ export async function getOwnOrganizerProfile(
   if (!row) {
     throw NOT_FOUND();
   }
-  return toPublicOrganizerProfile(row);
+  const { rating, reviewCount } = await getOrganizerRatingSummary(db, row.id);
+  return {
+    organizerProfile: toPublicOrganizerProfile(row),
+    rating,
+    reviewCount,
+  };
 }
 
 /**
@@ -145,7 +158,7 @@ export async function updateOrganizerProfile(
   db: DbClient,
   userId: string,
   patch: UpdateOrganizerProfileRequest,
-): Promise<OrganizerProfile> {
+): Promise<OrganizerProfileResponse> {
   const existing = await db
     .select({ id: organizerProfiles.id })
     .from(organizerProfiles)
@@ -167,7 +180,15 @@ export async function updateOrganizerProfile(
   if (!updated) {
     throw new Error('Organizer profile update returned no row.');
   }
-  return toPublicOrganizerProfile(updated);
+  const { rating, reviewCount } = await getOrganizerRatingSummary(
+    db,
+    updated.id,
+  );
+  return {
+    organizerProfile: toPublicOrganizerProfile(updated),
+    rating,
+    reviewCount,
+  };
 }
 
 function isUniqueViolation(error: unknown): boolean {

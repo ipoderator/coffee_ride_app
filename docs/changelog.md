@@ -2726,3 +2726,127 @@ Follow-up: CR-050 should replace the direct-insert step in
 with a real Redis-backed enqueue, once that queue exists and Redis is
 live-verified (KI-014) — the `NotificationLogger`-based `try`/`catch` shape is
 the seam to swap, not a producer rewrite.
+
+---
+
+## 2026-09-16 — CR-042 / CR-043 — Post-ride (Review, Organizer rating summary)
+
+Summary: closes `docs/tasks.md`'s Post-ride section, bundled in one task the same
+way CR-032..035 and CR-038..041 were — a new `reviews` table/capability module
+(CR-042) plus the aggregate it makes possible, an organizer's overall rating
+(CR-043), surfaced with no new endpoint. `docs/api.md`/`docs/product.md` only
+stubbed these two tickets (`POST`/`GET /v1/rides/:id/reviews`, "review completed
+rides") — every eligibility/shape decision below is this task's own scope call,
+made consistent with existing precedent and recorded in
+`.claude/context/current-task.md`.
+
+Twelfth domain table, `reviews` (migration `0012_brave_richard_fisk.sql`): `id`,
+`rideId` (FK → `rides`, cascade), `userId` (FK → `users`, cascade — deliberately no
+FK to `registrations`, so a later cancellation can never retroactively invalidate an
+already-submitted review), `rating` (int, CHECK `1-5`), `comment` (nullable,
+≤2000 chars, Zod-layer bound only), `createdAt`. No edit/delete — create + list
+only, same immutable-message precedent as `ride_updates`. A plain (non-partial)
+unique index on `(rideId, userId)` enforces one review per participant per ride
+(reviews have no `status`/cancel dimension, unlike `registrations`/
+`waitlist_entries`) and doubles as the index backing the review-list/rating-join
+queries.
+
+New `apps/api` capability module, `modules/reviews/` (`.claude/rules/
+architecture.md` already named `reviews` as its own feature boundary — unlike
+`ride_updates`, which shares the `notifications` module, this one gets its own).
+`createReview` — eligibility is an _active_ registration on a `finished` ride
+(`403 not_a_participant`/`409 ride_not_finished`; a cancelled registrant cannot
+review), `409 review_already_exists` on a duplicate (checked, then re-caught as
+the same code on the DB unique-index race, same pattern
+`organizers.service.ts`'s `createOrganizerProfile` already uses).
+`listRideReviews` — public (no session), paginated, newest first.
+`getOrganizerRatingSummary`/`getOrganizerRatingSummaries` — `avg(rating)`/
+`count(*)` across every review on any of an organizer's rides, computed via a
+join (no denormalized column, `.claude/rules/database.md` doesn't ask for one at
+this scale); the batched (`group by`) variant is used on the two paginated,
+potentially-many-organizers-per-page endpoints (`GET /v1/rides` discovery,
+`GET /v1/registrations/mine`) to avoid N+1, the single-organizer variant on
+`GET /v1/rides/:id` and all three `/v1/organizers/me` endpoints.
+
+No new endpoint for CR-043 — `rating`/`reviewCount` are additive fields on
+`RideOrganizerSummary` (so they ride along on the existing `organizer: { id, name
+}` embed everywhere it already appears) and on `GET`/`POST`/`PATCH
+/v1/organizers/me`'s response, alongside `organizerProfile` — same "complete ride
+record, not a link out" reasoning `docs/api.md` already gives for why no standalone
+`GET /v1/organizers/:id` exists. `GetRideResponse` also gained `viewerReview` (the
+caller's own review, `null` if none/unauthenticated), same "embed the caller's own
+state" precedent as `viewerRegistration`/`viewerWaitlistEntry`.
+
+`apps/web`: `features/participant/ride-detail/` gained `ReviewForm` (a feature-local
+1-5 rating picker — no shared rating-input component exists yet, same "don't invent
+a shared component for one call site" reasoning) and `ReviewList`
+(`docs/design.md` §9's named components), both rendered from a new "Отзывы"
+section on `/rides/[id]`, shown only once `ride.status === 'finished'`; the form
+itself only when `viewerRegistration` is set and `viewerReview` is still `null` —
+its absence is the "you can't/already did" signal, no separate copy. The ride
+detail header and `/organizer/profile` (`OrganizerProfileForm`) both show the
+organizer's aggregate rating via a new `formatRatingParts`/`formatRating`
+formatter (`docs/design.md` §7: `4,8 ★`, missing/no-reviews renders `—`, correct
+Russian plural for the review count via a small `n % 10`/`n % 100` helper in
+`terminology.ts`).
+
+Validation: `turbo run lint typecheck test build` — all 25 tasks green (`apps/api`
+255 tests, +13 new in `reviews.routes.test.ts`, run against a real, migrated local
+Postgres per this repo's existing test discipline — not mocked; `apps/web` 155
+tests, +8 new — 5 in `ride-detail.test.tsx` covering the eligibility/already-
+reviewed/organizer-rating-across-rides scenarios, 3 in `organizer-profile.test.tsx`
+covering the rating card; `packages/ui` 90 tests, +5 new — `formatRating`/
+`formatRatingParts` in `format.test.ts`, the Russian plural helper via
+`ORGANIZER_TERMS.ratingReviewsCount` in `terminology.test.ts`. The
+`reviews.routes.test.ts` migration itself was applied to and verified against the
+real local Postgres (`coffee_ride_dev`, Homebrew-installed, independent of the
+still-unavailable Docker daemon — KI-019) before any test ran. `NODE_ENV=production
+turbo run build` — all 6 build tasks pass; `/rides/[id]`'s route stays dynamic
+(`ƒ`), no new route needed since reviews live inside the existing ride-detail page.
+
+Files: `packages/db/src/schema/review.ts` (new) + `schema/index.ts` + migration
+`0012_brave_richard_fisk.sql`; `packages/types/src/domain/review.ts` (new),
+`packages/types/src/api/reviews.ts` (new), `packages/types/src/api/rides.ts`
+(`RideOrganizerSummary` gains `rating`/`reviewCount`, `GetRideResponse` gains
+`viewerReview`), `packages/types/src/api/organizers.ts`
+(`OrganizerProfileResponse` gains `rating`/`reviewCount`), `index.ts`;
+`apps/api/src/modules/reviews/` (new: `reviews.service.ts`, `reviews.routes.ts`,
+`review-response.schema.ts`, `reviews.routes.test.ts`);
+`apps/api/src/modules/rides/rides.service.ts` (`getRideForViewer`/
+`listPublicRides` gain the rating join, `getRideForViewer` gains `viewerReview`),
+`apps/api/src/modules/rides/rides.routes.ts`/`ride-response.schema.ts` (schema
+additions — the Fastify Zod serializer strips unlisted fields, so these had to
+move in lockstep with the type changes); `apps/api/src/modules/registrations/
+registrations.service.ts` (`listMyRegistrations` gains the batched rating join);
+`apps/api/src/modules/organizers/organizers.service.ts`/`organizers.routes.ts`
+(all three handlers now return `{ organizerProfile, rating, reviewCount }`);
+`apps/api/src/routes/v1.ts` (registers `reviewsRoutes`); `apps/api/src/modules/
+rides/rides.routes.test.ts` (2 pre-existing organizer-embed assertions updated
+for the additive fields); `apps/web/src/features/participant/ride-detail/`
+(`api.ts` gains `createReview`/`getRideReviews`, new `ReviewForm.tsx`/
+`ReviewList.tsx`, `RideDetailView.tsx` wires the new section + organizer rating
+line); `apps/web/src/features/organizer/profile/components/
+OrganizerProfileForm.tsx` (rating card); `packages/ui/src/format.ts`
+(`formatRatingParts`/`formatRating`), `packages/ui/src/terminology.ts`
+(`REVIEWS_TERMS`, `ORGANIZER_TERMS`/`RIDE_DETAIL_TERMS` rating fields,
+`formatReviewsCount` plural helper); test fixture updates across
+`discovery.test.tsx`/`my-rides.test.tsx`/`ride-detail.test.tsx`/
+`organizer-profile.test.tsx`/`organizer-profile-widget.test.tsx` for the new
+additive fields; `docs/{api,database,design,tasks}.md`.
+
+Decisions: none new at the ADR level — this stays inside the existing modular-
+monolith/capability-module architecture (ADR-008) and the existing "no standalone
+organizer endpoint" precedent (CR-023's own reasoning in `docs/api.md`), just a
+new capability module of the kind `.claude/rules/architecture.md` already
+enumerates.
+
+Known limitations: no review edit/delete (matches `RideUpdate`'s own precedent,
+not named in any doc as a need); no "my reviews" list for a participant (nothing in
+`docs/design.md`'s screen inventory names one); the rating aggregate is computed
+live via a join on every read rather than cached/denormalized — fine at MVP scale,
+would need revisiting if organizer-profile or discovery-list read volume grows
+materially. `docs/tasks.md`'s Post-ride section (CR-042/CR-043) is now fully
+complete — Quality (CR-044..048) is next.
+
+Follow-up: none identified beyond the "known limitations" above — no ticket
+currently depends on a review edit/delete or a cached rating.
