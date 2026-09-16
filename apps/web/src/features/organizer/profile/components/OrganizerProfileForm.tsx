@@ -62,9 +62,11 @@ export function OrganizerProfileForm() {
   // `setProfile` below already flips it to non-null on a successful create,
   // which would make a `profile`-derived message pick the wrong text.
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     getOrganizerProfile()
       .then((response) => {
@@ -94,7 +96,7 @@ export function OrganizerProfileForm() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -183,7 +185,12 @@ export function OrganizerProfileForm() {
   }
 
   if (status === 'error') {
-    return <ErrorState message={ORGANIZER_TERMS.loadError} />;
+    return (
+      <ErrorState
+        message={ORGANIZER_TERMS.loadError}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
+      />
+    );
   }
 
   return (

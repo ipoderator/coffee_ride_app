@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createRideUpdateRequestSchema, type RideUpdate } from 'types';
 import {
+  AUTH_TERMS,
   Button,
   Card,
   EmptyState,
@@ -79,7 +80,7 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
           (issue) => issue.path === 'message',
         );
         setFieldError(messageIssue?.message ?? null);
-        setFormError(messageIssue ? null : err.problem.detail);
+        setFormError(messageIssue ? null : AUTH_TERMS.genericError);
       } else {
         setFormError(RIDE_UPDATES_TERMS.historyLoadError);
       }
@@ -137,7 +138,10 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
         )}
 
         {historyStatus === 'error' && (
-          <ErrorState message={RIDE_UPDATES_TERMS.historyLoadError} />
+          <ErrorState
+            message={RIDE_UPDATES_TERMS.historyLoadError}
+            onRetry={loadHistory}
+          />
         )}
 
         {historyStatus === 'ready' && items.length === 0 && (

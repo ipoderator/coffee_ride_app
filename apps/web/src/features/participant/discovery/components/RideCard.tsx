@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { PublicRide } from 'types';
 import {
@@ -34,13 +35,18 @@ export function RideCard({ ride }: { ride: PublicRide }) {
       <Card className="flex flex-col gap-3 transition-opacity hover:opacity-90">
         {ride.coverImageUrl ? (
           // Always `null` today (KI-023, no S3 pipeline yet) — same inert branch
-          // `RideDetailView` already carries.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={ride.coverImageUrl}
-            alt=""
-            className="h-40 w-full rounded-lg object-cover"
-          />
+          // `RideDetailView` already carries. `next/image` needs the eventual S3
+          // domain in `next.config.ts`'s `images.remotePatterns`, which is
+          // CR-086's job alongside the pipeline itself — this only swaps the tag
+          // (CR-048) so the branch is already optimized once that value exists.
+          <div className="relative h-40 w-full overflow-hidden rounded-lg">
+            <Image
+              src={ride.coverImageUrl}
+              alt=""
+              fill
+              className="object-cover"
+            />
+          </div>
         ) : null}
 
         <div className="flex items-center gap-3">

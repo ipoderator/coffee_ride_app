@@ -357,6 +357,21 @@ Next action: CR-058 (`docs/tasks.md`) upgrades auth rate limiting to a
 Redis-backed, per-IP-and-per-account limiter once KI-014 (Redis unverified in
 this environment) is resolved; CR-061 (now headers-only, see `docs/tasks.md`)
 adds `@fastify/helmet`. Revisit this entry once both land.
+Update 2026-09-16 (CR-047, "Security review"): re-verified against the full
+`.claude/rules/security.md` checklist, not just auth. Both remaining items are
+broader than originally scoped here — (1) is every abuse-prone endpoint, not
+just `/v1/auth/*` (the same in-memory, per-IP-only `@fastify/rate-limit`
+default store is the only rate limiting registered anywhere in `apps/api`);
+(2) is every response `apps/api` sends, not just auth responses (no
+`@fastify/helmet` or equivalent is registered at all — zero security headers,
+API-wide). Everything else on the checklist (Argon2id hashing, no plaintext
+anywhere, account-enumeration-safe login errors, session cookie flags,
+consistent server-side ownership checks, Zod on every route, parameterized
+Drizzle queries, minimized participant responses, audit columns) was verified
+compliant this session — no new gaps found beyond these two, already-tracked
+ones. Scope decision: fix only what's this task's own (CR-044/045/046/048),
+document CR-058/CR-061's exact scope rather than implement it under CR-047,
+per `.claude/context/current-task.md`.
 
 ### KI-023 — Profile avatar/photo upload is not implemented
 

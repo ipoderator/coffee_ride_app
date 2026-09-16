@@ -125,9 +125,11 @@ export function EditRideForm({ rideId }: { rideId: string }) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     getRide(rideId)
       .then((response) => {
@@ -151,7 +153,7 @@ export function EditRideForm({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [rideId]);
+  }, [rideId, loadAttempt]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -390,7 +392,12 @@ export function EditRideForm({ rideId }: { rideId: string }) {
   }
 
   if (status === 'error' || !ride || !form) {
-    return <ErrorState message={RIDE_EDIT_TERMS.loadError} />;
+    return (
+      <ErrorState
+        message={RIDE_EDIT_TERMS.loadError}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
+      />
+    );
   }
 
   const isDraft = ride.status === 'draft';

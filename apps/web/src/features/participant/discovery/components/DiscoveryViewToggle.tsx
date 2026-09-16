@@ -1,4 +1,4 @@
-import { RIDE_DISCOVERY_TERMS } from 'ui';
+import { cn, RIDE_DISCOVERY_TERMS } from 'ui';
 
 export type DiscoveryView = 'list' | 'map';
 
@@ -16,19 +16,27 @@ function tabClassName(isActive: boolean): string {
  * `/` (CR-026, `docs/design.md` §8 "Discovery — List + map toggle"). A plain
  * two-button tab group, not a shared `packages/ui` primitive — same "structurally
  * trivial, one feature-local instance" reasoning `RideFilters` (CR-025) already used
- * (KI-020 stays open). The `lg`+ split list+map layout named in §11 is left to
- * CR-044's responsive audit (`.claude/context/current-task.md`) — this toggle
- * implements §8's behavior literally.
+ * (KI-020 stays open).
+ *
+ * CR-044: at `lg`+, `DiscoveryList` shows list and map side by side (§11's split
+ * view) so this toggle becomes moot there — callers pass `className="lg:hidden"` to
+ * hide it once both panels are simultaneously visible, rather than this component
+ * hard-coding that breakpoint decision itself.
  */
 export function DiscoveryViewToggle({
   view,
   onChange,
+  className,
 }: {
   view: DiscoveryView;
   onChange: (view: DiscoveryView) => void;
+  className?: string;
 }) {
   return (
-    <div role="tablist" className="flex w-fit gap-1 rounded-lg bg-bg p-1">
+    <div
+      role="tablist"
+      className={cn('flex w-fit gap-1 rounded-lg bg-bg p-1', className)}
+    >
       <button
         type="button"
         role="tab"

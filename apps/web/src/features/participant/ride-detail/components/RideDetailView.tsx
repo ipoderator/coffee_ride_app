@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import type {
   Registration,
@@ -190,9 +191,11 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [viewerWaitlistEntry, setViewerWaitlistEntry] =
     useState<WaitlistEntry | null>(null);
   const [viewerReview, setViewerReview] = useState<Review | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     getRideDetail(rideId)
       .then((response) => {
@@ -224,7 +227,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [rideId]);
+  }, [rideId, loadAttempt]);
 
   if (status === 'loading') {
     return (
@@ -250,7 +253,12 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   }
 
   if (status === 'error' || !ride) {
-    return <ErrorState message={RIDE_DETAIL_TERMS.loadError} />;
+    return (
+      <ErrorState
+        message={RIDE_DETAIL_TERMS.loadError}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
+      />
+    );
   }
 
   const statusTerm = RIDE_STATUS_TERMS[ride.status];
@@ -259,136 +267,151 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   return (
     <div className="flex flex-col gap-6">
       {ride.coverImageUrl ? (
-        // `coverImageUrl` is always `null` today (KI-023, no S3 pipeline yet);
-        // `next/image` needs a configured remote pattern this codebase doesn't have
-        // yet either. Revisit once a real value can ever reach this branch.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={ride.coverImageUrl}
-          alt=""
-          className="h-64 w-full rounded-xl object-cover"
-        />
+        // `coverImageUrl` is always `null` today (KI-023, no S3 pipeline yet).
+        // `next/image` needs the eventual S3 domain in `next.config.ts`'s
+        // `images.remotePatterns`, which is CR-086's job alongside the pipeline
+        // itself — this only swaps the tag (CR-048) so the branch is already
+        // optimized once that value exists.
+        <div className="relative h-64 w-full overflow-hidden rounded-xl">
+          <Image
+            src={ride.coverImageUrl}
+            alt=""
+            fill
+            className="object-cover"
+          />
+        </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-        </div>
-        <h1 className="text-2xl font-semibold text-text">{ride.title}</h1>
-        <p className="text-sm text-text-secondary">
-          {RIDE_DETAIL_TERMS.organizedByLabel}: {organizerName}
-          {organizerReviewCount > 0 && (
-            <>
-              {' · '}
-              {formatRating(organizerRating, organizerReviewCount)}{' '}
-              {RIDE_DETAIL_TERMS.ratingReviewsCount(organizerReviewCount)}
-            </>
+      {/* docs/design.md §11 ("md: two-column ride detail"): primary content
+          (title/metrics/registration) on the left, route + stops on the right.
+          Reviews stay full-width below both — a long-form list doesn't fit a
+          fixed-width column. Single stacked column below `md`. */}
+      <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start md:gap-x-8 md:gap-y-6">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
+            </div>
+            <h1 className="text-2xl font-semibold text-text">{ride.title}</h1>
+            <p className="text-sm text-text-secondary">
+              {RIDE_DETAIL_TERMS.organizedByLabel}: {organizerName}
+              {organizerReviewCount > 0 && (
+                <>
+                  {' · '}
+                  {formatRating(organizerRating, organizerReviewCount)}{' '}
+                  {RIDE_DETAIL_TERMS.ratingReviewsCount(organizerReviewCount)}
+                </>
+              )}
+            </p>
+          </div>
+
+          <Card className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
+              {RIDE_DETAIL_TERMS.startLabel}
+            </p>
+            <p className="text-lg font-semibold text-text">
+              {formatDate(startDate, { timeZone: ride.startTimezone })}
+              {', '}
+              {formatTime(startDate, { timeZone: ride.startTimezone })}
+            </p>
+          </Card>
+
+          {ride.description && (
+            <p className="whitespace-pre-wrap text-sm text-text">
+              {ride.description}
+            </p>
           )}
-        </p>
-      </div>
 
-      <Card className="flex flex-col gap-2">
-        <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
-          {RIDE_DETAIL_TERMS.startLabel}
-        </p>
-        <p className="text-lg font-semibold text-text">
-          {formatDate(startDate, { timeZone: ride.startTimezone })}
-          {', '}
-          {formatTime(startDate, { timeZone: ride.startTimezone })}
-        </p>
-      </Card>
-
-      {ride.description && (
-        <p className="whitespace-pre-wrap text-sm text-text">
-          {ride.description}
-        </p>
-      )}
-
-      <MetricRow>
-        {ride.distanceKm !== null && (
-          <MetricTile
-            label={METRIC_TERMS.distance}
-            {...formatDistanceParts(ride.distanceKm)}
-          />
-        )}
-        {ride.elevationGainMeters !== null && (
-          <MetricTile
-            label={METRIC_TERMS.elevation}
-            {...formatElevationParts(ride.elevationGainMeters)}
-          />
-        )}
-        {ride.paceKmh !== null && (
-          <MetricTile
-            label={METRIC_TERMS.pace}
-            {...formatSpeedParts(ride.paceKmh)}
-          />
-        )}
-        {ride.durationMinutes !== null && (
-          <MetricTile
-            label={METRIC_TERMS.duration}
-            {...formatDurationParts(ride.durationMinutes)}
-          />
-        )}
-      </MetricRow>
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        {ride.difficulty !== null && (
-          <DifficultyScale level={ride.difficulty} />
-        )}
-        <span className="text-sm text-text-secondary">
-          {BICYCLE_TYPE_TERMS[ride.bicycleType]}
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-x-8 gap-y-4">
-        <MetricTile
-          label={RIDE_DETAIL_TERMS.priceLabel}
-          {...formatPriceParts(ride.priceRub)}
-        />
-        {ride.participantLimit !== null && (
-          <MetricTile
-            label={METRIC_TERMS.participants}
-            {...formatParticipantsParts(
-              registrationsCount,
-              ride.participantLimit,
+          <MetricRow>
+            {ride.distanceKm !== null && (
+              <MetricTile
+                label={METRIC_TERMS.distance}
+                {...formatDistanceParts(ride.distanceKm)}
+              />
             )}
+            {ride.elevationGainMeters !== null && (
+              <MetricTile
+                label={METRIC_TERMS.elevation}
+                {...formatElevationParts(ride.elevationGainMeters)}
+              />
+            )}
+            {ride.paceKmh !== null && (
+              <MetricTile
+                label={METRIC_TERMS.pace}
+                {...formatSpeedParts(ride.paceKmh)}
+              />
+            )}
+            {ride.durationMinutes !== null && (
+              <MetricTile
+                label={METRIC_TERMS.duration}
+                {...formatDurationParts(ride.durationMinutes)}
+              />
+            )}
+          </MetricRow>
+
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {ride.difficulty !== null && (
+              <DifficultyScale level={ride.difficulty} />
+            )}
+            <span className="text-sm text-text-secondary">
+              {BICYCLE_TYPE_TERMS[ride.bicycleType]}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-8 gap-y-4">
+            <MetricTile
+              label={RIDE_DETAIL_TERMS.priceLabel}
+              {...formatPriceParts(ride.priceRub)}
+            />
+            {ride.participantLimit !== null && (
+              <MetricTile
+                label={METRIC_TERMS.participants}
+                {...formatParticipantsParts(
+                  registrationsCount,
+                  ride.participantLimit,
+                )}
+              />
+            )}
+          </div>
+
+          <RegistrationButton
+            rideId={rideId}
+            rideStatus={ride.status}
+            participantLimit={ride.participantLimit}
+            registrationsCount={registrationsCount}
+            viewerRegistration={viewerRegistration}
+            viewerWaitlistEntry={viewerWaitlistEntry}
+            onChange={(registration) => {
+              setViewerRegistration(registration);
+              if (registration) {
+                setRegistrationsCount((count) => count + 1);
+                return;
+              }
+              // CR-036 ("Waitlist"): cancelling may have silently promoted the
+              // oldest waiting entry into the freed spot server-side, so the
+              // count might not actually have gone down — refetch instead of
+              // guessing (`.claude/rules/database.md`: "live status, not stale
+              // coordination").
+              getRideDetail(rideId)
+                .then((response) => {
+                  setRegistrationsCount(response.registrationsCount);
+                  setViewerWaitlistEntry(response.viewerWaitlistEntry);
+                })
+                .catch(() => {
+                  // Best-effort refresh only — the cancellation itself already
+                  // succeeded; a stale count here is not worth surfacing an
+                  // error for.
+                });
+            }}
+            onWaitlistChange={setViewerWaitlistEntry}
           />
-        )}
+        </div>
+
+        <div className="flex flex-col gap-6">
+          {route ? <RouteSection rideId={rideId} route={route} /> : null}
+          <StopList stops={stops} />
+        </div>
       </div>
-
-      <RegistrationButton
-        rideId={rideId}
-        rideStatus={ride.status}
-        participantLimit={ride.participantLimit}
-        registrationsCount={registrationsCount}
-        viewerRegistration={viewerRegistration}
-        viewerWaitlistEntry={viewerWaitlistEntry}
-        onChange={(registration) => {
-          setViewerRegistration(registration);
-          if (registration) {
-            setRegistrationsCount((count) => count + 1);
-            return;
-          }
-          // CR-036 ("Waitlist"): cancelling may have silently promoted the oldest
-          // waiting entry into the freed spot server-side, so the count might not
-          // actually have gone down — refetch instead of guessing
-          // (`.claude/rules/database.md`: "live status, not stale coordination").
-          getRideDetail(rideId)
-            .then((response) => {
-              setRegistrationsCount(response.registrationsCount);
-              setViewerWaitlistEntry(response.viewerWaitlistEntry);
-            })
-            .catch(() => {
-              // Best-effort refresh only — the cancellation itself already
-              // succeeded; a stale count here is not worth surfacing an error for.
-            });
-        }}
-        onWaitlistChange={setViewerWaitlistEntry}
-      />
-
-      {route ? <RouteSection rideId={rideId} route={route} /> : null}
-
-      <StopList stops={stops} />
 
       {ride.status === 'finished' && (
         <ReviewsSection

@@ -26,9 +26,11 @@ type LoadStatus = 'loading' | 'ready' | 'error';
 export function ParticipantTable({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<RideParticipantSummary[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     getRideParticipants(rideId)
       .then((response) => {
@@ -44,7 +46,7 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [rideId]);
+  }, [rideId, attempt]);
 
   return (
     <Card className="flex flex-col gap-4">
@@ -60,7 +62,10 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
       )}
 
       {status === 'error' && (
-        <ErrorState message={PARTICIPANTS_TERMS.loadError} />
+        <ErrorState
+          message={PARTICIPANTS_TERMS.loadError}
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       )}
 
       {status === 'ready' && items.length === 0 && (

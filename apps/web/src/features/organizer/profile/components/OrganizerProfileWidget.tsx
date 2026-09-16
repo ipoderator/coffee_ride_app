@@ -26,9 +26,11 @@ type State =
  */
 export function OrganizerProfileWidget() {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setState({ status: 'loading' });
 
     getOrganizerProfile()
       .then((response) => {
@@ -47,7 +49,7 @@ export function OrganizerProfileWidget() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   if (state.status === 'loading') {
     return (
@@ -61,7 +63,11 @@ export function OrganizerProfileWidget() {
   if (state.status === 'error') {
     return (
       <Card>
-        <ErrorState message={state.message} variant="inline" />
+        <ErrorState
+          message={state.message}
+          variant="inline"
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       </Card>
     );
   }

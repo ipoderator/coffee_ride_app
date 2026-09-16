@@ -336,7 +336,7 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       cancellation time.
 - [x] CR-041 In-app notifications — `Notification` table,
       `GET /v1/notifications/mine` + `POST /v1/notifications/:id/read`, `/me/
-  notifications` (third participant cabinet nav entry). ADR-007 (Pending):
+notifications` (third participant cabinet nav entry). ADR-007 (Pending):
       in-app only, no email/push. Delivery is a same-request DB insert after the
       triggering transaction, not a Redis queue — see KI-040/CR-050.
 
@@ -358,7 +358,7 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
       `rating`/`reviewCount` on `RideOrganizerSummary` (`GET /v1/rides`,
       `GET /v1/rides/:id` — batched, not N+1, on the paginated discovery/
       my-registrations endpoints) and on `GET`/`POST`/`PATCH
-    /v1/organizers/me` (shown on `/organizer/profile`). No new endpoint —
+  /v1/organizers/me` (shown on `/organizer/profile`). No new endpoint —
       same "no standalone organizer endpoint" precedent CR-023 established.
       See `docs/changelog.md`.
 
@@ -368,11 +368,42 @@ These three are **verification passes over screens already built to `docs/design
 not the point where responsive/a11y/state work starts. A screen that ships without them
 is not done (`docs/definition-of-done.md`).
 
-- [ ] CR-044 Responsive UI — audit against `docs/design.md` §11
-- [ ] CR-045 Accessibility — audit against `docs/design.md` §12 (WCAG 2.1 AA)
-- [ ] CR-046 Error/loading/empty states — audit against `docs/design.md` §10
-- [ ] CR-047 Security review
-- [ ] CR-048 Performance review
+- [x] CR-044 Responsive UI — done 2026-09-16: audited all 16 screens against
+      `docs/design.md` §11 (3 parallel Explore-agent passes, see
+      `.claude/context/current-task.md`/`docs/changelog.md`). Fixed 5 real gaps:
+      `CabinetShell` (bottom nav base, side nav `md`+), `RideDetailView`
+      (two-column at `md`), `DiscoveryList`/`DiscoveryViewToggle` (combined
+      list+map split view at `lg`), `MetricRow` (distinct `sm` two-column step),
+      root `layout.tsx` (shared max-width-1200px-centered container at `xl`).
+      Everything else already compliant.
+- [x] CR-045 Accessibility — done 2026-09-16: audited against `docs/design.md`
+      §12 (WCAG 2.1 AA). One real gap: no `<main>` landmark on any of the 12
+      cabinet pages — fixed once in `CabinetShell`. Everything else (focus
+      rings, label/`aria-describedby` linking, no color-alone conveyance,
+      reduced-motion, one `<h1>` per page) already compliant. Map keyboard
+      operability recorded as "re-verify once a live map ships" (KI-031), not
+      a fixable gap today.
+- [x] CR-046 Error/loading/empty states — done 2026-09-16: audited against
+      `docs/design.md` §10. Systemic gap: 12 of 14 `ErrorState` call sites
+      rendered `message` only, no `onRetry` (§10 point 3 requires a retry
+      affordance). Added `onRetry` to all 11 remaining sites (2 already had
+      it); normalized `UpdateComposer`'s raw `problem.detail` submit error to
+      the shared `AUTH_TERMS.genericError` term. Skeletons/empty
+      states/forms/CR-052 degraded states already compliant everywhere.
+- [x] CR-047 Security review — done 2026-09-16: walked every item in
+      `.claude/rules/security.md` against the whole app, not just auth. No new
+      gaps beyond what KI-022 already tracked (now widened there to cover
+      every endpoint, not just `/v1/auth/*`) — no `@fastify/helmet` (HIGH,
+      CR-061's exact scope) and in-memory single-instance rate limiting
+      (MEDIUM/LOW, CR-058's exact scope). Documented in
+      `.claude/context/known-issues.md`, not implemented here, per the
+      scope decision (avoid mixing into a separately tracked ticket).
+- [x] CR-048 Performance review — done 2026-09-16: verified compliant
+      (batched organizer rating aggregate, explicit indexes on FK/filter
+      columns, cursor pagination everywhere). One LOW fix applied: `RideCard`/
+      `RideDetailView`'s cover image `<img>` → `next/image` (currently inert,
+      `coverImageUrl` is always `null` until CR-086's S3 pipeline — cheap to
+      fix now so the branch is already optimized once it exists).
 
 ## Resilience
 

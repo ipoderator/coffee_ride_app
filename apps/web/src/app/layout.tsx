@@ -35,7 +35,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className={`${golosText.variable} ${ibmPlexMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {/* docs/design.md §11: "xl (>= 1280): max content width 1200px, centered" —
+            one shared cap here rather than repeated per-page, per
+            `.claude/context/current-task.md`'s CR-044 finding. Every page's own
+            (narrower) container still applies inside it; this only bounds the
+            widest screens/layouts (cabinet side nav, discovery split view). */}
+        <div className="mx-auto w-full xl:max-w-300">{children}</div>
+      </body>
     </html>
   );
 }

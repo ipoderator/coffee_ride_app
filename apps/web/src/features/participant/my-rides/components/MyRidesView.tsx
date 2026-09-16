@@ -25,6 +25,7 @@ export function MyRidesView() {
   const [tab, setTab] = useState<RegistrationsTab>('upcoming');
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<MyRegistrationSummary[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +45,7 @@ export function MyRidesView() {
     return () => {
       cancelled = true;
     };
-  }, [tab]);
+  }, [tab, attempt]);
 
   const tabs = <MyRegistrationsTabs tab={tab} onChange={setTab} />;
   const emptyTitle =
@@ -70,7 +71,10 @@ export function MyRidesView() {
     return (
       <div className="flex flex-col gap-4">
         {tabs}
-        <ErrorState message={MY_REGISTRATIONS_TERMS.loadError} />
+        <ErrorState
+          message={MY_REGISTRATIONS_TERMS.loadError}
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       </div>
     );
   }

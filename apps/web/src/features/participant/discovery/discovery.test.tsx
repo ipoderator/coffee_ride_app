@@ -163,10 +163,55 @@ describe('DiscoveryList', () => {
         'Карта временно недоступна. Используйте список заездов.',
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText(baseRide.title)).not.toBeInTheDocument();
+    // CR-044 (`docs/design.md` §11 split view at `lg`): the list panel stays
+    // mounted — only CSS-hidden below `lg` — so it's still in the DOM, just
+    // flagged `hidden` below the split-view breakpoint. The active panel (map)
+    // carries no such class.
+    expect(screen.getByTestId('discovery-list-panel').className).toContain(
+      'hidden',
+    );
+    expect(
+      screen.getByTestId('discovery-map-panel').className ?? '',
+    ).not.toContain('hidden');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Список' }));
 
     expect(await screen.findByText(baseRide.title)).toBeInTheDocument();
+    expect(
+      screen.getByTestId('discovery-list-panel').className ?? '',
+    ).not.toContain('hidden');
+    expect(screen.getByTestId('discovery-map-panel').className).toContain(
+      'hidden',
+    );
+  });
+
+  it('shows both panels unhidden at once above the lg split-view breakpoint, regardless of the toggle (CR-044)', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [baseRide],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+    await screen.findByText(baseRide.title);
+
+    // Neither panel is unconditionally hidden — the `hidden` class is always
+    // paired with an `lg:block` override, so a real `lg`+ viewport shows both
+    // simultaneously even while `view` still says "list".
+    const listPanel = screen.getByTestId('discovery-list-panel');
+    const mapPanel = screen.getByTestId('discovery-map-panel');
+    expect(listPanel.className ?? '').not.toContain('hidden');
+    expect(mapPanel.className).toBe('hidden lg:block');
+  });
+
+  it('hides the list/map toggle above the lg split-view breakpoint (CR-044)', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [baseRide],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+    await screen.findByText(baseRide.title);
+
+    expect(screen.getByRole('tablist').className).toContain('lg:hidden');
   });
 });

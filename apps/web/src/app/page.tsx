@@ -5,7 +5,7 @@ import { DiscoveryList } from '@/features/participant/discovery/components/Disco
 // placeholder. List-only slice — no map toggle (CR-026) or filters (CR-025) yet.
 export default function Home() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold text-text">
         {RIDE_DISCOVERY_TERMS.pageTitle}
       </h1>

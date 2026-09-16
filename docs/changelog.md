@@ -2850,3 +2850,139 @@ complete — Quality (CR-044..048) is next.
 
 Follow-up: none identified beyond the "known limitations" above — no ticket
 currently depends on a review edit/delete or a cached rating.
+
+## 2026-09-16 — CR-044 / CR-045 / CR-046 / CR-047 / CR-048 — Quality (Responsive UI, Accessibility, Error/loading/empty states, Security review, Performance review)
+
+Verification passes over the 16 screens already built to `docs/design.md`, per
+`docs/tasks.md`'s own framing ("not the point where responsive/a11y/state work
+starts... a screen that ships without them is not done"). Three parallel
+Explore-agent audits (states / responsive+a11y / security+perf — methodology and
+full findings in `.claude/context/current-task.md`) found a small number of real
+gaps against each rules doc; everything else checked was already compliant. Scope
+decision: fix every real gap found; for the two security findings that are the
+exact scope of an already-tracked separate ticket (CR-058, CR-061), document only,
+don't implement under this task.
+
+CR-046 (states, `docs/design.md` §10): systemic gap — 12 of 14 `ErrorState` call
+sites rendered `message` only, no `onRetry`, though §10 point 3 requires a retry
+affordance and two sites (`ReviewList.tsx`, `RideDetailView.tsx`'s `RouteSection`)
+already proved the pattern. Added `onRetry` (re-running the same fetch, via either
+an `attempt` counter added to the effect's dependency array or an existing named
+reload function) to the 11 remaining sites: `DiscoveryList`, `MyRidesView`,
+`NotificationList`, `RideDetailView` (top-level ride load), `RidesList`,
+`EditRideForm`, `ParticipantTable`, `WaitlistTable`, `RouteUploadForm`,
+`OrganizerProfileForm`, `OrganizerProfileWidget`, `UpdateComposer`. Also
+normalized `UpdateComposer`'s submit-error fallback from the raw
+`ApiError.problem.detail` string to the shared `AUTH_TERMS.genericError` term
+(`problem.detail` is contractually safe per `.claude/rules/backend.md`, so this
+wasn't a leak — just the one form not following the same static-term convention
+every other form in the repo uses).
+
+CR-044 (responsive, `docs/design.md` §11): five gaps, each traced to one of §11's
+five named breakpoints. `CabinetShell.tsx` (shared shell for all 12 `/me/*`+
+`/organizer/*` pages) had a single unconditional nav row — now a fixed bottom tab
+bar at `base`, an ordinary sticky side-nav column at `md`+, wrapped in a real
+`<main>` (also closes CR-045's gap, see below). `RideDetailView.tsx` was a single
+column at every width — now a two-column grid at `md`+ (primary content left,
+route/stops right; the reviews section stays full-width below both, a long list
+doesn't fit a fixed column). `DiscoveryList`/`DiscoveryViewToggle` only ever
+showed one of list/map, toggled — `DiscoveryViewToggle` already carried a code
+comment deferring this exact work to CR-044; now both panels stay mounted with the
+inactive one CSS-gated `hidden lg:block`, so `lg`+ shows the combined split view
+§11 asks for while `base`/`md` keep the toggle-driven single-panel behavior
+unchanged; the toggle itself gets `lg:hidden` since it's moot once both panels are
+visible. `packages/ui`'s `MetricRow` jumped straight from a `base` 2-column grid
+to `md`'s flex-row wrap, skipping §11's own named `sm` two-column step — now
+`base` is a single column, `sm` is 2-column grid, `md`+ is the existing flex-row.
+No shared `xl` max-width-1200px-centered container existed anywhere — added once,
+in root `layout.tsx`, wrapping `{children}`; the three growing layouts above
+(`CabinetShell`, discovery `page.tsx`, ride-detail `page.tsx`) had their own
+too-narrow per-page caps widened (`max-w-3xl`→`max-w-5xl`/`max-w-4xl`) so they can
+actually use the room up to that shared cap instead of the outer container being a
+no-op. Participant/waitlist lists and every form were already mobile-first/
+card-based and were not touched.
+
+CR-045 (accessibility, `docs/design.md` §12, WCAG 2.1 AA): one real gap — no
+`<main>` landmark on any of the 12 cabinet pages (`CabinetShell.tsx` wrapped
+content in a plain `<div>`), fixed once in the shell alongside the CR-044 nav
+work. Everything else verified compliant, no code change needed: no raw hex
+(ESLint rule active + clean), focus rings on every shared interactive primitive,
+every form input has a real `<label>` + `aria-describedby` error linking
+(`FormField.tsx`), no color-alone conveyance (`StatusBadge`/`DifficultyScale`
+always pair with text), reduced-motion respected where it matters (`Skeleton`'s
+`motion-safe:animate-pulse`, test-enforced), one real `<h1>` per page. Map
+keyboard operability is not yet applicable — no live 2GIS integration exists
+(KI-016/KI-031, still a degraded placeholder with no interactive surface) —
+recorded as "re-verify once a live map ships," not a fixable gap today.
+
+CR-047 (security, `.claude/rules/security.md`): walked the full checklist against
+the whole app, not just auth endpoints. Verified compliant: Argon2id hashing, no
+plaintext anywhere, account-enumeration-safe login errors, session cookie flags
+(httpOnly/Secure-in-prod/SameSite=Lax), CSRF plugin wired (not just written),
+consistent server-side ownership checks across rides/registrations/reviews/
+organizers (identity always from session, never client-supplied), Zod on every
+route, parameterized Drizzle queries only, participant responses minimized (no
+phone/email in participant-list schemas), `.env` gitignored/no hardcoded secrets,
+audit columns (`updatedBy`/timestamps) present on sensitive tables. No new gaps
+found beyond two KI-022 already tracked at a narrower (auth-only) scope — widened
+that entry instead of opening duplicates: (1) HIGH — no `@fastify/helmet` (or
+equivalent) registered, zero security headers on any response API-wide, exact
+scope of CR-061 (currently open); (2) MEDIUM/LOW — auth and general rate limiting
+are still in-memory, per-IP-only, single-instance (`@fastify/rate-limit`'s default
+store), exact scope of CR-058 (blocked on KI-014, Redis never live-verified in
+this environment). Both documented in `.claude/context/known-issues.md`
+(KI-022's update), neither implemented here, per the scope decision.
+
+CR-048 (performance): verified compliant — organizer rating aggregate is a
+genuine batched `GROUP BY` query (not N+1, confirmed again against CR-042/043's
+own work), explicit indexes exist on the FK/filter columns that matter, every
+list endpoint uses the shared cursor-pagination helper (ADR-011). One LOW fix
+applied: `RideCard.tsx`/`RideDetailView.tsx` rendered `ride.coverImageUrl` via a
+raw `<img>` (eslint-disabled) — swapped to `next/image` (`fill` + a `relative`
+wrapper, matching the prior fixed-size `object-cover` styling). Currently inert
+(`coverImageUrl` is always `null` — no S3 pipeline yet, KI-023/CR-086) but cheap
+to fix now so the branch is already optimized the moment CR-086 wires a real
+value through; `next/image` will additionally need the eventual S3 domain in
+`next.config.ts`'s `images.remotePatterns`, which is CR-086's job alongside the
+pipeline itself, not this one.
+
+Validation: `pnpm --filter ui --filter web run typecheck` and `... run lint` both
+clean. `pnpm --filter ui --filter web run test` — `packages/ui` 90/90 passed
+(unchanged — `MetricRow.test.tsx` updated to assert the new `sm:grid-cols-2`
+class rather than added-to), `apps/web` 157/157 passed (+2 new: the split-view
+class-assertion tests in `discovery.test.tsx` replacing the old DOM-presence
+assertion, which the CR-044 fix made incorrect — both panels now stay mounted,
+CSS-gated, rather than one being absent from the DOM entirely). `NODE_ENV=production
+pnpm --filter ui --filter web --filter types run build` — all green, 14 static +
+dynamic routes generated. `apps/api`/`packages/db` untouched by this task, not
+re-run.
+
+Files: `apps/web/src/components/cabinet/CabinetShell.tsx` (responsive nav +
+`<main>`), `apps/web/src/features/participant/ride-detail/components/
+RideDetailView.tsx` (two-column grid, top-level `onRetry`, `next/image`),
+`apps/web/src/features/participant/discovery/components/{DiscoveryList,
+DiscoveryViewToggle,RideCard}.tsx` (split view, `onRetry`, `next/image`),
+`packages/ui/src/components/MetricRow.tsx` (+ `.test.tsx`), `apps/web/src/app/
+layout.tsx` (shared `xl` container), `apps/web/src/app/page.tsx`/`rides/[id]/
+page.tsx` (widened per-page max-width), 11 `ErrorState` call sites listed under
+CR-046 above, `apps/web/src/features/organizer/updates/components/
+UpdateComposer.tsx` (retry + `AUTH_TERMS.genericError` normalization),
+`apps/web/src/features/participant/discovery/discovery.test.tsx` (split-view
+assertions), `.claude/context/known-issues.md` (KI-022 widened),
+`docs/tasks.md`, `.claude/context/project-state.md`.
+
+Decisions: none new at the ADR level — every fix stays inside existing patterns
+(`ErrorState`'s existing `onRetry` prop, `docs/design.md`'s already-specified
+breakpoints/landmarks, `next/image`, the existing `AUTH_TERMS.genericError`
+convention).
+
+Known limitations: CR-058 (rate limiting) and CR-061 (security headers) remain
+open, tracked in KI-022 — not this task's scope. `next/image`'s `RideCard`/
+`RideDetailView` swap has no `images.remotePatterns` configured yet since no real
+image domain exists (CR-086); harmless today (`coverImageUrl` is always `null`)
+but CR-086 must add that config as part of wiring the real pipeline, not assume
+the tag swap alone is sufficient.
+
+Follow-up: CR-058, CR-060, CR-061 are the next security-hardening tickets
+(`docs/tasks.md`'s Resilience/Auth-follow-up sections); none of them were blocked
+or newly required by this task, just re-confirmed still open and in scope.

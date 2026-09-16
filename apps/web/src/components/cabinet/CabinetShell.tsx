@@ -87,22 +87,25 @@ export function CabinetShell({
 
   return (
     <CurrentUserContext.Provider value={user}>
-      <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 p-6">
+      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 p-6 pb-24 md:flex-row md:items-start md:gap-8 md:pb-6">
+        {/* base: bottom tab bar, fixed to the viewport. md+: an ordinary sticky
+            side nav column, back in normal flow next to `<main>` (design.md §11:
+            "base: bottom nav in cabinets" / "md: side nav appears"). */}
         <nav
           aria-label={CABINET_TERMS.navLabel}
-          className="flex gap-4 border-b border-border pb-3"
+          className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around gap-1 border-t border-border bg-bg p-2 md:sticky md:top-6 md:inset-x-auto md:bottom-auto md:z-auto md:w-48 md:shrink-0 md:flex-col md:items-stretch md:justify-start md:gap-1 md:border-t-0 md:bg-transparent md:p-0"
         >
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="text-sm font-medium text-text-secondary hover:text-text"
+              className="rounded-md px-3 py-2 text-center text-sm font-medium text-text-secondary hover:text-text md:text-left"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        {children}
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
     </CurrentUserContext.Provider>
   );

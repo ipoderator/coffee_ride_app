@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { BicycleType, PublicRide } from 'types';
 import {
   Button,
@@ -30,11 +30,16 @@ type LoadStatus = 'loading' | 'ready' | 'error';
  * `docs/design.md` §10's own example) with a "Сбросить фильтры" action; an
  * unfiltered empty result keeps the plain `emptyTitle`.
  *
- * CR-026 ("Map discovery"): `DiscoveryViewToggle` is likewise always visible. The map
- * view renders `RideMapPlaceholder` — no live 2GIS credential exists in this
- * environment (KI-016), so a real map render would be unverifiable
- * (`.claude/context/current-task.md`'s investigation). Switching to "Карта" does not
- * refetch or otherwise change the underlying list/filter state.
+ * CR-026 ("Map discovery"): the map view renders `RideMapPlaceholder` — no live
+ * 2GIS credential exists in this environment (KI-016), so a real map render would
+ * be unverifiable (`.claude/context/current-task.md`'s investigation). Switching to
+ * "Карта" does not refetch or otherwise change the underlying list/filter state.
+ *
+ * CR-044 (`docs/design.md` §11: "lg: Discovery becomes split list + map"): both
+ * panels are always mounted — the inactive one is gated behind `hidden lg:block`
+ * rather than left out of the DOM, so it's already there, just unhidden by CSS, the
+ * moment the viewport crosses `lg`. The toggle itself hides at `lg`+
+ * (`className="lg:hidden"`) since there's no longer a single active view to pick.
  */
 export function DiscoveryList() {
   const [status, setStatus] = useState<LoadStatus>('loading');
@@ -43,6 +48,7 @@ export function DiscoveryList() {
     undefined,
   );
   const [view, setView] = useState<DiscoveryView>('list');
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,81 +68,81 @@ export function DiscoveryList() {
     return () => {
       cancelled = true;
     };
-  }, [bicycleType]);
+  }, [bicycleType, attempt]);
 
-  const controls = (
+  const filters = (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <RideFilters bicycleType={bicycleType} onChange={setBicycleType} />
-      <DiscoveryViewToggle view={view} onChange={setView} />
+      <DiscoveryViewToggle
+        view={view}
+        onChange={setView}
+        className="lg:hidden"
+      />
     </div>
   );
 
-  // CR-026: the map view doesn't depend on the list's own load status — it's a
-  // fixed degraded notice regardless of whether the list is loading/ready/errored
-  // (`.claude/context/current-task.md`).
-  if (view === 'map') {
-    return (
-      <div className="flex flex-col gap-4">
-        {controls}
-        <RideMapPlaceholder />
-      </div>
-    );
-  }
-
-  const filters = controls;
-
+  let listPanel: ReactNode;
   if (status === 'loading') {
-    return (
+    listPanel = (
       <div className="flex flex-col gap-4">
-        {filters}
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
     );
-  }
-
-  if (status === 'error') {
-    return (
+  } else if (status === 'error') {
+    listPanel = (
+      <ErrorState
+        message={RIDE_DISCOVERY_TERMS.loadError}
+        onRetry={() => setAttempt((n) => n + 1)}
+      />
+    );
+  } else if (rides.length === 0) {
+    listPanel = bicycleType ? (
+      <EmptyState
+        title={RIDE_DISCOVERY_TERMS.emptyFilteredTitle}
+        action={
+          <Button variant="secondary" onClick={() => setBicycleType(undefined)}>
+            {RIDE_DISCOVERY_TERMS.resetFiltersLabel}
+          </Button>
+        }
+      />
+    ) : (
+      <EmptyState
+        title={RIDE_DISCOVERY_TERMS.emptyTitle}
+        description={RIDE_DISCOVERY_TERMS.emptyDescription}
+      />
+    );
+  } else {
+    listPanel = (
       <div className="flex flex-col gap-4">
-        {filters}
-        <ErrorState message={RIDE_DISCOVERY_TERMS.loadError} />
+        {rides.map((ride) => (
+          <RideCard key={ride.id} ride={ride} />
+        ))}
       </div>
     );
   }
 
-  if (rides.length === 0) {
-    return (
-      <div className="flex flex-col gap-4">
-        {filters}
-        {bicycleType ? (
-          <EmptyState
-            title={RIDE_DISCOVERY_TERMS.emptyFilteredTitle}
-            action={
-              <Button
-                variant="secondary"
-                onClick={() => setBicycleType(undefined)}
-              >
-                {RIDE_DISCOVERY_TERMS.resetFiltersLabel}
-              </Button>
-            }
-          />
-        ) : (
-          <EmptyState
-            title={RIDE_DISCOVERY_TERMS.emptyTitle}
-            description={RIDE_DISCOVERY_TERMS.emptyDescription}
-          />
-        )}
-      </div>
-    );
-  }
-
+  // CR-044: both panels stay mounted; only the inactive one is CSS-hidden below
+  // `lg` (`docs/design.md` §11's split view). Above `lg` neither carries the
+  // `hidden` class, so both render side by side regardless of `view`.
   return (
     <div className="flex flex-col gap-4">
       {filters}
-      {rides.map((ride) => (
-        <RideCard key={ride.id} ride={ride} />
-      ))}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <div
+          data-testid="discovery-list-panel"
+          className={view === 'map' ? 'hidden lg:block' : undefined}
+        >
+          {listPanel}
+        </div>
+        <div
+          data-testid="discovery-map-panel"
+          className={view === 'list' ? 'hidden lg:block' : undefined}
+        >
+          <RideMapPlaceholder />
+        </div>
+      </div>
     </div>
   );
 }

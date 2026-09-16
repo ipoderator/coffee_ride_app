@@ -23,7 +23,8 @@ describe('MetricRow', () => {
       </MetricRow>,
     );
     const row = container.firstElementChild;
-    expect(row?.className).toContain('grid-cols-2');
+    expect(row?.className).toContain('grid-cols-1');
+    expect(row?.className).toContain('sm:grid-cols-2');
     expect(row?.className).toContain('md:flex');
   });
 });

@@ -49,9 +49,11 @@ function groupByStatus(rides: Ride[]): Array<[Ride['status'], Ride[]]> {
 export function RidesList() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rides, setRides] = useState<Ride[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     listMyRides()
       .then((response) => {
@@ -67,7 +69,7 @@ export function RidesList() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   if (status === 'loading') {
     return (
@@ -80,7 +82,12 @@ export function RidesList() {
   }
 
   if (status === 'error') {
-    return <ErrorState message={RIDE_LIST_TERMS.loadError} />;
+    return (
+      <ErrorState
+        message={RIDE_LIST_TERMS.loadError}
+        onRetry={() => setAttempt((n) => n + 1)}
+      />
+    );
   }
 
   if (rides.length === 0) {

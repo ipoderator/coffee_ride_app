@@ -19,7 +19,9 @@ complete too: registration-confirmation/waitlist-promotion notifications (CR-038
 organizer ride updates with fan-out (CR-039), ride-cancellation fan-out (CR-040), and
 the participant-facing in-app inbox (CR-041). Post-ride is now fully complete too:
 participant reviews of finished rides (CR-042) and the organizer-wide rating
-aggregate they feed (CR-043). Quality (CR-044..048) is next.
+aggregate they feed (CR-043). Quality (CR-044..048 — responsive/a11y/states/
+security/performance audits) is now fully complete too. Resilience (CR-049..052)
+is next.
 
 ## Current task
 
@@ -58,7 +60,15 @@ organizer name whenever they have at least one review. `/organizer/profile`
 Cabinet shell + nav/widget registries (ADR-009) exist for both organizer and
 participant sides — participant now has three entries (profile, my registrations,
 notifications), organizer still has one, no feature-flag support yet (CR-054
-generalizes this).
+generalizes this). CR-044/045/046/048 (Quality) landed on top of all of the
+above: `CabinetShell` now renders a real `<main>` landmark with a responsive
+nav (bottom tab bar at `base`, sticky side column at `md`+); `RideDetailView`
+is two-column at `md`+; `DiscoveryList`/`DiscoveryViewToggle` show a combined
+list+map split view at `lg`+ (both panels always mounted, the inactive one
+CSS-gated `hidden lg:block`); a shared `xl` max-width-1200px-centered container
+wraps every page from the root `layout.tsx`; every `ErrorState` call site now
+offers `onRetry`; `RideCard`/`RideDetailView`'s cover image uses `next/image`
+(still inert — `coverImageUrl` is always `null` until CR-086).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). Capability modules: `auth` (register/verify-email/login/logout/me,
@@ -128,9 +138,10 @@ None.
 ## Next
 
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
-and Post-ride (CR-042/CR-043) sections are all now fully complete. Quality
-(CR-044 Responsive UI, CR-045 Accessibility, CR-046 Error/loading/empty states,
-CR-047 Security review, CR-048 Performance review) is next.
+Post-ride (CR-042/CR-043), and Quality (CR-044..048) sections are all now fully
+complete. Resilience (CR-049 timeout/retry/circuit-breaker utilities, CR-050
+async notification delivery via Redis queue, CR-051 health check endpoint,
+CR-052 frontend degraded-state handling) is next.
 
 ## Important decisions
 
@@ -171,8 +182,11 @@ items:
 - `packages/db`/`packages/types`/`packages/maps-2gis` export raw TS source, not
   compiled `dist` — a production boot (`node dist/server.js`) is confirmed broken
   until this is resolved via an ADR (KI-017).
-- Auth ships with an interim security posture: no `@fastify/helmet` yet, rate
-  limiting is in-memory-per-IP only, no per-account limiting (KI-022).
+- No `@fastify/helmet` (or equivalent) anywhere — zero security headers on any
+  `apps/api` response, API-wide, not just auth. Rate limiting is in-memory
+  per-IP-only, single-instance, no per-account limiting, also API-wide.
+  Re-confirmed by CR-047's full security-rules walkthrough, not just auth
+  endpoints (KI-022).
 - No live 2GIS credential — geocoding and MapGL rendering are unverified against a
   real account; every map surface shows a real degraded state instead (KI-016,
   KI-031). No geocode-by-address UI (KI-032); a ride's finish point has no coordinates
@@ -209,4 +223,4 @@ items:
 
 ## Last updated
 
-2026-09-16 (CR-042/043)
+2026-09-16 (CR-044/045/046/047/048)

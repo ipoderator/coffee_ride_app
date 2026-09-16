@@ -32,9 +32,11 @@ const TYPE_LABEL: Record<Notification['type'], string> = {
 export function NotificationList() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<Notification[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     listMyNotifications()
       .then((response) => {
@@ -50,7 +52,7 @@ export function NotificationList() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   function handleClick(notification: Notification) {
     if (notification.readAt) return;
@@ -77,7 +79,12 @@ export function NotificationList() {
   }
 
   if (status === 'error') {
-    return <ErrorState message={NOTIFICATIONS_TERMS.loadError} />;
+    return (
+      <ErrorState
+        message={NOTIFICATIONS_TERMS.loadError}
+        onRetry={() => setAttempt((n) => n + 1)}
+      />
+    );
   }
 
   if (items.length === 0) {

@@ -53,6 +53,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
@@ -67,6 +68,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
 
     reload()
       .then(() => {
@@ -87,7 +89,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [reload, loadAttempt]);
 
   function resetMessages() {
     setFormError(null);
@@ -218,7 +220,12 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   }
 
   if (status === 'error' || rideStatus === null) {
-    return <ErrorState message={RIDE_ROUTE_TERMS.loadError} />;
+    return (
+      <ErrorState
+        message={RIDE_ROUTE_TERMS.loadError}
+        onRetry={() => setLoadAttempt((n) => n + 1)}
+      />
+    );
   }
 
   const isDraft = rideStatus === 'draft';
