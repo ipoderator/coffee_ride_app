@@ -24,6 +24,10 @@ import {
   encodeCursor,
 } from '../../lib/cursor.js';
 import { toPublicRide } from '../rides/rides.service.js';
+import {
+  createRegistrationConfirmedNotification,
+  type NotificationLogger,
+} from '../notifications/notifications.service.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -452,9 +456,18 @@ export async function listMyRegistrations(
  * (`registrations_ride_id_user_id_active_unique`) is the invariant backstop per
  * `.claude/rules/database.md`, not a path this code needs to catch a constraint
  * violation for.
+ *
+ * CR-038 ("Registration confirmation", `.claude/context/current-task.md`): once
+ * the transaction above has committed, creates a `registration_confirmed`
+ * notification for the new registrant — never inside the transaction itself
+ * (`.claude/rules/resilience.md`: a non-critical side effect must never be able to
+ * fail or roll back the critical action). A notification failure is logged and
+ * swallowed by {@link createRegistrationConfirmedNotification} itself; this
+ * function's own return value is unaffected either way.
  */
 export async function createRegistration(
   db: DbClient,
+  logger: NotificationLogger,
   userId: string,
   rideId: string,
 ): Promise<Registration> {
@@ -517,6 +530,8 @@ export async function createRegistration(
     return row;
   });
 
+  await createRegistrationConfirmedNotification(db, logger, userId, rideId);
+
   return toRegistration(inserted);
 }
 
@@ -532,13 +547,19 @@ export async function createRegistration(
  * makes "waitlist consistency" atomic with the cancellation that caused it
  * (`.claude/rules/database.md`/`.claude/rules/resilience.md`), not a separate step
  * that could observe a stale state.
+ *
+ * CR-038 ("Registration confirmation"): a waitlist promotion is "you are now
+ * registered" too, so it fires the same `registration_confirmed` notification —
+ * after the transaction commits, same reasoning as {@link createRegistration}'s
+ * own doc comment.
  */
 export async function cancelRegistration(
   db: DbClient,
+  logger: NotificationLogger,
   userId: string,
   rideId: string,
 ): Promise<void> {
-  await db.transaction(async (tx) => {
+  const promotedUserId = await db.transaction(async (tx) => {
     // Locks the same row `createRegistration`/`joinWaitlist` lock, so a concurrent
     // join/register for this ride can't race with the promotion below.
     await tx
@@ -598,7 +619,17 @@ export async function cancelRegistration(
         status: 'active',
       });
     }
+    return oldestWaiting?.userId ?? null;
   });
+
+  if (promotedUserId) {
+    await createRegistrationConfirmedNotification(
+      db,
+      logger,
+      promotedUserId,
+      rideId,
+    );
+  }
 }
 
 /**

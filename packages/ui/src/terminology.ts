@@ -186,6 +186,8 @@ export const CABINET_TERMS = {
   profileNavLabel: 'Профиль',
   // CR-091 ("My registrations"): the participant cabinet's second nav entry.
   myRegistrationsNavLabel: 'Мои регистрации',
+  // CR-041 ("In-app notifications"): the participant cabinet's third nav entry.
+  notificationsNavLabel: 'Уведомления',
   // CR-014: the organizer cabinet's one nav entry so far, and the CTA on the
   // participant cabinet home that's currently the only way to reach it
   // (`/organizer` itself has no dashboard content yet — CR-015).
@@ -353,6 +355,8 @@ export const RIDE_EDIT_TERMS = {
   // CR-037 ("Organizer participant list"): link into
   // `/organizer/rides/[id]/participants`.
   participantsLink: 'Участники →',
+  // CR-039 ("Ride updates"): link into `/organizer/rides/[id]/updates`.
+  updatesLink: 'Обновления →',
   notEditable: 'Редактировать можно только черновик заезда.',
   save: 'Сохранить',
   savePending: 'Сохранение…',
@@ -614,4 +618,42 @@ export const MY_REGISTRATIONS_TERMS = {
   emptyPastTitle: 'Пока нет прошедших заездов',
   emptyPastDescription:
     'Здесь появятся заезды, в которых вы уже приняли участие.',
+} as const;
+
+/**
+ * `/organizer/rides/[id]/updates` (CR-039, `docs/design.md` §8 "Ride updates
+ * composer", §9's `UpdateComposer`). No edit/delete of a sent update — only
+ * compose + history (`.claude/context/current-task.md`'s scope decision).
+ */
+export const RIDE_UPDATES_TERMS = {
+  pageTitle: 'Обновления заезда',
+  backToEdit: 'К редактированию заезда',
+  messageLabel: 'Сообщение участникам',
+  messagePlaceholder: 'Например: старт перенесён на 9:00.',
+  send: 'Отправить',
+  sendPending: 'Отправка…',
+  sendSuccess: 'Обновление отправлено участникам.',
+  historyTitle: 'История обновлений',
+  historyLoadError:
+    'Не удалось загрузить историю обновлений. Попробуйте ещё раз.',
+  historyEmptyTitle: 'Обновлений пока нет',
+  historyEmptyDescription: 'Отправленные участникам сообщения появятся здесь.',
+} as const;
+
+/**
+ * `/me/notifications` (CR-041, `docs/design.md` §8 "In-app notifications").
+ * Per-type label shown above the ride title (`.claude/context/current-task.md`:
+ * no unread-count badge, no bulk "mark all read" in this ticket — click a card to
+ * mark it read).
+ */
+export const NOTIFICATIONS_TERMS = {
+  pageTitle: 'Уведомления',
+  loadError: 'Не удалось загрузить уведомления. Попробуйте ещё раз.',
+  emptyTitle: 'Пока нет уведомлений',
+  emptyDescription:
+    'Здесь будут появляться подтверждения регистрации, обновления и отмены заездов.',
+  registrationConfirmedLabel: 'Регистрация подтверждена',
+  rideUpdateLabel: 'Обновление по заезду',
+  rideCancelledLabel: 'Заезд отменён',
+  unreadLabel: 'Новое',
 } as const;

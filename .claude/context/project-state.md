@@ -11,11 +11,14 @@ lifecycle (`draft → published → registration_open → registration_closed �
 finished`, plus `cancelled`) implemented end to end; public discovery with filters and
 a map view; GPX route upload/rendering/distance-elevation reconciliation; named
 organizer-curated stops; typed organizer-placed route points (map pins). Route section
-of `docs/tasks.md` is fully complete. Registration section is now fully complete too:
+of `docs/tasks.md` is fully complete. Registration section is fully complete:
 register/cancel/capacity/duplicate-protection (CR-032..035), waitlist with
 auto-promotion (CR-036), organizer participant/waitlist list (CR-037), and
-participant-facing "My registrations" (CR-091) all done. Communication (CR-038..041)
-is next.
+participant-facing "My registrations" (CR-091). Communication section is now fully
+complete too: registration-confirmation/waitlist-promotion notifications (CR-038),
+organizer ride updates with fan-out (CR-039), ride-cancellation fan-out (CR-040), and
+the participant-facing in-app inbox (CR-041). Post-ride (CR-042 Review, CR-043
+Organizer rating summary) is next.
 
 ## Current task
 
@@ -33,18 +36,22 @@ Claude's project memory).
 
 **apps/web**: Next.js 15 + React 19 + TS 6.0.3, Tailwind v4 + shadcn/ui, real design
 tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Screens:
-`/register`, `/login`, `/me` + `/me/profile` + `/me/rides`, `/organizer` (dashboard) +
-`/organizer/profile` + `/organizer/rides` (list/new/[id]/edit/[id]/route/[id]/
-participants), `/` (public discovery — list/map toggle, bicycleType filter,
-upcoming-only sort) and `/rides/[id]` (public ride detail, incl. elevation profile,
-stops, and a `RegistrationButton` — register/cancel/join-or-leave-waitlist states,
-redirects to `/login` on 401). `/organizer/rides/[id]/participants` (CR-037):
-`ParticipantTable`/`WaitlistTable`, linked from `EditRideForm`. `/me/rides` (CR-091):
-`MyRidesView`, Upcoming/Past tabs, read-only (links out to `/rides/[id]` for
-cancellation). Cabinet shell + nav/widget registries (ADR-009) exist for both
-organizer and participant sides — participant now has two entries (profile, my
-registrations), organizer still has one, no feature-flag support yet (CR-054
-generalizes this).
+`/register`, `/login`, `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
+`/organizer` (dashboard) + `/organizer/profile` + `/organizer/rides`
+(list/new/[id]/edit/[id]/route/[id]/participants/[id]/updates), `/` (public
+discovery — list/map toggle, bicycleType filter, upcoming-only sort) and
+`/rides/[id]` (public ride detail, incl. elevation profile, stops, and a
+`RegistrationButton` — register/cancel/join-or-leave-waitlist states, redirects to
+`/login` on 401). `/organizer/rides/[id]/participants` (CR-037):
+`ParticipantTable`/`WaitlistTable`, linked from `EditRideForm`. `/me/rides`
+(CR-091): `MyRidesView`, Upcoming/Past tabs, read-only (links out to `/rides/[id]`
+for cancellation). `/organizer/rides/[id]/updates` (CR-039): `UpdateComposer` —
+compose form + read-only history, linked from `EditRideForm`. `/me/notifications`
+(CR-041): `NotificationList`, one page newest-first, click an unread card to mark
+it read and open its ride, no unread-count badge. Cabinet shell + nav/widget
+registries (ADR-009) exist for both organizer and participant sides — participant
+now has three entries (profile, my registrations, notifications), organizer still
+has one, no feature-flag support yet (CR-054 generalizes this).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). Capability modules: `auth` (register/verify-email/login/logout/me,
@@ -65,12 +72,20 @@ participants`/`.../waitlist` (CR-037) — organizer-only, cursor-paginated, own 
 `RideParticipantSummary` shape with no phone/email; `GET /v1/registrations/mine`
 (CR-091) — the caller's own active registrations, two independently cursor-paginated
 `?when=upcoming|past` tabs, joined with each ride's public+organizer summary, own
-`/v1/registrations` URL prefix). Auth endpoints are rate-limited in-memory only
-(KI-014 — no live Redis yet).
+`/v1/registrations` URL prefix), `notifications` (its own capability module, CR-038..041:
+`POST`/`GET /v1/rides/:id/updates` — organizer-only, sharing the `/rides` prefix,
+fans out a `ride_update` notification to every active registrant; `GET
+/v1/notifications/mine` + `POST /v1/notifications/:id/read` under their own
+`/notifications` prefix; a `registration_confirmed` notification also fires from
+`registrations`'s `createRegistration`/waitlist-promotion, and a `ride_cancelled`
+fan-out fires from `rides`'s `cancelRide` — every producer inserts directly into
+`notifications` in the same request, right after its own transaction commits, log-
+and-swallow on failure, not a Redis queue yet, KI-040/CR-050). Auth endpoints are
+rate-limited in-memory only (KI-014 — no live Redis yet).
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
 `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`,
-`registrations`, `waitlist_entries`.
+`registrations`, `waitlist_entries`, `ride_updates`, `notifications`.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -97,8 +112,9 @@ None.
 
 ## Next
 
-`docs/tasks.md` Registration section is now fully complete (CR-032..037, CR-091).
-Communication (CR-038..041) is next.
+`docs/tasks.md` Registration section (CR-032..037, CR-091) and Communication
+section (CR-038..041) are both now fully complete. Post-ride (CR-042 Review,
+CR-043 Organizer rating summary) is next.
 
 ## Important decisions
 
@@ -146,11 +162,12 @@ items:
   KI-031). No geocode-by-address UI (KI-032); a ride's finish point has no coordinates
   (KI-033); route points have no participant-facing UI yet, API + organizer management
   only, pending real map rendering (KI-036).
-- No participant-facing "My registrations" list yet (`/me/rides`) — a participant can
-  still see/cancel a registration via the specific ride's `/rides/[id]` page (KI-037,
-  tracked as CR-091).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
   no in-app recovery path (KI-026).
+- Notification delivery (CR-038..041) is a same-request DB insert right after the
+  triggering transaction commits, not a queued async job — an accepted interim
+  posture, not a regression, since in-app notifications are a same-database insert,
+  not an external-provider call (KI-040, upgrade path is CR-050).
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
   are deferred, no design-doc backing yet (KI-030).
 - Provisional/deferred: `RideService`/registration-state terminology keys pending a
@@ -176,4 +193,4 @@ items:
 
 ## Last updated
 
-2026-09-16 (CR-091)
+2026-09-16 (CR-038/039/040/041)

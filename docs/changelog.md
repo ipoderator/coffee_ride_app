@@ -2621,3 +2621,108 @@ Known limitations: none new. `docs/tasks.md`'s Registration section (CR-032..037
 CR-091) is now fully complete — Communication (CR-038..041) is next.
 
 Follow-up: none specific to this ticket.
+
+## 2026-09-16 — CR-038/039/040/041 — Communication (registration confirmation, ride updates, cancellation notification, in-app notifications)
+
+Summary: closed `docs/tasks.md`'s Communication section in one bundle — three
+notification producers feeding one consumer, same "bundle a table's producers and
+consumer together" precedent CR-032..035 set for registration. ADR-007
+(Notifications, Pending) says "start with in-app notifications; external provider
+later behind an adapter" — this is that starting point, no email/push anywhere in
+this ticket.
+
+Two new tables: `ride_updates` (tenth domain table — `rideId`, `message`,
+`createdAt`, `updatedBy`; no edit/delete, only create + list) and `notifications`
+(eleventh — `userId`/`rideId`/`rideUpdateId` (nullable, only for `type =
+'ride_update'`)/`type` (`registration_confirmed`/`ride_update`/`ride_cancelled`
+pg enum)/`createdAt`/`readAt`). A CHECK constraint enforces `rideUpdateId`
+non-null iff `type = 'ride_update'`.
+
+New `apps/api` capability module, `modules/notifications/`
+(`.claude/rules/architecture.md`'s feature-boundary list already named
+`notifications`): `createRegistrationConfirmedNotification` (CR-038, called from
+`registrations.service.ts`'s `createRegistration` and from `cancelRegistration`'s
+waitlist-promotion branch — a waitlist promotion is "you are now registered" too,
+reusing the same notification type rather than inventing a fourth one),
+`createRideUpdate`/`listRideUpdates` (CR-039, organizer-only,
+`POST`/`GET /v1/rides/:id/updates`, sharing the `/rides` prefix the same way
+`registrationsRoutes` already does), `notifyRideCancelled` (CR-040, called from
+`rides.service.ts`'s `cancelRide`), `listMyNotifications`/`markNotificationRead`
+(CR-041, `GET /v1/notifications/mine` + `POST /v1/notifications/:id/read`, own
+`/notifications` prefix — same "no single-ride parent" reasoning
+`myRegistrationsRoutes` already used). Every fan-out is scoped to active
+registrations only, not waitlist entries — same precedent CR-037/CR-091 already
+established for "the participant list."
+
+Delivery mechanism, a deliberate scope decision: a plain DB insert, in the same
+request, immediately after (never inside) the triggering transaction — not a
+Redis queue. `.claude/rules/resilience.md` names Redis for decoupling notification
+delivery, but that's CR-050 ("Async notification delivery via Redis queue"), a
+distinct, still-open backlog item, and Redis has never been live-verified in this
+environment (KI-014). In-app notifications are a same-database insert, not a call
+to an external provider, so the resilience property that actually matters today —
+"never let this side effect fail or roll back the critical action" — is satisfied
+by wrapping every notification insert in `try`/`catch` (logged via
+`request.log.error`, never rethrown): a notification failure can never lose a
+registration/cancellation/update. Recorded as an accepted interim posture, new
+KI-040, pointing at CR-050 as the upgrade path.
+
+`apps/web` gained `features/organizer/updates/` (`UpdateComposer` — compose form +
+read-only history, `docs/design.md` §9's named component) and
+`/organizer/rides/[id]/updates`, linked from `EditRideForm` via a new
+"Обновления →" link (same row as "Маршрут →"/"Участники →"). Also gained
+`features/participant/notifications/` (`NotificationList` — one page, newest
+first, no unread-count badge or bulk "mark all read" in this ticket; clicking an
+unread card marks it read, fire-and-forget, and links into the ride) and
+`/me/notifications`, the participant cabinet's third nav entry.
+
+Validation: `turbo run lint typecheck test` — 19/19 tasks green (`apps/api` 242
+tests, +16 new; `apps/web` 147 tests, +11 new; `packages/ui` 85 tests
+unchanged). `NODE_ENV=production turbo run build` — all 6 build tasks pass, both
+new routes (`/me/notifications`, `/organizer/rides/[id]/updates`) present in
+`web:build`'s route list. Live-verified via curl against a real Postgres +
+running `apps/api`: registering created a `registration_confirmed` notification;
+a waitlist auto-promotion notified the promoted user, not the cancelling one;
+an organizer's update fanned out to the one active registrant with the correct
+message/ride title; cancelling the ride fanned out `ride_cancelled` to the same
+registrant; marking a notification read was idempotent (same `readAt` on a
+second call); a stranger got `404 notification_not_found` trying to mark someone
+else's notification read. All scratch data (rides/organizer profile/users)
+deleted from the DB afterward, confirmed by a direct count query.
+
+Files: `packages/db/src/schema/{ride-update,notification}.ts` + migration
+`0011_silent_cyclops.sql`; `packages/types/src/domain/{ride-update,
+notification}.ts`, `packages/types/src/api/notifications.ts`;
+`apps/api/src/modules/notifications/` (new: `notifications.service.ts`,
+`notifications.routes.ts`, `notification-response.schema.ts`,
+`notifications.routes.test.ts`); `apps/api/src/modules/registrations/
+registrations.service.ts` (notification calls added to `createRegistration`/
+`cancelRegistration`, both gained a `logger` parameter);
+`apps/api/src/modules/rides/rides.service.ts` (`cancelRide` gained a `logger`
+parameter + the cancellation fan-out call); `apps/api/src/routes/v1.ts`
+(registers the two new plugins); `apps/web/src/features/organizer/updates/` (new);
+`apps/web/src/app/organizer/rides/[id]/updates/page.tsx` (new);
+`apps/web/src/features/organizer/rides/components/EditRideForm.tsx` (new link);
+`apps/web/src/features/participant/notifications/` (new);
+`apps/web/src/app/me/notifications/page.tsx` (new);
+`apps/web/src/lib/cabinet/participant-nav.ts` (registers the new nav item);
+`packages/ui/src/terminology.ts` (`RIDE_UPDATES_TERMS`, `NOTIFICATIONS_TERMS`,
+`RIDE_EDIT_TERMS.updatesLink`, `CABINET_TERMS.notificationsNavLabel`);
+`docs/{api,tasks}.md`; `.claude/context/known-issues.md` (new KI-040).
+
+Decisions: none new at the ADR level — ADR-007 stays Pending (in-app now,
+external-provider adapter later, per its own text); the delivery-mechanism call
+above is a scope decision recorded in `.claude/context/current-task.md` and
+KI-040, not an ADR (it doesn't change the fixed stack or an accepted
+architectural boundary).
+
+Known limitations: KI-040 (notification delivery is a same-request insert, not a
+queued job — see above). No unread-count badge anywhere in the UI (no design-doc
+spec for one). `docs/tasks.md`'s Communication section (CR-038..041) is now fully
+complete — Post-ride (CR-042 Review, CR-043 Organizer rating summary) is next.
+
+Follow-up: CR-050 should replace the direct-insert step in
+`apps/api/src/modules/notifications/notifications.service.ts`'s three producers
+with a real Redis-backed enqueue, once that queue exists and Redis is
+live-verified (KI-014) — the `NotificationLogger`-based `try`/`catch` shape is
+the seam to swap, not a producer rewrite.

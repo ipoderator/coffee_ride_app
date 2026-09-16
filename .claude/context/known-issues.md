@@ -525,6 +525,43 @@ Next action: none required — this is a shell/invocation-order gotcha, not a bu
 pass: don't reuse a `source .env`'d shell for both `apps/api` DB work and `apps/web`
 builds without overriding `NODE_ENV` for the latter.
 
+### KI-040 — Notification delivery is a same-request DB insert, not a queued async job
+
+Status: open — accepted interim posture, not a regression. Discovered: 2026-09-16
+(CR-038/039/040/041, "Communication" session).
+Problem: `.claude/rules/resilience.md` says notification delivery "must run
+outside the request/response cycle and outside the critical transaction" and
+names Redis as the mechanism ("the side effect is queued (Redis) and processed
+separately"). CR-050 ("Async notification delivery via Redis queue") is the
+backlog ticket that actually builds that queue, and it is still open; Redis has
+never been live-verified in this environment either (KI-014). This session's
+three notification producers (`registration_confirmed` on register/promotion,
+`ride_update` fan-out, `ride_cancelled` fan-out) instead insert directly into the
+`notifications` table, in the same request, immediately after (never inside) the
+triggering transaction — wrapped in `try`/`catch` so a failure is logged
+(`request.log.error`) and swallowed, never surfacing as a failure of the
+registration/update/cancellation endpoint that triggered it
+(`.claude/context/current-task.md`'s scope decision).
+Impact: low today — in-app notifications are a same-database insert, not a call
+to an external provider (ADR-007 is explicit that the external-provider adapter
+is a later step), so the specific resilience property that matters right now
+("never let this side effect fail or roll back the critical action") is already
+satisfied. What's missing is decoupling from the request/response cycle itself: a
+slow or failing `notifications` insert still adds latency to the triggering
+request (though it can never fail it), and a `ride_update`/`ride_cancelled`
+fan-out to many registrants is one bulk multi-row insert per request rather than
+individually-retryable queued jobs.
+Workaround: none needed for correctness — every producer's own transaction
+already committed before the notification insert runs, so a notification failure
+never loses the registration/cancellation/update itself, only the notification
+row.
+Next action: when CR-050 builds the real Redis-backed queue, move all three
+producers' notification-insert step onto it instead of the direct in-request
+insert — the `NotificationLogger`-based `try`/`catch` shape in
+`apps/api/src/modules/notifications/notifications.service.ts` is the seam to
+replace (enqueue instead of insert directly), not a rewrite of the producers
+themselves.
+
 ---
 
 ## Resolved

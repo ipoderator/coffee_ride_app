@@ -35,6 +35,10 @@ import {
   toWaitlistEntry,
 } from '../registrations/registrations.service.js';
 import {
+  notifyRideCancelled,
+  type NotificationLogger,
+} from '../notifications/notifications.service.js';
+import {
   CursorError,
   clampLimit,
   decodeCursor,
@@ -903,9 +907,16 @@ const CANCELLABLE_STATUSES = [
  * (404 `ride_not_found` either way), no `emailVerified` gate (same reasoning as
  * {@link openRegistration}/{@link closeRegistration} — only `publish` is named by
  * `.claude/rules/security.md`).
+ *
+ * CR-040 ("Cancellation notification", `.claude/context/current-task.md`): once
+ * the status update below has committed, fans out a `ride_cancelled` notification
+ * to everyone who was actively registered at cancellation time — never inside the
+ * same statement/transaction as the status change itself
+ * (`.claude/rules/resilience.md`).
  */
 export async function cancelRide(
   db: DbClient,
+  logger: NotificationLogger,
   userId: string,
   rideId: string,
 ): Promise<Ride> {
@@ -938,6 +949,9 @@ export async function cancelRide(
   if (!updated) {
     throw new Error('Ride update returned no row.');
   }
+
+  await notifyRideCancelled(db, logger, rideId);
+
   return toPublicRide(updated);
 }
 

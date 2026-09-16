@@ -1,5 +1,6 @@
 import { profileNavItem } from '@/features/participant/profile/nav';
 import { myRegistrationsNavItem } from '@/features/participant/my-rides/nav';
+import { notificationsNavItem } from '@/features/participant/notifications/nav';
 import type { CabinetNavItem } from './types';
 
 // ADR-009 registry (`.claude/rules/extensibility.md`): a future participant
@@ -9,4 +10,5 @@ import type { CabinetNavItem } from './types';
 export const PARTICIPANT_NAV_ITEMS: CabinetNavItem[] = [
   profileNavItem,
   myRegistrationsNavItem,
+  notificationsNavItem,
 ].sort((a, b) => a.order - b.order);

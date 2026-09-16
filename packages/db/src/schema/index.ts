@@ -20,3 +20,5 @@ export * from './stop.js';
 export * from './route-point.js';
 export * from './registration.js';
 export * from './waitlist-entry.js';
+export * from './ride-update.js';
+export * from './notification.js';

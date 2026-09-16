@@ -403,8 +403,58 @@ this array yet — see `docs/database.md`'s `RoutePoint` entry and KI-036.
 
 ## Updates
 
-POST `/v1/rides/:id/updates`
-GET `/v1/rides/:id/updates` — collection, paginated
+POST `/v1/rides/:id/updates` — **implemented (CR-039, "Ride updates")**. Requires a
+valid session cookie (`401` otherwise) and organizer ownership of the ride: `404
+ride_not_found` both when the id doesn't exist and when it belongs to a different
+organizer (same rule as `GET /v1/rides/:id/participants`). No ride-status gate
+beyond ownership — sending an update on a ride with no active registrants yet is
+harmless (zero notifications created), not an error. Body: `{ message }` (1-2000
+chars). `201` → `{ rideUpdate }` (`RideUpdate`: `id`/`rideId`/`message`/
+`createdAt`). Fans out a `ride_update` notification (see Notifications below) to
+every currently-active registrant, after the `RideUpdate` row has already been
+inserted — never inside the same transaction (`.claude/rules/resilience.md`); a
+fan-out failure is logged and never turns this endpoint's response into an error.
+
+GET `/v1/rides/:id/updates` — **implemented (CR-039)**. Organizer-only, same
+ownership rule as `POST`. `200` → `{ items: RideUpdate[], nextCursor }`, newest
+first. Collection, paginated per ADR-011.
+
+## Notifications
+
+GET `/v1/notifications/mine` — **implemented (CR-041, "In-app notifications")**.
+Requires a valid session cookie (`401` otherwise). Own `/notifications` prefix, not
+nested under `/rides` — same reasoning as `GET /v1/registrations/mine` (no
+single-ride parent). The caller's own notifications only, newest first — no filter
+dimension of its own (unlike `/registrations/mine`'s required `when`). `200` →
+`{ items: Notification[], nextCursor }`. Each item: `{ id, userId, type, ride: {
+id, title }, message, createdAt, readAt }` — `type` is one of
+`registration_confirmed` / `ride_update` / `ride_cancelled`; `message` is the
+originating `RideUpdate.message` text for `ride_update`, `null` otherwise;
+`readAt` is `null` until marked read. Collection, paginated per ADR-011.
+
+POST `/v1/notifications/:id/read` — **implemented (CR-041)**. Requires a valid
+session cookie. `404 notification_not_found` if the id doesn't exist or belongs to
+someone else (identity from the session only). Idempotent — re-marking an
+already-read notification keeps its original `readAt`. `200` → `{ notification }`.
+
+Notifications are created (never returned by any endpoint other than the two
+above) by three producers, all in-app-only for now (ADR-007 is Pending — no
+email/push in this ticket):
+
+- `POST /v1/rides/:id/register` (CR-032) and a waitlist auto-promotion inside
+  `DELETE /v1/rides/:id/register` (CR-036) each create one
+  `registration_confirmed` notification for the newly-registered user, after
+  their own transaction has already committed.
+- `POST /v1/rides/:id/updates` (CR-039, above) fans out one `ride_update`
+  notification per currently-active registrant.
+- `POST /v1/rides/:id/cancel` (CR-021) fans out one `ride_cancelled` notification
+  per registrant who was actively registered at cancellation time.
+
+Every producer inserts directly into the `notifications` table in the same
+request, after its own critical transaction commits — not a Redis queue. See
+`.claude/context/known-issues.md` for why this is an accepted interim posture
+(CR-050 is the ticket that would change it) rather than the full
+`.claude/rules/resilience.md` async-queue pattern.
 
 ## Reviews
 

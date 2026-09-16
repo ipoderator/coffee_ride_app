@@ -8,6 +8,10 @@ import {
   myRegistrationsRoutes,
   registrationsRoutes,
 } from '../modules/registrations/registrations.routes.js';
+import {
+  myNotificationsRoutes,
+  rideUpdatesRoutes,
+} from '../modules/notifications/notifications.routes.js';
 import { registerCsrf } from '../plugins/csrf.js';
 
 // Versioned root (ADR-011): every product endpoint lives under /v1. Future
@@ -38,4 +42,10 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   // capability module, mounted at its own prefix — see `myRegistrationsRoutes`'s own
   // doc comment for why it can't nest under `/rides`.
   await app.register(myRegistrationsRoutes, { prefix: '/registrations' });
+  // CR-039 ("Ride updates"): a third plugin sharing the `/rides` prefix, own
+  // `notifications` capability module (`.claude/context/current-task.md`).
+  await app.register(rideUpdatesRoutes, { prefix: '/rides' });
+  // CR-041 ("In-app notifications"): same capability module, own prefix — no
+  // single-ride parent, same reasoning as `myRegistrationsRoutes`.
+  await app.register(myNotificationsRoutes, { prefix: '/notifications' });
 };

@@ -413,6 +413,12 @@ export function EditRideForm({ rideId }: { rideId: string }) {
           >
             {RIDE_EDIT_TERMS.participantsLink}
           </Link>
+          <Link
+            href={`/organizer/rides/${rideId}/updates`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_EDIT_TERMS.updatesLink}
+          </Link>
         </div>
 
         {!isDraft && (

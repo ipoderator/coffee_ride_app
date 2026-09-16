@@ -477,6 +477,42 @@ feature-local, not a reuse of discovery's own `RideCard` per
 `.claude/rules/extensibility.md`) and `/me/rides`; the participant cabinet nav
 registry now has two entries instead of one.
 
+CR-038/039/040/041 ("Communication", 2026-09-16): `packages/db` gained its tenth
+and eleventh tables, `ride_updates` (`rideId` FK → `rides` `ON DELETE CASCADE`,
+`message`, `createdAt`, `updatedBy` — no edit/delete, only create + list) and
+`notifications` (`userId`/`rideId` FKs cascade, `rideUpdateId` nullable FK →
+`ride_updates` cascade, a `notification_type` pg enum
+`registration_confirmed`/`ride_update`/`ride_cancelled`, `createdAt`, `readAt`
+nullable — a CHECK enforces `rideUpdateId` non-null iff `type = 'ride_update'`).
+`apps/api` gained its **first `notifications` capability module**
+(`.claude/rules/architecture.md`'s feature-boundary list already named it):
+`createRegistrationConfirmedNotification` (called from `registrations.service.ts`'s
+`createRegistration` and from `cancelRegistration`'s waitlist-promotion branch),
+`createRideUpdate`/`listRideUpdates` (`POST`/`GET /v1/rides/:id/updates`,
+organizer-only, sharing the `/rides` prefix the same way `registrationsRoutes`
+already does — a fourth plugin on that prefix), `notifyRideCancelled` (called
+from `rides.service.ts`'s `cancelRide`), `listMyNotifications`/
+`markNotificationRead` (`GET /v1/notifications/mine` + `POST
+/v1/notifications/:id/read`, own `/notifications` prefix). One-directional
+dependency, no new import cycle: `registrations.service.ts`/`rides.service.ts`
+import from `notifications.service.ts` for the producer calls, while
+`notifications.service.ts` itself imports only the `registrations`/`rides`
+**schema tables** (not their service functions) for its own fan-out queries —
+unlike the pre-existing `rides.service.ts` ⇄ `registrations.service.ts` cycle
+(CR-091's changelog entry explains that one), `notifications` never calls back
+into either. Every notification producer inserts directly into `notifications` in
+the same request, immediately after (never inside) its own triggering
+transaction, wrapped in `try`/`catch` (`NotificationLogger`, effectively
+`app.log`) — a deliberate, documented departure from
+`.claude/rules/resilience.md`'s literal "queue it via Redis" wording, since a
+same-database insert isn't an external-integration call and Redis-backed queuing
+is CR-050's separate, still-open scope (KI-040). `apps/web` gained
+`features/organizer/updates/` (`UpdateComposer` — compose + read-only history)
+and `/organizer/rides/[id]/updates`, linked from `EditRideForm`; and
+`features/participant/notifications/` (`NotificationList` — one page, newest
+first, click-to-read) and `/me/notifications`, the participant cabinet's third
+nav entry.
+
 ## Target structure
 
 apps/

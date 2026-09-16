@@ -323,10 +323,22 @@ rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
 
 ## Communication
 
-- [ ] CR-038 Registration confirmation
-- [ ] CR-039 Ride updates
-- [ ] CR-040 Cancellation notification
-- [ ] CR-041 In-app notifications
+- [x] CR-038 Registration confirmation — a `registration_confirmed` notification
+      is created for the registrant on `POST /v1/rides/:id/register` and on a
+      waitlist auto-promotion inside `DELETE /v1/rides/:id/register`, after each
+      one's own transaction commits.
+- [x] CR-039 Ride updates — `RideUpdate` table + `POST`/`GET /v1/rides/:id/updates`
+      (organizer-only), fanning out a `ride_update` notification to every
+      currently-active registrant. `/organizer/rides/[id]/updates` (compose +
+      history).
+- [x] CR-040 Cancellation notification — `POST /v1/rides/:id/cancel` fans out a
+      `ride_cancelled` notification to everyone actively registered at
+      cancellation time.
+- [x] CR-041 In-app notifications — `Notification` table,
+      `GET /v1/notifications/mine` + `POST /v1/notifications/:id/read`, `/me/
+    notifications` (third participant cabinet nav entry). ADR-007 (Pending):
+      in-app only, no email/push. Delivery is a same-request DB insert after the
+      triggering transaction, not a Redis queue — see KI-040/CR-050.
 
 ## Post-ride
 
