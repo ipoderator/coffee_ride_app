@@ -1,8 +1,10 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import {
+  forgotPasswordRequestSchema,
   loginRequestSchema,
   registerRequestSchema,
+  resetPasswordRequestSchema,
   verifyEmailRequestSchema,
 } from 'types';
 import type { Env } from '../../env.js';
@@ -11,6 +13,8 @@ import { userResponseSchema } from '../users/user-response.schema.js';
 import {
   loginUser,
   registerUser,
+  requestPasswordReset,
+  resetPassword,
   toPublicUser,
   verifyEmail,
 } from './auth.service.js';
@@ -32,6 +36,10 @@ const verifyEmailResponseSchema = z.object({
 });
 
 const loginResponseSchema = z.object({
+  user: userResponseSchema,
+});
+
+const resetPasswordResponseSchema = z.object({
   user: userResponseSchema,
 });
 
@@ -136,6 +144,41 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         expires: session.expiresAt,
       });
 
+      return reply.status(200).send({ user });
+    },
+  );
+
+  app.post(
+    '/forgot-password',
+    {
+      schema: { body: forgotPasswordRequestSchema },
+      config: { rateLimit: AUTH_RATE_LIMIT },
+    },
+    async (request, reply) => {
+      // Result is deliberately discarded — `.claude/rules/security.md`: the
+      // response must be identical whether or not the email belongs to a
+      // real account. `204` carries no body, so there is nothing for the two
+      // cases to differ on.
+      await requestPasswordReset(app.db, request.body.email);
+      return reply.status(204).send();
+    },
+  );
+
+  app.post(
+    '/reset-password',
+    {
+      schema: {
+        body: resetPasswordRequestSchema,
+        response: { 200: resetPasswordResponseSchema },
+      },
+      config: { rateLimit: AUTH_RATE_LIMIT },
+    },
+    async (request, reply) => {
+      const user = await resetPassword(
+        app.db,
+        request.body.token,
+        request.body.password,
+      );
       return reply.status(200).send({ user });
     },
   );

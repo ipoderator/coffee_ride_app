@@ -12,6 +12,7 @@
 //   constraints for required/bounded fields.
 export * from './user.js';
 export * from './email-verification-token.js';
+export * from './password-reset-token.js';
 export * from './session.js';
 export * from './organizer-profile.js';
 export * from './ride.js';

@@ -1,10 +1,16 @@
-import { eq } from 'drizzle-orm';
-import { emailVerificationTokens, users } from 'db/schema';
+import { and, eq, isNull } from 'drizzle-orm';
+import {
+  emailVerificationTokens,
+  passwordResetTokens,
+  sessions,
+  users,
+} from 'db/schema';
 import type { DbClient } from 'db';
 import type { User } from 'types';
 import { hashPassword, verifyPassword } from './password.js';
 import {
   EMAIL_VERIFICATION_TOKEN_TTL_MS,
+  PASSWORD_RESET_TOKEN_TTL_MS,
   generateVerificationToken,
   hashToken,
 } from './tokens.js';
@@ -225,6 +231,132 @@ export async function loginUser(
   }
 
   return toPublicUser(row);
+}
+
+export interface RequestPasswordResetResult {
+  userFound: boolean;
+  // Only set when `userFound` is true. The route layer (`auth.routes.ts`)
+  // must NEVER let this reach an HTTP response — `POST
+  // /v1/auth/forgot-password` returns the identical `204` regardless of this
+  // value (`.claude/rules/security.md`: no account enumeration). Exposed here
+  // only so tests can drive the reset flow without an email-delivery channel
+  // (ADR-007, still Pending) — same reasoning as `registerUser`'s
+  // `verificationToken`, minus the dev-only HTTP exposure that endpoint has.
+  resetToken?: string;
+}
+
+/**
+ * Always looks up the user and always returns promptly; branches only on
+ * whether to insert a token, never on anything the caller (the route) could
+ * turn into a response difference.
+ */
+export async function requestPasswordReset(
+  db: DbClient,
+  email: string,
+): Promise<RequestPasswordResetResult> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const [row] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, normalizedEmail))
+    .limit(1);
+
+  if (!row) {
+    return { userFound: false };
+  }
+
+  const rawToken = generateVerificationToken();
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+
+  await db.insert(passwordResetTokens).values({
+    userId: row.id,
+    tokenHash,
+    expiresAt,
+  });
+
+  return { userFound: true, resetToken: rawToken };
+}
+
+/**
+ * Validates a reset token and, on success, changes the password, consumes
+ * every other outstanding token for that user (a stale earlier link must not
+ * still work once a newer one has succeeded), and revokes every session for
+ * that user (`.claude/rules/security.md`: "a password change revokes every
+ * session of that user") — all inside one transaction.
+ */
+export async function resetPassword(
+  db: DbClient,
+  rawToken: string,
+  newPassword: string,
+): Promise<User> {
+  const tokenHash = hashToken(rawToken);
+
+  const [tokenRow] = await db
+    .select()
+    .from(passwordResetTokens)
+    .where(eq(passwordResetTokens.tokenHash, tokenHash))
+    .limit(1);
+
+  if (!tokenRow) {
+    throw new AuthServiceError(
+      'invalid_reset_token',
+      400,
+      'Invalid reset link',
+      'This password reset link is invalid.',
+    );
+  }
+  if (tokenRow.usedAt) {
+    throw new AuthServiceError(
+      'reset_token_already_used',
+      400,
+      'Reset link already used',
+      'This password reset link was already used.',
+    );
+  }
+  if (tokenRow.expiresAt.getTime() < Date.now()) {
+    throw new AuthServiceError(
+      'reset_token_expired',
+      400,
+      'Reset link expired',
+      'This password reset link has expired.',
+    );
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  const updatedUser = await db.transaction(async (tx) => {
+    const now = new Date();
+
+    const [updated] = await tx
+      .update(users)
+      .set({ passwordHash, updatedAt: now })
+      .where(eq(users.id, tokenRow.userId))
+      .returning();
+    if (!updated) {
+      throw new Error('User update returned no row.');
+    }
+
+    // Sweeps up `tokenRow` itself (still unused, per the check above) plus
+    // every other outstanding token for this user in one statement — no
+    // separate "mark this one" / "mark the rest" pair needed.
+    await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: now })
+      .where(
+        and(
+          eq(passwordResetTokens.userId, tokenRow.userId),
+          isNull(passwordResetTokens.usedAt),
+        ),
+      );
+
+    await tx.delete(sessions).where(eq(sessions.userId, tokenRow.userId));
+
+    return updated;
+  });
+
+  return toPublicUser(updatedUser);
 }
 
 // A real Argon2id hash of an arbitrary fixed value — used only as the

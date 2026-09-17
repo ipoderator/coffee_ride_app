@@ -16,6 +16,16 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   null means unused, single-use once set), `createdAt`. Not one of the fixed
   domain entities in `.claude/CLAUDE.md` — an auth implementation detail, not
   a product concept.
+- PasswordResetToken — one row per issued password-reset request for a User
+  (CR-060), same shape as EmailVerificationToken: `id`, `userId` (FK → User,
+  cascade delete), `tokenHash` (SHA-256 of the raw token — never persisted
+  raw), `expiresAt` (30 min, `timestamptz`), `usedAt` (nullable — single-use;
+  a successful reset also marks every other still-outstanding token for that
+  user as used), `createdAt`. Unlike EmailVerificationToken's dev-only
+  response field, the raw token here is never returned over HTTP in any
+  environment (`.claude/rules/security.md`'s no-account-enumeration
+  requirement on `POST /v1/auth/forgot-password`). Not a fixed domain
+  entity — an auth implementation detail.
 - Session — one row per active login (CR-012, ADR-013): `id`, `userId` (FK →
   User, cascade delete), `tokenHash` (SHA-256 of the opaque cookie token —
   same never-store-the-raw-value pattern as `EmailVerificationToken`),

@@ -48,3 +48,27 @@ export interface LoginResponse {
 export interface MeResponse {
   user: User;
 }
+
+// CR-060 (`.claude/rules/security.md`). Deliberately no `email` format
+// requirement stricter than register's — the endpoint must behave
+// identically whether or not the address belongs to a real account, so there
+// is nothing useful to reject beyond "is this shaped like an email."
+export const forgotPasswordRequestSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+
+// `POST /v1/auth/forgot-password` always returns `204 No Content` — no
+// body, so there is nothing that could differ between an existing and a
+// non-existent email (`.claude/context/current-task.md`). No response type
+// exported for it for that reason.
+
+export const resetPasswordRequestSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(12, 'Password must be at least 12 characters.'),
+});
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
+export interface ResetPasswordResponse {
+  user: User;
+}

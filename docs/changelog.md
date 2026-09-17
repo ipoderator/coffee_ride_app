@@ -3392,3 +3392,71 @@ Follow-up: this completes the Extensibility foundations section of
 `docs/tasks.md` (CR-053, CR-054, CR-055, CR-056 all done). Security
 foundations (CR-058 auth rate limiting, CR-060 password reset, CR-061
 security headers) is the next open section.
+
+## 2026-09-17 — CR-060 — Password reset flow
+
+Summary: `.claude/rules/security.md` requires single-use, time-limited
+password reset tokens with no account enumeration on the request endpoint;
+`docs/api.md` already named `POST /v1/auth/forgot-password`/`reset-password`
+with no body. This ticket implements both, mirroring CR-011's
+email-verification-token shape.
+Schema: new `password_reset_tokens` table (`packages/db`, migration
+`0013_useful_living_tribunal.sql`) — `id`, `userId` (FK → `users`, cascade),
+`tokenHash` (unique, SHA-256 of the raw token), `expiresAt` (30 min —
+top of security.md's 15–30 min range), `usedAt` (nullable, single-use),
+`createdAt`. Applied and verified against this environment's real local
+Postgres.
+API: `POST /v1/auth/forgot-password` — body `{ email }`, always `204` with no
+body regardless of whether the account exists, in every `NODE_ENV`. Real
+tension resolved deliberately: CR-011's `register` dev-only `verificationUrl`
+convenience (no email delivery yet, ADR-007 Pending) can't be reused here —
+exposing the reset link only when the account exists would make the response
+shape itself enumerable, exactly what this rule forbids. The service function
+(`requestPasswordReset`) still returns the raw token to its caller, but
+`auth.routes.ts` discards it unconditionally; tests and any manual/dev
+verification call the service function directly instead, the same way other
+behavior tests reach past the HTTP layer for a deliberately-hidden value.
+`POST /v1/auth/reset-password` — body `{ token, password }` (12+ chars, same
+policy as register), `200 { user }`; `400` with `invalid_reset_token` /
+`reset_token_already_used` / `reset_token_expired` as appropriate. On
+success, inside one transaction: updates `passwordHash`, marks every
+outstanding token for that user used (including but not limited to the one
+just consumed — a stale earlier link can't still work after a newer one
+succeeded), and deletes every `sessions` row for that user
+(`.claude/rules/security.md`: "a password change revokes every session of
+that user" — same hard-delete shape ADR-013 already uses for logout, no soft
+`revokedAt` path exists yet). Neither endpoint sets a session cookie; the
+caller logs in again with the new password. Both endpoints share the
+existing `AUTH_RATE_LIMIT` tier (5/min/IP).
+Files: `packages/db/src/schema/password-reset-token.ts` (new),
+`schema/index.ts`, `migrations/0013_useful_living_tribunal.sql`;
+`packages/types/src/api/auth.ts` (`forgotPasswordRequestSchema`,
+`resetPasswordRequestSchema`); `apps/api/src/modules/auth/tokens.ts`
+(`PASSWORD_RESET_TOKEN_TTL_MS`), `auth.service.ts`
+(`requestPasswordReset`/`resetPassword`), `auth.routes.ts` (the two routes),
+`auth.routes.test.ts` (36 new assertions: enumeration-safety, token
+issue/consume, expiry, reuse, cross-token invalidation, session revocation,
+rate limiting); `docs/api.md`, `docs/database.md`.
+Decisions: none new at the ADR level — implements the already-Accepted
+ADR-006/ADR-013 requirements, doesn't change them.
+Validation: `pnpm turbo run lint typecheck` clean across all 9 workspace
+members; `apps/api` full suite 278/278 passing (was 265, +13 net after this
+ticket's new describe blocks), `apps/web` 174/174 unaffected;
+`pnpm --filter api build` clean. Live-verified end to end against this
+environment's real local Postgres + a running `apps/api` (not just unit
+tests, given the security-sensitive contract): registered a real user,
+confirmed `forgot-password` returns byte-identical `204` for that email and
+for a nonexistent one, obtained a real reset token via the service layer
+(no HTTP path exists to leak it), logged in with the old password to capture
+a session cookie, reset the password, confirmed the old session cookie now
+401s on `/v1/auth/me`, confirmed login with the new password succeeds and
+the old password is rejected. Dev server and scratch verification script
+stopped/removed afterward — nothing left running or uncommitted.
+Known limitations: `.claude/context/known-issues.md` KI-042 (new) — no
+`/forgot-password`/`/reset-password` web screens exist yet (same gap shape as
+KI-026's `/verify-email`), and unlike that endpoint this one can never expose
+its token over HTTP even in dev, so real end-to-end use needs ADR-007's
+still-Pending email delivery, not just a screen.
+Follow-up: CR-058 (Redis-backed per-account auth rate limiting, blocked on
+KI-014) and CR-061 (security headers, unblocked) are the two remaining
+Security foundations tickets. CR-061 is the natural next task.

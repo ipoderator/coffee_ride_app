@@ -552,6 +552,35 @@ Next action: none required — this is a shell/invocation-order gotcha, not a bu
 pass: don't reuse a `source .env`'d shell for both `apps/api` DB work and `apps/web`
 builds without overriding `NODE_ENV` for the latter.
 
+### KI-042 — No `/forgot-password`/`/reset-password` web screens; the reset token is never exposed over HTTP, even in dev
+
+Status: open. Discovered: 2026-09-17 (CR-060, "Password reset flow").
+Problem: `docs/design.md`'s Auth-flows row names `/forgot-password`/
+`/reset-password` but no CR before this one built either the API or the
+screens — same gap shape as KI-026 (`/verify-email`). CR-060 shipped the API
+mechanics only (`POST /v1/auth/forgot-password`, `POST
+/v1/auth/reset-password`). Unlike `/verify-email` (whose `register` response
+carries a dev-only `verificationUrl`), this endpoint's response must stay
+byte-identical whether or not the email exists
+(`.claude/rules/security.md` — no account enumeration), so no dev-only token
+field exists anywhere on `forgot-password`, in any environment. A real
+organizer/participant who forgets their password today has no way to
+actually complete a reset without a real email-delivery channel (ADR-007,
+still Pending).
+Impact: medium — password reset is unusable end to end for a real user in
+this environment (no email delivery, no web screen), though the underlying
+mechanics (issue/validate/consume token, revoke sessions) are fully built and
+tested.
+Workaround: manual/test-only — call `requestPasswordReset(db, email)`
+directly from the service layer (as `auth.routes.test.ts` does) to obtain
+the raw token, then `POST /v1/auth/reset-password` with it via curl/API
+client. No production-safe workaround exists, by design.
+Next action: needs its own ticket (same "real gap, add a ticket" discipline
+as KI-024/KI-025/KI-026) for the `/forgot-password`/`/reset-password` web
+screens, and depends on ADR-007's real email delivery landing before a real
+user could ever discover their own reset token — a web screen alone doesn't
+close this gap without a delivery channel behind it.
+
 ---
 
 ## Resolved

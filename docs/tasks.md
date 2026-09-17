@@ -458,7 +458,7 @@ is not done (`docs/definition-of-done.md`).
       widget-grid requirement in the design spec, so no participant widget
       registry was invented. Closed the two real gaps: zero test coverage of
       the mechanism (added `CabinetShell.test.tsx`, `cabinet-registries.
-    test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
+test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
       misattributed CR-055's flag-utility scope to this ticket (fixed to
       point at CR-055 instead). See `docs/changelog.md`.
 - [x] CR-055 Feature flag utility for staged cabinet feature rollout — ADR-009
@@ -493,7 +493,16 @@ is not done (`docs/definition-of-done.md`).
       web screen exists yet (`docs/design.md` §8 lists `/verify-email` under "Auth
       flows"), a pre-existing gap this ticket doesn't close — see
       `.claude/context/known-issues.md`.
-- [ ] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
+- [x] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
+      — done 2026-09-17: seventh domain table (`password_reset_tokens`, same
+      shape as `email_verification_tokens`), `POST /v1/auth/forgot-password`
+      (always `204`, no body, identical for a real vs. unknown email — no dev
+      token exposure at all, unlike `register`'s `verificationUrl`) and
+      `POST /v1/auth/reset-password` (`200 { user }`; invalidates every other
+      outstanding token for that user and revokes every session). Live-verified
+      end to end against a real Postgres + running `apps/api`: enumeration-safe
+      response, session revocation, old-password rejection, new-password login.
+      See `docs/changelog.md`.
 - [ ] CR-061 Security headers (`@fastify/helmet`-equivalent) — the CSRF half of this
       ticket's original scope (Origin/Referer check for cookie sessions) was
       implemented by CR-012 (`apps/api/src/plugins/csrf.ts`, ADR-013); this ticket is

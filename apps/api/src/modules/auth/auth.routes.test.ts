@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { emailVerificationTokens, sessions } from 'db/schema';
+import {
+  emailVerificationTokens,
+  passwordResetTokens,
+  sessions,
+} from 'db/schema';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv, type Env } from '../../env.js';
+import { requestPasswordReset } from './auth.service.js';
 import { hashSessionToken } from './session.js';
 
 // These tests exercise the real service/repository layers against a live
@@ -444,6 +449,287 @@ describe('POST /v1/auth/logout', () => {
     });
 
     expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+});
+
+describe('POST /v1/auth/forgot-password', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  it('returns 204 with no body for a real, registered email', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/forgot-password',
+      payload: { email },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).toBe('');
+
+    await app.close();
+  });
+
+  it('returns the identical 204 with no body for an unknown email — no account enumeration', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/forgot-password',
+      payload: { email: uniqueEmail() },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).toBe('');
+
+    await app.close();
+  });
+
+  it('never returns a reset token anywhere in the response, even outside production', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/forgot-password',
+      payload: { email },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).not.toContain('token');
+
+    await app.close();
+  });
+
+  it('actually creates a token row for a known email (verified via the service layer, not HTTP)', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+
+    const result = await requestPasswordReset(app.db, email);
+
+    expect(result.userFound).toBe(true);
+    expect(result.resetToken).toBeTypeOf('string');
+
+    await app.close();
+  });
+
+  it('rate-limits after the auth tier threshold', async () => {
+    const app = await buildApp(testEnv);
+    const attempts = 6; // tier is 5/min — see auth.routes.ts's AUTH_RATE_LIMIT
+
+    const responses = [];
+    for (let i = 0; i < attempts; i += 1) {
+      responses.push(
+        await app.inject({
+          method: 'POST',
+          url: '/v1/auth/forgot-password',
+          payload: { email: uniqueEmail() },
+        }),
+      );
+    }
+
+    const statuses = responses.map((r) => r.statusCode);
+    expect(statuses.filter((s) => s === 204).length).toBe(5);
+    expect(statuses.at(-1)).toBe(429);
+
+    await app.close();
+  });
+});
+
+describe('POST /v1/auth/reset-password', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  const NEW_PASSWORD = 'a-brand-new-password-456';
+
+  it('resets the password with a valid token, and the new password logs in', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken } = await requestPasswordReset(app.db, email);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: resetToken, password: NEW_PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().user.email).toBe(email);
+    expect(JSON.stringify(response.json())).not.toContain('passwordHash');
+
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: NEW_PASSWORD },
+    });
+    expect(loginResponse.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('revokes every existing session for that user on a successful reset', async () => {
+    const app = await buildApp(testEnv);
+    const { email, password } = await registerTestUser(app);
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password },
+    });
+    const rawSessionToken = sessionCookie(loginResponse)!.value;
+
+    const { resetToken } = await requestPasswordReset(app.db, email);
+    await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: resetToken, password: NEW_PASSWORD },
+    });
+
+    const meResponse = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: rawSessionToken },
+    });
+    expect(meResponse.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('invalidates every other outstanding reset token for the same user', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken: firstToken } = await requestPasswordReset(
+      app.db,
+      email,
+    );
+    const { resetToken: secondToken } = await requestPasswordReset(
+      app.db,
+      email,
+    );
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: firstToken, password: NEW_PASSWORD },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: secondToken, password: 'yet-another-password-789' },
+    });
+    expect(second.statusCode).toBe(400);
+    expect(second.json().code).toBe('reset_token_already_used');
+
+    await app.close();
+  });
+
+  it('rejects an unknown token with a 400 domain error', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: 'not-a-real-token', password: NEW_PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('invalid_reset_token');
+
+    await app.close();
+  });
+
+  it('rejects a token that was already used', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken } = await requestPasswordReset(app.db, email);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: resetToken, password: NEW_PASSWORD },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: resetToken, password: 'yet-another-password-789' },
+    });
+    expect(second.statusCode).toBe(400);
+    expect(second.json().code).toBe('reset_token_already_used');
+
+    await app.close();
+  });
+
+  it('rejects an expired token', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken } = await requestPasswordReset(app.db, email);
+
+    const { hashToken } = await import('./tokens.js');
+    await app.db
+      .update(passwordResetTokens)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(sql`${passwordResetTokens.tokenHash} = ${hashToken(resetToken!)}`);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: resetToken, password: NEW_PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('reset_token_expired');
+
+    await app.close();
+  });
+
+  it('rejects a password shorter than 12 characters with 400', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken } = await requestPasswordReset(app.db, email);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/reset-password',
+      payload: { token: resetToken, password: 'too-short' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('validation_error');
+
+    await app.close();
+  });
+
+  it('rate-limits after the auth tier threshold', async () => {
+    const app = await buildApp(testEnv);
+    const attempts = 6; // tier is 5/min — see auth.routes.ts's AUTH_RATE_LIMIT
+
+    const responses = [];
+    for (let i = 0; i < attempts; i += 1) {
+      responses.push(
+        await app.inject({
+          method: 'POST',
+          url: '/v1/auth/reset-password',
+          payload: { token: 'not-a-real-token', password: NEW_PASSWORD },
+        }),
+      );
+    }
+
+    const statuses = responses.map((r) => r.statusCode);
+    expect(statuses.filter((s) => s === 400).length).toBe(5);
+    expect(statuses.at(-1)).toBe(429);
 
     await app.close();
   });

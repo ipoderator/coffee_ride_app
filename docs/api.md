@@ -45,8 +45,25 @@ GET `/v1/auth/me` — **implemented (CR-012)**. Requires a valid session cookie
 `displayName`/`phone`/`bio` (all `null` until set via `PATCH /v1/users/me`) —
 an additive field change, not a new endpoint (`.claude/rules/extensibility.md`).
 
-POST `/v1/auth/forgot-password`
-POST `/v1/auth/reset-password`
+POST `/v1/auth/forgot-password` — **implemented (CR-060)**. Body: `{ email }`.
+Always `204` with no body, whether or not the email belongs to a real
+account (`.claude/rules/security.md`: no account enumeration) — a real
+account gets a new `password_reset_tokens` row (single-use, 30 min expiry);
+an unknown one gets nothing, with an identical response either way. No dev
+convenience field exists for this token (unlike `register`'s
+`verificationUrl`) — exposing it even outside production would make the
+response shape itself enumerable. Same rate-limit tier as register/login.
+
+POST `/v1/auth/reset-password` — **implemented (CR-060)**. Body: `{ token,
+password }` (`password` min 12 chars, same policy as register). `200` →
+`{ user }`. `400` with code `invalid_reset_token` /
+`reset_token_already_used` / `reset_token_expired` as appropriate. On
+success: every other outstanding reset token for that user is invalidated
+too, and every one of that user's sessions is revoked
+(`.claude/rules/security.md` — a password change ends every existing
+login); the caller is not automatically logged in and must `POST
+/v1/auth/login` with the new password. Same rate-limit tier as
+register/login.
 
 ## Users
 

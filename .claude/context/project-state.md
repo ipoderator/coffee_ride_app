@@ -29,8 +29,7 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-056 (2GIS-import lint rule) just closed — Extensibility
-foundations section fully complete.
+None active. CR-060 (password reset flow) just closed.
 
 ## Implemented
 
@@ -88,7 +87,11 @@ cursor pagination). `GET /health` (unversioned) reports real, bounded DB/Redis/S
 status (`ok`/`error`/`not_configured` per dependency, overall `ok`/`degraded`),
 always `200` (CR-051). Capability modules: `auth` (register/verify-email/login/logout/me,
 Argon2id, DB-backed sessions per ADR-013, CSRF via Origin/Referer check on every unsafe
-`/v1` method), `users` (profile PATCH), `organizers` (OrganizerProfile CRUD, create
+`/v1` method; CR-060 added `POST /v1/auth/forgot-password`/`reset-password` —
+always `204` regardless of whether the email exists, no dev-token exposure at
+all unlike register's `verificationUrl`; a successful reset revokes every
+session for that user and invalidates every other outstanding reset token),
+`users` (profile PATCH), `organizers` (OrganizerProfile CRUD, create
 gated on `emailVerified`), `rides` (create/edit draft, every lifecycle transition,
 owner's "mine" list, public list + detail with filters/bbox/pagination, GPX route
 upload/download/geometry, distance/elevation reconciliation, stop CRUD and route-point
@@ -127,8 +130,9 @@ batched not N+1 on the paginated endpoints) and on `GET`/`POST`/`PATCH
 /v1/organizers/me`.
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
-`sessions`, `organizer_profiles`, `rides`, `routes`, `stops`, `route_points`,
-`registrations`, `waitlist_entries`, `ride_updates`, `notifications`, `reviews`.
+`password_reset_tokens`, `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`,
+`route_points`, `registrations`, `waitlist_entries`, `ride_updates`, `notifications`,
+`reviews`.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -175,10 +179,11 @@ None.
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), Quality (CR-044..048), Resilience (CR-049..052), and
 Extensibility foundations (CR-053..056) sections are all now fully complete.
-Security foundations is next: CR-058 (Redis-backed, per-account auth rate
-limiting — blocked on KI-014 until a live Redis is reachable), CR-060
-(password reset flow), and CR-061 (security headers, `@fastify/helmet`-
-equivalent) are the three open tickets in that section.
+Security foundations: CR-060 (password reset flow) just closed. Two open
+tickets remain in that section: CR-058 (Redis-backed, per-account auth rate
+limiting — blocked on KI-014 until a live Redis is reachable) and CR-061
+(security headers, `@fastify/helmet`-equivalent — unblocked, next logical
+task).
 
 ## Important decisions
 
@@ -234,7 +239,10 @@ items:
   (KI-033); route points have no participant-facing UI yet, API + organizer management
   only, pending real map rendering (KI-036).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
-  no in-app recovery path (KI-026).
+  no in-app recovery path (KI-026). Same gap for password reset (KI-042, CR-060): API-only,
+  and unlike verify-email's dev-only link, the reset token is never exposed over HTTP in
+  any environment (no-account-enumeration requirement) — real end-to-end use needs
+  ADR-007's still-Pending email delivery, not just a screen.
 - Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
   when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
   pre-CR-050 direct synchronous insert when it isn't. Live Redis reachability
@@ -262,6 +270,12 @@ items:
 - `timestamptz` + ride-local timezone (ADR-012);
 - session revocation semantics and the single-origin/no-CORS posture (ADR-013);
 - server-side registration invariants;
+- `POST /v1/auth/forgot-password` returning an identical `204` regardless of
+  whether the email exists, in every environment — no dev-only token field on
+  this endpoint, unlike `register`'s `verificationUrl` (CR-060,
+  `.claude/rules/security.md`);
+- a password reset revoking every session for that user and invalidating
+  every other outstanding reset token for that user (CR-060);
 - server-side authorization checks (never UI-only — `.claude/rules/security.md`);
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
   `packages/maps-2gis` — `.claude/rules/maps.md`, lint-enforced since CR-056:
@@ -285,4 +299,4 @@ items:
 
 ## Last updated
 
-2026-09-17 (CR-056)
+2026-09-17 (CR-060)
