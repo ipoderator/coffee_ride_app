@@ -77,6 +77,9 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       resilience:
         specifier: workspace:*
         version: link:../../packages/resilience
@@ -102,6 +105,9 @@ importers:
       config:
         specifier: workspace:*
         version: link:../../packages/config
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       eslint:
         specifier: ^9.0.0
         version: 9.39.5(jiti@2.7.0)

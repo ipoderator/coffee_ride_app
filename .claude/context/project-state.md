@@ -29,8 +29,9 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-061 (security headers) just closed — Security foundations
-section now has only CR-058 open (blocked on KI-014).
+None active. ADR-017 (`apps/api` production build bundling, resolving
+KI-017) just closed — the prerequisite for CR-074 (Dockerfile), the first
+open Deployment-section ticket.
 
 ## Implemented
 
@@ -90,7 +91,11 @@ always `200` (CR-051). `@fastify/helmet` registered globally in `app.ts`
 (`plugins/security-headers.ts`, CR-061) — every response (`/health`, `/docs`,
 `/v1/*`) carries CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`;
 CSP drops `upgrade-insecure-requests` (this app doesn't terminate TLS itself) and
-tightens `frame-ancestors`/`X-Frame-Options` to `'none'`/`DENY`. Capability modules: `auth` (register/verify-email/login/logout/me,
+tightens `frame-ancestors`/`X-Frame-Options` to `'none'`/`DENY`. Production `build`
+now bundles via `esbuild` (`scripts/build.mjs`, ADR-017) instead of plain `tsc` —
+`db`/`types`/`resilience`'s source is inlined into one `dist/server.js`, every real
+npm dependency stays external; `dev`/`typecheck`/`test` scripts are unaffected
+(still `tsx`/`vitest`/`tsc --noEmit`). Capability modules: `auth` (register/verify-email/login/logout/me,
 Argon2id, DB-backed sessions per ADR-013, CSRF via Origin/Referer check on every unsafe
 `/v1` method; CR-060 added `POST /v1/auth/forgot-password`/`reset-password` —
 always `204` regardless of whether the email exists, no dev-token exposure at
@@ -187,8 +192,11 @@ Extensibility foundations (CR-053..056) sections are all now fully complete.
 Security foundations: CR-060 (password reset flow) and CR-061 (security
 headers) both just closed. One ticket remains in that section: CR-058
 (Redis-backed, per-account auth rate limiting), blocked on KI-014 until a
-live Redis is reachable in this environment — the next open section
-(Deployment, CR-074+) is otherwise the next logical work.
+live Redis is reachable in this environment. Deployment (CR-074+) is the
+next open section — KI-017 (the thing that would have made CR-074's
+Dockerfile build an image that immediately crashes on boot) is now resolved
+(ADR-017), so CR-074 (`Dockerfile` for `apps/web`/`apps/api`) can proceed
+directly.
 
 ## Important decisions
 
@@ -217,6 +225,11 @@ See `docs/decisions.md`. Notably:
   one shared package, `packages/resilience`, wired at each integration's own call
   site (`packages/maps-2gis`, `apps/api`'s S3 route-storage module) — not
   reimplemented per integration.
+- ADR-017: `apps/api`'s production `build` bundles `db`/`types`/`resilience`'s source
+  into `dist/server.js` via `esbuild` (`apps/api/scripts/build.mjs`), resolving
+  KI-017's real `ERR_MODULE_NOT_FOUND` boot crash — every real npm dependency stays
+  external. `db`/`types`/`maps-core`/`maps-2gis`/`resilience` themselves are
+  unchanged.
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
   warm neutral base with one muted teal-green accent. One exception: `danger` is a
   bright red, reserved for cancellation/failure (`StatusBadge`, `Button
@@ -230,14 +243,14 @@ items:
 - No deployment artifacts, observability, or a live-verified Redis/S3/Postgres in this
   environment — Docker's daemon is unreachable throughout (KI-001, KI-002, KI-003,
   KI-006, KI-014, KI-015, KI-019).
-- `packages/db`/`packages/types`/`packages/maps-2gis` export raw TS source, not
-  compiled `dist` — a production boot (`node dist/server.js`) is confirmed broken
-  until this is resolved via an ADR (KI-017).
-- No `@fastify/helmet` (or equivalent) anywhere — zero security headers on any
-  `apps/api` response, API-wide, not just auth. Rate limiting is in-memory
-  per-IP-only, single-instance, no per-account limiting, also API-wide.
-  Re-confirmed by CR-047's full security-rules walkthrough, not just auth
-  endpoints (KI-022).
+- Rate limiting is in-memory per-IP-only, single-instance, no per-account limiting,
+  API-wide (KI-022, narrowed) — CR-058 upgrades this once KI-014 (Redis unverified in
+  this environment) is resolved. `apps/api`'s production boot crash on
+  `db`/`types`'s raw-TS-source exports (KI-017) and missing `@fastify/helmet`
+  security headers (the other half of KI-022) are both now resolved (ADR-017,
+  CR-061) — `packages/maps-2gis` still exports raw source too, unaffected by
+  ADR-017 (nothing in `apps/api` consumes it yet, so it was never actually
+  blocking).
 - No live 2GIS credential — geocoding and MapGL rendering are unverified against a
   real account; every map surface shows a real degraded state instead (KI-016,
   KI-031). No geocode-by-address UI (KI-032); a ride's finish point has no coordinates
@@ -285,6 +298,11 @@ items:
   doesn't terminate TLS itself — that directive would break `/docs` over
   local `http://`) and `frame-ancestors`/`X-Frame-Options` staying
   `'none'`/`DENY` (CR-061);
+- `apps/api/scripts/build.mjs`'s `external` computation staying derived from
+  the union of `dependencies` across `apps/api` + every bundled workspace
+  package (`db`/`types`/`resilience`), not just `apps/api`'s own
+  `package.json` — and never bundling a real npm dependency (especially
+  `argon2`, a native addon) into `dist/server.js` (ADR-017);
 - server-side authorization checks (never UI-only — `.claude/rules/security.md`);
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
   `packages/maps-2gis` — `.claude/rules/maps.md`, lint-enforced since CR-056:
@@ -308,4 +326,4 @@ items:
 
 ## Last updated
 
-2026-09-17 (CR-061)
+2026-09-17 (ADR-017)

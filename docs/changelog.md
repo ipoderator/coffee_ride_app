@@ -3519,3 +3519,75 @@ tickets. Only CR-058 (Redis-backed per-account auth rate limiting) stays
 open in that section, blocked on KI-014 (Redis unverified live in this
 environment) — the Deployment section (CR-074+) is otherwise the next
 logical work.
+
+## 2026-09-17 — ADR-017 — `apps/api` production build bundles workspace source via `esbuild`, resolving KI-017
+
+Summary: KI-017 (confirmed live-blocking since CR-011) documented that a
+plain `node dist/server.js` crashes with `ERR_MODULE_NOT_FOUND` — `db`'s
+compiled `client.ts` imports its sibling `schema/index.ts` with a
+`.js`-suffixed NodeNext-style specifier that Node's native `.ts`
+type-stripping doesn't rewrite. `tsx`/`vitest`/`tsc` all handle it fine;
+only a real compiled boot under plain `node` was broken. Left unresolved
+since CR-011 because nothing needed a real compiled boot before CR-074
+(Dockerfile) — this ticket resolves it as that prerequisite, before CR-074
+starts.
+Decision (full reasoning in `docs/decisions.md` ADR-017): `apps/api`'s own
+`build` script switches from `tsc -p tsconfig.json` to `esbuild`
+(`apps/api/scripts/build.mjs`), bundling `src/server.ts` plus `db`/`types`/
+`resilience`'s source into one `dist/server.js`. Chosen over the other
+option KI-017 itself named (declaration-based `dist` exports on `db`/
+`types`) specifically because it touches nothing about how those packages
+ship to their other consumers (`tsx watch`, `vitest`) — only `apps/api`'s
+own production artifact changes. Every real npm dependency (`fastify`,
+`drizzle-orm`, `postgres`, `argon2`, `bullmq`, `ioredis`,
+`@aws-sdk/client-s3`, `sax`, `zod`, the `@fastify/*` plugins) stays
+external, resolved from `node_modules` at runtime exactly as before —
+bundling a native addon (`argon2`) would trade one broken-module-resolution
+problem for a differently-broken native-binding problem.
+`external` is computed at build time as the union of `dependencies` across
+`apps/api` + `db` + `types` + `resilience`, minus those three workspace
+package names — not just `apps/api`'s own `package.json`, which doesn't
+know about `db`'s own dependency on `postgres` at all. This surfaced a real,
+second gap while implementing it (not hypothetical): marking `postgres`
+external in the bundle wasn't sufficient by itself — pnpm's strict,
+non-hoisted `node_modules` only symlinks a package's own declared
+dependencies into its `node_modules`, so a plain `node dist/server.js`
+still couldn't resolve the bare `postgres` specifier until `apps/api/
+package.json` declared it directly (even though no file under `apps/api/
+src` imports it — the bundle does, once `db`'s source is inlined). Fixed by
+adding `postgres` as a direct `apps/api` dependency, documented in
+`build.mjs`'s own comment.
+Files: `apps/api/package.json` (new `esbuild` devDependency, new `postgres`
+direct dependency, `build` script points at the new script), `apps/api/
+scripts/build.mjs` (new), `apps/api/eslint.config.mjs` (scoped
+`languageOptions.globals` override for `scripts/**/*.mjs` — the first
+non-TS source file here, needed `URL` declared since TS files' own
+type-checker normally covers this instead of ESLint's `no-undef`);
+`docs/decisions.md` (ADR-017), `.claude/context/known-issues.md` (KI-017
+resolved).
+Decisions: ADR-017 (new) — see `docs/decisions.md` for the full decision,
+rationale, and "what this does NOT mean"/"when to revisit" sections.
+Validation: `pnpm turbo run lint typecheck build` clean across all 9
+workspace members (24/24 tasks); full `apps/api` test suite 283/283 passing,
+unaffected (`tsx watch`/`vitest` never read `dist/`). Live-verified the
+actual regression, not just "builds without error": `NODE_ENV=test node
+dist/server.js` (against this environment's real local Postgres) booted
+cleanly — the exact `ERR_MODULE_NOT_FOUND` crash KI-017 documented is gone
+— `GET /health` responded, and `POST /v1/auth/register` round-tripped
+through the bundle end to end (argon2 hash, Drizzle insert, helmet headers,
+rate limiting) with `201 Created`. Separately confirmed
+`NODE_ENV=production` with this environment's local-only config still
+correctly hits the unrelated, already-working CR-073 placeholder-refusal
+guard — deliberately not conflated with the module-resolution fix this
+ticket actually verifies. Inspected the bundle directly to confirm `argon2`
+stayed a genuine external `import` (not inlined) and `db`'s exported symbols
+(`createDbClient`, `passwordResetTokens`, ...) were actually present in the
+output (inlined, not left as unresolved bare imports). Dev server/log files
+cleaned up afterward.
+Known limitations: none new. `packages/maps-2gis` still exports raw TS
+source too, same as before — unaffected by this ADR since nothing in
+`apps/api` consumes it yet, so it was never actually part of the blocking
+gap.
+Follow-up: CR-074 (`Dockerfile` for `apps/web`/`apps/api`) can now proceed —
+`pnpm --filter api build && node dist/server.js` is a real, working
+production boot to containerize. This is the next logical task.

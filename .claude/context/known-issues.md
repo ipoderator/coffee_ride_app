@@ -174,8 +174,8 @@ real route.
 
 ### KI-017 — `packages/maps-2gis`/`packages/db`/`packages/types` export raw TS source, not compiled `dist`
 
-Status: open — **confirmed live and now blocking** (CR-011; was previously a
-predicted-but-unverified risk). Discovered: 2026-09-12 (CR-007).
+Status: resolved 2026-09-17 (ADR-017, `docs/decisions.md`). Discovered:
+2026-09-12 (CR-007). Confirmed live-blocking: 2026-09-13 (CR-011).
 Problem: `packages/db`, `packages/types`, and `packages/maps-2gis`'s
 `package.json` `main`/`types`/`exports` all point at `./src/*.ts`, not
 `./dist/*.js`. `tsx` (dev, `vitest`) and `tsc` (typecheck, and build-time type
@@ -205,24 +205,42 @@ need this: a `resolve.extensionAlias` entry in `next.config.ts` teaches
 webpack the same `.js`→`.ts` mapping `tsc`/`tsx` already understand. That
 fix is scoped to webpack/`apps/web` only — it does nothing for `apps/api`'s
 compiled output running under plain `node`.
-Workaround: none for production. `apps/api`'s actual CR-011 acceptance
-criteria (dev-mode live check via `tsx`, all four `vitest` suites, `tsc`
-typecheck/build) are unaffected — none of them execute `dist/server.js`
-under plain `node`. This is a real, separate gap from any of those, on the
-production-boot path only.
-Next action: before `apps/api` is ever deployed for real (CR-074+), resolve
-this — either (a) switch `db`/`types` to declaration-based `dist` exports
-(`"types": "./dist/index.d.ts"`, `"main"/"exports"` pointing at `dist`,
-`"declaration": true` in their `tsconfig.json`) and add a `predev`/watch
-build step so `apps/api`'s `tsx watch` dev flow keeps working without a
-manual build first, or (b) switch `apps/api`'s own `build` script to a
-bundler (esbuild/tsup) that inlines workspace-package source instead of
-leaving cross-package `import`s for Node to resolve at runtime — either is an
-architecture/tooling decision (`.claude/rules/architecture.md`'s change
-control) that needs an explicit ADR, not a silent fix inside a feature
-ticket, which is why CR-011 documents this rather than resolving it
-unilaterally. Re-run the same `NODE_ENV=production node dist/server.js`
-smoke test after whichever fix lands.
+Workaround: none for production (until resolved below). `apps/api`'s actual
+CR-011 acceptance criteria (dev-mode live check via `tsx`, all four `vitest`
+suites, `tsc` typecheck/build) were unaffected — none of them execute
+`dist/server.js` under plain `node`.
+Resolution: ADR-017 — `apps/api`'s own `build` script now bundles
+`src/server.ts` plus `db`/`types`/`resilience`'s source into one
+`dist/server.js` via `esbuild` (`apps/api/scripts/build.mjs`) — a bundler,
+chosen over declaration-based `dist` exports specifically to avoid adding
+dev/test-path complexity to packages that already work correctly for every
+consumer (full reasoning in ADR-017 itself). Every real npm dependency stays external, resolved from
+`node_modules` at runtime as before — never bundling a native addon
+(`argon2`) mattered, not just avoiding unnecessary work. `db`/`types`/
+`maps-core`/`maps-2gis`/`resilience` themselves are completely untouched.
+Live-verified, not just built without error: `NODE_ENV=test node
+dist/server.js` against this environment's real local Postgres booted
+cleanly (previously crashed with the exact `ERR_MODULE_NOT_FOUND` above),
+`GET /health` responded, and a real `POST /v1/auth/register` round-tripped
+through the bundle (argon2 hash, Drizzle insert, helmet headers, rate
+limiting) with `201 Created`. Separately confirmed the unrelated,
+already-correct production placeholder guard (CR-073) still fires under a
+real `NODE_ENV=production` with this environment's local-only config — the
+two are orthogonal, and conflating them would have made the wrong test look
+like a pass. Found and fixed one more real gap along the way: marking
+`postgres` external in the bundle wasn't sufficient by itself under pnpm's
+strict `node_modules` (a package's own dependencies aren't visible to a
+workspace consumer that doesn't declare them directly) — `apps/api/
+package.json` now lists `postgres` as a direct dependency, documented in
+`build.mjs`'s own comment so a future similar gap is recognized, not
+re-debugged from scratch. Full `apps/api` test suite (283 tests) and
+`pnpm turbo run lint typecheck build` (24/24) confirmed zero effect on the
+dev/test paths.
+Next action: none for this gap. CR-074 (Dockerfile) can now proceed —
+`pnpm --filter api build && node dist/server.js` is a real, working
+production boot to build a Docker image around. If a future workspace
+package needs bundling into `apps/api`'s production artifact too, see
+ADR-017's "When to revisit."
 
 ### KI-018 — `packages/config`'s shared tsconfig fragment broke under Vite 8's oxc transform
 

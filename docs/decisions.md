@@ -541,3 +541,82 @@ If a future external integration needs retry behavior this utility doesn't suppo
 not others), extend `packages/resilience` itself rather than building a parallel
 mechanism next to it — the whole point of this ADR is that there is one place this
 logic lives.
+
+## ADR-017 — `apps/api`'s production build bundles workspace source with `esbuild`
+
+Status: Accepted.
+
+Resolves KI-017 (`.claude/context/known-issues.md`): `packages/db`/`packages/types`
+ship `main`/`types`/`exports` pointing at raw `.ts` source, which `tsx` (dev, tests)
+and `tsc` (typecheck) resolve fine but a plain `node dist/server.js` cannot — `db`'s
+compiled `client.ts` imports its sibling `schema/index.ts` with a `.js`-suffixed
+NodeNext-style specifier that Node's native `.ts` type-stripping loads literally
+without rewriting, crashing with `ERR_MODULE_NOT_FOUND`. Confirmed live and blocking
+since CR-011 (first real runtime consumer of `db`/`types`); left undecided until now
+since nothing needed a real compiled boot before CR-074 (Dockerfile).
+
+### Decision
+
+1. **`apps/api`'s own `build` script switches to `esbuild`** (`apps/api/scripts/
+build.mjs`), bundling `src/server.ts` plus the source of every workspace package it
+   actually depends on (`db`, `types`, `resilience`) into one `dist/server.js`. Every
+   real npm dependency (`fastify`, `drizzle-orm`, `postgres`, `argon2`, `bullmq`,
+   `ioredis`, `@aws-sdk/client-s3`, `sax`, `zod`, the `@fastify/*` plugins) stays
+   external — resolved from `node_modules` at runtime exactly as today, never inlined.
+   Bundling a native addon (`argon2`) would be a real footgun, not just unnecessary
+   work.
+2. **`db`/`types`/`maps-core`/`maps-2gis`/`resilience` are untouched** — their
+   `package.json` `exports` keep pointing at raw `.ts` source, and their own `tsc`-based
+   `build` scripts are unchanged. `tsx watch`/`vitest` (every consumer's dev/test path,
+   not just `apps/api`'s) never read `dist/` and are provably unaffected — the full
+   `apps/api` test suite (283 tests) and `apps/api`'s `tsx watch` dev flow both work
+   identically before and after this change.
+3. **`external` is computed from the union of `dependencies` across `apps/api` +
+   every bundled workspace package, minus those workspace package names** — not just
+   `apps/api`'s own `package.json`. A workspace package's own runtime dependency (e.g.
+   `db`'s dependency on `postgres`) isn't otherwise visible to `apps/api` at all today.
+   This surfaced a second, real gap while implementing it (not hypothetical): marking
+   `postgres` external in the bundle wasn't sufficient by itself — pnpm's strict,
+   non-hoisted `node_modules` only symlinks a package's _own_ declared dependencies
+   into its `node_modules`, so a plain `node dist/server.js` still couldn't resolve
+   the bare `postgres` specifier until `apps/api/package.json` declared it directly.
+   `apps/api` now lists `postgres` as a direct dependency even though no file under
+   `apps/api/src` imports it — the bundle does, once `db`'s source is inlined, which
+   makes it a genuine runtime dependency of this app now, not a phantom one.
+
+### Rationale (why a bundler, not declaration-based `dist` exports)
+
+The alternative KI-017 itself named — switching `db`/`types` to real `dist` exports
+(`"main"/"exports"` pointing at compiled output, `"declaration": true`) — would require
+every dev/test consumer of those packages to keep resolving to fresh source, not a
+stale prior build, meaning either a dual source/dist export condition (real ongoing
+complexity on a path — dev/test — that already works correctly) or a mandatory build
+step wired into every dev/test invocation across the whole monorepo. Bundling only
+`apps/api`'s own production build touches nothing about how `db`/`types`/`maps-2gis`
+ship to anyone else; it fixes the one broken consumption path without adding
+maintenance surface to the ones that already work.
+
+### What this does NOT mean
+
+- It does not change `db`/`types`/`maps-core`/`maps-2gis`/`resilience`'s own package
+  shape, `exports`, or `build` scripts — this ADR is scoped to `apps/api`'s own
+  production artifact only.
+- It does not mean bundling third-party npm dependencies. Every real npm package stays
+  external by design — bundling `argon2` (a native addon) or `@aws-sdk/client-s3`
+  would trade a known-broken module-resolution problem for a differently-broken native-
+  binding/bundling problem.
+- It does not mean `apps/web` needs the same treatment — its equivalent problem
+  (webpack, not plain `node`, resolving `types`' `.js`-suffixed relative imports) was
+  already fixed differently (`next.config.ts`'s `resolve.extensionAlias`, CR-011) and
+  is unaffected by this ADR.
+
+### When to revisit
+
+If a fourth workspace package (e.g. `maps-2gis`, once something in `apps/api` actually
+consumes it) needs bundling into `apps/api`'s production artifact, add it to
+`WORKSPACE_PACKAGES` in `apps/api/scripts/build.mjs` — the `external` computation
+already unions in whatever `dependencies` that package declares, so the only manual
+step is adding its name to that list. If `apps/web` or another app ever needs its own
+compiled-production-boot fix, decide fresh whether bundling or declaration-based
+`dist` exports fits its actual constraints — don't assume this ADR's answer transfers
+without checking.

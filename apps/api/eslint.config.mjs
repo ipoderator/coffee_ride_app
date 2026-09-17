@@ -16,6 +16,18 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // `js.configs.recommended`'s `no-undef` doesn't know Node's ambient
+    // globals for a plain `.mjs` file the way TS files' own type-checker
+    // does (typescript-eslint's recommended config disables `no-undef`
+    // there instead) — `scripts/build.mjs` (ADR-017) is the first non-TS
+    // source file here, so it needs its actual globals declared explicitly
+    // rather than pulling in a whole `globals` package for one identifier.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { URL: 'readonly' },
+    },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
