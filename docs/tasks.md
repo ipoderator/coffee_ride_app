@@ -503,10 +503,17 @@ test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
       end to end against a real Postgres + running `apps/api`: enumeration-safe
       response, session revocation, old-password rejection, new-password login.
       See `docs/changelog.md`.
-- [ ] CR-061 Security headers (`@fastify/helmet`-equivalent) — the CSRF half of this
+- [x] CR-061 Security headers (`@fastify/helmet`-equivalent) — the CSRF half of this
       ticket's original scope (Origin/Referer check for cookie sessions) was
       implemented by CR-012 (`apps/api/src/plugins/csrf.ts`, ADR-013); this ticket is
-      now headers-only
+      now headers-only — done 2026-09-17: `@fastify/helmet` registered globally
+      (`apps/api/src/plugins/security-headers.ts`), applying CSP/
+      X-Content-Type-Options/X-Frame-Options/Referrer-Policy to `/health`, `/docs`,
+      and every `/v1` route alike. Custom CSP removes `upgrade-insecure-requests`
+      (would break `/docs` over local `http://`) and tightens `frame-ancestors`/
+      `X-Frame-Options` to `'none'`/`DENY`. Live-verified `/docs` (Swagger UI)
+      still renders and works via a headless-browser check — zero console errors,
+      zero failed requests, full operations list visible. See `docs/changelog.md`.
 - [x] CR-062 Session store decision — database-backed sessions + single-origin `/api`,
       decided 2026-09-11 in ADR-013; implemented by CR-012
 

@@ -29,7 +29,8 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-060 (password reset flow) just closed.
+None active. CR-061 (security headers) just closed — Security foundations
+section now has only CR-058 open (blocked on KI-014).
 
 ## Implemented
 
@@ -85,7 +86,11 @@ offers `onRetry`; `RideCard`/`RideDetailView`'s cover image uses `next/image`
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). `GET /health` (unversioned) reports real, bounded DB/Redis/S3
 status (`ok`/`error`/`not_configured` per dependency, overall `ok`/`degraded`),
-always `200` (CR-051). Capability modules: `auth` (register/verify-email/login/logout/me,
+always `200` (CR-051). `@fastify/helmet` registered globally in `app.ts`
+(`plugins/security-headers.ts`, CR-061) — every response (`/health`, `/docs`,
+`/v1/*`) carries CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`;
+CSP drops `upgrade-insecure-requests` (this app doesn't terminate TLS itself) and
+tightens `frame-ancestors`/`X-Frame-Options` to `'none'`/`DENY`. Capability modules: `auth` (register/verify-email/login/logout/me,
 Argon2id, DB-backed sessions per ADR-013, CSRF via Origin/Referer check on every unsafe
 `/v1` method; CR-060 added `POST /v1/auth/forgot-password`/`reset-password` —
 always `204` regardless of whether the email exists, no dev-token exposure at
@@ -179,11 +184,11 @@ None.
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), Quality (CR-044..048), Resilience (CR-049..052), and
 Extensibility foundations (CR-053..056) sections are all now fully complete.
-Security foundations: CR-060 (password reset flow) just closed. Two open
-tickets remain in that section: CR-058 (Redis-backed, per-account auth rate
-limiting — blocked on KI-014 until a live Redis is reachable) and CR-061
-(security headers, `@fastify/helmet`-equivalent — unblocked, next logical
-task).
+Security foundations: CR-060 (password reset flow) and CR-061 (security
+headers) both just closed. One ticket remains in that section: CR-058
+(Redis-backed, per-account auth rate limiting), blocked on KI-014 until a
+live Redis is reachable in this environment — the next open section
+(Deployment, CR-074+) is otherwise the next logical work.
 
 ## Important decisions
 
@@ -276,6 +281,10 @@ items:
   `.claude/rules/security.md`);
 - a password reset revoking every session for that user and invalidating
   every other outstanding reset token for that user (CR-060);
+- `@fastify/helmet`'s CSP staying `upgrade-insecure-requests`-free (this app
+  doesn't terminate TLS itself — that directive would break `/docs` over
+  local `http://`) and `frame-ancestors`/`X-Frame-Options` staying
+  `'none'`/`DENY` (CR-061);
 - server-side authorization checks (never UI-only — `.claude/rules/security.md`);
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
   `packages/maps-2gis` — `.claude/rules/maps.md`, lint-enforced since CR-056:
@@ -299,4 +308,4 @@ items:
 
 ## Last updated
 
-2026-09-17 (CR-060)
+2026-09-17 (CR-061)

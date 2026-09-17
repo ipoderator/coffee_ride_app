@@ -2,145 +2,130 @@
 
 ## Task ID
 
-CR-060 — "Password reset flow (single-use, time-limited tokens, no account
-enumeration)". Security foundations section, next unblocked ticket (CR-058 is
-blocked on KI-014 — Redis unverified live in this environment).
+CR-061 — "Security headers (`@fastify/helmet`-equivalent)". Last open,
+unblocked ticket in the Security foundations section (CR-058 stays blocked
+on KI-014 — Redis unverified live in this environment).
 
 ## Goal
 
-`.claude/rules/security.md`: "Password reset tokens are single-use and
-time-limited (e.g. 15–30 min), invalidated after use/expiry. Requesting a
-reset for a non-existent email returns the same response as for an existing
-one (no account enumeration)." `docs/api.md` already names the two routes
-(`POST /v1/auth/forgot-password`, `POST /v1/auth/reset-password`) with no
-body — this ticket fills them in.
+`.claude/rules/security.md`, Transport & headers: "Apply standard security
+headers on API responses (e.g. `@fastify/helmet` or equivalent): CSP,
+X-Content-Type-Options, frame-ancestors/X-Frame-Options, Referrer-Policy."
+KI-022 (re-confirmed by CR-047's audit): "no `@fastify/helmet` or equivalent
+is registered at all — zero security headers, API-wide." CR-061's original
+CSRF half was already implemented by CR-012 (`plugins/csrf.ts`, ADR-013) —
+this ticket is headers-only, per `docs/tasks.md`'s existing note.
 
 ## Investigation
 
-- Mirrors CR-011's email-verification-token shape almost exactly
-  (`packages/db/src/schema/email-verification-token.ts`,
-  `apps/api/src/modules/auth/tokens.ts`): opaque random token, only its
-  SHA-256 hash persisted, single-use (`usedAt`), time-limited (`expiresAt`).
-- Real tension with the enumeration rule: CR-011's `register` dev-only
-  `verificationUrl` convenience (no email delivery yet, ADR-007 Pending)
-  can't be reused for `forgot-password` — exposing the reset link only when
-  the account exists (even gated to non-production) makes the response shape
-  itself enumerable, which is exactly the property this rule protects.
-  Decision: `POST /v1/auth/forgot-password` returns the same `204` in every
-  environment, unconditionally — no dev-only token field, ever. The service
-  function still returns the raw token to its caller (mirrors
-  `registerUser`'s `verificationToken` return), but `auth.routes.ts` discards
-  it. Tests obtain the token by importing the service function directly, the
-  same way `.claude/rules/testing.md`-style behavior tests already reach past
-  the HTTP layer when a deliberately-hidden value needs verifying.
-- `.claude/rules/security.md` also requires: "a password change revokes every
-  session of that user." ADR-013 logout is a hard delete (no soft
-  `revokedAt` code path exists yet) — reset follows the same hard-delete
-  shape: every `sessions` row for that `userId` is deleted in the same
-  transaction as the password update.
-- A user can accumulate more than one outstanding, unused, unexpired reset
-  token (no previous-token invalidation on a repeat `forgot-password` call,
-  same as CR-011's email-verification precedent). Left as-is on the
-  `forgot-password` side (matches precedent), but closed on the `reset`
-  side: a successful reset marks every other still-outstanding token for that
-  user as used too, so a stale earlier link can't reset the password again
-  after a newer one already succeeded.
-- No web screen scope, by the same precedent CR-059/KI-026 already
-  established for `/verify-email`: `docs/design.md` §Auth-flows names
-  `/forgot-password`/`/reset-password` but no CR before this one built either
-  the API or the screen. This ticket ships the API mechanics only; the screen
-  gap gets its own known-issue entry, matching KI-026's shape.
+- `apps/api/src/app.ts` registers `registerErrorHandler`, `registerOpenApi`
+  (`/docs` Swagger UI + `/documentation/json`), `registerDb`, `registerS3`,
+  `registerNotificationQueue`, then `multipart`/`cookie`/`rate-limit`
+  plugins, then `healthRoutes` (`/health`, unversioned) and `v1Routes`
+  (`/v1/*`, own encapsulated context — CSRF is scoped there deliberately,
+  per `csrf.ts`'s own comment, so it never touches `/health`/`/docs`).
+- KI-022's own wording ("zero security headers, API-wide") and
+  `.claude/rules/security.md`'s "on API responses" (not "on `/v1`
+  responses") both point at applying this globally — `/health` and `/docs`
+  should get the same headers, not just `/v1`. Unlike CSRF (which is
+  meaningless outside cookie-bearing `/v1` mutations), generic headers like
+  `X-Content-Type-Options`/`Referrer-Policy`/`frame-ancestors` cost nothing
+  on a JSON or Swagger-UI response.
+- Real risk: `@fastify/helmet`'s default CSP is strict enough to plausibly
+  break `/docs` (Swagger UI, part of the fixed "REST + OpenAPI" stack per
+  `.claude/CLAUDE.md` — must not regress it) and its default
+  `upgrade-insecure-requests` CSP directive would break local `http://`
+  dev entirely (browser silently rewrites `/docs`'s own sub-requests to
+  `https://`, which has no listener locally) — this app never terminates
+  TLS itself (a reverse proxy does, per ADR-013/CR-075, not yet built), so
+  that directive is actively wrong here, not just inconvenient.
+- No `@fastify/helmet` dependency currently installed. Latest npm version
+  (13.1.1) targets Fastify 5 (this repo's version) — same "adopt latest,
+  don't pin below current" pattern every other `@fastify/*` dependency here
+  already follows.
 
 ## Decision
 
-- New table `password_reset_tokens` (`packages/db`), same shape as
-  `email_verification_tokens`: `id`, `userId` (FK cascade), `tokenHash`
-  (unique), `expiresAt`, `usedAt` (nullable), `createdAt`.
-- TTL: 30 minutes (top of security.md's 15–30 min range — reset links are
-  emailed/manually shared, slightly more slack than a same-session action).
-- `apps/api/src/modules/auth/auth.service.ts`: `requestPasswordReset(db,
-email)` — always looks up the user, always returns quickly; if found,
-  inserts a token and returns `{ userFound: true, resetToken }`; if not,
-  returns `{ userFound: false }`. No password hashing involved, so no
-  Argon2id-style timing-defense needed (unlike `loginUser`) — the sole
-  requirement is an identical HTTP response either way, enforced at the route
-  layer by never branching on the result.
-- `resetPassword(db, token, newPassword)` — validates the token
-  (unknown/used/expired → `AuthServiceError` `invalid_reset_token` /
-  `reset_token_already_used` / `reset_token_expired`, 400 each), then in one
-  transaction: updates `users.passwordHash`, marks the token `usedAt`, marks
-  every other outstanding token for that user `usedAt` too, deletes every
-  `sessions` row for that user. Returns the updated public `User`.
-- Routes: `POST /v1/auth/forgot-password` (`204`, always, same
-  `AUTH_RATE_LIMIT` tier) and `POST /v1/auth/reset-password` (`200 { user
-}`, same rate-limit tier). Neither sets a session cookie — the user logs in
-  again with the new password.
-- `docs/api.md`/`docs/database.md` updated with the real contract/schema.
-  `.claude/context/known-issues.md` gets a new entry for the missing web
-  screens + the "never exposed via HTTP, even in dev" scope boundary.
+- Add `@fastify/helmet` (`apps/api`), registered once, globally, in
+  `app.ts` — new `apps/api/src/plugins/security-headers.ts`
+  (`registerSecurityHeaders`), called early (right after
+  `registerErrorHandler`) so it applies to every route registered
+  afterward: `/health`, `/docs`, `/v1/*`.
+- Custom CSP directives (not helmet's raw defaults): `defaultSrc: ["'self'"]`,
+  `styleSrc: ["'self'", "'unsafe-inline'"]` (Swagger UI's own inline styles
+  — helmet's own default already includes `'unsafe-inline'` here, not a
+  lowered bar), `imgSrc: ["'self'", 'data:']` (Swagger UI's embedded
+  logo/favicon), `scriptSrc: ["'self'"]`, `objectSrc: ["'none'"]`,
+  `frameAncestors: ["'none'"]` (this API is never meant to be framed —
+  stricter than helmet's `'self'` default), `upgradeInsecureRequests: null`
+  (explicitly removed — see the dev-breakage reasoning above; TLS
+  termination is a reverse-proxy concern this app doesn't own yet).
+- `xFrameOptions: { action: 'deny' }` to match `frameAncestors: 'none'` —
+  security.md names both together, keep them consistent rather than
+  shipping a CSP `frame-ancestors: none` next to a looser
+  `X-Frame-Options: SAMEORIGIN`.
+- Everything else stays helmet's defaults (`X-Content-Type-Options: nosniff`,
+  `Referrer-Policy`, `Cross-Origin-Resource-Policy: same-origin` — consistent
+  with ADR-013's no-CORS single-origin posture, `Strict-Transport-Security`
+  — harmless over plain http per spec, takes effect once a real reverse
+  proxy terminates TLS).
+- Live-verify `/docs` still renders and functions after the change (not just
+  assumed) — this is the one real regression risk.
 
 ## Requirements / acceptance criteria
 
-- `forgot-password` response is byte-identical for an existing vs.
-  non-existent email, in every `NODE_ENV`.
-- A valid reset token successfully changes the password and can't be reused.
-- An expired or already-used token is rejected with a distinct, correct code.
-- On success, every existing session for that user is invalidated (a
-  previously-valid session cookie 401s on `/v1/auth/me` afterward).
-- A second, still-valid reset token for the same user is invalidated once one
-  of them is used.
-- Both endpoints are rate-limited at the same tier as register/login.
-- `pnpm turbo run lint typecheck` and the full `apps/api`/`apps/web` test
-  suites stay green.
+- `GET /health`, `GET /docs`, and a `/v1/*` response all carry
+  `Content-Security-Policy`, `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy`.
+- `/docs` (Swagger UI) still renders and works with the new CSP — live
+  browser check, not just "no server error."
+- No `upgrade-insecure-requests` directive (would break local `http://` dev).
+- `pnpm turbo run lint typecheck build` and the full `apps/api`/`apps/web`
+  test suites stay green.
 
 ## Planned files
 
-- `packages/db/src/schema/password-reset-token.ts` (new), `schema/index.ts`.
-- `packages/db/migrations/00XX_*.sql` (generated).
-- `packages/types/src/api/auth.ts`.
-- `apps/api/src/modules/auth/tokens.ts`, `auth.service.ts`, `auth.routes.ts`,
-  `auth.routes.test.ts`.
-- `docs/api.md`, `docs/database.md`, `docs/tasks.md`.
-- `.claude/context/known-issues.md`, `.claude/context/project-state.md`,
+- `apps/api/package.json` (new dependency).
+- `apps/api/src/plugins/security-headers.ts` (new).
+- `apps/api/src/app.ts` (registers it).
+- `apps/api/src/app.test.ts` or a new test file — header assertions.
+- `docs/tasks.md`, `.claude/context/known-issues.md` (KI-022 narrows to just
+  CR-058 once this lands), `.claude/context/project-state.md`,
   `docs/changelog.md`.
 
 ## Implementation progress
 
-- [x] DB schema + migration (`0013_useful_living_tribunal.sql`, applied).
-- [x] Shared Zod schemas.
-- [x] Service layer (`requestPasswordReset`/`resetPassword`).
-- [x] Routes + rate limiting.
-- [x] Tests (happy path, enumeration-safety, expiry, reuse, session
-      revocation, other-token invalidation, rate limit) — 36 new assertions.
-- [x] Docs (`api.md`, `database.md`) + known-issues entry (KI-042).
-- [x] Validation (lint/typecheck/test) + context updates.
+- [x] Install `@fastify/helmet` (`^13.1.1`).
+- [x] `security-headers.ts` plugin + wire into `app.ts`.
+- [x] Tests (headers present on `/health`/`/v1`/`/docs`, no
+      `upgrade-insecure-requests`, `frame-ancestors 'none'`) — 5 new
+      assertions.
+- [x] Live-verify `/docs` still works (headless-browser check).
+- [x] Docs/context updates.
 
 ## Validation results
 
-`pnpm turbo run lint typecheck` — 17/17 tasks clean. `apps/api` full suite:
-278/278 passing (was 265). `apps/web` full suite: 174/174 passing
-(unaffected). `pnpm --filter api build` clean. Live-verified end to end
-against this environment's real local Postgres + a running `apps/api`:
-registered a real user; `forgot-password` returned byte-identical `204` for
-that email and for a nonexistent one; obtained a real reset token via the
-service layer directly (no HTTP path exposes it); captured a session cookie
-by logging in with the old password; reset the password; confirmed the old
-session cookie now 401s on `/v1/auth/me`; confirmed the new password logs in
-and the old one is rejected. Dev server and scratch verification script
-stopped/removed afterward.
+`pnpm turbo run lint typecheck build` — 24/24 tasks clean. `apps/api` full
+suite: 283/283 passing (was 278). `apps/web` unaffected (174/174). Live
+browser check via the `browser-automation` skill against a real running
+`apps/api`: `http://localhost:4000/docs/` renders the full Swagger UI
+operations list, zero console errors (no CSP violations), zero failed
+requests. `curl -i /docs` confirmed actual header values match the plan
+(CSP with `frame-ancestors 'none'`, no `upgrade-insecure-requests`;
+`X-Frame-Options: DENY`). Dev server stopped afterward.
 
 ## Discovered issues
 
-None new — KI-042 documents the (expected, scoped-out) missing web
-screens/email-delivery gap, same shape as KI-026.
+None new.
 
 ## Final result
 
-CR-060 is complete. `password_reset_tokens` table + `POST
-/v1/auth/forgot-password`/`reset-password` ship the full single-use,
-time-limited, enumeration-safe reset flow required by
-`.claude/rules/security.md`, including session revocation and cross-token
-invalidation on success. Security foundations now has one unblocked ticket
-left: CR-061 (security headers, `@fastify/helmet`-equivalent) — CR-058 stays
-blocked on KI-014 (Redis unverified live in this environment). Next logical
-task: CR-061.
+CR-061 is complete. `@fastify/helmet` is registered globally
+(`apps/api/src/plugins/security-headers.ts`) with a custom CSP that drops
+`upgrade-insecure-requests` (this app never terminates TLS itself) and
+tightens `frame-ancestors`/`X-Frame-Options` to `'none'`/`DENY`. Live-verified
+the one real regression risk — `/docs` (Swagger UI) — still renders and
+works correctly. This closes Security foundations' second-to-last open item;
+only CR-058 (Redis-backed per-account auth rate limiting) remains, blocked on
+KI-014. Next logical task: Deployment section (CR-074+), since Security
+foundations has no other unblocked work.

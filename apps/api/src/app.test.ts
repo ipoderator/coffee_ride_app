@@ -107,3 +107,60 @@ describe('error handler', () => {
     await app.close();
   });
 });
+
+describe('security headers (CR-061)', () => {
+  it('sends CSP/X-Content-Type-Options/X-Frame-Options/Referrer-Policy on an unversioned route', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.headers['content-security-policy']).toBeDefined();
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+    expect(response.headers['referrer-policy']).toBeDefined();
+
+    await app.close();
+  });
+
+  it('sends the same headers on a /v1 route', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({ method: 'GET', url: '/v1/auth/me' });
+
+    expect(response.headers['content-security-policy']).toBeDefined();
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+
+    await app.close();
+  });
+
+  it('sends the same headers on /docs (Swagger UI)', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({ method: 'GET', url: '/docs' });
+
+    expect(response.headers['content-security-policy']).toBeDefined();
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+
+    await app.close();
+  });
+
+  it('CSP does not include upgrade-insecure-requests (would break local http:// dev)', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.headers['content-security-policy']).not.toContain(
+      'upgrade-insecure-requests',
+    );
+
+    await app.close();
+  });
+
+  it("CSP sets frame-ancestors 'none', matching X-Frame-Options: DENY", async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.headers['content-security-policy']).toContain(
+      "frame-ancestors 'none'",
+    );
+
+    await app.close();
+  });
+});

@@ -384,6 +384,23 @@ compliant this session — no new gaps found beyond these two, already-tracked
 ones. Scope decision: fix only what's this task's own (CR-044/045/046/048),
 document CR-058/CR-061's exact scope rather than implement it under CR-047,
 per `.claude/context/current-task.md`.
+Update 2026-09-17 (CR-061, "Security headers"): item (2) is resolved —
+`@fastify/helmet` is now registered globally in `apps/api/src/app.ts`
+(`plugins/security-headers.ts`), so every response (`/health`, `/docs`,
+`/v1/*` alike) carries `Content-Security-Policy`,
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+and helmet's other standard headers. CSP is customized, not left at helmet's
+raw defaults: `upgrade-insecure-requests` is explicitly removed (this app
+never terminates TLS itself — the default directive would break `/docs` over
+local `http://`, rewriting its own same-origin sub-requests to `https://`
+with no listener there) and `frame-ancestors`/`X-Frame-Options` are tightened
+to `'none'`/`DENY` (helmet's own defaults are `'self'`/`SAMEORIGIN`). Only
+item (1) remains open — narrower now than CR-047's audit found it, since
+CR-058 is the tracked ticket for it (blocked on KI-014).
+Impact: lowered further — the two items CR-047's audit widened to "every
+endpoint"/"every response" are now one item, not two.
+Next action: CR-058 only (Redis-backed, per-account auth rate limiting,
+blocked on KI-014 until a live Redis is reachable).
 
 ### KI-023 — Profile avatar/photo upload is not implemented
 

@@ -3460,3 +3460,62 @@ still-Pending email delivery, not just a screen.
 Follow-up: CR-058 (Redis-backed per-account auth rate limiting, blocked on
 KI-014) and CR-061 (security headers, unblocked) are the two remaining
 Security foundations tickets. CR-061 is the natural next task.
+
+## 2026-09-17 — CR-061 — Security headers (`@fastify/helmet`)
+
+Summary: `.claude/rules/security.md`'s Transport & headers section requires
+CSP/`X-Content-Type-Options`/`frame-ancestors`/`X-Frame-Options`/
+`Referrer-Policy` on API responses; KI-022 (re-confirmed by CR-047's audit)
+tracked "zero security headers, API-wide" as the one remaining item this
+ticket closes (the CSRF half of CR-061's original scope was already done by
+CR-012).
+Implementation: new `apps/api/src/plugins/security-headers.ts`
+(`registerSecurityHeaders`), registering `@fastify/helmet` once, globally,
+in `app.ts` — right after `registerErrorHandler`, before every route is
+registered, so it applies to `/health`, `/docs` (Swagger UI), and every
+`/v1/*` route alike. Unlike `csrf.ts` (deliberately scoped to `v1Routes`'s
+own encapsulation context, since CSRF only matters for cookie-bearing `/v1`
+mutations), generic response headers are worth sending everywhere this
+process serves.
+CSP deviates from helmet's raw defaults in two deliberate ways: (1)
+`upgradeInsecureRequests` is explicitly removed — this app never terminates
+TLS itself (a reverse proxy will, per ADR-013/CR-075, not yet built), and
+the default directive would make a browser rewrite `/docs`'s own
+same-origin sub-requests to `https://` in local dev, which has no listener
+there, breaking Swagger UI entirely over plain `http://`; (2)
+`frameAncestors` is tightened to `'none'` (helmet's default is `'self'`),
+paired with `xFrameOptions: { action: 'deny' }` — this API is never meant to
+be framed by anything. `styleSrc`/`imgSrc` stay permissive enough for
+Swagger UI's own inline styles and embedded logo (`'unsafe-inline'` on
+`styleSrc` is helmet's own default already, not a bar lowered for this app).
+Files: `apps/api/package.json` (new dependency, `@fastify/helmet@^13.1.1` —
+current major, targets Fastify 5 like this repo, same "adopt latest" pattern
+every other `@fastify/*` dependency here follows), `apps/api/src/plugins/
+security-headers.ts` (new), `apps/api/src/app.ts` (wires it in),
+`apps/api/src/app.test.ts` (5 new assertions: headers present on `/health`,
+`/v1/auth/me`, `/docs`; no `upgrade-insecure-requests`; `frame-ancestors
+'none'`).
+Decisions: none new at the ADR level — implements the already-Accepted
+ADR-006 checklist item, doesn't change it.
+Validation: `pnpm turbo run lint typecheck build` clean across all 9
+workspace members; `apps/api` full suite 283/283 passing (was 278, +5 net);
+`apps/web` unaffected (174/174, not re-touched). Live-verified the one real
+regression risk, not just assumed safe: booted a real `apps/api` dev server
+and drove `/docs` through a headless browser (`browser-automation` skill) —
+`http://localhost:4000/docs/` (note the trailing slash — Swagger UI's own
+relative-asset-resolution gotcha, not a CSP issue) renders the full
+"Coffee Ride API 1.0.0" operations list including the new CR-060 auth
+routes, zero console errors (no CSP violation reports), zero failed network
+requests. `curl -i /docs` confirmed the actual header values sent
+(`Content-Security-Policy` with `frame-ancestors 'none'`, no
+`upgrade-insecure-requests`; `X-Frame-Options: DENY`; `Strict-Transport-Security`;
+`Cross-Origin-Resource-Policy: same-origin`, consistent with ADR-013's
+no-CORS single-origin posture). Dev server stopped afterward.
+Known limitations: none new — KI-022 updated (this ticket resolves item (2)
+of that entry; item (1), rate limiting, stays open as CR-058, blocked on
+KI-014).
+Follow-up: this closes the second of Security foundations' two remaining
+tickets. Only CR-058 (Redis-backed per-account auth rate limiting) stays
+open in that section, blocked on KI-014 (Redis unverified live in this
+environment) — the Deployment section (CR-074+) is otherwise the next
+logical work.

@@ -12,6 +12,7 @@ import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerOpenApi } from './plugins/openapi.js';
 import { registerS3 } from './plugins/s3.js';
+import { registerSecurityHeaders } from './plugins/security-headers.js';
 import { registerNotificationQueue } from './modules/notifications/queue.js';
 import { healthRoutes } from './routes/health.js';
 import { v1Routes } from './routes/v1.js';
@@ -51,6 +52,9 @@ export async function buildApp(env: Env) {
   app.setSerializerCompiler(serializerCompiler);
 
   registerErrorHandler(app);
+  // CR-061: global, before every route is registered — applies to
+  // `/health`, `/docs`, and `/v1/*` alike (`.claude/rules/security.md`).
+  await registerSecurityHeaders(app);
   await registerOpenApi(app);
   registerDb(app, env);
   registerS3(app, env);
