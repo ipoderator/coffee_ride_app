@@ -53,6 +53,13 @@ across multiple sessions/PRs, gate it behind a simple feature flag (a config val
 new deployment) so it can be hidden without a hotfix if something breaks. Remove the flag
 once the feature is stable — flags are not meant to accumulate indefinitely.
 
+Mechanics (CR-055, `apps/web/src/lib/cabinet/feature-flags.ts`): add `flag: 'YOUR_FLAG'`
+to the feature's `CabinetNavItem`/`DashboardWidget` descriptor; it's read from the
+server-only `FEATURE_YOUR_FLAG` env var (`"1"`/`"true"` = on, anything else/unset = off).
+Evaluated inside a Server Component (a cabinet's `layout.tsx`/`page.tsx`), never inside a
+`'use client'` module — a non-`NEXT_PUBLIC_` env var always reads as unset in the browser
+bundle, so a flag checked there would silently always be off.
+
 ## Regression discipline
 
 Any change to `packages/ui`, `packages/types`, or a shared API contract must be checked

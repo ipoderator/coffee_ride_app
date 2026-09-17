@@ -287,6 +287,40 @@ describe('RouteUploadForm', () => {
     expect(replaceRouteMock).toHaveBeenCalledWith('ride-1', expect.any(File));
   });
 
+  it('shows the degraded storage-unavailable notice on replace, not a hard error', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: baseRoute.distanceKm,
+      elevationGainMeters: baseRoute.elevationGainMeters,
+      route: baseRoute,
+      stops: [],
+      routePoints: [],
+    });
+    replaceRouteMock.mockRejectedValue(
+      new ApiError({
+        type: 'https://coffee-ride.example/errors/route_storage_unavailable',
+        title: 'Route storage unavailable',
+        status: 503,
+        detail: 'File storage is temporarily unavailable. Try again shortly.',
+        instance: '/v1/rides/ride-1/route',
+        code: 'route_storage_unavailable',
+      }),
+    );
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('track.gpx', { exact: false });
+
+    selectFile(new File(['<gpx></gpx>'], 'new-track.gpx'));
+    fireEvent.click(screen.getByRole('button', { name: 'Заменить трек' }));
+
+    expect(
+      await screen.findByText('Загрузка недоступна. Попробуйте ещё раз позже.'),
+    ).toBeInTheDocument();
+    // The still-existing route stays visible — a degraded upload never blanks
+    // the screen or discards already-persisted content.
+    expect(screen.getByText('track.gpx', { exact: false })).toBeInTheDocument();
+  });
+
   it('deletes the route after confirmation', async () => {
     getRideRouteStateMock.mockResolvedValue({
       status: 'draft',

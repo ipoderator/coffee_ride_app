@@ -37,6 +37,15 @@ adapter package, without touching ride/route/discovery feature code:
 - **`packages/maps-2gis`** — the only package allowed to import the 2GIS SDK. Implements
   the `packages/maps-core` interface.
 
+Lint-enforced, not convention-only (CR-056): every workspace member's `eslint.config.mjs`
+carries a `no-restricted-imports` rule rejecting any import specifier matching `*2gis*`;
+`packages/maps-2gis`'s own config is the one place that opts out
+(`nodeLibraryConfig({ allowMapsSdkImports: true })`,
+`packages/config/eslint/node-library.js`). No 2GIS SDK package is actually installed
+anywhere yet (`packages/maps-2gis` calls 2GIS's REST APIs via plain `fetch`) — this rule is
+preventative, guarding the day a real vendor package (e.g. for browser MapGL rendering,
+KI-031) gets installed somewhere it shouldn't.
+
 `apps/web` and `apps/api` depend only on `packages/maps-core`'s interface types plus
 whichever concrete adapter is wired in at the composition point (a single place — e.g. a
 provider factory read from config — not scattered imports).

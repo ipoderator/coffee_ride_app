@@ -3149,3 +3149,246 @@ ticket only adds the diagnostic surface that would report it once one exists.
 Follow-up: CR-052 (frontend degraded-state handling) is the one remaining
 Resilience-section ticket — a natural consumer of this endpoint's `dependencies`
 detail, not just its overall `status`.
+
+## 2026-09-17 — CR-052 — Frontend degraded-state handling (maps/uploads unavailable)
+
+Summary: `.claude/rules/resilience.md` requires the frontend to handle a degraded
+API response with a clear partial-failure UI state, never a blank screen or crash.
+`docs/design.md` §10 names exactly two required cases: 2GIS unavailable (map area
+shows an inline notice, rest of the screen stays usable) and S3 unavailable
+(upload control shows "Загрузка недоступна", rest of the form still submits). A
+read-only audit before writing any code found both cases already real, built
+opportunistically during CR-026/027/028 rather than as this ticket: discovery's
+`/` map (`RideMapPlaceholder`) and `/rides/[id]`'s route map
+(`RouteMapPlaceholder`) both render a tested inline `ErrorState` (KI-031);
+`RouteUploadForm`'s `handleUploadError` already maps the API's
+`route_storage_unavailable` code to an inline degraded notice without blocking
+the rest of the form. No other map or S3-upload surface exists (KI-023's
+avatar/cover-image upload is still unbuilt, nothing to degrade there).
+The one genuine gap: the degraded-upload path was only tested on the initial
+`uploadRoute` (POST) call, not `replaceRoute` (PATCH) — added the missing
+symmetric test (`route.test.tsx`, "shows the degraded storage-unavailable notice
+on replace, not a hard error"). `deleteRoute` was checked and confirmed it can't
+structurally hit this code path (`rides.service.ts`'s delete does the DB row
+first and treats S3 cleanup as best-effort try/catch), so it's correctly
+untested rather than a gap.
+Decision: CR-050's changelog entry had speculated CR-052 would be "a natural
+consumer of [`/health`]'s `dependencies` detail" — i.e. a proactive banner
+driven by polling `GET /health`. `docs/design.md` §10, the actual spec for this
+ticket, names only the two reactive per-call cases above and says nothing about
+a global banner or `/health` polling; `apps/web` doesn't call `/health` anywhere
+today. Closing CR-052 on the reactive, per-call handling that already exists and
+is now fully tested, per `.claude/CLAUDE.md`'s "don't add features beyond what
+the task requires" — a proactive global-degraded-banner is real product/UX
+surface with no design-doc backing yet, not an implicit extension of this
+ticket. Recorded explicitly (`.claude/context/known-issues.md`) so a future
+session doesn't read the CR-050 note as still-open scope.
+Files: `apps/web/src/features/organizer/route/route.test.tsx` (new test only;
+no application code changed — the behavior it tests already existed).
+Decisions: none new at the ADR level; the reactive-vs-proactive scoping decision
+above is recorded here and in known-issues, not promoted to a full ADR (no
+architecture change, just a scope boundary).
+Validation: `pnpm --filter web run test` — 158/158 passed (157 pre-existing + 1
+new), no other test modified. `pnpm --filter web run typecheck`/`lint` clean.
+Known limitations: none new. A future proactive `/health`-driven degraded banner
+remains a real option if a product need for one is identified, but needs its own
+`docs/design.md` update first, not a retrofit into this ticket's closure.
+This closes the Resilience section of `docs/tasks.md` (CR-049, CR-050, CR-051,
+CR-052 all done).
+
+## 2026-09-17 — CR-053 — Verified `packages/maps-core`/`packages/maps-2gis` split (ADR-010)
+
+Summary: first ticket in the Extensibility foundations section. ADR-010
+requires all map/geocoding/routing access to go through a provider-neutral
+interface (`packages/maps-core`), with 2GIS as one concrete implementation
+(`packages/maps-2gis`), and no other package importing the 2GIS SDK directly.
+Before writing any code, checked whether this was already true — the split
+was actually built during CR-007 (2026-09-12), before ADR-010 and this ticket
+existed as separate numbered backlog items, the same "earlier work already
+satisfies a later-numbered ticket" shape as CR-052.
+Verified directly rather than assumed: `packages/maps-core/src/{types.ts,
+provider.ts,index.ts}` match `.claude/rules/maps.md`'s interface contract
+exactly (`LatLng`, `GeocodeResult`, `RouteRequest`, `RouteResult`,
+`MapProvider`) with zero vendor imports and zero runtime dependencies;
+`packages/maps-2gis` is the only package with 2GIS-specific logic; dependency
+direction is correct (`maps-2gis`'s `package.json` depends on `maps-core`,
+never the reverse); a repo-wide grep for `2gis|2GIS|dgis|MapGL` outside
+`packages/maps-2gis` turned up only terminology/copy strings
+(`packages/ui/terminology.ts`, the degraded-map-notice components) and env var
+names (`apps/api/src/env.ts`) — never an actual SDK import.
+Also confirmed `packages/maps-2gis` still has zero real consumers in
+`apps/web`/`apps/api` — expected and already tracked, not this ticket's gap:
+KI-016 blocks wiring a live geocode/routing call on a missing
+`MAPS_2GIS_API_KEY` credential, KI-031 explains why map rendering stays a
+placeholder (no MapGL key either). Building a composition point now, with
+nothing real to wire it to, would be dead code behind an unverifiable
+adapter — deferred to whichever ticket first has a live credential.
+Files: none — no application code changed, only `docs/tasks.md`/
+`docs/changelog.md`/`.claude/context/project-state.md`.
+Decisions: none new — reaffirms ADR-010, doesn't change it.
+Validation: `pnpm turbo run typecheck lint --filter=maps-core
+--filter=maps-2gis` clean (all cache hits, no regression — nothing changed).
+Known limitations: none new — KI-016/KI-031 stay open at their existing scope.
+Follow-up: CR-054 (feature registry for dashboard nav/widgets) is next in the
+Extensibility foundations section.
+
+## 2026-09-17 — CR-054 — Verified feature registry for dashboard nav/widgets (ADR-009)
+
+Summary: `.claude/rules/extensibility.md` requires shared surfaces that must
+show every feature (dashboard nav, a widget grid) to be built as a registry a
+feature registers a descriptor into, never a hard-coded branch. Audited
+whether this already held before writing code — same "earlier ticket already
+satisfies this one" shape as CR-052/CR-053.
+Nav: already real and generic for both cabinets. `CabinetShell.tsx:98-106`
+renders `navItems.map(...)`, no per-feature branch; `lib/cabinet/
+organizer-nav.ts` (2 entries) and `participant-nav.ts` (3 entries) each just
+list descriptors + `.sort` by `order`. Confirmed against `docs/design.md` §8
+that organizer's 2 entries / participant's 3 are correct, not missing
+coverage — screens like `/organizer/rides/[id]/edit|route|participants|
+updates` are reached by drilling into a ride from the `/organizer/rides` list
+(one nav entry covers the whole area), same shape as `/me/rides`'s
+upcoming/past tabs. ADR-009 requires registration instead of branching, not
+that every screen becomes its own nav item.
+Widgets: already real and generic for the one cabinet `docs/design.md` §8
+actually specs a widget grid for — only `/organizer` is listed as "Dashboard
+(widgets from the ADR-009 registry)"; `/me` is plain "Participant cabinet
+home" with no widget-grid requirement. Deliberately did not invent an empty
+`PARTICIPANT_WIDGETS` registry with no real content behind it — that would be
+exactly the "design for hypothetical future requirements" `.claude/CLAUDE.md`
+warns against.
+Real gaps closed: (1) zero test coverage of the registry mechanism itself —
+no test exercised `CabinetShell`'s render-from-list loop, either nav
+registry's sort-by-order, or `organizer-widgets.ts`'s sort/empty-fallback
+branch in `app/organizer/page.tsx`. `apps/web/vitest.config.mts`'s own
+`@`-alias comment had already anticipated a `CabinetShell` test but it was
+never written. (2) Two inline comments (`lib/cabinet/types.ts`,
+`lib/cabinet/organizer-widgets.ts`) claimed "flag-aware generalization... is
+CR-054" — but `docs/tasks.md` lists that exact scope ("Feature flag utility
+for staged cabinet feature rollout") as CR-055, its own ticket. Fixed both
+comments to point at CR-055 instead of adding an unused `requiredCapability`/
+flag field now with no current consumer — nothing in `docs/design.md` calls
+for cabinet-nav icons or per-item capability gating today (both cabinets are
+already separate route trees, not one merged nav needing per-item
+visibility filtering).
+Files: `apps/web/src/components/cabinet/CabinetShell.test.tsx` (new, 3
+tests — generic render-from-arbitrary-list proof, 401→`/login` redirect,
+non-401 generic error state), `apps/web/src/lib/cabinet/
+cabinet-registries.test.ts` (new, 3 tests — sort-by-order for all three
+registries), `apps/web/src/app/organizer/page.test.tsx` (new, 2 tests —
+non-empty render loop + the previously-untested empty-registry fallback),
+`apps/web/src/lib/cabinet/types.ts` + `organizer-widgets.ts` (comment fixes
+only, no behavior change).
+Decisions: none new at the ADR level — reaffirms ADR-009, doesn't change it.
+Validation: `pnpm --filter web run test` — 166/166 passed (158 pre-existing +
+8 new), no other test modified. `pnpm --filter web run typecheck`/`lint`
+clean.
+Known limitations: none new.
+Follow-up: CR-055 (feature-flag utility for staged cabinet feature rollout)
+is next in the Extensibility foundations section — it owns the flag/
+capability-gating behavior these registries deliberately don't implement yet.
+
+## 2026-09-17 — CR-055 — Feature flag utility for staged cabinet feature rollout
+
+Summary: ADR-009/`.claude/rules/extensibility.md` require a new, risky, or
+incrementally-shipped cabinet feature to gate behind a feature flag (a
+config value, not a new deployment) "so partial rollout doesn't require a
+rushed hotfix." Unlike CR-052/053/054, this was a genuine gap — grepped the
+whole repo beforehand and found no flag mechanism anywhere, only a comment
+(fixed by CR-054) pointing at this ticket.
+Design: `isFeatureEnabled(flag)`/`filterEnabled(items)`
+(`apps/web/src/lib/cabinet/feature-flags.ts`) are deliberately server-only.
+`CabinetNavItem`/`DashboardWidget` registries are only ever imported by
+Server Components today (`app/organizer/layout.tsx`, `app/me/layout.tsx`,
+`app/organizer/page.tsx`) — filtering happens there, before the
+already-filtered list crosses to a Client Component (`CabinetShell`, a
+widget's own `Component`). This sidesteps a real Next.js constraint: a
+`NEXT_PUBLIC_*` env var is only statically inlined for a literal
+`process.env.X` member expression, never a dynamically computed key, so a
+generic `isFeatureEnabled(name: string)` could not work if evaluated
+client-side. Server-only env vars have no such restriction (plain Node.js
+`process.env[key]` access at request time), so the utility takes an
+arbitrary flag name and reads `FEATURE_<NAME>` — no `NEXT_PUBLIC_` prefix, no
+browser exposure (the real cost `.env.example` already flags for
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`).
+`app/organizer/page.tsx` had an unnecessary `'use client'` (no hooks/
+interactivity of its own) blocking this — dropped it. Server Components can
+render Client Components as children, so `OrganizerProfileWidget` (still
+`'use client'`, unchanged) keeps working exactly as before.
+No existing registry entry sets `flag` — every shipped cabinet feature is
+stable, nothing is currently mid-rollout — so this ships as pure
+infrastructure with zero behavior change today, matching the ticket's own
+framing ("utility for staged rollout," not "gate feature X").
+Files: `apps/web/src/lib/cabinet/feature-flags.ts` (new),
+`apps/web/src/lib/cabinet/feature-flags.test.ts` (new, 8 tests — env
+unset/falsy/truthy, case-insensitivity, item-with/without-flag, order
+preservation across mixed items), `apps/web/src/lib/cabinet/types.ts`
+(`flag?: string` added to both descriptor types), `apps/web/src/app/
+organizer/layout.tsx` + `apps/web/src/app/me/layout.tsx` (filter their nav
+registry before passing it to `CabinetShell`), `apps/web/src/app/organizer/
+page.tsx` (dropped `'use client'`, filters `ORGANIZER_WIDGETS`),
+`.claude/rules/extensibility.md` (records the `FEATURE_<NAME>` convention
+and the Server-Component-only constraint).
+Decisions: none new at the ADR level — implements ADR-009, doesn't change it.
+Validation: `pnpm --filter web run test` — 174/174 passed (166 pre-existing +
+8 new), no other test modified. `pnpm --filter web run typecheck`/`lint`/
+`build` all clean — `build` mattered here specifically, given the Server/
+Client boundary change on `/organizer`'s page. Live-verified against this
+environment's real local Postgres (not just unit tests, given the boundary
+change): booted `apps/api`+`apps/web`, registered and logged in a real test
+user, curled `/organizer` and `/me` with the session cookie — both render
+without error; the RSC payload confirms `CabinetShell` receives exactly the
+expected filtered nav lists (`/organizer`: profile + rides; `/me`: my
+registrations + profile + notifications, unchanged since nothing is
+flagged) and `/organizer`'s widget grid still renders `OrganizerProfileWidget`
+as a Client Component reference from the now-Server-Component page. Dev
+servers stopped and temp files removed afterward.
+Known limitations: none new.
+Follow-up: CR-056 (lint rule/doc preventing direct 2GIS SDK imports outside
+`packages/maps-2gis`) is the last ticket in the Extensibility foundations
+section.
+
+## 2026-09-17 — CR-056 — Lint rule preventing direct 2GIS SDK imports outside `packages/maps-2gis`
+
+Summary: ADR-010/`.claude/rules/maps.md` require `packages/maps-2gis` to be
+the only package allowed to import the 2GIS SDK; CR-053 verified this held
+by convention (no actual SDK package is installed anywhere — `maps-2gis`
+calls 2GIS's REST APIs via plain `fetch`). This ticket makes that convention
+machine-enforced, the same "shared infra ahead of a specific need" shape as
+`packages/resilience` (CR-049) — it guards the day a real vendor package
+(e.g. for browser MapGL rendering, KI-031) gets installed somewhere it
+shouldn't, rather than fixing an existing violation.
+Rule: `no-restricted-imports` with `patterns: [{ group: ['*2gis*'], message:
+... }]` — a glob matching any import specifier containing "2gis" anywhere
+(catches `@2gis/mapgl` and any similarly-named future package), on every
+workspace member except `packages/maps-2gis`.
+Flat ESLint config has no directory cascading in this repo (CR-010/KI-012),
+so every workspace member needed its own copy of the rule. Four packages
+(`maps-core`, `resilience`, `types`, and `maps-2gis` itself) share
+`packages/config`'s `nodeLibraryConfig()` factory — the rule was added there
+once, on by default, with a `{ allowMapsSdkImports: true }` opt-out that
+only `maps-2gis`'s own `eslint.config.mjs` passes. The five configs that
+don't use that factory (`apps/web`, `apps/api`, `packages/db`,
+`packages/ui`, `packages/config` itself) each got the same rule block added
+directly — the same duplication shape the pre-existing "no raw hex color"
+rule already established across `apps/web`/`packages/ui`.
+Proven to actually fire, not just assumed: temporarily added `import {
+something } from '@2gis/mapgl'` to a scratch file under `apps/web/src/lib/`,
+confirmed `eslint` failed with this rule's exact message, then did the same
+under `packages/maps-2gis/src/` and confirmed it passed (only the
+pre-existing `no-console` warning) — proving the opt-out works too. Both
+scratch files deleted afterward, never committed.
+Files: `packages/config/eslint/node-library.js` (rule + opt-out option),
+`packages/maps-2gis/eslint.config.mjs` (opts out), `apps/web/
+eslint.config.mjs`, `apps/api/eslint.config.mjs`, `packages/db/
+eslint.config.mjs`, `packages/ui/eslint.config.mjs`, `packages/config/
+eslint.config.mjs` (rule added directly), `.claude/rules/maps.md` (records
+the enforcement).
+Decisions: none new at the ADR level — enforces ADR-010, doesn't change it.
+Validation: `pnpm turbo run lint typecheck` — clean across all 9 workspace
+members (0 real violations, since no 2GIS SDK import exists anywhere).
+Manual proof of the rule firing/opting-out as described above.
+Known limitations: none new.
+Follow-up: this completes the Extensibility foundations section of
+`docs/tasks.md` (CR-053, CR-054, CR-055, CR-056 all done). Security
+foundations (CR-058 auth rate limiting, CR-060 password reset, CR-061
+security headers) is the next open section.

@@ -1081,3 +1081,29 @@ participant cabinet nav registry. Read-only — cancellation stays on
 Postgres + `apps/api`: an upcoming and a past-dated ride each land in the
 correct tab, no session → `401`, missing `when` → `400`. See
 `docs/changelog.md`'s CR-091 entry.
+
+### KI-041 — CR-052 closes on reactive degraded-state handling, not a proactive `/health` banner
+
+Resolved: 2026-09-17 (CR-052, "Frontend degraded-state handling" — the scoping
+decision this entry records). Discovered: 2026-09-16 (CR-050's changelog entry
+speculated CR-052 would be "a natural consumer of [`/health`]'s `dependencies`
+detail," i.e. a global banner driven by polling `GET /health`).
+Problem: that CR-050 note created an implicit expectation that was never backed
+by `docs/design.md`. §10 (the actual spec for CR-052) names exactly two
+degraded cases — an inline notice on the map area when 2GIS is unavailable, and
+"Загрузка недоступна" on the upload control when S3 is unavailable — both
+reactive, per-call, and both already built (opportunistically, during
+CR-026/027/028) before CR-052 was picked up as its own ticket. Nothing in the
+product docs asks for a global "backend is degraded" banner.
+Impact: none functionally — this is a scope-boundary clarification, not a bug.
+Left unrecorded, a future session could read the CR-050 note as still-open
+scope and build a `/health`-polling banner nobody asked for, or conversely
+keep treating CR-052 as blocked on it.
+Resolution: CR-052 is closed on the reactive, per-call handling alone (already
+real, now with a symmetric `replaceRoute` degraded-path test added alongside
+the existing `uploadRoute` one). `apps/web` does not call `GET /health`
+anywhere, deliberately.
+Next action: none for CR-052 itself. If a real product need for a proactive
+degraded-backend banner shows up later, it needs its own `docs/design.md`
+update first (what it looks like, which pages show it, how often it polls) —
+treat that as new scope, not a reopening of this ticket.

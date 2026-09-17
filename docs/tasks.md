@@ -430,14 +430,54 @@ is not done (`docs/definition-of-done.md`).
       2026-09-16: `GET /health` now runs a real, bounded check per dependency
       (`ok`/`error`/`not_configured`) and always returns `200`. See
       `docs/changelog.md`.
-- [ ] CR-052 Frontend degraded-state handling (maps/uploads unavailable)
+- [x] CR-052 Frontend degraded-state handling (maps/uploads unavailable) — done
+      2026-09-17: both `docs/design.md` §10 cases were already real,
+      opportunistically built during CR-026/027/028 (map placeholder,
+      `route_storage_unavailable` inline notice) — this ticket closed the gap
+      by adding the missing `replaceRoute` (PATCH) degraded-path test
+      (symmetric with the already-tested `uploadRoute` one) and recording an
+      explicit decision that CR-052 closes on reactive per-call handling, not
+      a proactive `/health`-polling global banner (no design.md spec for one).
+      See `docs/changelog.md`.
 
 ## Extensibility foundations
 
-- [ ] CR-053 Split `packages/maps-core` (interface) + `packages/maps-2gis` (adapter) — ADR-010
-- [ ] CR-054 Feature registry for dashboard nav/widgets (organizer + participant cabinets) — ADR-009
-- [ ] CR-055 Feature flag utility for staged cabinet feature rollout — ADR-009
-- [ ] CR-056 Document/lint rule preventing direct 2GIS SDK imports outside `packages/maps-2gis`
+- [x] CR-053 Split `packages/maps-core` (interface) + `packages/maps-2gis` (adapter) — ADR-010
+      — done 2026-09-17: verified as already satisfied by CR-007 (2026-09-12),
+      before ADR-010/this ticket existed as separate backlog items. No code
+      changed: confirmed `packages/maps-core` is vendor-free (types/interface
+      only), `packages/maps-2gis` is the only package with 2GIS-specific
+      logic, dependency direction is correct (`maps-2gis` → `maps-core`, never
+      reversed), and a repo-wide grep found no 2GIS SDK import leaking outside
+      `packages/maps-2gis`. See `docs/changelog.md`.
+- [x] CR-054 Feature registry for dashboard nav/widgets (organizer + participant cabinets) — ADR-009
+      — done 2026-09-17: the registry mechanism itself (generic render-from-list,
+      no per-feature branching) already existed for nav in both cabinets
+      (CR-013/014) and for widgets in the one cabinet `docs/design.md` §8
+      actually specs a widget grid for (`/organizer`, CR-015) — `/me` has no
+      widget-grid requirement in the design spec, so no participant widget
+      registry was invented. Closed the two real gaps: zero test coverage of
+      the mechanism (added `CabinetShell.test.tsx`, `cabinet-registries.
+    test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
+      misattributed CR-055's flag-utility scope to this ticket (fixed to
+      point at CR-055 instead). See `docs/changelog.md`.
+- [x] CR-055 Feature flag utility for staged cabinet feature rollout — ADR-009
+      — done 2026-09-17: `apps/web/src/lib/cabinet/feature-flags.ts`
+      (`isFeatureEnabled`/`filterEnabled`, server-only `FEATURE_<NAME>` env
+      vars). `CabinetNavItem`/`DashboardWidget` gained an optional `flag`
+      field; both cabinet layouts and `/organizer`'s widget page now filter
+      through it before rendering (no current registry entry sets one — all
+      shipped features are stable). `.claude/rules/extensibility.md` records
+      the concrete naming convention. See `docs/changelog.md`.
+- [x] CR-056 Document/lint rule preventing direct 2GIS SDK imports outside `packages/maps-2gis`
+      — done 2026-09-17: a `no-restricted-imports` rule (`group: ['*2gis*']`)
+      added to every workspace member's ESLint config (via `packages/config`'s
+      `nodeLibraryConfig()` for its four consumers, hand-added to the five
+      configs that don't use it); `packages/maps-2gis` opts out
+      (`allowMapsSdkImports: true`). No such SDK package is installed
+      anywhere yet — preventative, proven to actually fire with a temporary
+      violating import (then reverted). `.claude/rules/maps.md` records the
+      enforcement. See `docs/changelog.md`.
 
 ## Security foundations
 

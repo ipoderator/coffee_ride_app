@@ -20,14 +20,17 @@ organizer ride updates with fan-out (CR-039), ride-cancellation fan-out (CR-040)
 the participant-facing in-app inbox (CR-041). Post-ride is now fully complete too:
 participant reviews of finished rides (CR-042) and the organizer-wide rating
 aggregate they feed (CR-043). Quality (CR-044..048 — responsive/a11y/states/
-security/performance audits) is now fully complete too. Resilience is in progress:
-CR-049 (timeout/retry/circuit-breaker utilities), CR-050 (async notification
-delivery via Redis queue), and CR-051 (health check endpoint) are done; CR-052 is
-next and is the last ticket in the Resilience section.
+security/performance audits) is now fully complete too. Resilience is now fully complete: CR-049 (timeout/retry/circuit-breaker
+utilities), CR-050 (async notification delivery via Redis queue), CR-051
+(health check endpoint), and CR-052 (frontend degraded-state handling — closed
+2026-09-17 on reactive per-call handling that was already real, plus one missing
+test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
+`/health`-banner scoping decision) are all done.
 
 ## Current task
 
-None active.
+None active. CR-056 (2GIS-import lint rule) just closed — Extensibility
+foundations section fully complete.
 
 ## Implemented
 
@@ -59,10 +62,18 @@ a viewer with an active registration on a `finished` ride who hasn't reviewed ye
 plus a public `ReviewList`; the ride's organizer rating (CR-043) shows next to the
 organizer name whenever they have at least one review. `/organizer/profile`
 (`OrganizerProfileForm`) shows the same aggregate rating card once a profile exists.
-Cabinet shell + nav/widget registries (ADR-009) exist for both organizer and
-participant sides — participant now has three entries (profile, my registrations,
-notifications), organizer still has one, no feature-flag support yet (CR-054
-generalizes this). CR-044/045/046/048 (Quality) landed on top of all of the
+Cabinet shell + nav/widget registries (ADR-009, verified/tested by CR-054)
+exist for both organizer and participant sides — participant nav has three
+entries (profile, my registrations, notifications), organizer nav has two
+(profile, rides); organizer also has a widget registry backing `/organizer`'s
+dashboard (`docs/design.md` §8), participant has none since no participant
+widget grid is spec'd. Both descriptor types have an optional `flag` field
+(CR-055, `lib/cabinet/feature-flags.ts`) staged-rollout-gated via a
+server-only `FEATURE_<NAME>` env var, filtered in at each cabinet's
+`layout.tsx`/`organizer/page.tsx` — no current entry sets one. No per-item
+capability field exists (nothing currently needs one — both cabinets are
+already separate route trees). CR-044/045/046/048 (Quality) landed on top
+of all of the
 above: `CabinetShell` now renders a real `<main>` landmark with a responsive
 nav (bottom tab bar at `base`, sticky side column at `md`+); `RideDetailView`
 is two-column at `md`+; `DiscoveryList`/`DiscoveryViewToggle` show a combined
@@ -162,11 +173,12 @@ None.
 ## Next
 
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
-Post-ride (CR-042/CR-043), and Quality (CR-044..048) sections are all now fully
-complete. Resilience is nearly done: CR-049 (timeout/retry/circuit-breaker
-utilities), CR-050 (async notification delivery via Redis queue), and CR-051
-(health check endpoint) are done. CR-052 (frontend degraded-state handling) is the
-one remaining Resilience-section ticket, next up.
+Post-ride (CR-042/CR-043), Quality (CR-044..048), Resilience (CR-049..052), and
+Extensibility foundations (CR-053..056) sections are all now fully complete.
+Security foundations is next: CR-058 (Redis-backed, per-account auth rate
+limiting — blocked on KI-014 until a live Redis is reachable), CR-060
+(password reset flow), and CR-061 (security headers, `@fastify/helmet`-
+equivalent) are the three open tickets in that section.
 
 ## Important decisions
 
@@ -252,7 +264,9 @@ items:
 - server-side registration invariants;
 - server-side authorization checks (never UI-only — `.claude/rules/security.md`);
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
-  `packages/maps-2gis` — `.claude/rules/maps.md`);
+  `packages/maps-2gis` — `.claude/rules/maps.md`, lint-enforced since CR-056:
+  don't add `*2gis*`-matching packages to `no-restricted-imports`'s
+  exemption list anywhere but `maps-2gis`'s own config);
 - the loopback binding of infrastructure ports in `docker-compose.yml`;
 - one shared timeout/retry/circuit-breaker implementation (`packages/resilience`,
   ADR-016) for every external integration — don't hand-roll a new ad hoc wrapper;
@@ -271,4 +285,4 @@ items:
 
 ## Last updated
 
-2026-09-16 (CR-051)
+2026-09-17 (CR-056)

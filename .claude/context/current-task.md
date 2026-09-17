@@ -2,107 +2,108 @@
 
 ## Task ID
 
-CR-051 — "Health check endpoint (`apps/api`) reporting DB/Redis/S3 status".
+CR-056 — "Document/lint rule preventing direct 2GIS SDK imports outside
+`packages/maps-2gis`". Last ticket in the Extensibility foundations section.
 
 ## Goal
 
-`.claude/rules/resilience.md`: "`apps/api` exposes a health check endpoint that
-reports the status of its own dependencies (DB, Redis, S3) without dying if one is
-degraded." `docs/api.md`'s `## Health` section already documents the contract (`GET
-/health`, unversioned per ADR-011, "reports DB/Redis/S3 status; must not fail hard
-if one dependency is degraded"). `apps/api/src/routes/health.ts` was a
-bootstrap-only stub (`{ status: 'ok' }`, no dependency checks) whose own comment
-named this ticket as the one that replaces the handler body.
+ADR-010 / `.claude/rules/maps.md`: "packages/maps-2gis — the only package
+allowed to import the 2GIS SDK." CR-053 verified this held by convention
+(repo-wide grep, no code change needed at the time). This ticket makes that
+convention machine-enforced so a future session can't accidentally violate
+it without ESLint catching it immediately.
+
+## Investigation
+
+- No actual 2GIS SDK npm dependency exists anywhere yet — `packages/
+maps-2gis` calls 2GIS's REST APIs directly via `fetch` (`http.ts`), "no SDK
+  dependency" per its own `docs/changelog.md` CR-007 entry. The rule is
+  genuinely preventative (like `packages/resilience`, CR-049) — it protects
+  against the day a real `@2gis/mapgl`-style package gets `pnpm add`ed for
+  browser rendering (KI-031's blocked next step), not against an existing
+  violation.
+- Flat ESLint config has no directory cascading in this repo (confirmed by
+  CR-010/KI-012, documented in the root `eslint.config.mjs`'s own comment) —
+  every workspace member has its own `eslint.config.mjs`. Four packages
+  (`maps-core`, `maps-2gis`, `resilience`, `types`) share `packages/config`'s
+  `nodeLibraryConfig()` factory; `db`, `ui`, `apps/api`, `apps/web`,
+  `packages/config` itself each hand-roll their own (same pattern the
+  existing "no raw hex color" rule already follows — duplicated across
+  `apps/web`/`packages/ui`, not centralized, since those two aren't on the
+  shared Node-library factory).
+
+## Decision
+
+Add a `no-restricted-imports` rule blocking any import specifier matching
+`*2gis*` (glob, catches `@2gis/mapgl`, `2gis-something`, etc. — the only
+sensible npm-name shape a real vendor SDK would take) everywhere except
+`packages/maps-2gis`:
+
+- `nodeLibraryConfig()` (`packages/config/eslint/node-library.js`) gets the
+  rule by default, with a `{ allowMapsSdkImports: true }` opt-out —
+  `maps-core`/`resilience`/`types` get it for free with no code change on
+  their side; `maps-2gis` is the one caller that opts out.
+- `apps/web`, `apps/api`, `packages/db`, `packages/ui`,
+  `packages/config` (own config, plain JS) each get the same rule added
+  directly to their existing hand-rolled config, same duplication shape the
+  hex-color rule already established.
+- `.claude/rules/maps.md` gets a note that this is now lint-enforced, not
+  convention-only.
 
 ## Requirements / acceptance criteria
 
-- `GET /health` always returns `200` (never fails hard) with per-dependency status
-  plus an overall summary.
-- DB check: a real, bounded round trip against `app.db` (`select 1`), not just "the
-  pool object exists."
-- Redis check: `not_configured` when Redis isn't configured (`REDIS_URL` unset,
-  KI-014) — reuses CR-050's existing producer connection rather than opening a
-  fourth Redis connection just for this ping; a real bounded `PING` otherwise.
-- S3 check: `not_configured` when `app.s3` is null (KI-015), a real bounded
-  `HeadBucketCommand` otherwise, using the AWS SDK's `abortSignal` (properly
-  timeout-bound, unlike DB/Redis).
-- None of the three checks may hang the request: DB/Redis use a hand-rolled
-  `Promise.race` timeout (neither honors `AbortSignal`, same gotcha CR-050 already
-  hit and documented for BullMQ); S3 uses `packages/resilience`'s
-  `callWithResilience` (timeout only, no retry/breaker — a diagnostic ping, not a
-  retried business operation).
-- `not_configured` is not the same as `error` — an intentionally-absent optional
-  dependency (this environment, KI-014/KI-015) must not read as "degraded."
-- Own unit tests for the route (mocked `@aws-sdk/client-s3`/`ioredis`/`bullmq`, no
-  live infrastructure needed — same precedent as `queue.test.ts`/
-  `route.routes.test.ts`).
-- Context docs updated: `docs/tasks.md`, `docs/changelog.md`,
-  `.claude/context/project-state.md`, `.claude/context/architecture-map.md`.
+- Every package/app except `maps-2gis` rejects an import matching `*2gis*`.
+- `maps-2gis` itself is unaffected (it's expected to eventually import a
+  real SDK).
+- Proven to actually fire, not just "no errors today" (which could mean the
+  rule silently isn't wired) — temporarily add a violating import, confirm
+  `eslint` fails on it, then remove it.
+- `pnpm turbo run lint` stays clean across the whole repo (no real violation
+  exists).
 
 ## Planned files
 
-- `apps/api/src/lib/race-timeout.ts` (new) — extract the `raceTimeout` helper
-  `queue.ts` already had privately.
-- `apps/api/src/modules/notifications/queue.ts` — import the extracted helper;
-  decorate `app.redis: RedisClient | null` alongside `app.notificationQueue` (same
-  producer connection, reused not duplicated).
-- `apps/api/src/routes/health.ts` — real DB/Redis/S3 checks, replacing the stub.
-- `apps/api/src/routes/health.test.ts` (new).
-- `apps/api/src/app.test.ts` — remove the now-superseded bootstrap-stub `/health`
-  assertion.
-- `docs/tasks.md`, `docs/changelog.md`, `.claude/context/project-state.md`,
-  `.claude/context/architecture-map.md`.
+- `packages/config/eslint/node-library.js` — add the rule + opt-out option.
+- `packages/maps-2gis/eslint.config.mjs` — opt out.
+- `apps/web/eslint.config.mjs`, `apps/api/eslint.config.mjs`,
+  `packages/db/eslint.config.mjs`, `packages/ui/eslint.config.mjs`,
+  `packages/config/eslint.config.mjs` — add the same rule directly.
+- `.claude/rules/maps.md` — note lint enforcement.
+- `docs/tasks.md`, `docs/changelog.md`, `.claude/context/project-state.md`.
 
 ## Implementation progress
 
-- [x] Read context (docs/api.md's Health section, resilience.md, the existing
-      health.ts stub, db/s3/queue plugins).
-- [x] `race-timeout.ts` extracted; `queue.ts` updated to use it (no behavior
-      change — same tests pass unmodified).
-- [x] `app.redis` decoration added (reuses `queue.ts`'s producer connection).
-- [x] `health.ts` real checks implemented (db/redis/s3, always `200`).
-- [x] Unit tests written (`health.test.ts`, 5 tests); removed the superseded
-      `/health` assertion from `app.test.ts`.
-- [x] Validation: typecheck/lint/test/build all clean.
-- [x] Context docs updated.
+- [x] Extended `nodeLibraryConfig()`.
+- [x] Updated the 5 hand-rolled configs + `maps-2gis`'s opt-out.
+- [x] Proved the rule fires (temporary violation under `apps/web`, reverted)
+      and that the opt-out works (same violation under `maps-2gis`, passed).
+- [x] `pnpm turbo run lint typecheck` clean.
+- [x] Updated `.claude/rules/maps.md` + context docs.
 
 ## Validation results
 
-`pnpm --filter api run typecheck`/`lint`/`build` — all clean.
-`pnpm --filter api run test` (real local Postgres) — 265/265 passed across 15
-files (260 pre-existing minus the 1 removed stub assertion, plus 5 new
-`health.test.ts`), no other pre-existing test modified.
-`pnpm turbo run typecheck lint --filter=api --filter=resilience --filter=db` —
-clean.
-Manual live verification: booted `apps/api` (`tsx src/server.ts`) with this
-environment's real local Postgres reachable and Redis/S3 genuinely unreachable
-(KI-014/KI-015/KI-019, Docker down) — `curl /health` returned `200` with
-`{"status":"degraded","dependencies":{"db":"ok","redis":"error","s3":"error"}}`,
-confirming the endpoint distinguishes a live dependency from a real failure and
-never fails hard. Server stopped afterward; no artifacts left behind.
+`pnpm turbo run lint typecheck` — 17/17 tasks successful across all 9
+workspace members. Manual proof: a scratch `import { something } from
+'@2gis/mapgl'` under `apps/web/src/lib/` made `eslint` fail with this rule's
+exact message; the identical scratch file under `packages/maps-2gis/src/`
+passed (only the pre-existing `no-console` warning). Both scratch files
+deleted, never committed.
 
 ## Discovered issues
 
-None new. Confirmed (not just assumed) that `db.execute`/`ioredis`'s `.ping()`
-don't honor `AbortSignal` the same way BullMQ's calls don't (CR-050) — this is why
-`raceTimeout` was extracted into a shared helper rather than reasoned about
-per-call-site.
+None new.
 
 ## Final result
 
-CR-051 is complete and shipped. `GET /health` now runs a real, bounded check per
-dependency instead of returning a static stub: DB via a timed `select 1`, Redis via
-a timed `PING` on the same connection `notifications/queue.ts` already owns
-(`app.redis`, new decoration), S3 via a timed `HeadBucketCommand` (the one check
-that gets a real `AbortSignal`-backed timeout via `callWithResilience`, since the
-AWS SDK honors it and neither postgres.js nor ioredis do). Response is
-`{ status: 'ok' | 'degraded', dependencies: { db, redis, s3 } }`, each one of
-`'ok' | 'error' | 'not_configured'` — an unconfigured optional dependency never
-reads as a failure. Always `200`. `raceTimeout` (the hand-rolled `Promise.race`
-timeout CR-050 introduced for BullMQ) is now a shared helper
-(`apps/api/src/lib/race-timeout.ts`) instead of living only inside `queue.ts`.
-Live-verified against this environment's real constraints (reachable Postgres,
-unreachable Redis/S3) rather than only unit-tested. Resilience section of
-`docs/tasks.md` now has exactly one open ticket left: CR-052 (frontend
-degraded-state handling), a natural consumer of this endpoint's per-dependency
-detail.
+CR-056 is complete. `no-restricted-imports` (`group: ['*2gis*']`) now runs on
+every workspace member except `packages/maps-2gis` — added once to
+`packages/config`'s `nodeLibraryConfig()` (its four consumers get it for
+free, `maps-2gis` opts out via `allowMapsSdkImports: true`) and hand-added
+to the five configs that don't use that factory. No 2GIS SDK package exists
+anywhere yet, so this ships as pure preventative infrastructure (same shape
+as `packages/resilience`, CR-049) with zero current violations — proven to
+actually fire via a temporary scratch import, not just assumed from "no
+errors today." `.claude/rules/maps.md` records the enforcement. This
+completes the Extensibility foundations section (CR-053/054/055/056 all
+done). Next logical task: Security foundations (CR-058 auth rate limiting,
+CR-060 password reset, CR-061 security headers).

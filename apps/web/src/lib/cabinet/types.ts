@@ -10,14 +10,17 @@ export interface CabinetNavItem {
   /** Lower sorts first. Leave gaps (10, 20, 30, ...) so a future feature can
    * slot in between without renumbering existing ones. */
   order: number;
+  /** CR-055: staged-rollout gate (`./feature-flags.ts`'s `FEATURE_<name>` env
+   * var). Omit for an always-enabled item — the common case; every current
+   * entry omits it since nothing is mid-rollout today. */
+  flag?: string;
 }
 
 // CR-015: same registration-over-branching pattern as `CabinetNavItem`, for
 // dashboard widgets (`docs/design.md` §8: "Dashboard (widgets from the ADR-009
-// registry)"). Deliberately minimal — no feature-flag field yet; CR-054 is the
-// ticket that generalizes this (and the nav registry) with flags across both
-// cabinets, not this one. A feature owns its own data fetching/loading/error
-// states inside `Component`; the registry only orders it on the page.
+// registry)"). A feature owns its own data fetching/loading/error states
+// inside `Component`; the registry only orders (and, per CR-055, flag-gates)
+// it on the page.
 export interface DashboardWidget {
   /** Unique within one registry — used as the React list key. */
   id: string;
@@ -25,4 +28,6 @@ export interface DashboardWidget {
    * `CabinetNavItem.order`. */
   order: number;
   Component: ComponentType;
+  /** CR-055: same staged-rollout gate as `CabinetNavItem.flag`. */
+  flag?: string;
 }

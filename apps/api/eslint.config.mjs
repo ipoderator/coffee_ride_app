@@ -22,6 +22,22 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // CR-056 (ADR-010, `.claude/rules/maps.md`): only packages/maps-2gis
+      // may import a 2GIS SDK package. No such package is installed
+      // anywhere yet — preventative, same shape as packages/resilience
+      // (CR-049).
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['*2gis*'],
+              message:
+                'Only packages/maps-2gis may import a 2GIS SDK package (ADR-010, .claude/rules/maps.md).',
+            },
+          ],
+        },
+      ],
     },
   },
 );

@@ -18,12 +18,38 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+// CR-056 (ADR-010, `.claude/rules/maps.md`): "packages/maps-2gis is the only
+// package allowed to import the 2GIS SDK." No such SDK is actually installed
+// anywhere yet (`packages/maps-2gis` calls 2GIS's REST APIs via plain
+// `fetch`) — this is preventative, the same "shared infra ahead of a
+// specific need" shape as `packages/resilience` (CR-049), guarding the day a
+// real vendor package (e.g. `@2gis/mapgl`, for browser rendering, KI-031)
+// gets installed. `*2gis*` is a glob, not a fixed name: it catches any
+// npm-name shape a 2GIS package plausibly takes.
+const NO_2GIS_SDK_IMPORTS = {
+  'no-restricted-imports': [
+    'error',
+    {
+      patterns: [
+        {
+          group: ['*2gis*'],
+          message:
+            'Only packages/maps-2gis may import a 2GIS SDK package (ADR-010, .claude/rules/maps.md).',
+        },
+      ],
+    },
+  ],
+};
+
 /**
- * @param {{ ignores?: string[] }} [options] extra glob patterns to ignore,
- *   on top of the always-ignored `dist/**` and `node_modules/**`.
+ * @param {{ ignores?: string[], allowMapsSdkImports?: boolean }} [options]
+ *   `ignores`: extra glob patterns to ignore, on top of the always-ignored
+ *   `dist/**` and `node_modules/**`. `allowMapsSdkImports`: set by
+ *   `packages/maps-2gis` itself — the one caller exempt from
+ *   `NO_2GIS_SDK_IMPORTS` above.
  */
 export function nodeLibraryConfig(options = {}) {
-  const { ignores = [] } = options;
+  const { ignores = [], allowMapsSdkImports = false } = options;
 
   return tseslint.config(
     {
@@ -38,6 +64,7 @@ export function nodeLibraryConfig(options = {}) {
           { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
         ],
         'no-console': ['warn', { allow: ['warn', 'error'] }],
+        ...(allowMapsSdkImports ? {} : NO_2GIS_SDK_IMPORTS),
       },
     },
   );
