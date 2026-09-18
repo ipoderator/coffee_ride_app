@@ -26,16 +26,6 @@ Workaround: none needed for CR-075 — the images exist now.
 Next action: CR-075. (Neither new Dockerfile has had an actual `docker build` run
 against it yet — see KI-019, same root cause, same environment.)
 
-### KI-003 — Redis has no password, no persistence, no healthcheck
-
-Status: open. Discovered: 2026-09-11 (partly recorded earlier in project-state.md).
-Problem: the `redis` service runs unauthenticated, without AOF, and without a healthcheck.
-Impact: on a server, an unauthenticated Redis is a takeover vector; without AOF, a restart
-silently drops queued notification jobs (CR-050), which contradicts
-`.claude/rules/resilience.md` (a failed background job must never silently disappear).
-Workaround: ports are now bound to `127.0.0.1`, which contains the exposure locally.
-Next action: CR-077.
-
 ### KI-007 — CI cannot test uploads or run e2e
 
 Status: open. Discovered: 2026-09-11.
@@ -704,6 +694,39 @@ actually builds and applies cleanly — before trusting this manifest as more th
 ---
 
 ## Resolved
+
+### KI-003 — Redis has no password, no persistence, no healthcheck
+
+Resolved: 2026-09-18 (CR-077, "Redis hardening").
+Discovered: 2026-09-11 (partly recorded earlier in project-state.md).
+Problem: the local-dev `redis` service ran unauthenticated and without AOF
+persistence. Its "no healthcheck" half was actually already stale by the time
+this was reopened — CR-009/CR-010 (2026-09-13) had already added a
+`redis-cli ping` healthcheck; the claim just never got corrected here.
+Impact: on a server, an unauthenticated Redis is a takeover vector; without
+AOF, a restart silently drops queued notification jobs (CR-050), which
+contradicts `.claude/rules/resilience.md` (a failed background job must
+never silently disappear).
+Workaround: ports were already bound to `127.0.0.1`, containing the exposure
+locally in the meantime.
+Resolution: `docker-compose.yml`'s `redis` service gained `command:
+redis-server --requirepass redis-dev-only --appendonly yes` (a literal
+dev-only password, same pattern as this file's existing `postgres`/`minio`
+credentials — the file is explicitly local-dev-only and bound to
+`127.0.0.1`); its healthcheck now authenticates
+(`redis-cli --no-auth-warning -a redis-dev-only ping`). `.env.example`'s
+`REDIS_URL` updated to `redis://:redis-dev-only@localhost:6379` to match —
+`ioredis` (`apps/api/src/redis.ts`) parses embedded credentials natively, no
+application code change needed. `docker-compose.prod.yml` (ADR-018) still
+runs no Redis of its own — a production `REDIS_URL` points at a real,
+separately-provisioned instance, whose own operator owns its
+password/persistence. `docker compose config` validated the new `command:`
+line parses cleanly; Docker's daemon is still unreachable in this
+environment (KI-019) so a live boot with real auth was not exercised.
+`pnpm turbo run lint typecheck build test`: 29/29 tasks green, 299/299
+`apps/api` tests passing (no application source touched by this ticket —
+`queue.test.ts`/`health.test.ts` both fully mock `ioredis`, confirmed, so
+their literal unauthenticated `REDIS_URL` fixture strings are unaffected).
 
 ### KI-040 — Notification delivery is a same-request DB insert, not a queued async job
 

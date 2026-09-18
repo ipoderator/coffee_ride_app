@@ -3874,3 +3874,53 @@ round out the section. KI-046 (the Compose empty-string gotcha for
 `REDIS_URL`/`S3_ENDPOINT`) is worth folding into whichever of CR-077/CR-081
 actually touches those variables next, rather than opening a dedicated
 ticket for a two-line fix.
+
+## 2026-09-18 — CR-077 — Redis hardening: password, AOF persistence (KI-003)
+
+Summary: next open Deployment-section ticket after CR-079. KI-003 flagged the
+local-dev `redis` service (`docker-compose.yml`) as unauthenticated and
+without AOF persistence — a container restart silently dropped queued
+notification jobs (CR-050), contradicting `.claude/rules/resilience.md`
+("a failed background job must never silently disappear"). KI-003's "no
+healthcheck" half was actually already stale: CR-009/CR-010 had added a
+`redis-cli ping` healthcheck back on 2026-09-13; that correction is folded
+into this ticket's close-out rather than opened as a separate note.
+Investigation: `apps/api/src/redis.ts`'s `createRedisClient` is a thin
+`ioredis` factory over a full connection URL — `ioredis` parses
+`redis://:<password>@host:port` natively, so authenticating needed no
+application code change, only the URL value. `docker-compose.prod.yml`
+(ADR-018) runs no Redis service of its own — it assumes `REDIS_URL` already
+points at a real, externally provisioned instance — so this ticket's scope
+is the local-dev compose file only; a production instance's password/
+persistence is that instance's own operator's responsibility.
+`.github/workflows/ci.yml` runs its own separate `redis` GitHub Actions
+service (not `docker-compose.yml`) and sets `REDIS_URL` to an unauthenticated
+local value — confirmed unaffected either way, since
+`queue.test.ts`/`health.test.ts` both fully mock `ioredis` rather than
+connecting live.
+Implementation: `docker-compose.yml`'s `redis` service gained `command:
+redis-server --requirepass redis-dev-only --appendonly yes` — a literal
+dev-only password, the same pattern this file already uses for `postgres`'s
+`POSTGRES_PASSWORD`/`minio`'s `MINIO_ROOT_PASSWORD` (plain values, not
+`${VAR}`-substituted like `docker-compose.prod.yml`, since this file is
+explicitly "local development infrastructure only" and bound to
+`127.0.0.1`). Healthcheck updated to `redis-cli --no-auth-warning -a
+redis-dev-only ping`. `.env.example`'s `REDIS_URL` updated to
+`redis://:redis-dev-only@localhost:6379` to match, with a comment steering a
+production value toward a real, separately-hardened instance.
+Decisions: none new at the ADR level — this operationalizes CR-077 exactly
+as scoped in `docs/tasks.md`.
+Validation: `docker compose -f docker-compose.yml config` parses cleanly
+with the new `command:`/healthcheck lines (Docker's daemon is still
+unreachable in this environment, KI-019, so a live authenticated boot was
+not exercised). `pnpm turbo run lint typecheck build test`: 29/29 tasks
+green, 299/299 `apps/api` tests passing (this ticket touched no application
+source — the full suite re-run confirmed nothing regressed).
+Known limitations: KI-003 resolved (moved to Resolved section). Production
+Redis hardening (password, persistence) stays outside this repo's compose
+manifests, per ADR-018 — an operator's responsibility wherever that instance
+is actually hosted.
+Follow-up: CR-078 (Postgres backups) is the next Deployment-section ticket
+that was open before this one and remains open; CR-080 (CI gaps), CR-081
+(env var set + docs), CR-082 (pin MinIO) round out the section, no fixed
+order decided among them.

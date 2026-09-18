@@ -24,14 +24,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # KI-003: requirepass + AOF persistence. Dev-only literal password (same
+  # pattern as postgres/minio below, this file is local-dev-only and bound to
+  # 127.0.0.1) — without AOF a container restart silently drops queued
+  # notification jobs (CR-050), which .claude/rules/resilience.md forbids.
   redis:
     image: redis:8-alpine
+    command: redis-server --requirepass redis-dev-only --appendonly yes
     ports:
       - '127.0.0.1:6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test:
+        [
+          'CMD',
+          'redis-cli',
+          '--no-auth-warning',
+          '-a',
+          'redis-dev-only',
+          'ping',
+        ]
       interval: 5s
       timeout: 5s
       retries: 10

@@ -29,10 +29,9 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-079 (request-id correlation + a single error-reporting
-funnel, KI-006) just closed — CR-077 (Redis hardening) and CR-078 (Postgres
-backups) are the two Deployment-section tickets that were already open and
-remain open; CR-080/081/082 round out the section.
+None active. CR-077 (Redis hardening, KI-003) just closed — CR-078 (Postgres
+backups) is the one Deployment-section ticket that was already open before it
+and remains open; CR-080/081/082 round out the section.
 
 ## Implemented
 
@@ -42,7 +41,14 @@ format/lint/typecheck/build/test plus DB migrations. Husky/lint-staged is
 workspace-aware (each package linted with its own config). `docker-compose.yml`
 defines Postgres/Redis/MinIO but has never been live-booted in this environment —
 Docker's daemon is unreachable here (KI-019; see `docker-desktop-unavailable` in
-Claude's project memory). `apps/web/Dockerfile` and `apps/api/Dockerfile` (CR-074,
+Claude's project memory). Its `redis` service now requires a password and persists
+via AOF (CR-077, KI-003 resolved): `command: redis-server --requirepass
+redis-dev-only --appendonly yes`, healthcheck authenticates too; `.env.example`'s
+`REDIS_URL` matches (`redis://:redis-dev-only@localhost:6379`) — `ioredis`
+(`apps/api/src/redis.ts`) parses the embedded credential natively, no application
+code change needed. `docker-compose.prod.yml` still runs no Redis of its own
+(ADR-018) — a production instance's password/persistence stays that instance's
+own operator's responsibility. `apps/web/Dockerfile` and `apps/api/Dockerfile` (CR-074,
 new) plus a root `.dockerignore` give both apps real multi-stage, non-root-user
 container images — `apps/web` via Next's `output: 'standalone'` trace,
 `apps/api` via ADR-017's esbuild bundle pruned to a production-only `node_modules`
@@ -224,16 +230,18 @@ Security foundations: one ticket remains, CR-058 (Redis-backed, per-account auth
 rate limiting), blocked on KI-014 until a live Redis is reachable in this
 environment — also now has a second reason to check when unblocked: KI-044
 (whether `apps/api` sees each real client's IP through the new Caddy→web→api
-hop, not just `web`'s internal one). Deployment: CR-074/075/076/079
+hop, not just `web`'s internal one). Deployment: CR-074/075/076/077/079
 (Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
-ADR-018; migrations as an explicit, concurrency-safe deploy step;
-request-id correlation + error-reporting funnel) are all closed. CR-077
-(Redis hardening), CR-078 (Postgres backups), CR-080 (CI gaps), CR-081 (full
+ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
+password + AOF persistence; request-id correlation + error-reporting funnel)
+are all closed. CR-078 (Postgres backups), CR-080 (CI gaps), CR-081 (full
 prod env var set + deployment docs), CR-082 (pin MinIO/review base images)
-remain open, no fixed order decided among them yet. KI-046 (new, CR-079):
-`docker-compose.prod.yml` passes an unset `REDIS_URL`/`S3_ENDPOINT` through
-as an empty string, which their bare `.url().optional()` schema rejects —
-worth folding into whichever of CR-077/CR-081 touches those variables next.
+remain open, no fixed order decided among them yet. KI-046 (CR-079,
+still open — CR-077's scope was the local-dev `docker-compose.yml`, not
+this file): `docker-compose.prod.yml` passes an unset `REDIS_URL`/
+`S3_ENDPOINT` through as an empty string, which their bare
+`.url().optional()` schema rejects — worth folding into CR-081, the next
+ticket that touches production env vars.
 
 ## Important decisions
 
@@ -299,7 +307,7 @@ items:
   none has been exercised by a real `docker build`/`docker compose up`/`docker
 compose run` (KI-043, KI-045) — Docker's daemon is unreachable throughout this
   environment, same root cause as the never-booted dev `docker-compose.yml` and
-  the still-unverified Redis/S3/Postgres-via-compose gaps (KI-001, KI-003,
+  the still-unverified Redis/S3/Postgres-via-compose gaps (KI-001,
   KI-014, KI-015, KI-019). Caddy's automatic TLS additionally needs real
   public DNS, unverifiable in any sandbox regardless of Docker access. KI-002
   itself (migration execution during deploy) is resolved — the migration
@@ -433,4 +441,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-17 (CR-079)
+2026-09-18 (CR-077)

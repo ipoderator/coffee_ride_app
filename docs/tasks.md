@@ -530,8 +530,8 @@ Deliberately deferred until there is something to deploy (see `docs/changelog.md
       (ADR-018). See `docs/changelog.md`.
 - [x] CR-076 Migrations as an explicit deploy step — safe when several API instances start
       at once (never on application boot) — done 2026-09-17. See `docs/changelog.md`.
-- [ ] CR-077 Redis hardening: password, AOF persistence (the notification queue lives
-      there — CR-050), healthcheck
+- [x] CR-077 Redis hardening: password, AOF persistence (the notification queue lives
+      there — CR-050), healthcheck — done 2026-09-18. See `docs/changelog.md`.
 - [ ] CR-078 PostgreSQL backups + a restore actually verified, not just scheduled
 - [x] CR-079 Structured logging (pino + request id) and error reporting; background job
       failures must be visible (`.claude/rules/resilience.md`) — done 2026-09-17.
