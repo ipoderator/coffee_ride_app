@@ -8,8 +8,10 @@ import {
   type ZodTypeProvider,
 } from '@fastify/type-provider-zod';
 import type { Env } from './env.js';
+import { generateRequestId } from './lib/request-id.js';
 import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
+import { registerErrorReporting } from './plugins/error-reporting.js';
 import { registerOpenApi } from './plugins/openapi.js';
 import { registerS3 } from './plugins/s3.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
@@ -41,16 +43,33 @@ export async function buildApp(env: Env) {
             ? 'silent'
             : 'debug',
       // pino-pretty only in local dev — structured JSON logs are what a real
-      // deployment's log pipeline wants (CR-079 builds on this later), and
-      // 'test' doesn't need a transport at all above.
+      // deployment's log pipeline wants, and 'test' doesn't need a transport
+      // at all above.
       transport:
         env.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
+      // CR-079: once api/migrate/web all ship to one log pipeline, this is
+      // what tells their lines apart.
+      base: { service: 'api' },
     },
+    // CR-079: correlates a request across the CR-075 Caddy -> web -> api hop
+    // — Fastify's default genReqId is just a per-process counter, useless
+    // for that. `lib/request-id.ts` validates/bounds the inbound header.
+    genReqId: generateRequestId,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
+  // Echoes back whichever request id was actually used (inbound, reused, or
+  // freshly generated) so a caller/proxy can see it for correlation.
+  app.addHook('onSend', async (request, reply, payload) => {
+    reply.header('x-request-id', request.id);
+    return payload;
+  });
+
+  // Must exist before registerErrorHandler/registerNotificationQueue, both
+  // of which call app.reportError.
+  registerErrorReporting(app, env);
   registerErrorHandler(app);
   // CR-061: global, before every route is registered — applies to
   // `/health`, `/docs`, and `/v1/*` alike (`.claude/rules/security.md`).

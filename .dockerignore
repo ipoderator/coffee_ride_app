@@ -1,0 +1,26 @@
+# CR-074. Everything .gitignore already excludes (generated/untracked
+# directories should never enter a build context either), plus the usual
+# Docker-specific additions (.git itself, CI config, editor/agent dirs) that
+# .gitignore has no reason to list.
+node_modules
+.next
+out
+dist
+coverage
+playwright-report
+test-results
+.turbo
+
+.git
+.github
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+*.tsbuildinfo
+
+.vscode
+.agents

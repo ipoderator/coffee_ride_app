@@ -164,3 +164,44 @@ describe('security headers (CR-061)', () => {
     await app.close();
   });
 });
+
+describe('request id (CR-079)', () => {
+  it('reuses a valid inbound X-Request-Id and echoes it back', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': 'caddy-req-abc123' },
+    });
+
+    expect(response.headers['x-request-id']).toBe('caddy-req-abc123');
+
+    await app.close();
+  });
+
+  it('generates and echoes a request id when none is supplied', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.headers['x-request-id']).toBeDefined();
+    expect(response.headers['x-request-id']).not.toBe('');
+
+    await app.close();
+  });
+
+  it('ignores a malformed inbound X-Request-Id and generates its own instead', async () => {
+    const app = await buildApp(testEnv);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': 'not valid; DROP TABLE users' },
+    });
+
+    expect(response.headers['x-request-id']).toBeDefined();
+    expect(response.headers['x-request-id']).not.toBe(
+      'not valid; DROP TABLE users',
+    );
+
+    await app.close();
+  });
+});

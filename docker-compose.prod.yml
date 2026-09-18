@@ -1,0 +1,120 @@
+# CR-075, ADR-018. Production manifest for the two CR-074 application images
+# plus a reverse proxy. This is NOT an extension of docker-compose.yml, which
+# stays local development infrastructure only (see its own header comment) —
+# run with: docker compose -f docker-compose.prod.yml up -d --build
+#
+# Deliberately does NOT include Postgres, Redis, or S3/MinIO: where those run
+# in production is still an open decision (docs/architecture.md, ADR-018 "What
+# this does NOT mean"). This file assumes DATABASE_URL/REDIS_URL/S3_* already
+# point at real, reachable endpoints, populated from a real `.env` file
+# alongside this one (standard Compose `${VAR}` substitution — no extra
+# tooling).
+#
+# Migrations (CR-076): the `migrate` service below is gated behind the
+# `migrate` Compose profile, so a plain `docker compose up` never starts it.
+# Run it explicitly, once, before rolling `api` to a version that needs new
+# migrations:
+#   docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
+# `packages/db/src/migrate.ts` itself is safe to run concurrently (a
+# session-level Postgres advisory lock serializes overlapping invocations —
+# see that file's own comment and ADR references) but this is still a
+# deliberate, explicit step, never wired into any service's boot.
+#
+# `restart: unless-stopped` is the plain (non-Swarm) restart-policy field.
+# `deploy.resources.limits` is honored by Compose V2 outside Swarm mode too —
+# `deploy.restart_policy` is NOT (Swarm-only, silently ignored by `docker
+# compose up`), which is why restart policy is set at the top level instead.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY: ${NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # Internal-only — Caddy is the only public entry point (ADR-018 §2).
+      API_INTERNAL_URL: http://api:4000
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      AUTH_SECRET: ${AUTH_SECRET}
+      # Derived from DOMAIN, not a second independently-set variable — a
+      # WEB_ORIGIN left stale relative to DOMAIN would silently 403 every
+      # mutating request at the CSRF Origin/Referer check
+      # (apps/api/src/plugins/csrf.ts, ADR-013).
+      WEB_ORIGIN: https://${DOMAIN}
+      MAPS_2GIS_API_KEY: ${MAPS_2GIS_API_KEY}
+      # CR-079/KI-006. Optional — see .env.example. Empty string is fine:
+      # env.ts's z.string().url().optional() treats an unset/empty value as
+      # "not configured", the same degraded mode REDIS_URL/S3_* already use.
+      ERROR_REPORTING_WEBHOOK_URL: ${ERROR_REPORTING_WEBHOOK_URL}
+    # No `ports:` — unlike `caddy`, never reachable except from `web` and
+    # `caddy` over the compose network (ADR-018 §2).
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  # CR-076. Not started by `docker compose up` — the `migrate` profile means
+  # it only runs via an explicit `--profile migrate run --rm migrate` (see
+  # the header comment). One-shot: runs, applies whatever migrations aren't
+  # yet applied (or nothing, if already current — the advisory lock in
+  # `packages/db/src/migrate.ts` makes that safe even if triggered twice),
+  # then exits. No `restart:`/`deploy.resources` — those are for long-running
+  # services, not a job that's supposed to finish.
+  migrate:
+    profiles: ['migrate']
+    build:
+      context: .
+      dockerfile: packages/db/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+
+volumes:
+  caddy_data:
+  caddy_config:

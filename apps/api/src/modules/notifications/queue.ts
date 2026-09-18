@@ -127,10 +127,18 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
     },
   );
   worker.on('failed', (job, err) => {
-    app.log.error(
-      { err, jobId: job?.id, jobName: job?.name, attempts: job?.attemptsMade },
-      'Notification job failed after exhausting retries',
-    );
+    // CR-079/KI-006: this is the actual "background job failure" resilience.md
+    // means — routed through the same funnel an unexpected 500 uses
+    // (error-handler.ts), so "must be visible" means the same thing in both
+    // places. Deliberately not applied to the connection-level `.on('error',
+    // ...)` handlers below — those fire repeatedly on ordinary Redis
+    // hiccups and would trip the webhook sink's breaker on transient noise
+    // instead of a real job failure.
+    app.reportError(err, 'Notification job failed after exhausting retries', {
+      jobId: job?.id,
+      jobName: job?.name,
+      attempts: job?.attemptsMade,
+    });
   });
   worker.on('error', (err) => {
     app.log.error({ err }, 'BullMQ worker error (notifications)');

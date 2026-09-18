@@ -11,6 +11,12 @@ const queueCloseMock = vi.fn();
 const workerCloseMock = vi.fn();
 let capturedProcessor:
   ((job: { name: string; data: unknown }) => Promise<void>) | undefined;
+let capturedFailedHandler:
+  | ((
+      job: { id?: string; name?: string; attemptsMade?: number } | undefined,
+      err: Error,
+    ) => void)
+  | undefined;
 
 vi.mock('bullmq', () => {
   class MockQueue {
@@ -31,7 +37,14 @@ vi.mock('bullmq', () => {
     ) {
       capturedProcessor = processor;
     }
-    on() {
+    on(
+      event: string,
+      handler: (
+        job: { id?: string; name?: string; attemptsMade?: number } | undefined,
+        err: Error,
+      ) => void,
+    ) {
+      if (event === 'failed') capturedFailedHandler = handler;
       return this;
     }
     close() {
@@ -83,11 +96,13 @@ function createFakeApp() {
       if (name === 'onClose') closeHooks.push(fn);
     },
     log: { error: vi.fn() },
+    reportError: vi.fn(),
     db: { marker: 'fake-db' },
     _closeHooks: closeHooks,
   };
   return app as unknown as FastifyInstance & {
     notificationQueue: unknown;
+    reportError: ReturnType<typeof vi.fn>;
     _closeHooks: Array<() => Promise<void>>;
   };
 }
@@ -103,6 +118,7 @@ describe('registerNotificationQueue', () => {
     redisDisconnectMock.mockReset();
     processNotificationJobMock.mockReset();
     capturedProcessor = undefined;
+    capturedFailedHandler = undefined;
   });
 
   it('decorates null when REDIS_URL is not configured', () => {
@@ -161,6 +177,29 @@ describe('registerNotificationQueue', () => {
       app.db,
       'ride_cancelled',
       { rideId: 'r1' },
+    );
+  });
+
+  it('routes a job-failed-after-retries event through app.reportError (CR-079)', () => {
+    const app = createFakeApp();
+    const env = loadEnv({
+      ...BASE_ENV_SOURCE,
+      REDIS_URL: 'redis://localhost:6379',
+    });
+
+    registerNotificationQueue(app, env);
+
+    expect(capturedFailedHandler).toBeDefined();
+    const err = new Error('db unreachable');
+    capturedFailedHandler!(
+      { id: 'job-1', name: 'ride_cancelled', attemptsMade: 3 },
+      err,
+    );
+
+    expect(app.reportError).toHaveBeenCalledWith(
+      err,
+      'Notification job failed after exhausting retries',
+      { jobId: 'job-1', jobName: 'ride_cancelled', attempts: 3 },
     );
   });
 

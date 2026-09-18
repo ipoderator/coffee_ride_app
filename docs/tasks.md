@@ -522,17 +522,20 @@ test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
 Deliberately deferred until there is something to deploy (see `docs/changelog.md`,
 2026-09-11). These are not "nice to have" — nothing ships to a server without them.
 
-- [ ] CR-074 `Dockerfile` for `apps/web` and `apps/api` + `.dockerignore` (multi-stage,
-      non-root user, Next.js standalone output)
-- [ ] CR-075 Production manifest: reverse proxy serving the web app and `/api` on one
-      origin (ADR-013), TLS, resource limits, restart policy
-- [ ] CR-076 Migrations as an explicit deploy step — safe when several API instances start
-      at once (never on application boot)
+- [x] CR-074 `Dockerfile` for `apps/web` and `apps/api` + `.dockerignore` (multi-stage,
+      non-root user, Next.js standalone output) — done 2026-09-17. See
+      `docs/changelog.md`.
+- [x] CR-075 Production manifest: reverse proxy serving the web app and `/api` on one
+      origin (ADR-013), TLS, resource limits, restart policy — done 2026-09-17
+      (ADR-018). See `docs/changelog.md`.
+- [x] CR-076 Migrations as an explicit deploy step — safe when several API instances start
+      at once (never on application boot) — done 2026-09-17. See `docs/changelog.md`.
 - [ ] CR-077 Redis hardening: password, AOF persistence (the notification queue lives
       there — CR-050), healthcheck
 - [ ] CR-078 PostgreSQL backups + a restore actually verified, not just scheduled
-- [ ] CR-079 Structured logging (pino + request id) and error reporting; background job
-      failures must be visible (`.claude/rules/resilience.md`)
+- [x] CR-079 Structured logging (pino + request id) and error reporting; background job
+      failures must be visible (`.claude/rules/resilience.md`) — done 2026-09-17.
+      See `docs/changelog.md`.
 - [ ] CR-080 CI gaps: MinIO service, migration step, Playwright e2e job
 - [ ] CR-081 Full production environment variable set in `.env.example` + deployment
       documentation

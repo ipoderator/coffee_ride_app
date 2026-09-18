@@ -2,161 +2,196 @@
 
 ## Task ID
 
-Resolves KI-017 (`packages/db`/`packages/types`/`packages/maps-2gis` export raw
-TS source, not compiled `dist` — confirmed live-blocking in CR-011) via a new
-ADR-017, as a prerequisite for CR-074 (`docs/tasks.md` Deployment section,
-first open ticket). Security foundations has no other unblocked work (only
-CR-058 remains, blocked on KI-014) — Deployment is the next logical section,
-and CR-074 (`Dockerfile` for `apps/web`/`apps/api`) cannot produce a working
-image until `apps/api`'s production build actually boots under plain `node`,
-which KI-017 documents as currently broken.
+CR-079 — Structured logging (pino + request id) and error reporting;
+background job failures must be visible (`.claude/rules/resilience.md`,
+KI-006).
 
 ## Goal
 
-`.claude/rules/architecture.md`'s change control requires an ADR before a
-silent architecture/tooling change; KI-017's own "Next action" names this
-exact choice — (a) switch `db`/`types` to declaration-based `dist` exports,
-or (b) switch `apps/api`'s build to a bundler that inlines workspace source
-— as needing "an explicit ADR, not a silent fix inside a feature ticket."
+Give `apps/api` a real request-id correlation mechanism across the CR-075
+reverse-proxy hop, and a single funnel that every unexpected 500 and every
+background job failure goes through, so "must be visible" means the same
+thing in both places — with an optional external-sink extension point since
+no error-tracking provider is decided/configured yet (no ADR names one).
 
 ## Investigation
 
-- Confirmed still broken: `packages/db`/`packages/types`/`packages/maps-2gis`
-  all set `main`/`types`/`exports` to `./src/*.ts`. `tsx` (dev, tests) and
-  `tsc` (typecheck/build-time type resolution) handle that fine; a plain
-  `node dist/server.js` does not — `db`'s own compiled `client.ts` imports
-  its sibling `schema/index.ts` with a `.js`-suffixed NodeNext-style
-  specifier that Node's native `.ts` type-stripping loads literally (finds
-  `client.ts` itself fine, since that's what `db`'s `exports` names) but
-  does not rewrite to resolve the relative import — `ERR_MODULE_NOT_FOUND`.
-  `apps/web` doesn't hit this (Next/webpack, not plain `node` — already
-  fixed differently via `next.config.ts`'s `resolve.extensionAlias`).
-- Option (a) (declaration-based `dist` exports on `db`/`types`) would need
-  every consumer's dev flow (`tsx watch`, `vitest`) to keep resolving to
-  fresh `src/*.ts` — not a stale prior build — which means either dual
-  conditional exports (a "source"/dev condition vs. a `dist` condition) or a
-  build step wired into every dev/test invocation. Both add real ongoing
-  complexity to a path (dev/test) that works correctly today.
-- Option (b) (bundle `apps/api`'s own build) touches nothing about how
-  `db`/`types`/`maps-2gis` ship — their `exports` stay exactly as they are,
-  dev/test flows (`tsx watch`, `vitest`) are completely unaffected — only
-  `apps/api`'s own `build`/`start` scripts change. The only new artifact is
-  a single bundled `dist/server.js` with workspace source inlined and real
-  npm dependencies (`fastify`, `drizzle-orm`, `argon2`, `bullmq`, `ioredis`,
-  `@aws-sdk/*`, `sax`, `zod`, ...) left external — never bundling third-party
-  packages (especially `argon2`, a native addon — bundling a native binding
-  is a known footgun, not just unnecessary work).
-- No bundler (`esbuild`/`tsup`/etc.) exists anywhere in this repo today —
-  Vite 8's own transform is oxc-based, not esbuild-backed (KI-018). Chose
-  plain `esbuild` directly (not `tsup`): this is one bundle target with a
-  fully custom `external` computation (see Decision), and `tsup` would only
-  add a config layer on top of the exact same esbuild call for no benefit
-  here.
-- `apps/api`'s own `dependencies` list is not, by itself, the correct
-  `external` set — `db`'s own runtime dependencies (`drizzle-orm`,
-  `postgres`) aren't declared on `apps/api`'s `package.json` at all (only
-  reachable transitively through the `db` workspace symlink today), and
-  esbuild can't distinguish "workspace package" from "real npm package" via
-  its built-in `packages: 'external'` option — pnpm symlinks both kinds
-  under `node_modules` identically. The correct `external` set is the union
-  of `dependencies` across `apps/api` + every workspace package actually
-  being bundled into it (`db`, `types`, `resilience` — `maps-2gis`/
-  `maps-core` are not `apps/api` dependencies today, nothing to bundle
-  there), minus those workspace package names themselves.
+- `apps/api/src/app.ts` already runs Fastify's built-in pino logger: JSON in
+  production/test, `pino-pretty` only in development — that half of
+  "structured logging" pre-dates this ticket (its own comment already said
+  "CR-079 builds on this later").
+- Fastify's default `genReqId` is a per-process incrementing counter
+  (`req-1`, `req-2`, ...) — useless for correlating a request across the
+  CR-075 Caddy → web → api hop. No code currently reads/echoes
+  `X-Request-Id`.
+- `apps/api/src/plugins/error-handler.ts`'s 500 branches and
+  `apps/api/src/modules/notifications/queue.ts`'s `worker.on('failed', ...)`
+  each already call `*.log.error(...)` independently — real logging exists,
+  but there's no single funnel, and no extension point for forwarding to an
+  external error tracker later.
+- Checked `docs/decisions.md`/`docs/architecture.md`/`docs/product.md` for an
+  existing choice of error-tracking vendor (Sentry or otherwise): none
+  exists. ADR-016's own rationale ("no metrics/observability hook ... add
+  when actually needed, not speculatively") confirms this hasn't been
+  decided yet — so this ticket cannot wire a specific vendor SDK without
+  inventing an undecided architectural choice. Resolution: build the funnel
+  plus a generic optional webhook sink behind an env var, same "null is a
+  supported degraded mode" shape already used for S3/Redis
+  (`plugins/s3.ts`, `redis.ts`) — a real vendor integration is a future
+  ticket once one is actually chosen.
+- Confirmed `packages/resilience`'s `callWithResilience` accepts a `breaker`
+  directly in its options and manages `canAttempt`/`recordSuccess`/
+  `recordFailure` internally (unlike `queue.ts`'s hand-rolled breaker calls,
+  which exist only because BullMQ's `Queue.add()` doesn't honor
+  `AbortSignal` — `fetch` does, so the webhook sink can use
+  `callWithResilience` directly, same pattern as
+  `packages/maps-2gis/src/http.ts`'s `fetchJson`).
 
 ## Decision
 
-**ADR-017**: `apps/api`'s production build switches from `tsc -p
-tsconfig.json` (type-emit only, the thing that's broken) to `esbuild`,
-bundling `src/server.ts` plus every workspace dependency's source
-(`db`, `types`, `resilience`) into one `dist/server.js`, while every real npm
-dependency stays external (resolved from `node_modules` at runtime, exactly
-as today). `db`/`types`/`maps-core`/`maps-2gis`/`resilience`'s own
-`package.json` `exports`/`tsc`-based `build` scripts are untouched — this
-fixes the one broken consumption path (`apps/api`'s compiled production
-boot) without touching the dev/test path that already works for everyone
-else, including `apps/api`'s own `dev`/`test` scripts (`tsx watch`/`vitest`,
-unaffected — they never read `dist/`).
-
-- New `apps/api/scripts/build.mjs`: computes `external` at build time from
-  the union of `apps/api` + `db` + `types` + `resilience`'s own
-  `package.json` `dependencies`, minus `{db, types, resilience}` — so it
-  can't silently drift out of sync as dependencies change on either side.
-  `bundle: true`, `platform: 'node'`, `format: 'esm'`, `sourcemap: true`,
-  single `entryPoints: ['src/server.ts']` → `outfile: 'dist/server.js'`.
-- `apps/api/package.json`'s `"build"` script becomes `node scripts/build.mjs`
-  (was `tsc -p tsconfig.json`); `"typecheck"` stays `tsc --noEmit`
-  (unaffected — type-checking and the runtime artifact are decoupled now,
-  same as they conceptually already were).
-- Re-run the exact `NODE_ENV=production node dist/server.js` smoke test
-  KI-017/CR-011 originally used, against a real Postgres, to prove this
-  actually fixes the boot crash rather than just building without error.
+- New `apps/api/src/lib/request-id.ts`: `generateRequestId(req)` reads
+  `X-Request-Id` from the raw incoming request, validates it against a
+  bounded charset/length (untrusted header value feeding straight into every
+  subsequent log line is a log-injection/log-volume surface, not just
+  cosmetic), falls back to `randomUUID()`. Wired into `app.ts` via
+  Fastify's `genReqId` option; an `onSend` hook echoes `request.id` back as
+  the `X-Request-Id` response header so a caller (or Caddy) can see the id
+  actually used.
+- `app.ts`'s pino config gains `base: { service: 'api' }` — once
+  api/migrate/web all ship logs to one pipeline, this is what tells them
+  apart.
+- New `apps/api/src/plugins/error-reporting.ts`: decorates
+  `app.reportError(error, message, context?, logger?)`. Always logs
+  structurally via the given logger (defaults to `app.log`; call sites pass
+  `request.log` where available so the request's bound `reqId` carries
+  through) — this alone satisfies "must be visible" with zero external
+  config. If `ERROR_REPORTING_WEBHOOK_URL` is set, additionally POSTs the
+  error as JSON to that URL via `callWithResilience` with one _shared_
+  `CircuitBreaker` (not per-call, per `.claude/rules/resilience.md`) —
+  fire-and-forget, never throws back into the caller, an open breaker is
+  not itself logged (expected noise during a sustained outage).
+- `env.ts`: new optional `ERROR_REPORTING_WEBHOOK_URL` (no production
+  placeholder check needed — unset is a legitimate "not configured yet"
+  production state, same as `REDIS_URL`/`S3_*` today).
+- `error-handler.ts`'s two `>=500` branches call `app.reportError(...)`
+  instead of logging directly; `<500` branch keeps its existing
+  `request.log.warn(...)` (not every 4xx is an "error" worth this funnel).
+- `queue.ts`'s `worker.on('failed', ...)` (job failed after exhausting
+  retries — the actual "background job failure" resilience.md means) calls
+  `app.reportError(...)` instead of logging directly. Left unchanged,
+  deliberately: `worker.on('error', ...)`, `queue.on('error', ...)`, and both
+  Redis connections' `.on('error', ...)` — these are connection-level/
+  transient-outage noise, not job failures, and routing them through the
+  same funnel would trip the webhook sink's breaker on ordinary Redis
+  hiccups instead of real failures.
+- `docker-compose.prod.yml`'s `api` service gains
+  `ERROR_REPORTING_WEBHOOK_URL: ${ERROR_REPORTING_WEBHOOK_URL}`;
+  `.env.example` documents it as optional, deployment-only.
+- Not doing (real out-of-scope): picking/wiring an actual error-tracking
+  vendor SDK (Sentry or otherwise) — no such decision exists yet (see
+  Investigation); metrics/tracing — ADR-016 already deferred that
+  explicitly and nothing here changes that.
 
 ## Requirements / acceptance criteria
 
-- `pnpm --filter api build` succeeds and produces `dist/server.js`.
-- `NODE_ENV=production node dist/server.js` (with real env vars) boots
-  without `ERR_MODULE_NOT_FOUND` or any other crash, and `/health` responds.
-- `apps/api`'s `dev`/`typecheck`/`test` scripts are provably unaffected — full
-  test suite still passes, `tsx watch` still works.
-- `db`/`types`/`maps-core`/`maps-2gis`/`resilience` have zero changes.
-- Native/binary dependencies (`argon2`, `@aws-sdk/client-s3`'s deps) are never
-  bundled — confirmed by inspecting the `external` list actually used.
-- ADR-017 recorded in `docs/decisions.md`; KI-017 marked resolved in
-  `known-issues.md`.
+- Every request gets a stable `request.id`: an inbound valid `X-Request-Id`
+  is reused, otherwise one is generated; the response always echoes
+  `X-Request-Id`.
+- A malformed/oversized inbound `X-Request-Id` is rejected (server
+  generates its own) rather than trusted verbatim into logs.
+- Every unexpected 500 and every notification-job failure-after-retries goes
+  through `app.reportError`, which always logs structurally and optionally
+  forwards to a configured webhook sink without ever blocking/throwing back
+  into the caller.
+- `pnpm turbo run lint typecheck build test` stays green.
 
 ## Planned files
 
-- `apps/api/package.json` (new `esbuild` devDependency, `build` script),
-  `apps/api/scripts/build.mjs` (new).
-- `docs/decisions.md` (ADR-017), `.claude/context/known-issues.md` (KI-017
-  resolved), `.claude/rules/architecture.md` if the bundler needs a
-  dependency-direction note, `docs/tasks.md`, `.claude/context/project-state.md`,
-  `docs/changelog.md`.
+- `apps/api/src/lib/request-id.ts` (new) + test.
+- `apps/api/src/plugins/error-reporting.ts` (new) + test.
+- `apps/api/src/app.ts` (wire `genReqId`/onSend hook, `base` field, register
+  error reporting before the error handler).
+- `apps/api/src/plugins/error-handler.ts` (route >=500 through
+  `app.reportError`).
+- `apps/api/src/modules/notifications/queue.ts` (route job-failed through
+  `app.reportError`).
+- `apps/api/src/env.ts` (`ERROR_REPORTING_WEBHOOK_URL`).
+- `apps/api/src/app.test.ts` (request-id coverage).
+- `docker-compose.prod.yml`, `.env.example`.
+- `docs/tasks.md` (check off CR-079), `docs/changelog.md` (append),
+  `.claude/context/project-state.md` (overwrite), `.claude/context/
+known-issues.md` (KI-006 resolved).
 
 ## Implementation progress
 
-- [x] Add `esbuild`, write `scripts/build.mjs`, wire into `package.json`.
-- [x] Verify `pnpm --filter api build` + real boot under plain `node`
-      (the actual regression test for KI-017).
-- [x] Verify `external` excludes only real npm deps, includes `db`/`types`/
-      `resilience` source inlined (inspected the bundle, didn't just assume)
-      — found and fixed a real second gap (`postgres` needed as a direct
-      `apps/api` dependency, not just `external`, under pnpm's strict
-      `node_modules`).
-- [x] Full `apps/api` test suite + `pnpm turbo run lint typecheck build`
-      across the repo — proved zero effect on dev/test paths.
-- [x] ADR-017 + KI-017 resolution + docs/context updates.
+- [x] `lib/request-id.ts` + test.
+- [x] `plugins/error-reporting.ts` + test.
+- [x] Wire into `app.ts`.
+- [x] Update `error-handler.ts`.
+- [x] Update `queue.ts` (+ extended `queue.test.ts` to capture the `'failed'`
+      handler and assert it calls `app.reportError`).
+- [x] `env.ts` (+ `z.preprocess` for the Compose empty-string gotcha,
+      KI-046) + `.env.example` + `docker-compose.prod.yml`.
+- [x] Extend `app.test.ts` for request-id behavior.
+- [x] Full `pnpm turbo run lint typecheck build test`.
+- [x] Update docs/context (`docs/tasks.md`, `docs/changelog.md`,
+      `project-state.md`, `known-issues.md` — KI-006 resolved, KI-046 new).
 
 ## Validation results
 
-`pnpm turbo run lint typecheck build` — 24/24 tasks clean. `apps/api` full
-suite: 283/283 passing, unaffected. Live regression test: `NODE_ENV=test
-node dist/server.js` against this environment's real local Postgres booted
-cleanly (the exact `ERR_MODULE_NOT_FOUND` crash is gone), `GET /health`
-responded, and `POST /v1/auth/register` round-tripped end to end through the
-bundle (argon2, Drizzle, helmet, rate limiting) with `201 Created`.
-Separately confirmed `NODE_ENV=production` with local-only config still
-correctly hits the unrelated CR-073 placeholder guard, not conflated with
-this fix. Inspected `dist/server.js` directly: `argon2` stayed a genuine
-external `import` (not inlined), `db`'s exported symbols
-(`createDbClient`, `passwordResetTokens`) were present in the output
-(inlined). Dev server and log files cleaned up afterward.
+`pnpm --filter api exec tsc --noEmit` and `pnpm --filter api exec eslint .`
+both clean, run directly. `pnpm --filter api exec vitest run` (against this
+environment's real local Postgres, `DATABASE_URL` from `.env` —
+`postgresql://glebchurkin@localhost:5432/coffee_ride_dev`, not Docker/KI-019):
+299/299 tests passed, including new `lib/request-id.test.ts` (5 tests),
+`plugins/error-reporting.test.ts` (7 tests — structured logging always fires,
+webhook POST + exact payload shape via a stubbed global `fetch`, webhook
+failure logged as a warning without throwing, breaker trips after 5
+consecutive failures with no sixth `fetch` call), 3 new `app.test.ts` cases
+(real `.inject()` round trips: inbound id reused+echoed, one generated when
+absent, a malformed one rejected and replaced), and one new `queue.test.ts`
+case (captures the mocked `Worker`'s `'failed'` handler, asserts it calls
+`app.reportError` with the right job context). Live-observed the real JSON
+log line during the run: `{"level":30,...,"service":"api",
+"reqId":"<uuid>",...}` — `base`/`genReqId` confirmed to actually take effect
+at runtime, not just typecheck. Full `pnpm turbo run lint typecheck build
+test`: 29/29 tasks green (first run showed a `web#build` failure —
+`<Html> should not be imported outside of pages/_document` on `/500` —
+root-caused to a stale `apps/web/.next` cache from an earlier session
+combined with `NODE_ENV=development` leaking into the build from manually
+sourcing `.env`; deleting `.next` and invoking turbo with only `DATABASE_URL`
+set, not the whole `.env`, fixed it — confirmed unrelated to this ticket's
+changes since `apps/web` was never touched). `docker compose -f
+docker-compose.prod.yml config` with realistic env values showed
+`ERROR_REPORTING_WEBHOOK_URL: ""` for the api service when unset — exactly
+the Compose empty-string behavior KI-046 describes; confirmed live via `tsx`
+that `env.ts`'s `loadEnv` accepts that empty string and resolves
+`ERROR_REPORTING_WEBHOOK_URL` to `undefined` (not a crash).
 
 ## Discovered issues
 
-None new beyond the `postgres`-must-be-a-direct-dependency gap this task
-itself found and fixed (documented in ADR-017, KI-017's resolution, and
-`build.mjs`'s own comment — not left implicit).
+KI-046 (new): `docker-compose.prod.yml`'s `api` service wires
+`REDIS_URL`/`S3_ENDPOINT`/`ERROR_REPORTING_WEBHOOK_URL` through `${VAR}`
+unconditionally; Compose substitutes an empty string for an unset var, which
+a bare `z.string().url().optional()` rejects. Fixed for the new field this
+ticket added; `REDIS_URL`/`S3_ENDPOINT` carry the same pre-existing gotcha,
+left as-is (unrelated-changes discipline) and recorded rather than silently
+carried forward.
 
 ## Final result
 
-Resolved. `apps/api`'s production build now bundles `db`/`types`/
-`resilience`'s source via `esbuild` into `dist/server.js`
-(`apps/api/scripts/build.mjs`, ADR-017), fixing the `ERR_MODULE_NOT_FOUND`
-crash KI-017 documented since CR-011. Every real npm dependency (including
-the native `argon2` addon) stays external. `db`/`types`/`maps-core`/
-`maps-2gis`/`resilience` and every dev/test path are completely unaffected.
-CR-074 (Dockerfile for `apps/web`/`apps/api`, the first open Deployment
-ticket) can now proceed with a real, working production boot to
-containerize. Next logical task: CR-074.
+Done. `apps/api` now correlates requests across the CR-075 Caddy → web → api
+hop via a validated, echoed `X-Request-Id` (`lib/request-id.ts`), and every
+unexpected 500 and every notification job that exhausts its retries goes
+through one funnel, `app.reportError` (`plugins/error-reporting.ts`) —
+always logging structurally (satisfying "must be visible" with zero external
+config) and optionally forwarding to a webhook sink once an operator
+actually configures `ERROR_REPORTING_WEBHOOK_URL` (no vendor decided yet,
+deliberately not invented here). KI-006 resolved. Found and fixed a real
+edge case along the way rather than just wiring the new field blindly
+(KI-046's `z.preprocess` fix, confirmed live). Full repo lint/typecheck/
+build/test green (29/29 turbo tasks, 299 `apps/api` tests). Next logical
+task: no fixed order decided between CR-077 (Redis hardening) and CR-078
+(Postgres backups) — both were already open before this ticket and remain
+so; CR-080 (CI gaps), CR-081 (env var set + deployment docs), and CR-082
+(pin MinIO) round out the Deployment section.

@@ -620,3 +620,70 @@ step is adding its name to that list. If `apps/web` or another app ever needs it
 compiled-production-boot fix, decide fresh whether bundling or declaration-based
 `dist` exports fits its actual constraints — don't assume this ADR's answer transfers
 without checking.
+
+## ADR-018 — Reverse proxy: Caddy, terminating TLS in front of `apps/web` only
+
+Status: Accepted.
+
+CR-075 (`docs/tasks.md` Deployment section): the two CR-074 application images need a
+real "production manifest" — something that puts them on one public origin (ADR-013)
+with TLS, sane restart behavior, and resource limits. `docs/architecture.md` calls a
+reverse proxy choice a "production provider choice" that "must be recorded as ADRs" —
+recorded here.
+
+### Decision
+
+1. **Caddy 2** is the reverse proxy, not nginx+certbot or Traefik. One `deploy/
+Caddyfile`, one site block: `reverse_proxy web:3000`. Caddy's automatic HTTPS
+   (ACME/Let's Encrypt, obtained and renewed with no separate process) is the reason —
+   nginx would need a second container (certbot) plus a shared volume and a renewal
+   cron/timer wired correctly, which is exactly the kind of extra moving part
+   `docs/architecture.md`'s "prefer boring, explicit architecture" rule warns against
+   when a simpler option does the same job. Traefik was not chosen either: its value is
+   dynamic service discovery across many/changing containers, and this topology is two
+   fixed services — the added label-based configuration surface buys nothing here.
+2. **Caddy only ever proxies to `web`, never directly to `api`.** `apps/web/
+next.config.ts`'s `rewrites()` (built and working since CR-011) already forwards
+   same-origin `/api/v1/*` requests to `API_INTERNAL_URL` server-side inside the `web`
+   container. Routing `/api/*` a second time at the Caddy layer would duplicate that
+   logic in two places for no benefit — one composition point for the path split,
+   already tested, stays the only one. `docker-compose.prod.yml` reflects this: `api`
+   publishes no host port at all, reachable only from `web` over the compose network.
+3. **Resource limits and restart policy are plain Compose fields, not Swarm's `deploy:`
+   block** — `restart: unless-stopped` (top-level, per service) plus `deploy.resources.
+limits.cpus`/`memory` (Compose V2 applies this outside Swarm mode too, unlike
+   `deploy.restart_policy`, which Compose silently ignores without `docker stack
+deploy` — a well-known footgun worth naming explicitly here so a future edit doesn't
+   "simplify" restart handling into the Swarm-only field by mistake).
+
+### What this does NOT mean
+
+- It does not decide where Postgres/Redis/S3 run in production. `docker-compose.
+prod.yml` deliberately does not start them — it assumes `DATABASE_URL`/`REDIS_URL`/
+  `S3_*` already point at real, externally provisioned endpoints. `docs/
+architecture.md`'s "production provider choices... must be recorded as ADRs" stays
+  open for those three; conflating "here's a reverse proxy for the two app images"
+  with "here's how Postgres is hosted in production" would be a second, unrelated
+  decision smuggled into this one.
+- It does not run migrations. CR-076 ("migrations as an explicit deploy step... never
+  on application boot") owns that, and is still unbuilt — adding a migration step to
+  this compose file now would ship exactly the multi-instance race CR-076 exists to
+  prevent.
+- It does not harden Redis (KI-003) or add Postgres backups (KI-078/CR-078) — both stay
+  scoped to their own tickets, not folded into "the production manifest" just because
+  they're also Deployment-section work.
+- It does not claim to have been run. Docker's daemon is unreachable in this
+  environment (KI-019) and Caddy's ACME challenge needs a real public DNS record
+  pointing at a real host regardless — neither is verifiable in any local/CI sandbox.
+  See `.claude/context/known-issues.md` (KI-043 extended) for exactly what was and
+  wasn't checked instead.
+
+### When to revisit
+
+If a second first-party origin/service needs routing (mobile API gateway, a separate
+admin app), reconsider Traefik's dynamic-discovery model then — not preemptively now.
+If `/health`/`/docs` ever need to be reachable from outside the compose network
+directly (bypassing `web`), add an explicit Caddy route for them and give `apps/api`
+a `trustProxy` setting at that point — today they're only ever called from inside the
+compose network (Docker healthchecks, `web`'s own dev-time Swagger link), so trusting
+proxy headers on `apps/api` was deliberately left alone.

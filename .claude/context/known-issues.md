@@ -11,20 +11,20 @@ Each issue: ID; status; discovered date; problem; impact; workaround; next actio
 
 ### KI-001 — No deployment artifacts exist
 
-Status: open. Discovered: 2026-09-11 (pre-foundation audit).
+Status: narrowed 2026-09-17 (CR-074). Discovered: 2026-09-11 (pre-foundation audit).
 Problem: no `Dockerfile`, no `.dockerignore`, no production manifest, no reverse proxy
 config. `docker-compose.yml` is local development infrastructure only and says so.
-Impact: the project cannot be deployed to a server at all.
-Workaround: none needed yet — there is no application code to deploy.
-Next action: CR-074, CR-075.
-
-### KI-002 — Migration execution during deploy is undefined
-
-Status: open. Discovered: 2026-09-11.
-Problem: nothing says who runs `drizzle-kit migrate` on the server. Running it on
-application boot races when several API instances start together.
-Impact: possible partial/concurrent migrations on the first multi-instance deploy.
-Next action: CR-076.
+CR-074 added `apps/web/Dockerfile`, `apps/api/Dockerfile`, and a root `.dockerignore`
+(multi-stage, non-root runtime user, Next.js `output: 'standalone'` for `apps/web`,
+ADR-017's esbuild bundle pruned to a production-only `node_modules` via `pnpm deploy`
+for `apps/api`) — see `docs/changelog.md` for the full mechanics. Still missing: a
+production manifest and reverse proxy config putting both images behind one origin
+(ADR-013) — that stays CR-075.
+Impact: the project still cannot be deployed to a server end to end, but the two
+application images themselves are no longer the missing piece.
+Workaround: none needed for CR-075 — the images exist now.
+Next action: CR-075. (Neither new Dockerfile has had an actual `docker build` run
+against it yet — see KI-019, same root cause, same environment.)
 
 ### KI-003 — Redis has no password, no persistence, no healthcheck
 
@@ -35,14 +35,6 @@ silently drops queued notification jobs (CR-050), which contradicts
 `.claude/rules/resilience.md` (a failed background job must never silently disappear).
 Workaround: ports are now bound to `127.0.0.1`, which contains the exposure locally.
 Next action: CR-077.
-
-### KI-006 — No observability
-
-Status: open. Discovered: 2026-09-11.
-Problem: no structured logging, request ids, error reporting, or metrics are specified.
-Impact: `.claude/rules/resilience.md` requires background job failures to be visible;
-there is currently no mechanism that could make them visible.
-Next action: CR-079.
 
 ### KI-007 — CI cannot test uploads or run e2e
 
@@ -616,6 +608,99 @@ screens, and depends on ADR-007's real email delivery landing before a real
 user could ever discover their own reset token — a web screen alone doesn't
 close this gap without a delivery channel behind it.
 
+### KI-043 — CR-074's two Dockerfiles have never had a real `docker build` run against them
+
+Status: open. Discovered: 2026-09-17 (CR-074).
+Problem: same root cause as KI-019 — the Docker daemon does not come up in this
+environment (`docker info` confirmed still unreachable this session). CR-074 added
+`apps/web/Dockerfile` and `apps/api/Dockerfile`, both multi-stage with a non-root
+runtime user, but neither has had an actual `docker build`/`docker run` executed
+against it.
+Impact: medium — the Dockerfiles are new and unexercised as container images
+specifically (as opposed to the underlying mechanics they depend on, which were
+verified directly on the host — see Workaround). A mistake specific to the
+containerized environment (a missing system package, a base-image path/permission
+issue, a COPY that only looks right) would not be caught until the first real build.
+Workaround: could not build the images, so instead verified the pieces a Docker
+build would exercise, directly on the host, and did not just assume they'd work:
+(1) added `output: 'standalone'` to `apps/web/next.config.ts` and ran a real `pnpm
+--filter web build`, then inspected the actual `.next/standalone` output shape
+(confirmed the `apps/web/server.js` entry path and that `.next/static`/`public`
+need copying separately — both now match what the Dockerfile actually does); (2)
+for `apps/api`, ran the exact `pnpm --filter=api deploy --prod` command the
+Dockerfile's builder stage runs, then ran `node dist/server.js` from inside that
+pruned output directory against this environment's real local Postgres — `GET
+/health` responded `200`, proving the pruned, production-only `node_modules`
+(no devDependencies) is actually sufficient and argon2's native binding still
+resolves correctly from within it.
+Next action: the first session with a working Docker daemon should run
+`docker build -f apps/web/Dockerfile .` and `docker build -f apps/api/Dockerfile .`
+from the repo root, then `docker run` each with real env vars and confirm
+`apps/web` serves its pages and `apps/api`'s `/health` responds, before this is
+trusted as a real, deployable artifact (not just "the Dockerfile parses").
+
+### KI-044 — `apps/api`'s rate limiter may see one internal IP for every request once deployed behind Caddy
+
+Status: open. Discovered: 2026-09-17 (CR-075, ADR-018).
+Problem: `docker-compose.prod.yml`'s topology is `Caddy → web → (Next.js rewrite,
+server-side) → api` — `api` is never hit directly by Caddy or the public internet,
+only by `web` as an internal peer. `apps/api`'s per-IP rate limiter
+(`@fastify/rate-limit`, already flagged in-memory-only/single-instance by
+KI-014/KI-022) has no `trustProxy` configured on its Fastify instance
+(`apps/api/src/app.ts`) — deliberately left alone since `api` has no direct proxy
+boundary of its own yet. Whether Next's own `/api/v1/*` `rewrites()` forwards the
+original client's `X-Forwarded-For` header through to `api` (Caddy sets it when
+proxying to `web`; whether `web`'s own outbound rewrite request preserves it is a
+separate, unverified question) was not checked either way.
+Impact: unknown until checked — if the header isn't forwarded, every request
+`api` sees in production would appear to originate from `web`'s single internal
+IP, making the per-IP rate limiter effectively a single shared bucket across every
+real client at once (both over- and under-limiting incorrectly, not just a minor
+inaccuracy).
+Workaround: none — not yet checked, so not yet fixed.
+Next action: belongs with CR-058 (Redis-backed, per-account auth rate limiting,
+currently blocked on KI-014) since that ticket already touches this rate limiter —
+verify whether `X-Forwarded-For` survives Next's rewrite hop (inspect the header
+`api` actually receives, e.g. via a temporary log line, under a real Caddy→web→api
+chain once Docker is available), and if not, either configure `apps/api`'s
+`trustProxy` against `web`'s known internal address plus forward the header
+through the rewrite explicitly, or move rate limiting in front of `web` instead.
+
+### KI-045 — CR-075/CR-076's Caddy/compose production manifest has never been run end to end
+
+Status: open. Discovered: 2026-09-17 (CR-075, ADR-018; extended CR-076).
+Problem: same root cause as KI-019/KI-043 — Docker's daemon is unreachable in this
+environment. `docker-compose.prod.yml`, `deploy/Caddyfile`, and (CR-076)
+`packages/db/Dockerfile` + the `migrate` service have not had an actual `docker
+build`/`docker compose up`/`docker compose run` executed against them, and Caddy's
+automatic ACME/TLS additionally needs a real public DNS record pointing at a real
+host — something no local or CI sandbox could ever satisfy, Docker daemon or not.
+Impact: medium — the compose file's structure (services, env interpolation,
+volumes, no published ports on `web`/`api`, the `migrate` profile correctly
+absent from a profile-less `docker compose config --services`) was validated with
+`docker compose -f docker-compose.prod.yml config`, which catches YAML/
+interpolation mistakes but not runtime behavior (container startup order actually
+working, Caddy successfully obtaining a certificate, `web` actually reaching `api`
+by service name, the `migrate` image actually building). `deploy/Caddyfile` itself
+was only reviewed by hand against Caddy's documented syntax — no `caddy validate`
+was run (no local `caddy` binary either). CR-076's `packages/db/Dockerfile` got an
+extra layer of confidence beyond that: its exact planned file set (workspace
+`package.json`s + `packages/db/src` + `packages/db/migrations`, nothing else) was
+reproduced by hand in a plain directory (no Docker) and `pnpm --filter db
+db:migrate` was run from it against a real throwaway database, successfully — the
+closest a real `docker build` can be approximated without one.
+Workaround: none needed pre-deploy — this is inherent to the environment, not a
+defect to work around.
+Next action: the first actual deployment (a real host, real DNS pointed at it)
+should run `docker compose -f docker-compose.prod.yml up -d --build`, confirm all
+three long-running containers report running/healthy, confirm Caddy actually
+obtains a certificate (check its logs, not just that the container started),
+confirm `https://$DOMAIN` serves `apps/web` with `/api/v1/*` correctly reaching
+`apps/api` end to end, and separately run `docker compose -f docker-compose.
+prod.yml --profile migrate run --rm migrate` to confirm the migration image
+actually builds and applies cleanly — before trusting this manifest as more than
+"the YAML parses."
+
 ---
 
 ## Resolved
@@ -1171,3 +1256,79 @@ Next action: none for CR-052 itself. If a real product need for a proactive
 degraded-backend banner shows up later, it needs its own `docs/design.md`
 update first (what it looks like, which pages show it, how often it polls) —
 treat that as new scope, not a reopening of this ticket.
+
+### KI-002 — Migration execution during deploy is undefined
+
+Status: resolved 2026-09-17 (CR-076). Discovered: 2026-09-11.
+Problem: nothing said who runs migrations on the server, and — the part that
+turned out to be real, not just theoretical — `packages/db/src/migrate.ts`'s
+use of drizzle-orm's postgres-js migrator was never actually safe under
+concurrent invocation. Confirmed live before fixing anything: two
+`pnpm db:migrate` processes launched at the same instant against a fresh
+database reliably raced — one failed with `duplicate key value violates
+unique constraint "pg_namespace_nspname_index"` on `CREATE SCHEMA IF NOT
+EXISTS "drizzle"`, because drizzle's migrator reads the last-applied
+migration and applies missing ones inside one transaction, but never
+serializes that read+apply across separate processes.
+Resolution: `packages/db/src/migrate.ts` now wraps the whole migrate() call
+in a session-level Postgres advisory lock (`pg_advisory_lock`/
+`pg_advisory_unlock`, fixed arbitrary key), using the same `{ max: 1 }`
+client for the lock and the migration (a `client.reserve()` connection was
+tried first for an explicit same-session guarantee, but drizzle's
+postgres-js driver reaches into `client.options` for type-parser setup,
+which a reserved connection doesn't expose — `drizzle(reserved)` threw at
+construction, so the simpler `max: 1` approach was kept instead). Re-ran the
+identical concurrent-launch test after the fix: both processes now exit `0`
+— the second one's log shows Postgres `NOTICE`s ("schema \"drizzle\" already
+exists, skipping") proving it waited for the lock, found nothing left to do,
+and completed as a clean no-op instead of racing. A new `packages/db/Dockerfile`
+plus `docker-compose.prod.yml`'s `migrate` service (gated behind the `migrate`
+Compose profile, never started by a plain `docker compose up`) give this an
+actual explicit-deploy-step home in the production manifest.
+Next action: none — CR-076 is the ticket this pointed at, and it's done.
+
+### KI-006 — No observability
+
+Status: resolved 2026-09-17 (CR-079). Discovered: 2026-09-11.
+Problem: no structured logging, request ids, error reporting, or metrics were
+specified. `.claude/rules/resilience.md` requires background job failures to
+be visible; there was no mechanism that could make them visible.
+Resolution: `apps/api/src/lib/request-id.ts` (`generateRequestId`) reuses a
+valid inbound `X-Request-Id` or generates one, wired into `app.ts` as
+Fastify's `genReqId`; the response echoes it back. `app.ts`'s pino config
+gained `base: { service: 'api' }`. New `apps/api/src/plugins/
+error-reporting.ts` decorates `app.reportError(error, message, context?,
+logger?)` — always logs structurally (the mechanism that alone makes a
+failure "visible"), and optionally forwards to a webhook sink via
+`ERROR_REPORTING_WEBHOOK_URL` (a generic seam, not a specific vendor SDK —
+no error-tracking provider is decided yet, same as this ticket's own
+Investigation notes). `error-handler.ts`'s unexpected-500 branches and
+`queue.ts`'s job-failed-after-retries handler both now go through this one
+funnel. Metrics/tracing remain out of scope, unchanged from ADR-016's
+original "add when actually needed" stance.
+Next action: none for observability's request-id/error-visibility half.
+Picking and wiring a real error-tracking vendor is a future ticket once one
+is actually chosen — not reopening this one.
+
+### KI-046 — `docker-compose.prod.yml` passes unset optional env vars as empty strings
+
+Status: open (partially mitigated). Discovered: 2026-09-17 (CR-079).
+Problem: `docker-compose.prod.yml`'s `api` service wires every optional env
+var through `${VAR}` unconditionally (`REDIS_URL`, `S3_ENDPOINT`, and now
+`ERROR_REPORTING_WEBHOOK_URL`). Compose substitutes an empty string, not an
+absent variable, for one left unset in `.env` — confirmed live via `docker
+compose ... config`. A bare `z.string().url().optional()` in `apps/api/src/
+env.ts` rejects an empty string (only `undefined` counts as absent), which
+would crash `apps/api` at boot.
+Impact: deploying with `REDIS_URL`/`S3_ENDPOINT` genuinely unset (a
+legitimate degraded-mode configuration the code otherwise supports) crashes
+the API process in production instead of booting in the documented degraded
+mode.
+Workaround: `ERROR_REPORTING_WEBHOOK_URL` is fixed (CR-079's own scope) via
+a `z.preprocess` that normalizes `''` to `undefined` before validation,
+confirmed live with `tsx`. `REDIS_URL`/`S3_ENDPOINT` still have the bare,
+unfixed version — fixing them was out of scope for CR-079 (unrelated-changes
+discipline: this ticket touched observability, not those two fields).
+Next action: fold the same `z.preprocess` fix into whichever of CR-077
+(Redis hardening) or CR-081 (full production env var set) next touches
+`REDIS_URL`/`S3_ENDPOINT` — a two-line fix, not worth its own ticket.

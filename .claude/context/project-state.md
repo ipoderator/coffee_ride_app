@@ -29,9 +29,10 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. ADR-017 (`apps/api` production build bundling, resolving
-KI-017) just closed — the prerequisite for CR-074 (Dockerfile), the first
-open Deployment-section ticket.
+None active. CR-079 (request-id correlation + a single error-reporting
+funnel, KI-006) just closed — CR-077 (Redis hardening) and CR-078 (Postgres
+backups) are the two Deployment-section tickets that were already open and
+remain open; CR-080/081/082 round out the section.
 
 ## Implemented
 
@@ -41,7 +42,27 @@ format/lint/typecheck/build/test plus DB migrations. Husky/lint-staged is
 workspace-aware (each package linted with its own config). `docker-compose.yml`
 defines Postgres/Redis/MinIO but has never been live-booted in this environment —
 Docker's daemon is unreachable here (KI-019; see `docker-desktop-unavailable` in
-Claude's project memory).
+Claude's project memory). `apps/web/Dockerfile` and `apps/api/Dockerfile` (CR-074,
+new) plus a root `.dockerignore` give both apps real multi-stage, non-root-user
+container images — `apps/web` via Next's `output: 'standalone'` trace,
+`apps/api` via ADR-017's esbuild bundle pruned to a production-only `node_modules`
+through `pnpm --filter=api deploy --prod`. Neither image has had an actual
+`docker build` run against it yet, same root cause as the compose file (KI-043).
+`docker-compose.prod.yml` + `deploy/Caddyfile` (CR-075, ADR-018, new) put both
+images behind one public origin: Caddy terminates TLS (automatic ACME) and
+reverse-proxies to `web` only — `apps/web`'s own `next.config.ts` rewrite already
+forwards `/api/v1/*` to `api` internally, so `api` publishes no host port at all.
+Excludes Postgres/Redis/S3 by design (assumed externally provisioned). Migrations
+(CR-076): `packages/db/src/migrate.ts` now wraps its call in a session-level
+Postgres advisory lock (a real race — two concurrent runs against a fresh DB
+reliably failed before the fix, confirmed live) so it's safe under concurrent
+invocation; `packages/db/Dockerfile` + `docker-compose.prod.yml`'s `migrate`
+service (gated behind the `migrate` Compose profile — absent from a plain
+`docker compose up`) give it an explicit deploy-step home, never wired into any
+service's boot. None of this has been run end to end via a real `docker build`/
+`docker compose up` (KI-045, same root cause as KI-019/KI-043; Caddy's ACME also
+needs real public DNS, unverifiable in any sandbox) — the migration fix itself
+was still live-verified, just on the host directly rather than in a container.
 
 **apps/web**: Next.js 15 + React 19 + TS 6.0.3, Tailwind v4 + shadcn/ui, real design
 tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Screens:
@@ -85,7 +106,17 @@ offers `onRetry`; `RideCard`/`RideDetailView`'s cover image uses `next/image`
 (still inert — `coverImageUrl` is always `null` until CR-086).
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
-cursor pagination). `GET /health` (unversioned) reports real, bounded DB/Redis/S3
+cursor pagination). Every request gets a correlatable id (CR-079,
+`lib/request-id.ts` as Fastify's `genReqId`): a valid inbound `X-Request-Id`
+is reused (for the CR-075 Caddy → web → api hop), otherwise one is
+generated; always echoed back as the response header. Pino logs carry
+`base: { service: 'api' }`. `app.reportError(error, message, context?,
+logger?)` (`plugins/error-reporting.ts`, CR-079/KI-006) is the single funnel
+an unexpected 500 (`error-handler.ts`) and a notification-job
+failed-after-retries (`modules/notifications/queue.ts`) both go through:
+always logs structurally, and optionally forwards to a webhook sink via
+`ERROR_REPORTING_WEBHOOK_URL` (generic seam behind a shared `CircuitBreaker`
+— no error-tracking vendor is decided yet). `GET /health` (unversioned) reports real, bounded DB/Redis/S3
 status (`ok`/`error`/`not_configured` per dependency, overall `ok`/`degraded`),
 always `200` (CR-051). `@fastify/helmet` registered globally in `app.ts`
 (`plugins/security-headers.ts`, CR-061) — every response (`/health`, `/docs`,
@@ -189,14 +220,20 @@ None.
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), Quality (CR-044..048), Resilience (CR-049..052), and
 Extensibility foundations (CR-053..056) sections are all now fully complete.
-Security foundations: CR-060 (password reset flow) and CR-061 (security
-headers) both just closed. One ticket remains in that section: CR-058
-(Redis-backed, per-account auth rate limiting), blocked on KI-014 until a
-live Redis is reachable in this environment. Deployment (CR-074+) is the
-next open section — KI-017 (the thing that would have made CR-074's
-Dockerfile build an image that immediately crashes on boot) is now resolved
-(ADR-017), so CR-074 (`Dockerfile` for `apps/web`/`apps/api`) can proceed
-directly.
+Security foundations: one ticket remains, CR-058 (Redis-backed, per-account auth
+rate limiting), blocked on KI-014 until a live Redis is reachable in this
+environment — also now has a second reason to check when unblocked: KI-044
+(whether `apps/api` sees each real client's IP through the new Caddy→web→api
+hop, not just `web`'s internal one). Deployment: CR-074/075/076/079
+(Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
+ADR-018; migrations as an explicit, concurrency-safe deploy step;
+request-id correlation + error-reporting funnel) are all closed. CR-077
+(Redis hardening), CR-078 (Postgres backups), CR-080 (CI gaps), CR-081 (full
+prod env var set + deployment docs), CR-082 (pin MinIO/review base images)
+remain open, no fixed order decided among them yet. KI-046 (new, CR-079):
+`docker-compose.prod.yml` passes an unset `REDIS_URL`/`S3_ENDPOINT` through
+as an empty string, which their bare `.url().optional()` schema rejects —
+worth folding into whichever of CR-077/CR-081 touches those variables next.
 
 ## Important decisions
 
@@ -230,6 +267,22 @@ See `docs/decisions.md`. Notably:
   KI-017's real `ERR_MODULE_NOT_FOUND` boot crash — every real npm dependency stays
   external. `db`/`types`/`maps-core`/`maps-2gis`/`resilience` themselves are
   unchanged.
+- ADR-018: production reverse proxy is Caddy (automatic TLS/ACME), proxying only
+  to `apps/web` — never directly to `apps/api`, since `apps/web`'s own rewrite
+  already forwards `/api/v1/*` internally. Does not decide where Postgres/Redis/S3
+  run in production (still open, `docs/architecture.md`).
+- CR-076 (no new ADR — an implementation fix + deploy-manifest addition, not an
+  architectural decision): `packages/db/src/migrate.ts` wraps its migration call
+  in a session-level Postgres advisory lock, since drizzle's own migrator was
+  confirmed unsafe under concurrent invocation (a real, reproduced race, not
+  theoretical). `docker-compose.prod.yml`'s `migrate` service (Compose-profile
+  gated) is the explicit deploy step this runs as — never on `apps/api`'s boot.
+- CR-079 (no new ADR — an implementation addition, not an architectural
+  decision): `app.reportError` is the single funnel for unexpected 500s and
+  background job failures; an external error-tracking vendor stays an open,
+  undecided choice (consistent with ADR-016's "add observability hooks only
+  when actually needed") — the webhook sink is a generic, unverified-against-
+  any-real-endpoint extension point, not a vendor integration.
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
   warm neutral base with one muted teal-green accent. One exception: `danger` is a
   bright red, reserved for cancellation/failure (`StatusBadge`, `Button
@@ -240,12 +293,24 @@ variant="danger"`).
 Full list with IDs and next actions: `.claude/context/known-issues.md`. Headline
 items:
 
-- No deployment artifacts, observability, or a live-verified Redis/S3/Postgres in this
-  environment — Docker's daemon is unreachable throughout (KI-001, KI-002, KI-003,
-  KI-006, KI-014, KI-015, KI-019).
+- Deployment artifacts now exist (`apps/web/Dockerfile`, `apps/api/Dockerfile`,
+  root `.dockerignore` from CR-074; `docker-compose.prod.yml` + `deploy/Caddyfile`
+  from CR-075; `packages/db/Dockerfile` + the `migrate` service from CR-076) but
+  none has been exercised by a real `docker build`/`docker compose up`/`docker
+compose run` (KI-043, KI-045) — Docker's daemon is unreachable throughout this
+  environment, same root cause as the never-booted dev `docker-compose.yml` and
+  the still-unverified Redis/S3/Postgres-via-compose gaps (KI-001, KI-003,
+  KI-014, KI-015, KI-019). Caddy's automatic TLS additionally needs real
+  public DNS, unverifiable in any sandbox regardless of Docker access. KI-002
+  itself (migration execution during deploy) is resolved — the migration
+  script's own concurrency-safety was proven live on the host; only the
+  container-build step around it is unverified.
 - Rate limiting is in-memory per-IP-only, single-instance, no per-account limiting,
   API-wide (KI-022, narrowed) — CR-058 upgrades this once KI-014 (Redis unverified in
-  this environment) is resolved. `apps/api`'s production boot crash on
+  this environment) is resolved, and should also settle KI-044 (new, CR-075):
+  whether `apps/api` sees each real client's IP or just `web`'s single internal
+  one through the new Caddy→web→api hop is unverified. `apps/api`'s production
+  boot crash on
   `db`/`types`'s raw-TS-source exports (KI-017) and missing `@fastify/helmet`
   security headers (the other half of KI-022) are both now resolved (ADR-017,
   CR-061) — `packages/maps-2gis` still exports raw source too, unaffected by
@@ -274,6 +339,12 @@ items:
   end to end (same KI-014/KI-015 gap, unrelated to this endpoint's own correctness).
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
   are deferred, no design-doc backing yet (KI-030).
+- Observability (CR-079/KI-006): request-id correlation and structured
+  error-reporting logging are real and live-verified. No error-tracking
+  vendor is chosen yet — `ERROR_REPORTING_WEBHOOK_URL`'s webhook sink is a
+  generic, unconfigured-by-default seam, never exercised against a real
+  endpoint (no vendor/credential to verify against). Metrics/tracing remain
+  out of scope (ADR-016).
 - Provisional/deferred: `RideService`/registration-state terminology keys pending a
   real DB enum (KI-021); shadcn CLI's vendoring target still points at `apps/web`, not
   `packages/ui`, for any future structurally-complex primitive (KI-020); avatar/logo
@@ -303,6 +374,13 @@ items:
   package (`db`/`types`/`resilience`), not just `apps/api`'s own
   `package.json` — and never bundling a real npm dependency (especially
   `argon2`, a native addon) into `dist/server.js` (ADR-017);
+- `apps/api/package.json`'s `"files": ["dist"]` and the `inject-workspace-
+packages=true` env var scoped to the one `pnpm --filter=api deploy` `RUN`
+  step in `apps/api/Dockerfile` (not a repo-wide `.npmrc`, which would change
+  how ordinary `pnpm install` resolves workspace:* dependencies everywhere —
+  CR-074); `apps/web/Dockerfile`'s `runner` stage copying `.next/standalone`,
+  `.next/static`, and `public` together (Next's own standalone-output tracing
+  caveat — `apps/web`/`next.config.ts`'s `output: 'standalone'`, CR-074);
 - server-side authorization checks (never UI-only — `.claude/rules/security.md`);
 - the `packages/maps-core` boundary (no direct 2GIS SDK imports outside
   `packages/maps-2gis` — `.claude/rules/maps.md`, lint-enforced since CR-056:
@@ -322,8 +400,37 @@ items:
   `error` distinguished — an absent optional dependency (Redis/S3 unconfigured) must
   never read as a failure (`.claude/rules/resilience.md`);
 - feature-module isolation between organizer/participant cabinet features
-  (`.claude/rules/extensibility.md`).
+  (`.claude/rules/extensibility.md`);
+- Caddy proxying to `web` only, never directly to `api` (`docker-compose.
+prod.yml`, ADR-018) — `apps/web/next.config.ts`'s rewrite is the one place
+  `/api/v1/*` routing happens; don't add a second `/api` route at the proxy
+  layer;
+- `api`'s `WEB_ORIGIN` staying derived as `https://${DOMAIN}` inside
+  `docker-compose.prod.yml` rather than a second, independently-set variable
+  (ADR-018) — letting it drift from `DOMAIN` would silently break the CSRF
+  Origin/Referer check;
+- `docker-compose.prod.yml` staying free of Postgres/Redis/S3 service
+  definitions (ADR-018 "What this does NOT mean") — that's a still-open
+  production-hosting decision, not this file's to make;
+- the `migrate` service staying behind the `migrate` Compose profile — never
+  started by a plain `docker compose up`, and never wired into `apps/web`'s or
+  `apps/api`'s own service definition or boot sequence (CR-076);
+- `packages/db/src/migrate.ts`'s session-level advisory lock (`pg_advisory_
+lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
+  for both) — this is what makes concurrent invocation safe (KI-002); don't
+  "simplify" it back to a bare `migrate()` call, and don't swap the client for
+  a `client.reserve()` connection either — drizzle's postgres-js driver reads
+  `client.options`, which a reserved connection doesn't expose;
+- every unexpected 500 (`error-handler.ts`) and every notification job
+  failed-after-retries (`queue.ts`'s `worker.on('failed', ...)`) routing
+  through `app.reportError`, not a direct `*.log.error(...)` call (CR-079) —
+  that's what keeps "must be visible" meaning the same thing in both places;
+  connection-level `.on('error', ...)` noise (Redis, BullMQ queue/worker)
+  deliberately stays outside this funnel;
+- `lib/request-id.ts`'s bounded charset/length check on an inbound
+  `X-Request-Id` header before it's trusted into every log line (CR-079) —
+  don't relax it to accept an arbitrary client-supplied value verbatim.
 
 ## Last updated
 
-2026-09-17 (ADR-017)
+2026-09-17 (CR-079)

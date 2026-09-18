@@ -8,6 +8,10 @@ const API_INTERNAL_URL =
   process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
 const nextConfig: NextConfig = {
+  // CR-074: the Docker runtime image copies only `.next/standalone`'s traced
+  // output (a minimal `node_modules` plus the built server), not the full
+  // monorepo — see `apps/web/Dockerfile`.
+  output: 'standalone',
   async rewrites() {
     return [
       {

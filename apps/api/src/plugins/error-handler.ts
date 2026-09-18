@@ -98,7 +98,15 @@ export function registerErrorHandler(app: FastifyInstance) {
     // (a bug, a driver/DB error) — its message was written by a dependency, not
     // this codebase, so it is never safe to return as-is.
     if (status >= 500 && !isDeliberateDomainError) {
-      request.log.error({ err: error }, 'Unhandled error');
+      // CR-079/KI-006: funnels through app.reportError so an unexpected 500
+      // is "visible" the same way a background job failure is — passing
+      // request.log keeps this request's reqId in the structured log line.
+      app.reportError(
+        error,
+        'Unhandled error',
+        { instance: request.url },
+        request.log,
+      );
       return sendProblem(reply, {
         status: 500,
         code: 'internal_error',
@@ -109,9 +117,14 @@ export function registerErrorHandler(app: FastifyInstance) {
     }
 
     if (status >= 500) {
-      // Still a server-side problem worth logging loudly, even though its message
-      // is safe to return to the caller.
-      request.log.error({ err: error }, 'Degraded dependency');
+      // Still a server-side problem worth reporting loudly, even though its
+      // message is safe to return to the caller.
+      app.reportError(
+        error,
+        'Degraded dependency',
+        { instance: request.url },
+        request.log,
+      );
     } else {
       request.log.warn({ err: error }, 'Request error');
     }

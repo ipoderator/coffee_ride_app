@@ -46,6 +46,14 @@ Local development:
 
 Production provider choices can vary and must be recorded as ADRs.
 
+Production (CR-075, ADR-018): Caddy reverse-proxies the public origin to `apps/web`
+only (`docker-compose.prod.yml`, `deploy/Caddyfile`) — `apps/web`'s own `next.config.
+ts` rewrite already forwards `/api/v1/*` to `apps/api` internally, so Caddy never
+routes to `apps/api` directly. Automatic TLS via Caddy's built-in ACME. Where
+Postgres/Redis/S3 actually run in production is still undecided — `docker-compose.
+prod.yml` assumes they're already reachable via `DATABASE_URL`/`REDIS_URL`/`S3_*`,
+not containers it starts itself.
+
 ## Maps
 
 2GIS integration is isolated from domain logic.
