@@ -12,7 +12,7 @@
 # devDependencies (`tsx`) is simpler than adding a build step for a script
 # that already runs correctly via `tsx` in CI and local dev.
 
-FROM node:24-alpine AS deps
+FROM node:25-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 
