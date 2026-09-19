@@ -7,7 +7,7 @@
 # `runner` (the actual runtime image — no devDependencies, no source, no pnpm
 # store, non-root user).
 
-FROM node:24-alpine AS deps
+FROM node:25-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 
@@ -60,7 +60,7 @@ RUN pnpm --filter api build
 RUN npm_config_inject_workspace_packages=true \
     pnpm --filter=api deploy --prod /prod/api
 
-FROM node:24-alpine AS runner
+FROM node:25-alpine AS runner
 RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs fastify
 WORKDIR /app
 ENV NODE_ENV=production
