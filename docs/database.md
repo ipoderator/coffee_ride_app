@@ -168,3 +168,45 @@ See `docs/decisions.md` → ADR-012.
   never a fixed offset.
 
 Use migrations for every schema change.
+
+## Backups
+
+See `docs/decisions.md` → ADR-018 "What this does NOT mean": where production
+Postgres actually runs is an undecided, operator-specific choice —
+`docker-compose.prod.yml` assumes `DATABASE_URL` already points at a real,
+externally provisioned instance rather than starting one itself. Backups
+follow the same shape as `packages/db/src/migrate.ts`: a plain script driven
+entirely by `DATABASE_URL`, with no assumption about hosting.
+
+`packages/db/scripts/backup.sh` (`pnpm --filter db db:backup`) runs
+`pg_dump --format=custom` against `DATABASE_URL` into a timestamped file (default
+`./backups/coffee_ride_<UTC timestamp>.dump`, overridable via `BACKUP_DIR`), then
+prunes files older than `BACKUP_RETENTION_DAYS` (default 7, disable with `0`).
+The custom format is required for `pg_restore` (below) — it is not a plain SQL
+dump.
+
+`packages/db/scripts/restore.sh` (`pnpm --filter db db:restore -- <file>`) runs
+`pg_restore --clean --if-exists` against a target `DATABASE_URL`, restoring a
+`backup.sh`-produced file. `--clean --if-exists` means it works both restoring
+into an empty freshly created database (disaster recovery) and on top of a
+database that already has the schema (e.g. verifying a backup by restoring it
+into a scratch database) — either way it drops and recreates every object
+first rather than erroring on "already exists".
+
+Backup _destination_ (this local directory vs. syncing it to S3/offsite
+storage, and how often) is deliberately left to whoever operates the real
+Postgres instance, for the same reason its host is undecided — wiring a
+specific offsite target here would invent a hosting decision this repo hasn't
+made. A daily cron entry is a reasonable minimum once a host is chosen:
+
+```text
+0 3 * * * cd /path/to/coffeeride && DATABASE_URL=postgresql://... BACKUP_DIR=/var/backups/coffee-ride pnpm --filter db db:backup >> /var/log/coffee-ride-backup.log 2>&1
+```
+
+A restore was live-verified against this environment's real local Postgres
+(2026-09-19, CR-078): a backup of the working `coffee_ride_dev` database was
+restored into a separate scratch database and its row counts across every
+real table matched the source exactly, then the scratch database was
+dropped. See `docs/changelog.md`'s CR-078 entry for the exact procedure and
+counts — do not treat "the script exits 0" alone as a verified restore in any
+future check of this mechanism.

@@ -532,7 +532,19 @@ Deliberately deferred until there is something to deploy (see `docs/changelog.md
       at once (never on application boot) — done 2026-09-17. See `docs/changelog.md`.
 - [x] CR-077 Redis hardening: password, AOF persistence (the notification queue lives
       there — CR-050), healthcheck — done 2026-09-18. See `docs/changelog.md`.
-- [ ] CR-078 PostgreSQL backups + a restore actually verified, not just scheduled
+- [x] CR-078 PostgreSQL backups + a restore actually verified, not just scheduled
+      — done 2026-09-19: `packages/db/scripts/{backup.sh,restore.sh}` (plain
+      `pg_dump --format=custom`/`pg_restore --clean --if-exists`, both driven
+      entirely by `DATABASE_URL`, same portability as `migrate.ts` — no
+      hosting assumption, consistent with ADR-018 leaving Postgres hosting
+      undecided), `pnpm --filter db db:backup`/`db:restore`, documented in
+      `docs/database.md` (new "Backups" section, incl. a cron scheduling
+      example). Restore live-verified against this environment's real local
+      Postgres: a marker row inserted into the real `coffee_ride_dev`
+      database, backed up, restored into a scratch database, all 14 tables'
+      row counts (and the marker row's exact content) matched, then the
+      marker row/scratch database/test backup file were all cleaned up. See
+      `docs/changelog.md`.
 - [x] CR-079 Structured logging (pino + request id) and error reporting; background job
       failures must be visible (`.claude/rules/resilience.md`) — done 2026-09-17.
       See `docs/changelog.md`.

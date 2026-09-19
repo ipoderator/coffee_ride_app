@@ -3924,3 +3924,70 @@ Follow-up: CR-078 (Postgres backups) is the next Deployment-section ticket
 that was open before this one and remains open; CR-080 (CI gaps), CR-081
 (env var set + docs), CR-082 (pin MinIO) round out the section, no fixed
 order decided among them.
+
+## 2026-09-19 — CR-078 — PostgreSQL backups + a restore actually verified
+
+Summary: the next open Deployment-section ticket after CR-077/CR-079. Unlike
+every other open Deployment ticket, this one didn't have to stay
+documentation-only against an unreachable Docker daemon — this environment's
+local Postgres (used since CR-004, outside Docker) is genuinely reachable, so
+"a restore actually verified" (the ticket's own title, not just "a script
+that looks right") was achievable live in this session.
+Investigation: `docker-compose.prod.yml`/ADR-018 deliberately run no Postgres
+service of their own — production hosting is undecided, `DATABASE_URL` is
+assumed to already point at a real, externally provisioned instance. A
+backup mechanism therefore can't assume a specific host or container; it has
+to be connection-string-driven, the same shape `packages/db/src/migrate.ts`
+already uses. No `docs/deployment.md` exists — `docs/database.md` already
+owns `packages/db`'s operational rules (ADR-012's time rules live there), so
+a new "Backups" section there is the natural home rather than inventing a
+new doc.
+Implementation: `packages/db/scripts/backup.sh` (`pg_dump --format=custom`
+against `DATABASE_URL`, timestamped output file, `BACKUP_DIR`/
+`BACKUP_RETENTION_DAYS`-configurable, default 7-day pruning) and
+`packages/db/scripts/restore.sh` (`pg_restore --clean --if-exists
+--no-owner --no-privileges`, one positional backup-file argument) — plain
+shell, no new npm dependency, same "boring, explicit" precedent as
+`migrate.ts`. New `packages/db/package.json` scripts `db:backup`/`db:restore`.
+`docs/database.md` gained a "Backups" section: the mechanics above, an
+explicit statement that backup _destination_ (local disk vs. offsite/S3
+sync) is left to whoever operates the real Postgres instance — the same
+reasoning ADR-018 already used for leaving that instance's host undecided —
+plus a daily-cron scheduling example. `.gitignore` gained
+`packages/db/backups/` (the scripts' default output directory; real backup
+files are never repository content).
+Decisions: none new at the ADR level — same "implementation, not an
+architectural decision" precedent as CR-076/CR-077/CR-079. Backup
+destination stays exactly as undecided as Postgres hosting itself (ADR-018),
+deliberately not resolved here.
+Validation — this is the part that matters for this ticket's own acceptance
+criterion: inserted one marker row (`cr078-backup-verify@example.com`) into
+the real local `coffee_ride_dev` database (the only non-empty table in an
+otherwise-empty dev database, so the restore had real data to actually
+carry, not just an empty schema); ran `pnpm --filter db db:backup`; created
+a throwaway scratch database (`coffee_ride_cr078_restore_test`); restored
+the produced `.dump` file into it via `restore.sh`; compared `count(*)`
+across all 14 real tables between source and restored database — every one
+matched exactly (13 at `0`, `users` at `1`); separately confirmed the marker
+row's `id`/`email`/`display_name` were byte-identical between the two
+databases, not just a matching count. Cleaned up afterward: deleted the
+marker row from the real dev database, dropped the scratch database,
+deleted the test backup file — nothing from this verification pass was left
+behind. `pnpm turbo run lint typecheck build test` (via `--filter='!web'`,
+`apps/web`'s build run separately with `NODE_ENV=production` — see Discovered
+issues below): 25/25 tasks green, 299/299 `apps/api` tests passing (this
+ticket touched no application source).
+Discovered issues: none new — re-hit KI-038 (`next build` crashes under an
+inherited `NODE_ENV=development` from sourcing the root `.env` into the same
+shell as `apps/api`'s DB env vars), already documented with its exact
+workaround; not a regression, confirmed by following that entry's own
+"override NODE_ENV=production for the build command" workaround, which
+worked cleanly.
+Known limitations: none new. The restore was verified against this
+environment's real local Postgres, not a fresh disaster-recovery scenario on
+a from-scratch host — that's the same class of "verified locally, not
+against the exact real deploy target" gap KI-043/KI-045 already record for
+the Dockerfiles/production manifest, not a new one worth a separate entry.
+Follow-up: CR-080 (CI gaps), CR-081 (full production env var set +
+deployment documentation), CR-082 (pin MinIO/review base images) remain
+open, no fixed order decided among them.

@@ -12,3 +12,7 @@ test-results
 !.env.example
 .DS_Store
 *.log
+
+# CR-078: packages/db/scripts/backup.sh's default output directory. Real
+# backup files are never repository content, local-dev or otherwise.
+packages/db/backups/

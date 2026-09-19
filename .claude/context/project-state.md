@@ -29,9 +29,10 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-077 (Redis hardening, KI-003) just closed — CR-078 (Postgres
-backups) is the one Deployment-section ticket that was already open before it
-and remains open; CR-080/081/082 round out the section.
+None active. CR-078 (Postgres backups, live-verified restore) just closed —
+CR-080 (CI gaps), CR-081 (full prod env var set + deployment docs), CR-082
+(pin MinIO/review base images) are the remaining Deployment-section tickets,
+no fixed order decided among them.
 
 ## Implemented
 
@@ -179,7 +180,14 @@ batched not N+1 on the paginated endpoints) and on `GET`/`POST`/`PATCH
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
 `password_reset_tokens`, `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`,
 `route_points`, `registrations`, `waitlist_entries`, `ride_updates`, `notifications`,
-`reviews`.
+`reviews`. `scripts/backup.sh`/`scripts/restore.sh` (CR-078, new): plain
+`pg_dump --format=custom`/`pg_restore --clean --if-exists` wrappers driven
+entirely by `DATABASE_URL`, same hosting-agnostic shape as `migrate.ts` —
+`pnpm --filter db db:backup`/`db:restore`, documented in `docs/database.md`.
+Restore live-verified this session against this environment's real local
+Postgres (marker row round-tripped through a real backup into a scratch
+database, all 14 tables' counts matched, then cleaned up) — see
+`docs/changelog.md`'s CR-078 entry.
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -234,9 +242,10 @@ hop, not just `web`'s internal one). Deployment: CR-074/075/076/077/079
 (Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
 ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
 password + AOF persistence; request-id correlation + error-reporting funnel)
-are all closed. CR-078 (Postgres backups), CR-080 (CI gaps), CR-081 (full
-prod env var set + deployment docs), CR-082 (pin MinIO/review base images)
-remain open, no fixed order decided among them yet. KI-046 (CR-079,
+and CR-078 (Postgres backups, real backup/restore mechanism + a live-verified
+restore) are all closed. CR-080 (CI gaps), CR-081 (full prod env var set +
+deployment docs), CR-082 (pin MinIO/review base images) remain open, no
+fixed order decided among them yet. KI-046 (CR-079,
 still open — CR-077's scope was the local-dev `docker-compose.yml`, not
 this file): `docker-compose.prod.yml` passes an unset `REDIS_URL`/
 `S3_ENDPOINT` through as an empty string, which their bare
@@ -291,6 +300,11 @@ See `docs/decisions.md`. Notably:
   undecided choice (consistent with ADR-016's "add observability hooks only
   when actually needed") — the webhook sink is a generic, unverified-against-
   any-real-endpoint extension point, not a vendor integration.
+- CR-078 (no new ADR — an implementation addition, not an architectural
+  decision): `packages/db/scripts/backup.sh`/`restore.sh` are plain,
+  `DATABASE_URL`-driven `pg_dump`/`pg_restore` wrappers; backup destination
+  (local disk vs. offsite/S3 sync) stays exactly as undecided as Postgres
+  hosting itself (ADR-018) — deliberately not resolved here.
 - Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
   warm neutral base with one muted teal-green accent. One exception: `danger` is a
   bright red, reserved for cancellation/failure (`StatusBadge`, `Button
@@ -441,4 +455,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-18 (CR-077)
+2026-09-19 (CR-078)
