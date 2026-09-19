@@ -4505,3 +4505,53 @@ Known issues discovered: KI-048 (no `SIGTERM`/`SIGINT` handler calls
 
 Follow-up: CR-094 (wire graceful shutdown). CR-086 (cover image pipeline)
 is now the only unchecked, unblocked ticket left in `docs/tasks.md`.
+
+## 2026-09-19 — CR-094 — Wire SIGTERM/SIGINT graceful shutdown (resolve KI-048)
+
+Closed the gap CR-058 found: nothing in `apps/api/src/server.ts` ever
+registered a `SIGTERM`/`SIGINT` handler, so `app.close()` — and therefore
+every `onClose` hook (`modules/notifications/queue.ts`'s worker/producer
+disconnect, `plugins/db.ts`'s Postgres pool close) — never ran on a real
+`docker stop`/orchestrator shutdown.
+
+New `apps/api/src/lib/graceful-shutdown.ts` (`registerGracefulShutdown`),
+called from `server.ts` right after `buildApp()`, before `app.listen()`.
+First `SIGTERM`/`SIGINT` logs, starts an unref'd 10s hard-fallback timer,
+and calls `app.close()`: success clears the timer and `process.exit(0)`s,
+a rejecting `close()` (an `onClose` hook throwing) logs and `exit(1)`s, and
+the 10s timeout itself forces `exit(1)` if `close()` never settles — defense
+in depth beyond `queue.ts`'s own bounded (3s) `onClose` hook, since
+`db.ts`'s pool `.end()` has no timeout of its own. A second signal arriving
+while a shutdown is already in flight forces an immediate `exit(1)` instead
+of waiting on (or re-triggering) a possibly-stuck close.
+
+Both the signal source (`process`) and the exit function are injected
+dependencies, defaulting to the real `process`/`process.exit` in
+production — the same DI shape `lib/account-rate-limit.ts` uses for Redis —
+so the module is unit-tested (`lib/graceful-shutdown.test.ts`, 5 tests:
+registration, clean shutdown, a rejecting `close()`, the force-exit
+timeout via `vi.useFakeTimers()`, and the double-signal case) without
+sending a real OS signal or killing the test process. Real signal delivery
+against a running container still can't be live-verified in this sandbox
+(KI-019, Docker daemon unreachable) — same limitation every prior
+Redis/S3/Docker-dependent ticket here has hit; recorded as the residual gap
+in KI-048's resolution note rather than left implicit.
+
+Testing: `pnpm --filter api exec vitest run src/lib/graceful-shutdown.test.ts`
+5/5 passed. `pnpm --filter api typecheck`/`eslint .`: clean (typecheck
+caught one real issue while writing the test — `Pick<NodeJS.Process, 'on'>`
+requires `on()`'s return type to be `Process`, so the fake needed a type
+assertion rather than a plain object literal). `pnpm --filter api test`:
+55 passed, 1 skipped, 12 failed — every failure a pre-existing
+`DATABASE_URL is required` guard in an unrelated DB-dependent suite
+(KI-014/KI-019, no live Postgres in this sandbox), none touching this
+change. `pnpm turbo run lint typecheck build`: 24/24 green.
+
+Decisions: none new at the ADR level.
+
+Known issues resolved: KI-048 (no `SIGTERM`/`SIGINT` handler calls
+`app.close()`) — moved to `.claude/context/known-issues.md`'s Resolved
+section.
+
+Follow-up: CR-086 (cover image pipeline) is now the only unchecked,
+unblocked ticket left in `docs/tasks.md`.

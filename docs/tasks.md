@@ -493,7 +493,7 @@ test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
       blocking a critical journey; falls back to the plugin's in-memory
       store otherwise, unchanged. New independent per-account tier
       (`apps/api/src/lib/account-rate-limit.ts`, atomic `MULTI INCR +
-    PEXPIRE ... NX EXEC`) on `/register`/`/login`/`/forgot-password`,
+  PEXPIRE ... NX EXEC`) on `/register`/`/login`/`/forgot-password`,
       keyed by normalized email, also fail-open. Live-verified against the
       real Redis this session (including stopping it mid-session to confirm
       login still replies `401` in ~1.3s, not hung) — resolves KI-022. See
@@ -655,11 +655,10 @@ registrations/registrations.service.ts`) now return `{ resource, created }`;
       `packages/maps-2gis/src/route.ts` and re-verified live. No consumer
       wired in yet (still zero callers of `create2GisMapProvider`) — that's
       KI-032/CR-028/CR-084 follow-up. See `docs/changelog.md`.
-- [ ] CR-094 Wire `SIGTERM`/`SIGINT` in `apps/api/src/server.ts` to actually
-      call `app.close()` (then `process.exit(0)`, with a hard fallback
-      timeout) — found 2026-09-19 while live-verifying CR-058's fail-open
-      behavior: `modules/notifications/queue.ts`'s `onClose` hook already
-      assumes a real graceful shutdown triggers it ("e.g. SIGTERM"), but
-      nothing in `server.ts` ever registers a signal handler, so `app.close()`
-      never runs on a real `docker stop`/orchestrator shutdown today. See
-      KI-048.
+- [x] CR-094 Wire `SIGTERM`/`SIGINT` in `apps/api/src/server.ts` to actually
+      call `app.close()` — done 2026-09-19: new `apps/api/src/lib/
+graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
+      (signals source + exit function) for unit testing without real OS
+      signals — 5 tests cover clean shutdown, a rejecting `app.close()`, a
+      10s hard-fallback force-exit, and a second signal mid-shutdown forcing
+      an immediate exit. Resolves KI-048. See `docs/changelog.md`.

@@ -624,46 +624,47 @@ prod.yml --profile migrate run --rm migrate` to confirm the migration image
 actually builds and applies cleanly — before trusting this manifest as more than
 "the YAML parses."
 
+## Resolved
+
 ### KI-048 — Nothing calls `app.close()` on SIGTERM/SIGINT; no real graceful shutdown exists
 
-Status: open. Discovered: 2026-09-19 (CR-058, "Redis-backed auth rate
-limiting" session), incidentally while live-verifying that a rate-limit
-Redis-store failure fails open rather than hanging a request.
+Resolved: 2026-09-19 (CR-094). Discovered: 2026-09-19 (CR-058, "Redis-backed
+auth rate limiting" session), incidentally while live-verifying that a
+rate-limit Redis-store failure fails open rather than hanging a request.
 Problem: `apps/api/src/modules/notifications/queue.ts`'s own `onClose` hook
 comment says its bounded `raceTimeout`s exist so "a degraded Redis... would
 hang the whole app's graceful shutdown (`app.close()`, e.g. on SIGTERM)" —
-but `apps/api/src/server.ts` never registers a `SIGTERM`/`SIGINT` handler at
-all (confirmed by grep: `queue.ts`'s comment is the only place either string
-appears in `apps/api/src`). `app.listen()` is called and the process just
-runs; on a real `docker stop`/orchestrator SIGTERM, Node's default behavior
-for an unhandled `SIGTERM` is immediate termination — `app.close()` (and
-therefore every `onClose` hook: the notification queue's worker/producer
-disconnect, any DB pool close, etc.) never runs at all.
+but `apps/api/src/server.ts` never registered a `SIGTERM`/`SIGINT` handler at
+all (confirmed by grep: `queue.ts`'s comment was the only place either
+string appeared in `apps/api/src`). `app.listen()` was called and the
+process just ran; on a real `docker stop`/orchestrator SIGTERM, Node's
+default behavior for an unhandled `SIGTERM` is immediate termination —
+`app.close()` (and therefore every `onClose` hook: the notification queue's
+worker/producer disconnect, `db.ts`'s Postgres pool close, etc.) never ran
+at all.
 Impact: medium — a production deploy/redeploy (`docker compose up -d
---build`, CR-075/ADR-018) or a scaling-down event kills `apps/api`
+--build`, CR-075/ADR-018) or a scaling-down event killed `apps/api`
 mid-request and mid-in-flight-BullMQ-job with zero drain time, not "hangs
-briefly then recovers" as the existing code comments imply. Confirmed this
-session isn't specific to a degraded Redis either — the gap is that nothing
-triggers `app.close()` at all, degraded dependency or not.
-Workaround: none in production. Confirmed via a throwaway script
-(`buildApp()` + `app.inject()` + explicit `app.close()`, deleted after use,
-same technique CR-093's live check used) that `app.close()` ITSELF is
-correctly bounded (~3s, matching `CLOSE_TIMEOUT_MS`) and the triggering
-request (`POST /v1/auth/login` with Redis stopped) replied `401` in ~1.3s,
-not hung — so the resilience mechanics `queue.ts` already built (bounded
-close, fail-open rate limiting) work correctly once `app.close()` actually
-runs; they just never get invoked by a real process signal today.
-Next action: needs its own ticket (same "real gap, add a ticket" discipline
-as KI-024/025/026) — a `process.on('SIGTERM', ...)`/`SIGINT` handler in
-`server.ts` calling `await app.close()` then `process.exit(0)`, with a hard
-fallback timeout in case some `onClose` hook doesn't resolve. Added as
-CR-094 (`docs/tasks.md`, Deployment section). Out of CR-058's own scope —
-discovered while verifying CR-058's fail-open behavior, not something it
-introduced or regressed.
+briefly then recovers" as the existing code comments implied. Confirmed the
+gap wasn't specific to a degraded Redis either — nothing triggered
+`app.close()` at all, degraded dependency or not.
+Resolution: new `apps/api/src/lib/graceful-shutdown.ts`
+(`registerGracefulShutdown`), wired into `server.ts` right after
+`buildApp()`. First `SIGTERM`/`SIGINT` calls `app.close()` under a 10s hard
+fallback timeout (defense in depth beyond `queue.ts`'s own bounded 3s
+`onClose` hook, also covers `db.ts`'s unbounded pool `.end()`) — success
+exits 0, a rejecting `close()` or a timed-out close exits 1. A second signal
+mid-shutdown forces an immediate exit 1 instead of waiting on a possibly
+stuck close. Dependency-injectable (signals source + exit function) so it's
+unit-tested (5 tests) without sending a real OS signal or killing the test
+process; real signal delivery against a running container still can't be
+live-verified in this sandbox (KI-019, Docker daemon unreachable) — same
+limitation every Redis/S3/Docker-dependent CR here has hit.
+Next action: none — first real deploy should still confirm a `docker stop`
+against a live container logs "Received shutdown signal, closing
+gracefully." and exits promptly, per KI-045's own deploy-time checklist.
 
 ---
-
-## Resolved
 
 ### KI-022 — Auth endpoints ship with an interim, weaker security posture than `.claude/rules/security.md`'s full checklist
 

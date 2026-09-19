@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { loadEnv } from './env.js';
 import { buildApp } from './app.js';
+import { registerGracefulShutdown } from './lib/graceful-shutdown.js';
 
 // Node 24 native .env loading (stable since Node 20.6, no `dotenv` dependency
 // needed). One root .env for the whole monorepo (matches .env.example) —
@@ -17,6 +18,11 @@ try {
 
 const env = loadEnv();
 const app = await buildApp(env);
+
+// CR-094/KI-048: without this, a real SIGTERM (docker stop/orchestrator
+// shutdown) never runs app.close() — queue.ts's worker/producer disconnect
+// and db.ts's pool close would simply never happen.
+registerGracefulShutdown(app);
 
 try {
   const address = await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

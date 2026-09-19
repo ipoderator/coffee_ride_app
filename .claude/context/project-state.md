@@ -29,14 +29,15 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-058 (Redis-backed, per-IP-and-per-account auth rate
-limiting, resolving KI-022) just closed — Docker/a live Redis happened to be
-up this session, so it was picked up instead of waiting further. Only one
-unchecked, unblocked ticket remains in `docs/tasks.md`: CR-086 (cover image
-pipeline). CR-094 (new, KI-048 — wire real `SIGTERM`/`SIGINT` graceful
-shutdown) was also added this session as a discovered gap, unblocked but not
-started. Next logical step: CR-086, or CR-094, or (if a
-`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`/geocoding consumer is wanted) KI-032/KI-031.
+None active. CR-094 (wire `SIGTERM`/`SIGINT` graceful shutdown, resolving
+KI-048) just closed: new `apps/api/src/lib/graceful-shutdown.ts`
+(`registerGracefulShutdown`, dependency-injected signals/exit for unit
+testing), wired into `server.ts` right after `buildApp()` — first signal
+calls `app.close()` under a 10s hard-fallback timer, a second signal
+mid-shutdown forces an immediate exit. Only one unchecked, unblocked ticket
+remains in `docs/tasks.md`: CR-086 (cover image pipeline). Next logical
+step: CR-086, or (if a `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`/geocoding consumer
+is wanted) KI-032/KI-031.
 
 ## Implemented
 
@@ -390,10 +391,13 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   which is keyed by email, not IP). `apps/api`'s production boot crash on
   `db`/`types`'s raw-TS-source exports (KI-017) and missing `@fastify/helmet`
   security headers are both resolved (ADR-017, CR-061).
-- KI-048 (new, CR-058): nothing calls `app.close()` on `SIGTERM`/`SIGINT` —
-  `server.ts` never registers a signal handler, so a real `docker stop`
-  today kills the process without draining in-flight BullMQ jobs or running
-  any `onClose` hook. New ticket CR-094.
+- KI-048 (found CR-058, resolved CR-094): `server.ts` now registers a real
+  `SIGTERM`/`SIGINT` handler (`lib/graceful-shutdown.ts`,
+  `registerGracefulShutdown`) — first signal calls `app.close()` (draining
+  `queue.ts`'s BullMQ worker/producer and `db.ts`'s Postgres pool) under a
+  10s hard-fallback timer, a second signal mid-shutdown forces an immediate
+  exit. Dependency-injected for unit testing; real signal delivery against a
+  live container still unverified in this sandbox (KI-019).
 - Geocoding is now verified against a live 2GIS account and its one real bug (route
   geometry parsing) fixed (KI-016, resolved CR-093), but still has zero real
   consumers. No live MapGL browser credential — MapGL rendering is still unverified;
