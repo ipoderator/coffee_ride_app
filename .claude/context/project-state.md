@@ -29,11 +29,10 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-080 (CI gaps: MinIO service + Playwright e2e job, KI-007)
-just closed — CR-081 (full prod env var set + deployment docs), CR-082 (pin
-MinIO/review base images) are the remaining Deployment-section tickets, no
-fixed order decided among them. CR-092 (real critical-journey e2e specs,
-opened this session) is a new, separate open ticket.
+None active. CR-081 (full prod env var set + deployment docs) just closed —
+CR-082 (pin MinIO/review base images) is the one remaining Deployment-section
+ticket. CR-092 (real critical-journey e2e specs) and CR-083 (registration
+idempotency) remain open, no fixed order decided among them.
 
 ## Implemented
 
@@ -245,23 +244,18 @@ Security foundations: one ticket remains, CR-058 (Redis-backed, per-account auth
 rate limiting), blocked on KI-014 until a live Redis is reachable in this
 environment — also now has a second reason to check when unblocked: KI-044
 (whether `apps/api` sees each real client's IP through the new Caddy→web→api
-hop, not just `web`'s internal one). Deployment: CR-074/075/076/077/079
+hop, not just `web`'s internal one). Deployment: CR-074/075/076/077/078/079/080
 (Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
 ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
-password + AOF persistence; request-id correlation + error-reporting funnel)
-CR-078 (Postgres backups, real backup/restore mechanism + a live-verified
-restore), and CR-080 (CI gaps: MinIO service + real S3 round-trip test +
-Playwright e2e job, KI-007) are all closed. CR-081 (full prod env var set +
-deployment docs), CR-082 (pin MinIO/review base images) remain open, no
-fixed order decided among them yet. CR-092 (real critical-journey e2e
-specs, opened this session — `.claude/rules/testing.md`'s discover
-+register/create+publish/view-participants journeys still don't exist) is
-also open, tracked separately from Deployment. KI-046 (CR-079,
-still open — CR-077's scope was the local-dev `docker-compose.yml`, not
-this file): `docker-compose.prod.yml` passes an unset `REDIS_URL`/
-`S3_ENDPOINT` through as an empty string, which their bare
-`.url().optional()` schema rejects — worth folding into CR-081, the next
-ticket that touches production env vars.
+password + AOF persistence; Postgres backups + a live-verified restore;
+request-id correlation + error-reporting funnel; CI MinIO service + real S3
+round-trip test + Playwright e2e job, KI-007) and now CR-081 (full prod env
+var set + `docs/deployment.md`, new — also resolved KI-046 for real) are all
+closed. CR-082 (pin MinIO/review base images) is the one Deployment ticket
+still open. CR-092 (real critical-journey e2e specs — `.claude/rules/
+testing.md`'s discover+register/create+publish/view-participants journeys
+still don't exist) and CR-083 (registration idempotency) remain open,
+tracked separately from Deployment, no fixed order decided among the three.
 
 ## Important decisions
 
@@ -348,6 +342,13 @@ compose run` (KI-043, KI-045) — Docker's daemon is unreachable throughout this
   `.claude/rules/testing.md` names (discover+register, organizer
   create+publish, view participants) still don't exist — tracked as the new
   CR-092, out of CR-080's own "wire CI" scope.
+- `docs/deployment.md` (new, CR-081) documents the full production deploy procedure
+  (prerequisites, `.env` setup, first-boot migrate-then-serve order, verification,
+  redeploy/rollback) but — same as every other Deployment-section artifact — has not
+  been exercised by an actual `docker compose up` (KI-043/KI-045). `apps/api/src/
+env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not configured"
+  the same way `ERROR_REPORTING_WEBHOOK_URL` already did (KI-046, resolved), with new
+  test coverage in `apps/api/src/env.test.ts`.
 - Rate limiting is in-memory per-IP-only, single-instance, no per-account limiting,
   API-wide (KI-022, narrowed) — CR-058 upgrades this once KI-014 (Redis unverified in
   this environment) is resolved, and should also settle KI-044 (new, CR-075):
@@ -484,4 +485,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-19 (CR-080)
+2026-09-19 (CR-081)

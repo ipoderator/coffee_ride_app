@@ -23,8 +23,21 @@ const envSchema = z.object({
   // not just production — an optional/defaulted value would mean local dev
   // silently runs with no real CSRF check.
   WEB_ORIGIN: z.string().url(),
-  REDIS_URL: z.string().url().optional(),
-  S3_ENDPOINT: z.string().url().optional(),
+  // Both preprocessed the same way as ERROR_REPORTING_WEBHOOK_URL below:
+  // docker-compose.prod.yml wires these through `${VAR}` unconditionally
+  // (KI-046), and Compose substitutes an empty string, not an absent
+  // variable, for one left unset in `.env`. A bare `.url().optional()`
+  // rejects `''` (only `undefined` counts as absent) and crashes boot even
+  // though "Redis/S3 not configured" is a supported degraded mode
+  // everywhere this env is consumed.
+  REDIS_URL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
+  S3_ENDPOINT: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
   S3_REGION: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
@@ -32,15 +45,9 @@ const envSchema = z.object({
   MAPS_2GIS_API_KEY: z.string().optional(),
   // CR-079/KI-006. Optional: no error-tracking vendor is decided yet (no ADR
   // names one) — unset means `app.reportError` (plugins/error-reporting.ts)
-  // only logs structurally, the same "not configured is a supported
-  // degraded mode" shape as REDIS_URL/S3_* above. `docker-compose.prod.yml`
-  // wires this through `${ERROR_REPORTING_WEBHOOK_URL}` unconditionally
-  // (KI-046) — Compose substitutes an *empty string*, not an absent
-  // variable, when it's not set in `.env`, which a bare `.url().optional()`
-  // would reject (only `undefined` counts as absent) and crash boot. The
-  // preprocess step normalizes that empty string to `undefined` before
-  // validation so "not configured yet" — the expected state until a vendor
-  // is chosen — stays a safe production boot, not a crash.
+  // only logs structurally. Same empty-string-from-Compose preprocessing as
+  // REDIS_URL/S3_ENDPOINT above (this field is what originally surfaced
+  // KI-046).
   ERROR_REPORTING_WEBHOOK_URL: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z.string().url().optional(),

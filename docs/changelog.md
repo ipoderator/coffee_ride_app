@@ -4084,3 +4084,72 @@ e2e specs) is new and open.
 Follow-up: CR-081 (full production env var set + deployment documentation),
 CR-082 (pin MinIO/review base images), and the new CR-092 (critical-journey
 e2e specs) remain open, no fixed order decided among them.
+
+## 2026-09-19 — CR-081 — Full production env var set + deployment documentation (KI-046)
+
+Goal: close the remaining Deployment-section gap CR-080 left open —
+`.env.example` completeness and an actual deployment procedure — plus
+finish KI-046, which CR-079 only partially closed.
+
+Investigation: cross-checked `.env.example` line by line against every
+variable `docker-compose.prod.yml`'s `api`/`web`/`caddy` services actually
+consume — already complete, nothing to add. The real gap was that no
+`docs/deployment.md` existed at all: `docs/architecture.md`, ADR-018, and
+`docker-compose.prod.yml`'s own comments each document one slice (reverse
+proxy choice, migration profile) but nothing walked an operator through an
+actual deploy end to end. Separately, KI-046 (`docker-compose.prod.yml`
+substitutes an empty string, not an absent variable, for an unset optional
+env var — confirmed by CR-079 via `docker compose ... config`) was only
+fixed for `ERROR_REPORTING_WEBHOOK_URL`; `REDIS_URL`/`S3_ENDPOINT` still had
+the bare, crash-on-empty-string `z.string().url().optional()` shape.
+
+Implementation: `apps/api/src/env.ts` — applied the same `z.preprocess`
+empty-string-to-`undefined` normalization already used for
+`ERROR_REPORTING_WEBHOOK_URL` to `REDIS_URL` and `S3_ENDPOINT` (the only
+other two `.url().optional()` fields; the remaining `S3_*` fields are plain
+`z.string().optional()`, which already accepted `''` without crashing — no
+change needed there). New `apps/api/src/env.test.ts` (didn't exist before):
+covers the empty-string normalization for both fields, a genuinely malformed
+URL still being rejected, a real URL still being accepted, and the existing
+production-placeholder-refusal behavior — this correctness-critical parsing
+logic now has direct test coverage instead of only ever being exercised
+indirectly through other suites. New `docs/deployment.md`: prerequisites (a
+Docker + Compose v2 host, DNS already pointed at `DOMAIN`, externally
+provisioned Postgres/Redis/S3 — ADR-018 leaves that hosting choice open,
+this doc doesn't invent one), preparing `.env`, first-boot order (`--profile
+migrate run --rm migrate` before `up -d --build`, per CR-076), verification
+(`/health`'s per-dependency semantics, Caddy TLS, pino/request-id logs),
+redeploying, rollback limitations (no automated down-migrations — a
+schema-incompatible rollback needs a manually written reverse migration),
+and a pointer to `docs/database.md`'s Backups section rather than
+duplicating it. States plainly, once, that none of this has been exercised
+by a real `docker compose up` in any session (KI-043/KI-045) — documented
+and reviewed, not live-verified.
+
+Decisions: none new at the ADR level — an implementation fix (KI-046) plus a
+documentation addition, same "not an architectural decision" precedent as
+CR-076/077/078/079/080.
+
+Validation: `apps/api/src/env.test.ts` — 6/6 new tests pass in isolation
+(`vitest run src/env.test.ts`). Full monorepo check with a real local
+`DATABASE_URL`: `pnpm turbo run lint typecheck build test --filter='!web'`
+— 25/25 tasks green, 305 passed + 1 skipped `apps/api` tests (up from 299 —
+the 6 new ones), no regressions. `apps/web` built separately
+(`NODE_ENV=production pnpm --filter web build`, KI-038's documented
+workaround): succeeded, all 17 routes. `docs/deployment.md` itself is
+documentation, not code — reviewed against `docker-compose.prod.yml`/
+`deploy/Caddyfile`/every referenced CR/ADR for accuracy, same "can't be
+live-verified in this sandbox" caveat as the rest of the Deployment section.
+
+Known limitations: KI-046 fully resolved (moved to reflect that in
+`.claude/context/known-issues.md` — it was already filed under Resolved
+despite its prior "open (partially mitigated)" status text, a pre-existing
+filing quirk, not something this entry introduces). `docs/deployment.md`
+carries the same standing "reviewed, not live-verified" caveat as every
+other Deployment artifact (KI-043/KI-045) — restated explicitly in the doc
+itself rather than left implicit.
+
+Follow-up: CR-082 (pin MinIO/review base images) is the one remaining
+Deployment-section ticket. CR-092 (critical-journey e2e specs) and CR-083
+(registration idempotency) remain open, tracked separately, no fixed order
+decided among the three.

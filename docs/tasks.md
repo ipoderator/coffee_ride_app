@@ -563,8 +563,16 @@ Deliberately deferred until there is something to deploy (see `docs/changelog.md
       freshly started `apps/api`/`apps/web`; the live S3 test skips cleanly
       without the flag and genuinely attempts (and fails, no local MinIO)
       with it forced on. See `docs/changelog.md`.
-- [ ] CR-081 Full production environment variable set in `.env.example` + deployment
-      documentation
+- [x] CR-081 Full production environment variable set in `.env.example` + deployment
+      documentation — done 2026-09-19: `.env.example` was already complete
+      (cross-checked against every var `docker-compose.prod.yml` consumes —
+      nothing to add). New `docs/deployment.md`: prerequisites, `.env`
+      setup, first-boot migrate-then-serve order, verification, redeploy/
+      rollback, a pointer to `docs/database.md`'s Backups section. Also
+      resolved KI-046 for real (`apps/api/src/env.ts`'s `REDIS_URL`/
+      `S3_ENDPOINT` now normalize an empty string to "not configured" the
+      same way `ERROR_REPORTING_WEBHOOK_URL` already did), with new test
+      coverage in `apps/api/src/env.test.ts`. See `docs/changelog.md`.
 - [ ] CR-082 Pin `minio/minio` to a release tag; review base image versions
 
 ## Contract & model follow-ups

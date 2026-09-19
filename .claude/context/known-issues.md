@@ -1375,9 +1375,9 @@ is actually chosen — not reopening this one.
 
 ### KI-046 — `docker-compose.prod.yml` passes unset optional env vars as empty strings
 
-Status: open (partially mitigated). Discovered: 2026-09-17 (CR-079).
+Status: resolved 2026-09-19 (CR-081). Discovered: 2026-09-17 (CR-079).
 Problem: `docker-compose.prod.yml`'s `api` service wires every optional env
-var through `${VAR}` unconditionally (`REDIS_URL`, `S3_ENDPOINT`, and now
+var through `${VAR}` unconditionally (`REDIS_URL`, `S3_ENDPOINT`, and
 `ERROR_REPORTING_WEBHOOK_URL`). Compose substitutes an empty string, not an
 absent variable, for one left unset in `.env` — confirmed live via `docker
 compose ... config`. A bare `z.string().url().optional()` in `apps/api/src/
@@ -1387,11 +1387,13 @@ Impact: deploying with `REDIS_URL`/`S3_ENDPOINT` genuinely unset (a
 legitimate degraded-mode configuration the code otherwise supports) crashes
 the API process in production instead of booting in the documented degraded
 mode.
-Workaround: `ERROR_REPORTING_WEBHOOK_URL` is fixed (CR-079's own scope) via
-a `z.preprocess` that normalizes `''` to `undefined` before validation,
-confirmed live with `tsx`. `REDIS_URL`/`S3_ENDPOINT` still have the bare,
-unfixed version — fixing them was out of scope for CR-079 (unrelated-changes
-discipline: this ticket touched observability, not those two fields).
-Next action: fold the same `z.preprocess` fix into whichever of CR-077
-(Redis hardening) or CR-081 (full production env var set) next touches
-`REDIS_URL`/`S3_ENDPOINT` — a two-line fix, not worth its own ticket.
+Resolution: `ERROR_REPORTING_WEBHOOK_URL` was fixed first (CR-079) via a
+`z.preprocess` that normalizes `''` to `undefined` before validation.
+CR-081 applied the identical `z.preprocess` shape to `REDIS_URL` and
+`S3_ENDPOINT` — the only other two `.url().optional()` fields (the
+remaining `S3_*` fields are plain `z.string().optional()`, which already
+accepts `''` without crashing). New `apps/api/src/env.test.ts` covers the
+empty-string-to-undefined normalization for both, plus the existing
+production-placeholder-refusal behavior, so this stays a tested contract
+rather than only exercised indirectly.
+Next action: none.
