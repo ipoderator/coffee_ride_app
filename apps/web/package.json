@@ -12,7 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "next": "^15.5.25",
+    "next": "^16.3.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "class-variance-authority": "^0.7.1",
