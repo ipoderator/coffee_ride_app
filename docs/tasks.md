@@ -592,8 +592,24 @@ Deliberately deferred until there is something to deploy (see `docs/changelog.md
 
 Found during the 2026-09-11 audit, cheaper before the related feature is built.
 
-- [ ] CR-083 Idempotency for `POST /v1/rides/:id/register` (network retry must not create
-      a second registration; the DB constraint is the backstop, not the design)
+- [x] CR-083 Idempotency for `POST /v1/rides/:id/register` (network retry must not create
+      a second registration; the DB constraint is the backstop, not the design) —
+      done 2026-09-19: the DB-level protection (row lock + unique index,
+      CR-034/035) was already correct and untouched; the actual gap was
+      client-facing — a retry of an already-successful register/waitlist-join
+      call got back `409 registration_already_exists`/
+      `409 waitlist_entry_already_exists` instead of the existing resource.
+      `createRegistration`/`joinWaitlist` (`apps/api/src/modules/
+registrations/registrations.service.ts`) now return `{ resource, created }`;
+      the route layer replies `200` with the existing row on a replay instead
+      of `201`/an error, with no duplicate row and no duplicate
+      `registration_confirmed` notification. `joinWaitlist`'s _other_ "already"
+      check (an active registration blocking a waitlist join — a genuine
+      conflict, not a retry) is unchanged, still `409`. `apps/web` needed no
+      changes — its clients already branch on `response.ok`, not the exact
+      status code, so this also fixes a real latent UX bug
+      (`RegistrationButton` showing a spurious error on a lost-response
+      retry) for free. See `docs/changelog.md`.
 - [x] CR-084 Decide the geo query approach for map discovery (bbox/radius): PostGIS vs
       built-in types + index strategy — needed by CR-026 — decided together
       with CR-026 (ADR-014, 2026-09-15): plain lat/lng columns + a bbox range

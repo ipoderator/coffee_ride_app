@@ -105,14 +105,6 @@ const RIDE_NOT_FULL = () =>
     'This ride still has open spots — register instead of joining the waitlist.',
   );
 
-const WAITLIST_ENTRY_ALREADY_EXISTS = () =>
-  new RegistrationServiceError(
-    'waitlist_entry_already_exists',
-    409,
-    'Waitlist entry already exists',
-    'You are already on the waitlist for this ride.',
-  );
-
 const WAITLIST_ENTRY_NOT_FOUND = () =>
   new RegistrationServiceError(
     'waitlist_entry_not_found',
@@ -477,13 +469,24 @@ export async function listMyRegistrations(
  * `.claude/rules/database.md`, not a path this code needs to catch a constraint
  * violation for.
  *
+ * CR-083 ("Idempotency"): a call that lands after the caller already has an active
+ * registration for this ride — most commonly a network retry of a register call that
+ * actually succeeded, but the response never reached the client — is not an error.
+ * `created: false` and the existing row are returned instead of throwing
+ * `REGISTRATION_ALREADY_EXISTS()`; the caller (route layer) replies `200` rather than
+ * `201`. The DB-level uniqueness invariant above is the backstop that makes this safe
+ * under concurrent retries, not the client-facing design — that's the ticket's own
+ * framing, and it stays true here: this function still never inserts a second row.
+ *
  * CR-038 ("Registration confirmation", `.claude/context/current-task.md`): once
- * the transaction above has committed, creates a `registration_confirmed`
+ * the transaction above has committed a *new* row, creates a `registration_confirmed`
  * notification for the new registrant — never inside the transaction itself
  * (`.claude/rules/resilience.md`: a non-critical side effect must never be able to
- * fail or roll back the critical action). A notification failure is logged and
- * swallowed by {@link createRegistrationConfirmedNotification} itself; this
- * function's own return value is unaffected either way.
+ * fail or roll back the critical action). Skipped on an idempotent replay
+ * (`created: false`) — the registrant was already notified once, a retry must not
+ * fan out a second notification for the same registration. A notification failure is
+ * logged and swallowed by {@link createRegistrationConfirmedNotification} itself;
+ * this function's own return value is unaffected either way.
  */
 export async function createRegistration(
   db: DbClient,
@@ -491,11 +494,11 @@ export async function createRegistration(
   queue: NotificationQueue | null,
   userId: string,
   rideId: string,
-): Promise<Registration> {
+): Promise<{ registration: Registration; created: boolean }> {
   // Resolves 404 vs. a later 409 correctly (visibility) before the lock.
   await resolveVisibleRideStatus(db, userId, rideId);
 
-  const inserted = await db.transaction(async (tx) => {
+  const { row, created } = await db.transaction(async (tx) => {
     const [rideRow] = await tx
       .select({
         status: rides.status,
@@ -512,7 +515,7 @@ export async function createRegistration(
     }
 
     const [existingActive] = await tx
-      .select({ id: registrations.id })
+      .select()
       .from(registrations)
       .where(
         and(
@@ -523,7 +526,7 @@ export async function createRegistration(
       )
       .limit(1);
     if (existingActive) {
-      throw REGISTRATION_ALREADY_EXISTS();
+      return { row: existingActive, created: false };
     }
 
     if (rideRow.participantLimit !== null) {
@@ -548,18 +551,20 @@ export async function createRegistration(
     if (!row) {
       throw new Error('Registration insert returned no row.');
     }
-    return row;
+    return { row, created: true };
   });
 
-  await createRegistrationConfirmedNotification(
-    db,
-    logger,
-    queue,
-    userId,
-    rideId,
-  );
+  if (created) {
+    await createRegistrationConfirmedNotification(
+      db,
+      logger,
+      queue,
+      userId,
+      rideId,
+    );
+  }
 
-  return toRegistration(inserted);
+  return { registration: toRegistration(row), created };
 }
 
 /**
@@ -666,15 +671,24 @@ export async function cancelRegistration(
  * same `SELECT ... FOR UPDATE` lock {@link createRegistration} uses re-checks
  * `registration_open`, then re-derives capacity itself rather than trusting a stale
  * `409 ride_full` the caller might be reacting to (`.claude/context/current-task.md`).
+ *
+ * CR-083 ("Idempotency"): a retry that lands after the caller already has a `waiting`
+ * entry for this ride returns that existing entry (`created: false`) instead of
+ * erroring — same reasoning as {@link createRegistration}'s own CR-083 doc comment.
+ * This is *not* the same as the
+ * `existingActive` check just above it: already having an *active registration* is a
+ * genuine conflict (register/cancel instead of joining a queue for a spot that's
+ * already theirs), not a retry of this call, so that branch still throws
+ * `REGISTRATION_ALREADY_EXISTS()` unchanged.
  */
 export async function joinWaitlist(
   db: DbClient,
   userId: string,
   rideId: string,
-): Promise<WaitlistEntry> {
+): Promise<{ waitlistEntry: WaitlistEntry; created: boolean }> {
   await resolveVisibleRideStatus(db, userId, rideId);
 
-  const inserted = await db.transaction(async (tx) => {
+  const { row, created } = await db.transaction(async (tx) => {
     const [rideRow] = await tx
       .select({
         status: rides.status,
@@ -704,7 +718,7 @@ export async function joinWaitlist(
     }
 
     const [existingWaiting] = await tx
-      .select({ id: waitlistEntries.id })
+      .select()
       .from(waitlistEntries)
       .where(
         and(
@@ -715,7 +729,7 @@ export async function joinWaitlist(
       )
       .limit(1);
     if (existingWaiting) {
-      throw WAITLIST_ENTRY_ALREADY_EXISTS();
+      return { row: existingWaiting, created: false };
     }
 
     if (rideRow.participantLimit !== null) {
@@ -743,10 +757,10 @@ export async function joinWaitlist(
     if (!row) {
       throw new Error('Waitlist entry insert returned no row.');
     }
-    return row;
+    return { row, created: true };
   });
 
-  return toWaitlistEntry(inserted);
+  return { waitlistEntry: toWaitlistEntry(row), created };
 }
 
 /**

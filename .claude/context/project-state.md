@@ -29,10 +29,9 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-082 (pin MinIO/review base images) just closed — Deployment
-section (`docs/tasks.md`) is now fully complete, CR-074 through CR-082.
-CR-092 (real critical-journey e2e specs) and CR-083 (registration
-idempotency) remain open, no fixed order decided among them.
+None active. CR-083 (registration/waitlist-join idempotency) just closed.
+CR-092 (real critical-journey e2e specs) is the one remaining open ticket
+not blocked on anything unavailable in this environment.
 
 ## Implemented
 
@@ -152,7 +151,10 @@ upload/download/geometry, distance/elevation reconciliation, stop CRUD and route
 CRUD — both draft-only, embedded as additive `stops`/`routePoints` arrays on ride
 detail), `registrations` (its own capability module, `POST`/`DELETE
 /v1/rides/:id/register` — capacity + duplicate protection via one `SELECT ... FOR
-UPDATE` row lock; `POST`/`DELETE /v1/rides/:id/waitlist` (CR-036) — joining requires
+UPDATE` row lock; idempotent (CR-083) — a repeat register/waitlist-join call while
+the caller already has that exact row returns `200` with the existing row instead of
+erroring or creating a duplicate, no second `registration_confirmed` notification
+either; `POST`/`DELETE /v1/rides/:id/waitlist` (CR-036) — joining requires
 the ride to actually be full, re-derived server-side; cancelling a registration
 auto-promotes the oldest waiting entry (FIFO) into a fresh active registration inside
 the same transaction/row lock; embedded as additive `registrationsCount`/
@@ -254,10 +256,13 @@ var set + `docs/deployment.md`, new — also resolved KI-046 for real), and
 CR-082 (fixed `.github/dependabot.yml`'s docker/docker-compose coverage —
 nothing that sets a base image version had ever actually been scanned by
 Dependabot before this) are all closed — the entire Deployment section is
-now done. CR-092 (real critical-journey e2e specs — `.claude/rules/
-testing.md`'s discover+register/create+publish/view-participants journeys
-still don't exist) and CR-083 (registration idempotency) remain open, no
-fixed order decided between them.
+now done. CR-083 (registration/waitlist-join idempotency — a network retry
+of an already-successful call now returns the existing row instead of
+`409`, no client change needed) is also closed. CR-092 (real
+critical-journey e2e specs — `.claude/rules/testing.md`'s
+discover+register/create+publish/view-participants journeys still don't
+exist) is the one remaining open ticket, unblocked by anything in this
+environment.
 
 ## Important decisions
 
@@ -405,6 +410,12 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
 - `timestamptz` + ride-local timezone (ADR-012);
 - session revocation semantics and the single-origin/no-CORS posture (ADR-013);
 - server-side registration invariants;
+- `POST /v1/rides/:id/register`/`POST /v1/rides/:id/waitlist` replying `200`
+  with the existing row (not an error, not a duplicate) on a repeat call
+  for the same already-active registration/already-waiting entry (CR-083)
+  — don't reintroduce the `409` on this specific retry path; the _other_
+  "already" conflicts (`ride_full`, `ride_not_full`, an active registration
+  blocking a waitlist join) are unaffected and must stay errors;
 - `POST /v1/auth/forgot-password` returning an identical `204` regardless of
   whether the email exists, in every environment — no dev-only token field on
   this endpoint, unlike `register`'s `verificationUrl` (CR-060,
@@ -487,4 +498,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-19 (CR-082)
+2026-09-19 (CR-083)

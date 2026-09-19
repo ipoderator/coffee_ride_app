@@ -63,26 +63,31 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
   // CR-032 ("Register"), CR-034/CR-035 bundled in (capacity + duplicate protection —
   // see `registrations.service.ts`'s `createRegistration`). `404 ride_not_found` for a
   // non-existent ride or someone else's still-`draft` one; `409
-  // ride_registration_not_open` for any other status; `409
-  // registration_already_exists`; `409 ride_full` once `participantLimit` is reached.
+  // ride_registration_not_open` for any other status; `409 ride_full` once
+  // `participantLimit` is reached. CR-083 ("Idempotency"): a repeat call while already
+  // actively registered is not an error — replies `200` with the existing
+  // registration instead of `201`/a `409`.
   app.post(
     '/:id/register',
     {
       schema: {
         params: rideIdParamsSchema,
-        response: { 201: registrationResponseWrapper },
+        response: {
+          201: registrationResponseWrapper,
+          200: registrationResponseWrapper,
+        },
       },
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const registration = await createRegistration(
+      const { registration, created } = await createRegistration(
         app.db,
         app.log,
         app.notificationQueue,
         request.user!.id,
         request.params.id,
       );
-      return reply.status(201).send({ registration });
+      return reply.status(created ? 201 : 200).send({ registration });
     },
   );
 
@@ -112,24 +117,30 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
 
   // CR-036 ("Waitlist"). `404 ride_not_found` (non-existent/someone else's `draft`),
   // `409 ride_registration_not_open`, `409 registration_already_exists` (already
-  // actively registered), `409 ride_not_full` (there's still an open spot — register
-  // instead), `409 waitlist_entry_already_exists`.
+  // actively registered — a real conflict, register/cancel instead), `409
+  // ride_not_full` (there's still an open spot — register instead). CR-083
+  // ("Idempotency"): a repeat call while already on the waitlist is not an error —
+  // replies `200` with the existing entry instead of `201`/`409
+  // waitlist_entry_already_exists`.
   app.post(
     '/:id/waitlist',
     {
       schema: {
         params: rideIdParamsSchema,
-        response: { 201: waitlistEntryResponseWrapper },
+        response: {
+          201: waitlistEntryResponseWrapper,
+          200: waitlistEntryResponseWrapper,
+        },
       },
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const waitlistEntry = await joinWaitlist(
+      const { waitlistEntry, created } = await joinWaitlist(
         app.db,
         request.user!.id,
         request.params.id,
       );
-      return reply.status(201).send({ waitlistEntry });
+      return reply.status(created ? 201 : 200).send({ waitlistEntry });
     },
   );
 

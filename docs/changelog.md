@@ -4213,3 +4213,75 @@ Known limitations: none new. This closes the Deployment section of
 
 Follow-up: CR-092 (critical-journey e2e specs) and CR-083 (registration
 idempotency) remain open, no fixed order decided between them.
+
+## 2026-09-19 — CR-083 — Idempotency for register/waitlist-join (network retries)
+
+Goal: "the DB constraint is the backstop, not the design" — a network retry
+of an already-successful `POST /v1/rides/:id/register` (or the waitlist
+equivalent) must not surface as an error.
+
+Investigation: `registrations.service.ts`'s `createRegistration` already
+atomically prevents a second row (`SELECT ... FOR UPDATE` row lock +
+`existingActive` check + the DB-level partial unique index backstop,
+CR-034/035) — that invariant was correct and untouched. The real gap was
+client-facing: when a retry of the exact same (rideId, userId) register
+call landed after the first one already committed, the caller got back
+`409 registration_already_exists` — indistinguishable from "you tried to
+double-register." `joinWaitlist` has the identical shape for its own
+`existingWaiting` check (`409 waitlist_entry_already_exists`). Read
+`apps/web/src/features/participant/ride-detail/components/
+RegistrationButton.tsx`: its `isPending` guard only stops a second _click_
+while a request is in flight — it does nothing for a genuine network-level
+retry where the original request actually succeeded but the response never
+reached the client, which today shows the user a generic error despite
+them actually being registered. Confirmed `joinWaitlist` has two different
+"already" checks that needed different treatment: `existingActive` (caller
+already has an active registration — a genuine conflict, "register/cancel
+instead," not a retry of the waitlist-join call) must stay a `409
+registration_already_exists` error; only `existingWaiting` (the literal
+same action being retried) is the idempotency case. Also confirmed
+`apps/web`'s `registerForRide`/`joinRideWaitlist` clients branch on
+`response.ok` (any 2xx), not the exact status code — so this fix needs zero
+frontend changes and, as a side effect, fixes `RegistrationButton`'s latent
+retry-shows-an-error bug for free.
+
+Implementation: `createRegistration` and `joinWaitlist` now return
+`{ registration | waitlistEntry, created: boolean }`. When the
+already-exists branch is hit, the existing row is returned with
+`created: false` instead of throwing — same lock, same read, different
+outcome on the branch that used to error. `createRegistration`'s
+`registration_confirmed` notification now only fires when `created` is
+`true` (a retry must not fan out a second notification for an action that
+already notified once). `registrations.routes.ts`'s two `POST` handlers
+reply `201` when `created`, `200` on an idempotent replay — both added to
+each route's Zod response schema. The unrelated `existingActive` check
+inside `joinWaitlist` (registered-and-trying-to-join-the-waitlist-too) is
+untouched, still throws `REGISTRATION_ALREADY_EXISTS()`. The now-unused
+`WAITLIST_ENTRY_ALREADY_EXISTS` error factory was removed.
+`docs/api.md`: documents the `200`-on-idempotent-replay behavior for both
+endpoints; removed the now-impossible `409 registration_already_exists`
+outcome from `POST .../register`'s own paragraph (it only ever applied to
+`POST .../waitlist`'s cross-resource conflict now).
+
+Decisions: none new at the ADR level — a behavior-only fix inside the
+existing transaction/lock structure; `.claude/rules/database.md`'s
+invariants are unchanged (still exactly one row per ride+user, still
+enforced by the same lock + unique index).
+
+Validation: rewrote the two tests whose asserted behavior actually changed
+(`registrations.routes.test.ts`) into idempotency tests — a repeat register
+call returns `200` with the _same_ registration id, `GET /v1/rides/:id`
+still shows `registrationsCount: 1`, and `GET /v1/notifications/mine` shows
+exactly one `registration_confirmed` entry (not two); a repeat waitlist-join
+call returns `200` with the same entry id and the organizer's `GET
+/v1/rides/:id/waitlist` still shows exactly one item. The two tests
+covering the _unrelated_, still-an-error `existingActive`-inside-
+`joinWaitlist` conflict were left unchanged and still pass. Full suite:
+`pnpm turbo run lint typecheck build test --filter='!web'` — 25/25 tasks
+green, 305 passed + 1 skipped (same total as before CR-083 — two tests were
+rewritten in place, not added). `apps/web` untouched, no rebuild needed.
+
+Known limitations: none new.
+
+Follow-up: CR-092 (critical-journey e2e specs) is the one remaining open
+ticket with no dependency on anything blocked in this environment.

@@ -230,8 +230,7 @@ ride's organizer (every user is implicitly a participant, ADR-006). Same
 resource-enumeration-safe visibility rule as `GET /v1/rides/:id`: `404 ride_not_found`
 for a non-existent ride _or_ someone else's still-`draft` one. `409
 ride_registration_not_open` for any other status (a ride is only registrable while
-`registration_open`). `409 registration_already_exists` if the caller already has an
-active registration for this ride. `409 ride_full` once active registrations reach
+`registration_open`). `409 ride_full` once active registrations reach
 `participantLimit` (no auto-waitlist — joining the queue is a separate, explicit
 action, `POST .../waitlist` below). Bundles
 CR-034 ("Capacity enforcement") and CR-035 ("Duplicate protection"): a single
@@ -240,7 +239,11 @@ concurrent registration attempt for the same ride, making the duplicate check, t
 capacity check, and double-submit protection all race-free at once
 (`apps/api/src/modules/registrations/registrations.service.ts`). No request body.
 `201` → `{ registration }` (`Registration`: `id`/`rideId`/`userId`/`status`/
-`createdAt`/`updatedAt`/`cancelledAt`).
+`createdAt`/`updatedAt`/`cancelledAt`) on a fresh registration. **Idempotent (CR-083)**:
+a repeat call while the caller already has an active registration for this ride —
+most commonly a network retry of a call that actually succeeded — returns `200` with
+that same existing `registration` instead of an error or a second row; no duplicate
+`registration_confirmed` notification fires either.
 
 DELETE `/v1/rides/:id/register` — **implemented (CR-033, "Cancel registration")**.
 Same auth requirement as `POST`. `404 registration_not_found` if the caller has no
@@ -262,12 +265,14 @@ POST `/v1/rides/:id/waitlist` — **implemented (CR-036, "Waitlist")**. Same aut
 requirement and resource-enumeration-safe `404 ride_not_found` as `POST .../register`.
 `409 ride_registration_not_open` for any status other than `registration_open`. `409
 registration_already_exists` if the caller already has an active registration for
-this ride (register/cancel instead — a spot is already theirs). `409 ride_not_full`
-if the ride still has an open spot, or has no `participantLimit` at all — call
-`POST .../register` instead of joining a queue for a spot that isn't scarce. `409
-waitlist_entry_already_exists` if the caller already has a `waiting` entry. Re-derives
-capacity itself inside the same `SELECT ... FOR UPDATE` lock `POST .../register`
-uses, rather than trusting a stale `409 ride_full` the client might be reacting to.
+this ride (a genuine conflict — register/cancel instead, not a retry of this call).
+`409 ride_not_full` if the ride still has an open spot, or has no `participantLimit`
+at all — call `POST .../register` instead of joining a queue for a spot that isn't
+scarce. Re-derives capacity itself inside the same `SELECT ... FOR UPDATE` lock
+`POST .../register` uses, rather than trusting a stale `409 ride_full` the client
+might be reacting to. **Idempotent (CR-083)**: a repeat call while the caller already
+has a `waiting` entry for this ride returns `200` with that same existing
+`waitlistEntry` instead of `409 waitlist_entry_already_exists`.
 `201` → `{ waitlistEntry }` (`WaitlistEntry`: `id`/`rideId`/`userId`/`status`/
 `createdAt`/`updatedAt`/`cancelledAt`/`promotedAt`). No request body.
 

@@ -2,116 +2,156 @@
 
 ## Task ID
 
-CR-082 — Pin `minio/minio` to a release tag; review base image versions
-(`docs/tasks.md` Deployment section).
+CR-083 — Idempotency for `POST /v1/rides/:id/register` (`docs/tasks.md`
+"Contract & model follow-ups").
 
 ## Goal
 
-Close the last open Deployment-section ticket.
+A network retry of an already-successful register/waitlist-join call must
+not surface as an error to the caller. Ticket text: "the DB constraint is
+the backstop, not the design" — today it's the opposite.
 
 ## Investigation
 
-- MinIO pinning is already done: `docker-compose.yml` and `.github/
-workflows/ci.yml` both already use `quay.io/minio/minio:RELEASE.
-2025-09-07T16-13-09Z` (not `:latest`), landed back in CR-009
-  (2026-09-13, `docs/changelog.md`). Grepped the whole repo for
-  `minio/minio`/`:latest` — nothing unpinned anywhere. Same "ticket text
-  already stale" shape as CR-080's migration-step third.
-- "Review base image versions" — every Dockerfile uses `node:24-alpine`
-  (`apps/web/Dockerfile`, `apps/api/Dockerfile`, `packages/db/Dockerfile`);
-  `docker-compose.yml` also has `postgres:17-alpine`, `redis:8-alpine`;
-  `docker-compose.prod.yml` has `caddy:2-alpine`. All are major/minor
-  floating tags, not `:latest` and not digest-pinned.
-- Checked how those floating tags actually get reviewed over time:
-  `.github/dependabot.yml` has one `package-ecosystem: 'docker'` entry,
-  `directory: '/'`. Verified against GitHub's own docs (WebFetch) and a
-  web search (WebSearch) that this is broken in two real ways, not just
-  theoretically:
-  1. `docker` and `docker-compose` are two _separate_ Dependabot
-     ecosystems (`docker-compose` reached GA Feb 2025) — a `docker` entry
-     never scans `image:` references inside `docker-compose.yml`/
-     `docker-compose.prod.yml` at all. No `docker-compose` ecosystem entry
-     exists in this repo's config, so those two files' `postgres`/`redis`/
-     `minio`/`caddy` image pins have never been covered by any Dependabot
-     update.
-  2. The `docker` ecosystem only scans the exact `directory` given, no
-     subdirectory recursion — and this repo has no Dockerfile at the repo
-     root at all (all three live nested: `apps/web`, `apps/api`,
-     `packages/db`). The existing `directory: '/'` entry points at a
-     location with no Dockerfile, so it has never actually scanned any of
-     the three real Dockerfiles either.
-     Net effect: nothing that sets a base-image version anywhere in this repo
-     has ever actually been covered by Dependabot, despite `dependabot.yml`
-     appearing to include a `docker` entry. This is the real, previously
-     undiscovered gap behind "review base image versions" — not a one-time
-     manual version bump (which would go stale again immediately), but fixing
-     the mechanism that's supposed to do that review continuously.
+- `registrations.service.ts`'s `createRegistration` already atomically
+  prevents a _second row_ (the `SELECT ... FOR UPDATE` row lock +
+  `existingActive` check + the DB-level partial unique index backstop,
+  CR-034/035) — that invariant is correct and untouched by this ticket.
+  The actual gap: when a retry of the exact same (rideId, userId) register
+  call lands after the first one already committed, the _client_ gets back
+  `409 registration_already_exists` — indistinguishable, from the client's
+  perspective, from "you tried to double-register." `joinWaitlist` has the
+  identical shape for its own `existingWaiting` check
+  (`409 waitlist_entry_already_exists`).
+- Checked `apps/web/src/features/participant/ride-detail/`: `RegistrationButton`'s
+  `isPending` guard only stops a second _click_ while the first request is
+  in flight — it does nothing for a genuine network-level retry (the
+  original request actually succeeded server-side, but the response never
+  reached the client, e.g. a dropped connection). Today that shows the
+  user a generic error (`RIDE_DETAIL_TERMS.registrationActionError`) despite
+  them actually being registered — the real, concrete bug this ticket is
+  about, not a theoretical one.
+- Confirmed `joinWaitlist` has _two_ different "already" checks that must
+  NOT be treated the same way: `existingActive` (caller already has an
+  active registration — a genuine conflict, "register/cancel instead," not
+  a retry of the waitlist-join call) must stay a `409
+registration_already_exists` error. Only `existingWaiting` (caller
+  already has a `waiting` entry — the literal same action being retried)
+  is the idempotency case.
+- `apps/web`'s `registerForRide`/`joinRideWaitlist`/`cancelRideRegistration`
+  clients (`ride-detail/api.ts`) branch on `response.ok` (2xx), not on the
+  exact status code — so returning `200` instead of `409` for the
+  idempotent-replay case requires **zero** frontend changes and directly
+  fixes `RegistrationButton`'s latent retry-shows-an-error bug for free.
+  Verified by reading the client code, not assumed.
+- Only 2 of the existing tests in `registrations.routes.test.ts` assert the
+  old error-on-retry behavior for the exact cases this ticket changes:
+  "rejects a duplicate active registration with 409
+  registration_already_exists" (register) and "rejects a duplicate waiting
+  entry with 409 waitlist_entry_already_exists" (waitlist). A third test
+  ("rejects joining while already actively registered with 409
+  registration_already_exists") and a fourth (the rejoin-after-promotion
+  assertion inside the auto-promotion test) both hit the _different_,
+  still-an-error `existingActive`-inside-`joinWaitlist` conflict — verified
+  these stay unchanged.
 
 ## Decision
 
-- `.github/dependabot.yml`: replace the one non-functional `docker` entry
-  with three `docker` entries, one per actual Dockerfile directory
-  (`/apps/web`, `/apps/api`, `/packages/db`), plus a new `docker-compose`
-  entry (`directory: '/'`) covering `docker-compose.yml`/`docker-compose.
-prod.yml`. Same weekly schedule as the existing ecosystems.
-- No image version changes: `node:24-alpine`/`postgres:17-alpine`/
-  `redis:8-alpine`/`caddy:2-alpine` stay as intentional major/minor
-  floating tags (not `:latest`, not digest-pinned) — Dependabot, now
-  actually wired to reach every one of them, is the ongoing review
-  mechanism, not a manual audit that goes stale the moment it's done.
-  MinIO is the one deliberate exception (an exact `RELEASE.*` tag, not a
-  floating major version) because MinIO doesn't publish a rolling
-  major-version tag the same way the others do.
-- No new ADR — an implementation/tooling fix, same "not an architectural
-  decision" precedent as CR-076/077/078/079/080/081.
-- `docs/tasks.md`: check off CR-082.
+- `registrations.service.ts`:
+  - `createRegistration` now returns `{ registration, created: boolean }`.
+    When `existingActive` is found, return the existing row with
+    `created: false` instead of throwing `REGISTRATION_ALREADY_EXISTS()` —
+    same lock, same read, just a different outcome on the branch that used
+    to throw. The `registration_confirmed` notification only fires when
+    `created` is `true` (a retry must not fan out a second notification for
+    an action that already notified once).
+  - `joinWaitlist` now returns `{ waitlistEntry, created: boolean }`. Same
+    shape for its `existingWaiting` branch. Its `existingActive` branch is
+    untouched — still throws `REGISTRATION_ALREADY_EXISTS()`, a real
+    conflict, not a retry.
+  - `existingActive`'s query widened from `select({ id: ... })` to a full
+    row select (needed to return it); same change for
+    `existingWaiting`.
+- `registrations.routes.ts`: both `POST` handlers reply `201` when
+  `created` is `true`, `200` when `false` (idempotent replay of an existing
+  resource) — both status codes added to each route's Zod response schema.
+- `docs/api.md`: documents the `200`-on-idempotent-replay behavior for both
+  endpoints; `POST .../register`'s `409 registration_already_exists` line
+  removed (no longer a possible outcome); `POST .../waitlist`'s
+  `409 registration_already_exists` line kept (still real, cross-resource
+  conflict), its `409 waitlist_entry_already_exists` line replaced with the
+  idempotent-`200` behavior.
+- Update the 2 tests whose asserted behavior actually changes; add new
+  assertions that a retry returns the _same_ row id and does not fan out a
+  second notification (regression coverage per `.claude/rules/testing.md`:
+  "every bug fix should add regression coverage").
+- No new ADR, no migration — behavior-only change inside the existing
+  transaction/lock structure; the DB-level invariants
+  (`.claude/rules/database.md`) are unchanged.
 
 ## Requirements / acceptance criteria
 
-- Every base image reference in the repo (3 Dockerfiles + 2 compose files)
-  is reachable by some Dependabot entry.
-- `dependabot.yml` stays valid YAML.
-- No unrelated changes; `docs/tasks.md`/changelog/project-state updated.
+- A repeat `POST /v1/rides/:id/register` while already actively registered
+  returns `200` with the existing registration, not `409`.
+- A repeat `POST /v1/rides/:id/waitlist` while already waiting returns
+  `200` with the existing entry, not `409`.
+- `POST .../waitlist` while actively registered (the real conflict) still
+  returns `409 registration_already_exists`, unchanged.
+- No duplicate row is ever created (unchanged invariant — same lock +
+  unique index).
+- No duplicate `registration_confirmed` notification is created for a
+  retried register call.
+- Relevant tests/typecheck/lint pass; `docs/api.md` reflects the new
+  contract.
 
 ## Planned files
 
-- `.github/dependabot.yml`
+- `apps/api/src/modules/registrations/registrations.service.ts`
+- `apps/api/src/modules/registrations/registrations.routes.ts`
+- `apps/api/src/modules/registrations/registrations.routes.test.ts`
+- `docs/api.md`
 - `docs/tasks.md`
 - `docs/changelog.md`, `.claude/context/project-state.md`
 
 ## Implementation progress
 
-- [x] `dependabot.yml` fix (3 `docker` entries + 1 `docker-compose` entry)
-- [x] YAML validity check
+- [x] `registrations.service.ts` (`createRegistration`/`joinWaitlist`)
+- [x] `registrations.routes.ts` (status code branching + response schemas)
+- [x] Test updates + new regression coverage
+- [x] `docs/api.md`
+- [x] Validation (typecheck/lint/test)
 - [x] Docs/context updated, `git diff` reviewed
 
 ## Validation results
 
-- `.github/dependabot.yml` parsed with `python3 -c "import yaml..."`: valid
-  YAML, all 6 entries present with the expected ecosystem/directory pairs
-  (`npm /`, `github-actions /`, `docker /apps/web`, `docker /apps/api`,
-  `docker /packages/db`, `docker-compose /`).
-- Cannot be proven by an actual Dependabot run from this sandbox — same
-  "GitHub-hosted automation, reviewed not live-verified" category as CI
-  changes in CR-080. The next scheduled Dependabot run against the real
-  repo is what actually confirms it.
+- `pnpm --filter api typecheck`/`lint`: clean (one expected
+  `no-unused-vars` error after the fix — the now-unreachable
+  `WAITLIST_ENTRY_ALREADY_EXISTS` factory — removed, then clean).
+- `vitest run src/modules/registrations/registrations.routes.test.ts`:
+  38/38 pass, including the two rewritten idempotency tests (same row id
+  on retry, `registrationsCount`/waitlist count stay at 1, exactly one
+  `registration_confirmed` notification).
+- `pnpm turbo run lint typecheck build test --filter='!web'` (real local
+  `DATABASE_URL`): 25/25 tasks green, 305 passed + 1 skipped — same total
+  as before this ticket (two tests rewritten in place, not added).
+  `apps/web` untouched, no rebuild needed (no web changes).
 
 ## Discovered issues
 
-Documented above under Investigation — the two real Dependabot config gaps
-(missing `docker-compose` ecosystem, `docker` entry pointing at a
-Dockerfile-less directory) are this ticket's actual substance, found while
-scoping "review base image versions."
+None beyond what Investigation already covered.
 
 ## Final result
 
-CR-082 closed — Deployment section (`docs/tasks.md`) is now fully complete,
-CR-074 through CR-082. MinIO pinning confirmed already done (CR-009). Fixed
-the real gap: `.github/dependabot.yml` now has a `docker` entry per actual
-Dockerfile directory and a `docker-compose` entry for both compose files —
-previously nothing that sets a base image version anywhere in the repo was
-actually reachable by any Dependabot scan. Base image tags themselves
-unchanged by design (Dependabot is now the ongoing review mechanism).
-`docs/tasks.md`, `docs/changelog.md`, `.claude/context/project-state.md`
-all updated. Next logical task: CR-092 (critical-journey e2e specs) or
-CR-083 (registration idempotency) — no fixed order decided yet.
+CR-083 closed. `createRegistration`/`joinWaitlist` now return
+`{ resource, created }`; a repeat register/waitlist-join call for a row
+that already exists returns `200` with that existing row instead of `409`,
+with no duplicate row and no duplicate notification. The _other_
+"already registered" conflict inside `joinWaitlist` (blocks joining the
+waitlist while actively registered) is untouched, still an error — verified
+its two tests still pass unchanged. `apps/web` needed zero changes (its
+clients already branch on `response.ok`), which also fixes a real latent
+UX bug (`RegistrationButton` showing a spurious error after a lost-response
+retry) as a side effect. `docs/api.md`, `docs/tasks.md`,
+`docs/changelog.md`, `.claude/context/project-state.md` all updated. Next
+logical task: CR-092 (critical-journey e2e specs) — the one remaining open
+ticket not blocked on anything unavailable in this environment.

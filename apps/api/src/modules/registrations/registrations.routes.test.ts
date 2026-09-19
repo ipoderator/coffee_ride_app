@@ -286,26 +286,51 @@ describe('/v1/rides/:id/register', () => {
       await app.close();
     });
 
-    it('rejects a duplicate active registration with 409 registration_already_exists', async () => {
+    // CR-083 ("Idempotency"): a repeat register call for the same (rideId, userId) —
+    // e.g. a network retry of an already-successful call — is not an error. Returns
+    // the same existing registration with 200, not a fresh 201 or a 409, and does not
+    // create a second row or fan out a second confirmation notification.
+    it('returns the existing registration idempotently on a repeat register call, instead of an error or a duplicate', async () => {
       const app = await buildApp(testEnv);
       const { rideId } = await createOrganizerRide(app);
       const { rawToken: participantToken } = await registerAndLoginUser(app);
-      await app.inject({
+
+      const first = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participantToken },
+      });
+      expect(first.statusCode).toBe(201);
+      const firstRegistrationId = first.json().registration.id;
+
+      const retry = await app.inject({
         method: 'POST',
         url: `/v1/rides/${rideId}/register`,
         headers: { origin: WEB_ORIGIN },
         cookies: { session: participantToken },
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: `/v1/rides/${rideId}/register`,
-        headers: { origin: WEB_ORIGIN },
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json().registration.id).toBe(firstRegistrationId);
+
+      // No duplicate row: still exactly one active participant.
+      const detail = await getRideDetail(app, rideId, participantToken);
+      expect(detail.json().registrationsCount).toBe(1);
+
+      // No duplicate notification: exactly one registration_confirmed entry.
+      const inbox = await app.inject({
+        method: 'GET',
+        url: '/v1/notifications/mine',
         cookies: { session: participantToken },
       });
+      const confirmations = inbox
+        .json()
+        .items.filter(
+          (item: { type: string }) => item.type === 'registration_confirmed',
+        );
+      expect(confirmations).toHaveLength(1);
 
-      expect(response.statusCode).toBe(409);
-      expect(response.json().code).toBe('registration_already_exists');
       await app.close();
     });
 
@@ -613,9 +638,12 @@ describe('/v1/rides/:id/waitlist', () => {
       await app.close();
     });
 
-    it('rejects a duplicate waiting entry with 409 waitlist_entry_already_exists', async () => {
+    // CR-083 ("Idempotency"): a repeat waitlist-join call while already `waiting` —
+    // e.g. a network retry — is not an error. Returns the same existing entry with
+    // 200, not a fresh 201 or a 409, and does not create a second row.
+    it('returns the existing waitlist entry idempotently on a repeat join call, instead of an error or a duplicate', async () => {
       const app = await buildApp(testEnv);
-      const { rideId } = await createOrganizerRide(app, {
+      const { organizerToken, rideId } = await createOrganizerRide(app, {
         participantLimit: 1,
       });
       const { rawToken: firstToken } = await registerAndLoginUser(app);
@@ -626,22 +654,33 @@ describe('/v1/rides/:id/waitlist', () => {
         cookies: { session: firstToken },
       });
       const { rawToken: secondToken } = await registerAndLoginUser(app);
-      await app.inject({
+      const first = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: secondToken },
+      });
+      expect(first.statusCode).toBe(201);
+      const firstEntryId = first.json().waitlistEntry.id;
+
+      const retry = await app.inject({
         method: 'POST',
         url: `/v1/rides/${rideId}/waitlist`,
         headers: { origin: WEB_ORIGIN },
         cookies: { session: secondToken },
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: `/v1/rides/${rideId}/waitlist`,
-        headers: { origin: WEB_ORIGIN },
-        cookies: { session: secondToken },
-      });
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json().waitlistEntry.id).toBe(firstEntryId);
 
-      expect(response.statusCode).toBe(409);
-      expect(response.json().code).toBe('waitlist_entry_already_exists');
+      // No duplicate row: still exactly one waiting entry.
+      const waitlist = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/waitlist`,
+        cookies: { session: organizerToken },
+      });
+      expect(waitlist.json().items).toHaveLength(1);
+
       await app.close();
     });
   });
