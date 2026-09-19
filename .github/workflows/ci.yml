@@ -77,7 +77,7 @@ jobs:
       RUN_LIVE_S3_TESTS: '1'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Version comes from package.json → packageManager. Do not also pass
       # `version:` here: action-setup fails when the two disagree.
