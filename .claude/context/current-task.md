@@ -2,65 +2,70 @@
 
 ## Task ID
 
-CR-092 — Real critical-journey Playwright specs (`docs/tasks.md`).
+CR-093 — Connect a live 2GIS Geocoder/Directions key, resolve KI-016.
 
 ## Goal
 
-Write the three e2e journeys `.claude/rules/testing.md` names: participant
-discovers+registers, organizer creates+publishes a ride, organizer views
-participants. `home.spec.ts` is a one-page smoke check, not this.
+User supplied a real 2GIS API key ("подключи карту 2gis по api"). 2GIS
+splits credentials into two unrelated products (CR-071): a public
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (browser map rendering) and a private
+`MAPS_2GIS_API_KEY` (server-side Geocoder/Directions, billed per request,
+never shipped to the browser). Confirmed with the user which product the
+key was issued for before touching anything, since the two have opposite
+security postures.
+
+## Requirements / acceptance criteria
+
+- Key stored only where its product dictates (server-side key → `.env`
+  only, never `.env.example`, never committed — `.env` is already
+  `.gitignore`d).
+- KI-016's documented "next action" (verify `packages/maps-2gis`'s
+  geocode/route field-name guesses against a real 2GIS account) actually
+  performed, not just assumed.
+- Any real bug found gets fixed at the root and re-verified live, per
+  CLAUDE.md's self-correction protocol — not papered over.
 
 ## Decision
 
-- New `apps/web/e2e/helpers/api-fixtures.ts`: `registerAndVerify`/`login`/
-  `createOrganizerProfile`/`createPublishedRide`/`registerForRide`/
-  `setDisplayName`, direct `/api/v1/...` calls with the CSRF `Origin`
-  header (Playwright's `APIRequestContext` doesn't send one automatically
-  the way a real browser fetch does). Every call asserts a 2xx response
-  (`assertOk`) so a setup failure (e.g. hitting the shared auth rate limit)
-  surfaces clearly instead of a downstream `undefined` crash.
-- New `apps/web/e2e/critical-journeys.spec.ts`: the three journeys, each
-  seeding only its own preconditions via the helpers above and driving the
-  actually-tested journey through real UI interaction (fill forms, click
-  buttons, assert rendered state).
-- `test.describe.configure({ mode: 'serial' })` on the whole file:
-  `/v1/auth/register`/`/v1/auth/login` each carry a 5/min/IP in-memory rate
-  limit (KI-014's interim tier); the three journeys together need exactly 5
-  of each (spec 3 reuses `page.request`'s already-logged-in organizer
-  cookie instead of a redundant second UI login for the same identity).
-- No new ADR — test-suite work.
+- User confirmed the key is the server-side Geocoder/Directions product →
+  set `MAPS_2GIS_API_KEY` in local `.env`. Did not touch
+  `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` — that's a different key the user
+  hasn't provided (KI-031 stays open).
+- Verified live via a throwaway script calling `create2GisMapProvider`
+  directly (deleted after use, never committed — not part of the package's
+  source or tests).
 
-## Bugs found and fixed while writing these
+## Bugs found and fixed
 
-- `loginViaUi` originally clicked login's submit button and immediately
-  called `page.goto(...)` — raced `LoginForm`'s own `await login(...)`, and
-  the hard navigation could cancel that in-flight fetch before the session
-  cookie was ever set. Fixed with `page.waitForURL('/me')` after the click.
-- Fixture calls had no failure check — a rate-limited/failed setup call
-  surfaced several lines downstream as `Cannot read properties of
-undefined`. Fixed with `assertOk()`.
-- Unrelated to this ticket: a stale `apps/web/.next/types` artifact from an
-  earlier session's production build made `web#typecheck` fail on files
-  that no longer existed. `rm -rf apps/web/.next` fixed it (Next
-  regenerates on the next dev/build/typecheck run) — not caused by this
-  ticket's changes, confirmed by the error referencing routes untouched
-  here.
+- `geocode`/`reverseGeocode`: field-name guesses (`point.lat`/`point.lon`,
+  `full_name`) confirmed correct against the real API — no change needed.
+- `getRoute`: `total_distance`/`total_duration` guess confirmed correct.
+  The `geometry` guess was wrong and silently degraded on every call: the
+  real polyline is under `maneuvers[].outcoming_path.geometry[]`, each a
+  WKT `LINESTRING(lon lat, lon lat, ...)` string, not a flat `{lat, lon}`
+  array. Fixed in `packages/maps-2gis/src/route.ts` (new
+  `parseWktLineString`, rewritten `extractGeometry`); `provider.test.ts`'s
+  fixture updated to the verified real shape.
 
 ## Validation results
 
-- `pnpm --filter web typecheck`/`lint`: clean.
-- `pnpm turbo run test:e2e`: 4/4 passing (`home.spec.ts` + the 3 new
-  journeys), run twice to confirm no flakiness once outside the
-  rate-limit collision window (one back-to-back manual rerun within the
-  same ~60s did trip the shared limit once during development — expected
-  given exactly 5 of each per run, not a bug; a real CI run only executes
-  the suite once).
-- Full `pnpm turbo run lint typecheck build test` (real local
-  `DATABASE_URL`): 29/29 tasks green.
+- `pnpm --filter maps-2gis test`: 11/11 passing.
+- `pnpm --filter maps-2gis typecheck`: clean.
+- `pnpm --filter maps-2gis lint`: clean.
+- `pnpm --filter maps-2gis... build` (maps-core, resilience, maps-2gis):
+  green.
+- Live re-check after the fix: `getRoute` now returns a real multi-point
+  road-following polyline instead of the two-point waypoint fallback.
 
 ## Final result
 
-CR-092 closed. Every ticket in `docs/tasks.md` is now checked off or
-explicitly blocked (CR-058 on KI-014/live Redis) — no open, actionable
-ticket remains. `docs/tasks.md`, `docs/changelog.md`,
-`.claude/context/project-state.md` all updated.
+CR-093 closed. `.env` has a live `MAPS_2GIS_API_KEY`; the adapter's
+geocode/route parsing is now verified against a real account and its one
+real bug fixed. KI-016 resolved. `create2GisMapProvider` still has zero
+callers in `apps/api`/`apps/web` — wiring an actual consumer (KI-032's
+geocode-by-address UI, or CR-028/CR-084's route rendering) is the natural
+next step, not part of this ticket's scope. MapGL browser rendering
+(KI-031) is unchanged — still blocked on a separate public key the user
+has not provided. `docs/tasks.md`, `docs/changelog.md`,
+`.claude/context/project-state.md`, `.claude/context/known-issues.md` all
+updated.

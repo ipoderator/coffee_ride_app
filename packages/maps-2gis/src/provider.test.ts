@@ -2,11 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { create2GisMapProvider } from './provider.js';
 import { MapProviderError } from './errors.js';
 
-// No live 2GIS credential is available in this environment (KI-016) — these
-// tests exercise this adapter's own parsing/fallback/timeout-normalization
-// logic against constructed fixture responses, not a real API call. They do
-// NOT verify 2GIS's actual field names; that still needs a live account
-// before CR-026/CR-028/CR-084 depend on this adapter for real.
+// Fixture shapes below mirror a real response verified against a live 2GIS
+// account 2026-09-19 (KI-016, resolved) — these tests exercise this
+// adapter's parsing/fallback/timeout-normalization logic against that
+// verified shape, not a live call on every run.
 
 const config = { apiKey: 'test-key', timeoutMs: 1000 };
 
@@ -92,15 +91,23 @@ describe('reverseGeocode', () => {
 });
 
 describe('getRoute', () => {
-  it('parses distance/duration/geometry from an array-shaped response', async () => {
+  it('parses total_distance/total_duration and the maneuvers WKT geometry from an array-shaped response', async () => {
     mockFetchOnce({
       json: async () => [
         {
-          distance: 1200,
-          duration: 300,
-          geometry: [
-            { lat: 1, lon: 2 },
-            { lat: 3, lon: 4 },
+          total_distance: 1200,
+          total_duration: 300,
+          maneuvers: [
+            {
+              outcoming_path: {
+                geometry: [
+                  {
+                    selection:
+                      'LINESTRING(2.000000 1.000000, 4.000000 3.000000)',
+                  },
+                ],
+              },
+            },
           ],
         },
       ],

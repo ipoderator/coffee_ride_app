@@ -631,3 +631,15 @@ registrations/registrations.service.ts`) now return `{ resource, created }`;
       buttons, assert rendered state) — not scripted through the API
       end-to-end. Live-verified locally, twice, via `pnpm test:e2e`: 4/4
       passing. See `docs/changelog.md`.
+- [x] CR-093 Connect a live 2GIS Geocoder/Directions key, resolve KI-016 — done
+      2026-09-19: user supplied a real 2GIS key; confirmed with them it's the
+      server-side Geocoder/Directions product (not the separate public MapGL
+      key, CR-071) and added it to local `.env` only. Live-verified
+      `packages/maps-2gis` against the real API: `geocode`/`reverseGeocode`
+      field-name guesses were correct; `getRoute`'s geometry guess was wrong
+      (real polyline is WKT `LINESTRING` strings under
+      `maneuvers[].outcoming_path.geometry[]`, not a flat `{lat, lon}` array)
+      and was silently falling back to the raw waypoints — fixed in
+      `packages/maps-2gis/src/route.ts` and re-verified live. No consumer
+      wired in yet (still zero callers of `create2GisMapProvider`) — that's
+      KI-032/CR-028/CR-084 follow-up. See `docs/changelog.md`.

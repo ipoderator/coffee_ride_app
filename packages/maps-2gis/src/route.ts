@@ -6,27 +6,35 @@ import { MapProviderError } from './errors.js';
 import { fetchJson } from './http.js';
 
 // 2GIS Routing API (https://docs.2gis.com/en/api/navigation/routing/overview),
-// `POST {routingBaseUrl}/global`. Field names below (`distance`/`duration`/
-// `geometry`) are this adapter's best-documented guess, never exercised
-// against a live key or response this session (no credential available —
-// KI-016). Parsing is deliberately defensive (falls back to the requested
-// waypoints as the geometry if the response doesn't carry one) rather than
-// asserting an exact shape it cannot verify; distance/duration are the one
-// thing every route response is expected to carry, so their absence still
-// fails loudly.
+// `POST {routingBaseUrl}/global`. Field names verified 2026-09-19 against a
+// live key (KI-016): `total_distance`/`total_duration` are top-level on the
+// route item as guessed, but the route polyline is NOT a flat `geometry`
+// array of `{lat, lon}` — it is spread across `maneuvers[].outcoming_path.
+// geometry[]`, each a WKT `LINESTRING(lon lat, lon lat, ...)` string (2GIS's
+// `selection` field). The original `{lat, lon}`-point guess never matched
+// anything and silently fell back to the requested waypoints every time.
 const PROFILE_TO_TRANSPORT: Record<RouteRequest['profile'], string> = {
   cycling: 'bicycle',
   driving: 'driving',
   walking: 'walking',
 };
 
+interface GeometrySegment {
+  selection: string;
+}
+
+interface Maneuver {
+  outcoming_path?: {
+    geometry?: GeometrySegment[];
+  };
+}
+
 interface RoutingResponseItem {
   distance?: number;
   total_distance?: number;
   duration?: number;
   total_duration?: number;
-  geometry?: Array<{ lat: number; lon: number } | { selection: string }>;
-  waypoints?: Array<{ point?: { lat: number; lon: number } }>;
+  maneuvers?: Maneuver[];
 }
 
 type RoutingResponse =
@@ -36,17 +44,30 @@ function extractItems(body: RoutingResponse): RoutingResponseItem[] {
   return Array.isArray(body) ? body : (body.result ?? []);
 }
 
+// Parses 2GIS's `"LINESTRING(lon lat, lon lat, ...)"` WKT string (note:
+// longitude first, per the WKT spec) into provider-neutral points.
+function parseWktLineString(wkt: string): LatLng[] {
+  const match = /LINESTRING\(([^)]*)\)/.exec(wkt);
+  const coordinates = match?.[1];
+  if (!coordinates) return [];
+  return coordinates
+    .split(',')
+    .map((pair) => {
+      const [lng, lat] = pair.trim().split(/\s+/).map(Number);
+      return { lat: lat ?? NaN, lng: lng ?? NaN };
+    })
+    .filter(
+      (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng),
+    );
+}
+
 function extractGeometry(
   item: RoutingResponseItem,
   fallback: LatLng[],
 ): LatLng[] {
-  const points = item.geometry
-    ?.map((point) =>
-      'lat' in point && 'lon' in point
-        ? { lat: point.lat, lng: point.lon }
-        : null,
-    )
-    .filter((point): point is LatLng => point !== null);
+  const points = item.maneuvers
+    ?.flatMap((maneuver) => maneuver.outcoming_path?.geometry ?? [])
+    .flatMap((segment) => parseWktLineString(segment.selection));
   return points && points.length > 0 ? points : fallback;
 }
 

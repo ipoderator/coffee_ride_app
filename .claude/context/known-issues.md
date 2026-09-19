@@ -95,6 +95,17 @@ reachable Redis and confirming a job round-trips through the worker into a real
 Docker-unreachable constraint. Next action unchanged: the first session with a
 working Docker daemon (or an installed local Redis) should additionally confirm
 that live round trip, the way CR-004 did for Postgres.
+Update 2026-09-19: Docker Desktop worked in this session (see
+`docker-desktop-unavailable` memory — treat that as a point-in-time constraint,
+not permanent). `docker compose up -d redis` + the running `apps/api` dev
+server's own `/health` reported `redis: "ok"`; a standalone `ioredis`/`bullmq`
+script (`new Redis(REDIS_URL)`, `new Queue('notifications', {connection})`)
+also connected and reached `waitUntilReady()` against the real
+`redis:8-alpine` container with `--requirepass`. This closes the
+connection-level gap. Still open: an actual job enqueued through
+`notifications.service.ts` round-tripping through the `Worker` into a real
+`notifications` table row was not exercised this session — that's the
+remaining next action, not the connection itself.
 
 ### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
 
@@ -126,25 +137,16 @@ Next action: the first session with a working Docker daemon should run
 `DeleteObject` round trip against it (e.g. via `route-storage.ts`'s
 functions directly, or a full `POST /v1/rides/:id/route` → download → delete
 walkthrough), before trusting this in any CR-086 or production-facing work.
-
-### KI-016 — 2GIS Geocoder/Routing response parsing is unverified against a live API
-
-Status: open. Discovered: 2026-09-12 (CR-007).
-Problem: `packages/maps-2gis`'s field names (`point.lat`/`lon`, `full_name`,
-`distance`/`duration`, route geometry) come from 2GIS's public documentation
-and search results, not a real request/response — no `MAPS_2GIS_API_KEY` is
-configured in this environment, and `.claude/rules/maps.md` itself defers
-that verification to "before production integration."
-Impact: low today (zero consumers — see KI-017's same "not wired in yet"
-point), but real: a wrong field name would silently produce empty/degraded
-results rather than an obvious error, since parsing is deliberately
-defensive (falls back to the requested waypoints as route geometry if the
-response doesn't carry one).
-Workaround: none needed yet — nothing calls this code.
-Next action: verify against a real 2GIS account (a geocode call, a route
-call, inspect the actual response) before CR-026 (map discovery), CR-028
-(route rendering), or CR-084 (geo query approach) wires this adapter into a
-real route.
+Update 2026-09-19: Docker worked this session; `docker compose up -d minio`
+started cleanly, but the `coffee-ride` bucket did not exist yet (fresh
+container/volume) — `apps/api`'s `/health` reported `s3: "error"` until it was
+created manually (`mc mb local/coffee-ride`), after which `/health` reported
+`s3: "ok"`. Note for next time: nothing in this repo auto-creates the bucket
+on first boot — a fresh `minio_data` volume needs this one-time `mc mb` step.
+Health-check-level connectivity is now confirmed; a real
+`PutObject`/`GetObject`/`DeleteObject` round trip through
+`route-storage.ts` itself (e.g. an actual GPX upload) was not exercised this
+session — that remains the next action.
 
 ### KI-017 — `packages/maps-2gis`/`packages/db`/`packages/types` export raw TS source, not compiled `dist`
 
@@ -1397,3 +1399,90 @@ empty-string-to-undefined normalization for both, plus the existing
 production-placeholder-refusal behavior, so this stays a tested contract
 rather than only exercised indirectly.
 Next action: none.
+
+### KI-047 — Local `.env`'s `DATABASE_URL` diverges from `.env.example`, and stale `pnpm dev` processes accumulate across sessions
+
+Status: open. Discovered: 2026-09-19, first time Docker Desktop actually
+worked in this environment and `pnpm dev` was run end to end for manual
+browser verification.
+Problem: two separate issues surfaced together.
+
+1. This checkout's `.env` had `DATABASE_URL=postgresql://glebchurkin@
+localhost:5432/coffee_ride_dev` (a native Homebrew `postgresql@14`
+   instance, no container), not `.env.example`'s documented
+   `postgresql://postgres:postgres@localhost:5432/coffee_ride` (the
+   `docker-compose.yml` Postgres). This isn't a typo — `docs/changelog.md`
+   has dozens of prior entries citing the exact same native connection
+   string, and the native database already holds real accumulated dev data
+   (22 users, 13 rides, 7 registrations at time of discovery). Docker's
+   Postgres was previously unreachable in this environment (Docker Desktop
+   itself didn't start — see `docker-desktop-unavailable` project memory),
+   so all real local development has been happening against the native
+   instance instead, and `.env` was never brought back in line with the
+   template.
+2. Multiple `turbo dev`/`tsx watch`/`next dev` process trees from earlier,
+   unrelated sessions (going back to Thu 21:00 and 22:29) were still running
+   in the background, one of them holding port 4000. A fresh `pnpm dev`
+   this session failed with `EADDRINUSE` until all stale trees were found
+   (`ps aux | grep coffeeride`) and killed manually.
+   Impact: a session that blindly follows `.env.example`/`docker compose up -d`
+   gets a fresh, empty database and diverges from the real dev data this
+   developer has been using — and a session that just runs `pnpm dev` without
+   checking for prior background processes first can silently fail to bind its
+   port, or silently talk to a stale zombie API instance instead of its own.
+   Workaround: before running `pnpm dev`, check `ps aux | grep coffeeride` (or
+   `lsof -nP -iTCP:3000 -iTCP:4000 -sTCP:LISTEN`) for leftover processes from
+   earlier sessions and kill them first. Confirm which `DATABASE_URL` `.env`
+   actually points at before assuming it matches `.env.example` — ask before
+   changing it, since (as happened this session) the "wrong-looking" native
+   value may be the real one with real data, not a mistake to fix. On a fresh
+   MinIO volume, the `coffee-ride` S3 bucket also does not exist yet and must
+   be created once (`docker exec <minio-container> mc mb local/coffee-ride`
+   after `mc alias set local http://localhost:9000 minio minio12345`) —
+   nothing in this repo auto-creates it.
+   Next action: consider either (a) a `predev`/setup script that checks for
+   stale ports and creates the MinIO bucket idempotently, or (b) reconciling
+   `.env`/`.env.example` deliberately (e.g. migrating the native Postgres data
+   into the Docker Postgres, or updating `.env.example` to document the native
+   option too) so this doesn't need rediscovering every session. Recommended:
+   run `/run-skill-generator` to capture the working local-run procedure
+   (port-conflict check, correct `DATABASE_URL`, MinIO bucket bootstrap) as a
+   project skill under `.claude/skills/`, per the `run` skill's own guidance.
+
+### KI-016 — 2GIS Geocoder/Routing response parsing is unverified against a live API
+
+Resolved: 2026-09-19 (CR-093, "Connect live 2GIS Geocoder/Directions key").
+Discovered: 2026-09-12 (CR-007).
+Problem: `packages/maps-2gis`'s field names (`point.lat`/`lon`, `full_name`,
+`distance`/`duration`, route geometry) came from 2GIS's public documentation
+and search results, not a real request/response — no `MAPS_2GIS_API_KEY` was
+configured in this environment, and `.claude/rules/maps.md` itself deferred
+that verification to "before production integration."
+Impact: was low before this session (zero consumers — KI-017's same "not
+wired in yet" point still applied: no route/use case calls this adapter
+yet), but the bug found while resolving this was real and would have
+shipped silently — every route render would have drawn a straight line
+between waypoints instead of the actual road/path geometry, with no error
+to signal it.
+Workaround: none needed — fixed at the root.
+Resolution: a live server-side key (Geocoder/Directions product, never the
+public MapGL one — CR-071) was added to local `.env` and exercised directly
+against `create2GisMapProvider` with real requests (a Red Square geocode, a
+reverse-geocode, and a cycling route from Red Square to Gorky Park).
+`geocode`/`reverseGeocode`'s `point.lat`/`point.lon`/`full_name` guesses
+were exactly right. `getRoute`'s `total_distance`/`total_duration` guess was
+right, but the geometry guess was wrong: the real polyline is not a flat
+`geometry` array of `{lat, lon}` — it's spread across `maneuvers[].
+outcoming_path.geometry[]`, each a WKT `LINESTRING(lon lat, lon lat, ...)`
+string, which the adapter had never parsed, so it silently fell back to the
+requested waypoints on every call. Fixed in `packages/maps-2gis/src/
+route.ts` (new `parseWktLineString`, rewritten `extractGeometry`);
+`provider.test.ts`'s route geometry fixture updated to the verified real
+shape. Typecheck/lint/tests/build all green after the fix; re-ran the live
+call afterward and confirmed a real multi-point polyline comes back instead
+of the two-point fallback. See `docs/changelog.md`.
+Next action: none for this adapter itself. The next real step is wiring an
+actual consumer (KI-032's geocode-by-address UI, or CR-028/CR-084's route
+rendering) now that a live credential exists and the adapter is verified —
+see also KI-031 (MapGL browser rendering is still blocked on a separate,
+not-yet-provided `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`).

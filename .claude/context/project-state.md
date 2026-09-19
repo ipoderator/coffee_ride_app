@@ -29,9 +29,12 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-092 (real critical-journey e2e specs) just closed — every
-ticket in `docs/tasks.md` is now checked off or explicitly blocked (CR-058
-on KI-014/live Redis).
+None active. CR-093 (connect live 2GIS Geocoder/Directions key, resolve
+KI-016) just closed — every ticket in `docs/tasks.md` is now checked off or
+explicitly blocked (CR-058 on KI-014/live Redis). Next logical step if a
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` or a real geocoding consumer is wanted:
+KI-032 (geocode-by-address UI) or KI-031 (MapGL browser rendering, needs a
+separate public key not yet provided).
 
 ## Implemented
 
@@ -207,11 +210,19 @@ database, all 14 tables' counts matched, then cleaned up) — see
   `FormField`/`Card`/`Textarea`.
 
 **packages/maps-core / packages/maps-2gis**: provider-neutral `MapProvider` interface
-(ADR-010) + a 2GIS REST adapter (geocode/reverseGeocode/getRoute, no SDK dependency).
-No live 2GIS credential exists in this environment, so every map-rendering surface
-(discovery map, route map) shows a real, live-verified degraded state (KI-031) rather
-than an actual MapGL render. `fetchJson` now retries once and shares one `CircuitBreaker`
-across all three methods (CR-049, below), replacing its previous timeout-only logic.
+(ADR-010) + a 2GIS REST adapter (geocode/reverseGeocode/getRoute, no SDK dependency). A
+live server-side `MAPS_2GIS_API_KEY` (Geocoder/Directions product) now exists in local
+`.env` (CR-093, 2026-09-19) and was exercised directly against `create2GisMapProvider`:
+`geocode`/`reverseGeocode` field-name guesses were correct; `getRoute`'s geometry guess
+was wrong (real polyline lives in `maneuvers[].outcoming_path.geometry[]` as WKT
+`LINESTRING` strings, not a flat `{lat, lon}` array) and has been fixed and
+re-verified — KI-016 resolved. Still no consumer wired into any route/use case (that's
+the next step: KI-032's geocode-by-address UI, or CR-028/CR-084's route rendering). No
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (public browser MapGL key — a separate 2GIS product,
+CR-071) exists yet, so every map-rendering surface (discovery map, route map) still
+shows a real, live-verified degraded state (KI-031) rather than an actual MapGL render.
+`fetchJson` retries once and shares one `CircuitBreaker` across all three methods
+(CR-049, below), replacing its previous timeout-only logic.
 
 **packages/resilience** (new, CR-049): shared `callWithResilience` (timeout via
 `AbortSignal` + bounded retry with jittered backoff) and `CircuitBreaker`
@@ -370,11 +381,13 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   CR-061) — `packages/maps-2gis` still exports raw source too, unaffected by
   ADR-017 (nothing in `apps/api` consumes it yet, so it was never actually
   blocking).
-- No live 2GIS credential — geocoding and MapGL rendering are unverified against a
-  real account; every map surface shows a real degraded state instead (KI-016,
-  KI-031). No geocode-by-address UI (KI-032); a ride's finish point has no coordinates
-  (KI-033); route points have no participant-facing UI yet, API + organizer management
-  only, pending real map rendering (KI-036).
+- Geocoding is now verified against a live 2GIS account and its one real bug (route
+  geometry parsing) fixed (KI-016, resolved CR-093), but still has zero real
+  consumers. No live MapGL browser credential — MapGL rendering is still unverified;
+  every map surface shows a real degraded state instead (KI-031). No geocode-by-address
+  UI (KI-032); a ride's finish point has no coordinates (KI-033); route points have no
+  participant-facing UI yet, API + organizer management only, pending real map
+  rendering (KI-036).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
   no in-app recovery path (KI-026). Same gap for password reset (KI-042, CR-060): API-only,
   and unlike verify-email's dev-only link, the reset token is never exposed over HTTP in

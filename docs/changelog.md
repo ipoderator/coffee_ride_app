@@ -4344,3 +4344,70 @@ dependency on anything unavailable in this environment (Docker/Redis/S3/
 
 Follow-up: none currently queued — every ticket in `docs/tasks.md` is
 either checked off or explicitly blocked (CR-058 on KI-014/live Redis).
+
+## 2026-09-19 — CR-093 — Connect live 2GIS Geocoder/Directions key (resolve KI-016)
+
+Goal: the user supplied a real 2GIS API key ("подключи карту 2gis по api").
+2GIS credentials are split into two unrelated products (CR-071):
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (public, browser map rendering) and
+`MAPS_2GIS_API_KEY` (private, server-side Geocoder/Directions, billed per
+request). Asked the user which product the supplied key was issued for
+rather than guessing — confirmed it is the server-side Geocoder/Directions
+key.
+
+Implementation: added the key to local `.env` (`MAPS_2GIS_API_KEY`, already
+`.gitignore`d — never touched `.env.example`, which stays a blank
+template). Wrote a throwaway script (`packages/maps-2gis/live-check.ts`,
+deleted after use, never committed) calling `create2GisMapProvider`
+directly against the real 2GIS API — exactly KI-016's documented "next
+action" now that a credential exists: a geocode of "Красная площадь,
+Москва", a reverse-geocode, and a cycling route from Red Square to Gorky
+Park.
+
+Findings: `geocode`/`reverseGeocode`'s field-name guesses
+(`point.lat`/`point.lon`, `full_name`) were exactly right — both returned
+correct, sensible results immediately. `getRoute`'s `total_distance`/
+`total_duration` guess was also right, but its geometry guess was wrong and
+had been silently falling back to the two requested waypoints on every
+call: dumped the raw routing response
+(`packages/maps-2gis/raw-check.ts`/`dump.ts`, also deleted after use) and
+found the real polyline lives in `maneuvers[].outcoming_path.geometry[]`,
+each entry a WKT `LINESTRING(lon lat, lon lat, ...)` string — not the flat
+`{lat, lon}` array `route.ts` assumed. Fixed in
+`packages/maps-2gis/src/route.ts`: new `parseWktLineString` helper, rewrote
+`extractGeometry` to flatten every maneuver's WKT segments instead of
+looking for a top-level `geometry` field that never existed.
+`provider.test.ts`'s route-geometry fixture updated to the verified real
+response shape (`maneuvers[].outcoming_path.geometry[].selection`) instead
+of the old invented one. Re-ran the live script after the fix and confirmed
+a real multi-point road-following polyline now comes back instead of the
+two-point fallback.
+
+Decisions: none new at the ADR level — this verifies and fixes an existing
+adapter (ADR-010) against its real dependency; it does not change the
+architecture. No new consumer was wired in — `create2GisMapProvider` still
+has zero callers in `apps/api`/`apps/web` (KI-017's "factory exists, no
+consumer until one is justified" discipline stays true); that remains
+follow-up work (KI-032, CR-028/CR-084), not part of this ticket's scope.
+
+Validation: `pnpm --filter maps-2gis test` (11/11 passing),
+`pnpm --filter maps-2gis typecheck`, `pnpm --filter maps-2gis lint`, and
+`pnpm --filter maps-2gis... build` (maps-core/resilience/maps-2gis) all
+green. Live-verified directly against the real 2GIS Geocoder and Routing
+APIs (not just unit-tested against fixtures) — see Findings above.
+
+Known limitations: `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (the separate public
+browser-rendering key) still does not exist anywhere in this environment,
+so KI-031 (no live MapGL rendering; every map surface shows a degraded
+placeholder) is unchanged and unresolved by this ticket. `create2GisMapProvider`
+still has no real caller.
+
+Known issues resolved: KI-016 (2GIS Geocoder/Routing response parsing
+unverified against a live API) — see
+`.claude/context/known-issues.md`.
+
+Follow-up: wire an actual consumer now that geocoding is live-verified —
+either KI-032 (geocode-by-address UI in `EditRideForm`) or CR-028/CR-084's
+route rendering. Separately, if/when a public MapGL key is provided, KI-031
+becomes actionable (build the render-layer type in `packages/maps-core` +
+`packages/maps-2gis`'s MapGL implementation).
