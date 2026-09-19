@@ -29,9 +29,9 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-081 (full prod env var set + deployment docs) just closed —
-CR-082 (pin MinIO/review base images) is the one remaining Deployment-section
-ticket. CR-092 (real critical-journey e2e specs) and CR-083 (registration
+None active. CR-082 (pin MinIO/review base images) just closed — Deployment
+section (`docs/tasks.md`) is now fully complete, CR-074 through CR-082.
+CR-092 (real critical-journey e2e specs) and CR-083 (registration
 idempotency) remain open, no fixed order decided among them.
 
 ## Implemented
@@ -250,12 +250,14 @@ ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
 password + AOF persistence; Postgres backups + a live-verified restore;
 request-id correlation + error-reporting funnel; CI MinIO service + real S3
 round-trip test + Playwright e2e job, KI-007) and now CR-081 (full prod env
-var set + `docs/deployment.md`, new — also resolved KI-046 for real) are all
-closed. CR-082 (pin MinIO/review base images) is the one Deployment ticket
-still open. CR-092 (real critical-journey e2e specs — `.claude/rules/
+var set + `docs/deployment.md`, new — also resolved KI-046 for real), and
+CR-082 (fixed `.github/dependabot.yml`'s docker/docker-compose coverage —
+nothing that sets a base image version had ever actually been scanned by
+Dependabot before this) are all closed — the entire Deployment section is
+now done. CR-092 (real critical-journey e2e specs — `.claude/rules/
 testing.md`'s discover+register/create+publish/view-participants journeys
-still don't exist) and CR-083 (registration idempotency) remain open,
-tracked separately from Deployment, no fixed order decided among the three.
+still don't exist) and CR-083 (registration idempotency) remain open, no
+fixed order decided between them.
 
 ## Important decisions
 
@@ -485,4 +487,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-19 (CR-081)
+2026-09-19 (CR-082)

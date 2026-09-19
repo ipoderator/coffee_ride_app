@@ -14,7 +14,29 @@ updates:
     schedule:
       interval: 'weekly'
 
+  # CR-082: 'docker' only scans a Dockerfile in the exact `directory` given,
+  # no subdirectory recursion — the previous single `directory: '/'` entry
+  # pointed at a location with no Dockerfile at all (all three live nested)
+  # and never actually scanned anything. One entry per real Dockerfile.
   - package-ecosystem: 'docker'
+    directory: '/apps/web'
+    schedule:
+      interval: 'weekly'
+
+  - package-ecosystem: 'docker'
+    directory: '/apps/api'
+    schedule:
+      interval: 'weekly'
+
+  - package-ecosystem: 'docker'
+    directory: '/packages/db'
+    schedule:
+      interval: 'weekly'
+
+  # 'docker-compose' is a separate ecosystem from 'docker' (GA Feb 2025) —
+  # covers docker-compose.yml/docker-compose.prod.yml's `image:` references
+  # (postgres/redis/minio/caddy), which no 'docker' entry above reaches.
+  - package-ecosystem: 'docker-compose'
     directory: '/'
     schedule:
       interval: 'weekly'

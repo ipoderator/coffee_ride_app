@@ -573,7 +573,20 @@ Deliberately deferred until there is something to deploy (see `docs/changelog.md
       `S3_ENDPOINT` now normalize an empty string to "not configured" the
       same way `ERROR_REPORTING_WEBHOOK_URL` already did), with new test
       coverage in `apps/api/src/env.test.ts`. See `docs/changelog.md`.
-- [ ] CR-082 Pin `minio/minio` to a release tag; review base image versions
+- [x] CR-082 Pin `minio/minio` to a release tag; review base image versions —
+      done 2026-09-19: MinIO pinning was already done (CR-009). The real
+      finding while reviewing base image versions: `.github/dependabot.yml`'s
+      one `docker` entry (`directory: '/'`) never actually scanned anything
+      — `docker`/`docker-compose` are separate Dependabot ecosystems (no
+      `docker-compose` entry existed at all), and `docker` only scans the
+      exact directory given, which had no Dockerfile at repo root (all three
+      live nested). Fixed: one `docker` entry per real Dockerfile
+      (`apps/web`, `apps/api`, `packages/db`) plus a new `docker-compose`
+      entry covering both compose files. Base image tags themselves
+      (`node:24-alpine`/`postgres:17-alpine`/`redis:8-alpine`/
+      `caddy:2-alpine`) are left as intentional floating major/minor
+      versions — Dependabot, now actually wired to reach every one, is the
+      ongoing review mechanism. See `docs/changelog.md`.
 
 ## Contract & model follow-ups
 

@@ -4153,3 +4153,63 @@ Follow-up: CR-082 (pin MinIO/review base images) is the one remaining
 Deployment-section ticket. CR-092 (critical-journey e2e specs) and CR-083
 (registration idempotency) remain open, tracked separately, no fixed order
 decided among the three.
+
+## 2026-09-19 — CR-082 — Fix Dependabot docker/docker-compose coverage (base image review)
+
+Goal: close the last open Deployment-section ticket — pin `minio/minio` to
+a release tag (already done) and review base image versions.
+
+Investigation: grepped the whole repo for `minio/minio`/`:latest` —
+`docker-compose.yml` and `.github/workflows/ci.yml` already pin MinIO to
+`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`, landed in CR-009
+(2026-09-13). Same "ticket text already stale" shape as CR-080's
+migration-step third. The real question was how the remaining floating
+base-image tags (`node:24-alpine` in all three Dockerfiles,
+`postgres:17-alpine`/`redis:8-alpine` in `docker-compose.yml`,
+`caddy:2-alpine` in `docker-compose.prod.yml`) actually get reviewed over
+time — checked `.github/dependabot.yml`'s one `docker` entry
+(`directory: '/'`) against GitHub's own docs and current Dependabot
+behavior (WebFetch + WebSearch, since this is real external tooling
+behavior, not project-internal state). Found two real, previously
+undiscovered gaps: (1) `docker` and `docker-compose` are separate
+Dependabot ecosystems (the latter reached GA February 2025) — no
+`docker-compose` entry existed anywhere in this repo's config, so
+`docker-compose.yml`/`docker-compose.prod.yml`'s `image:` references
+(postgres/redis/minio/caddy) have never been covered by any Dependabot
+update, ever. (2) The `docker` ecosystem only scans the exact `directory`
+given, with no subdirectory recursion — this repo has no Dockerfile at the
+repo root at all (all three live nested under `apps/web`, `apps/api`,
+`packages/db`), so the existing `directory: '/'` entry has never actually
+scanned any of them either. Net effect: nothing that sets a base-image
+version anywhere in this repo has ever actually been reviewed by
+Dependabot, despite `dependabot.yml` appearing to include a working
+`docker` entry.
+
+Implementation: `.github/dependabot.yml` — replaced the one non-functional
+`docker` entry with three `docker` entries, one per real Dockerfile
+directory (`/apps/web`, `/apps/api`, `/packages/db`), plus a new
+`docker-compose` entry (`directory: '/'`) covering both compose files. Same
+weekly schedule as every other ecosystem already configured. No base image
+version changes — `node:24-alpine`/`postgres:17-alpine`/`redis:8-alpine`/
+`caddy:2-alpine` stay intentional major/minor floating tags (not
+`:latest`, not digest-pinned); Dependabot, now actually wired to reach
+every one of them, is the ongoing review mechanism rather than a one-time
+manual audit that would go stale again immediately. MinIO remains the one
+deliberate exception (an exact `RELEASE.*` tag) since it doesn't publish a
+rolling major-version tag the way the others do.
+
+Decisions: none new at the ADR level — a tooling-config fix, same "not an
+architectural decision" precedent as CR-076/077/078/079/080/081.
+
+Validation: `.github/dependabot.yml` parsed with `python3 -c "import
+yaml..."` — valid YAML, all 6 entries present with the expected
+ecosystem/directory pairs. Cannot be proven by an actual Dependabot run
+from this sandbox (same "GitHub-hosted automation, reviewed not
+live-verified" category as CI changes in CR-080) — the next scheduled
+Dependabot run against the real repo is what actually confirms this.
+
+Known limitations: none new. This closes the Deployment section of
+`docs/tasks.md` entirely (CR-074 through CR-082, all now checked off).
+
+Follow-up: CR-092 (critical-journey e2e specs) and CR-083 (registration
+idempotency) remain open, no fixed order decided between them.

@@ -2,134 +2,116 @@
 
 ## Task ID
 
-CR-081 — Full production environment variable set in `.env.example` +
-deployment documentation (`docs/tasks.md` Deployment section).
+CR-082 — Pin `minio/minio` to a release tag; review base image versions
+(`docs/tasks.md` Deployment section).
 
 ## Goal
 
-Close the last real gap before Deployment is fully documented and safe to
-operate: no `docs/deployment.md` exists at all (confirmed — `docs/` has no
-deployment doc; `docs/database.md` only covers backups), and KI-046
-(`REDIS_URL`/`S3_ENDPOINT` empty-string crash) is still open for its
-`env.ts` half (the `ERROR_REPORTING_WEBHOOK_URL` half was already fixed in
-CR-079).
+Close the last open Deployment-section ticket.
 
 ## Investigation
 
-- `.env.example` already lists every variable `docker-compose.prod.yml`'s
-  `api`/`web`/`caddy` services actually consume (`DOMAIN`, `ACME_EMAIL`,
-  `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, `DATABASE_URL`, `REDIS_URL`, `S3_*`,
-  `AUTH_SECRET`, `MAPS_2GIS_API_KEY`, `ERROR_REPORTING_WEBHOOK_URL`) —
-  cross-checked line by line. So the ".env.example" half of this ticket's
-  title is already satisfied; no new variables to add there.
-- KI-046 (`.claude/context/known-issues.md`) is still open for
-  `REDIS_URL`/`S3_ENDPOINT`: both are `z.string().url().optional()` in
-  `apps/api/src/env.ts` with no preprocessing, so `docker-compose.prod.yml`
-  substituting an empty string for an unset var (confirmed Compose
-  behavior, same as what CR-079 already found for
-  `ERROR_REPORTING_WEBHOOK_URL`) fails `.url()` validation and crashes API
-  boot — even though "Redis/S3 not configured" is a fully supported
-  degraded mode everywhere else in the app. `ERROR_REPORTING_WEBHOOK_URL`
-  already has the fix (`z.preprocess` normalizing `''` to `undefined`) —
-  applying the identical pattern to the other two closes KI-046 for real,
-  not just partially.
-- No `docs/deployment.md` exists. `docs/architecture.md`/ADR-018/
-  `docker-compose.prod.yml`'s own comments/`docs/database.md`'s Backups
-  section each document one slice (reverse proxy decision, migration
-  profile, backup script) but nothing walks an operator through an actual
-  deploy end to end: prerequisites, filling in `.env`, first boot order
-  (migrate before serving traffic), verifying `/health`, redeploying,
-  rollback limitations. That's the real gap this ticket closes.
+- MinIO pinning is already done: `docker-compose.yml` and `.github/
+workflows/ci.yml` both already use `quay.io/minio/minio:RELEASE.
+2025-09-07T16-13-09Z` (not `:latest`), landed back in CR-009
+  (2026-09-13, `docs/changelog.md`). Grepped the whole repo for
+  `minio/minio`/`:latest` — nothing unpinned anywhere. Same "ticket text
+  already stale" shape as CR-080's migration-step third.
+- "Review base image versions" — every Dockerfile uses `node:24-alpine`
+  (`apps/web/Dockerfile`, `apps/api/Dockerfile`, `packages/db/Dockerfile`);
+  `docker-compose.yml` also has `postgres:17-alpine`, `redis:8-alpine`;
+  `docker-compose.prod.yml` has `caddy:2-alpine`. All are major/minor
+  floating tags, not `:latest` and not digest-pinned.
+- Checked how those floating tags actually get reviewed over time:
+  `.github/dependabot.yml` has one `package-ecosystem: 'docker'` entry,
+  `directory: '/'`. Verified against GitHub's own docs (WebFetch) and a
+  web search (WebSearch) that this is broken in two real ways, not just
+  theoretically:
+  1. `docker` and `docker-compose` are two _separate_ Dependabot
+     ecosystems (`docker-compose` reached GA Feb 2025) — a `docker` entry
+     never scans `image:` references inside `docker-compose.yml`/
+     `docker-compose.prod.yml` at all. No `docker-compose` ecosystem entry
+     exists in this repo's config, so those two files' `postgres`/`redis`/
+     `minio`/`caddy` image pins have never been covered by any Dependabot
+     update.
+  2. The `docker` ecosystem only scans the exact `directory` given, no
+     subdirectory recursion — and this repo has no Dockerfile at the repo
+     root at all (all three live nested: `apps/web`, `apps/api`,
+     `packages/db`). The existing `directory: '/'` entry points at a
+     location with no Dockerfile, so it has never actually scanned any of
+     the three real Dockerfiles either.
+     Net effect: nothing that sets a base-image version anywhere in this repo
+     has ever actually been covered by Dependabot, despite `dependabot.yml`
+     appearing to include a `docker` entry. This is the real, previously
+     undiscovered gap behind "review base image versions" — not a one-time
+     manual version bump (which would go stale again immediately), but fixing
+     the mechanism that's supposed to do that review continuously.
 
 ## Decision
 
-- `apps/api/src/env.ts`: apply the same `z.preprocess((v) => v === '' ?
-undefined : v, z.string().url().optional())` shape already used for
-  `ERROR_REPORTING_WEBHOOK_URL` to `REDIS_URL` and `S3_ENDPOINT`. No other
-  fields need it (`S3_REGION`/`S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`/
-  `S3_BUCKET`/`MAPS_2GIS_API_KEY` are plain `z.string().optional()` — an
-  empty string already passes that check, so a downstream "is S3
-  configured" check based on `S3_ENDPOINT` alone is the only one that
-  actually needed fixing here).
-- New `apps/api/src/env.test.ts`: didn't exist before: covers the
-  empty-string-to-undefined normalization for `REDIS_URL`/`S3_ENDPOINT`
-  (mirroring the already-shipped `ERROR_REPORTING_WEBHOOK_URL` behavior)
-  plus the existing production-placeholder-refusal behavior, so this
-  correctness-critical parsing logic has real test coverage instead of
-  only ever being exercised indirectly through other suites.
-- New `docs/deployment.md`: prerequisites (Docker + Compose v2 host, DNS A
-  record for `DOMAIN`, externally provisioned Postgres/Redis/S3-compatible
-  endpoint reachable from the host — ADR-018 leaves that hosting choice
-  open, doesn't invent one), preparing `.env` from `.env.example`,
-  first-boot order (`--profile migrate run --rm migrate` before `up -d
---build` — CR-076's own documented order), redeploying/updating
-  (rebuild, run `migrate` again only if the release added migrations),
-  verifying (`/health` semantics — always `200`, per-dependency
-  `ok`/`error`/`not_configured`; Caddy TLS), logs (`docker compose logs -f
-<service>`, pino JSON to stdout, `request-id` correlation from CR-079),
-  rollback limitations (no automatic down-migrations — Drizzle doesn't
-  generate them; a schema-incompatible rollback needs a manual plan), a
-  pointer to `docs/database.md`'s Backups section rather than duplicating
-  it. Records plainly, once, that none of this has been exercised by a
-  real `docker compose up` in any session so far (KI-043/KI-045) — this is
-  the documented procedure, not a live-verified one.
-- `.claude/context/known-issues.md`: KI-046 → resolved.
-- `docs/tasks.md`: check off CR-081.
+- `.github/dependabot.yml`: replace the one non-functional `docker` entry
+  with three `docker` entries, one per actual Dockerfile directory
+  (`/apps/web`, `/apps/api`, `/packages/db`), plus a new `docker-compose`
+  entry (`directory: '/'`) covering `docker-compose.yml`/`docker-compose.
+prod.yml`. Same weekly schedule as the existing ecosystems.
+- No image version changes: `node:24-alpine`/`postgres:17-alpine`/
+  `redis:8-alpine`/`caddy:2-alpine` stay as intentional major/minor
+  floating tags (not `:latest`, not digest-pinned) — Dependabot, now
+  actually wired to reach every one of them, is the ongoing review
+  mechanism, not a manual audit that goes stale the moment it's done.
+  MinIO is the one deliberate exception (an exact `RELEASE.*` tag, not a
+  floating major version) because MinIO doesn't publish a rolling
+  major-version tag the same way the others do.
+- No new ADR — an implementation/tooling fix, same "not an architectural
+  decision" precedent as CR-076/077/078/079/080/081.
+- `docs/tasks.md`: check off CR-082.
 
 ## Requirements / acceptance criteria
 
-- `REDIS_URL=''`/`S3_ENDPOINT=''` no longer crashes `apps/api` boot (unit
-  test, not just reasoning).
-- `docs/deployment.md` exists and actually lets an operator go from a bare
-  host to a running, migrated, TLS-terminated deployment, without
-  duplicating `docs/database.md`'s Backups section.
-- KI-046 fully resolved (not just its `ERROR_REPORTING_WEBHOOK_URL` third).
-- `docs/tasks.md` CR-081 checked off; changelog/project-state/
-  known-issues updated.
+- Every base image reference in the repo (3 Dockerfiles + 2 compose files)
+  is reachable by some Dependabot entry.
+- `dependabot.yml` stays valid YAML.
+- No unrelated changes; `docs/tasks.md`/changelog/project-state updated.
 
 ## Planned files
 
-- `apps/api/src/env.ts`
-- `apps/api/src/env.test.ts` (new)
-- `docs/deployment.md` (new)
-- `.claude/context/known-issues.md`
+- `.github/dependabot.yml`
 - `docs/tasks.md`
 - `docs/changelog.md`, `.claude/context/project-state.md`
 
 ## Implementation progress
 
-- [x] `env.ts` preprocess fix for `REDIS_URL`/`S3_ENDPOINT`
-- [x] `env.test.ts` new coverage
-- [x] `docs/deployment.md`
-- [x] Validation (typecheck/lint/test)
+- [x] `dependabot.yml` fix (3 `docker` entries + 1 `docker-compose` entry)
+- [x] YAML validity check
 - [x] Docs/context updated, `git diff` reviewed
 
 ## Validation results
 
-- `vitest run src/env.test.ts`: 6/6 new tests pass in isolation.
-- `pnpm turbo run lint typecheck build test --filter='!web'` (real local
-  `DATABASE_URL`): 25/25 tasks green, 305 passed + 1 skipped `apps/api`
-  tests (up from 299 — the 6 new ones), no regressions.
-- `NODE_ENV=production pnpm --filter web build`: succeeded, all 17 routes
-  (KI-038's documented workaround for building `apps/web` outside turbo).
-- `docs/deployment.md` reviewed against `docker-compose.prod.yml`/
-  `deploy/Caddyfile`/every CR/ADR it references for accuracy — not
-  live-verified (no Docker in this sandbox, same as every other Deployment
-  artifact, KI-043/KI-045).
+- `.github/dependabot.yml` parsed with `python3 -c "import yaml..."`: valid
+  YAML, all 6 entries present with the expected ecosystem/directory pairs
+  (`npm /`, `github-actions /`, `docker /apps/web`, `docker /apps/api`,
+  `docker /packages/db`, `docker-compose /`).
+- Cannot be proven by an actual Dependabot run from this sandbox — same
+  "GitHub-hosted automation, reviewed not live-verified" category as CI
+  changes in CR-080. The next scheduled Dependabot run against the real
+  repo is what actually confirms it.
 
 ## Discovered issues
 
-None beyond what Investigation already covered.
+Documented above under Investigation — the two real Dependabot config gaps
+(missing `docker-compose` ecosystem, `docker` entry pointing at a
+Dockerfile-less directory) are this ticket's actual substance, found while
+scoping "review base image versions."
 
 ## Final result
 
-CR-081 closed. `apps/api/src/env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now
-normalize an empty string to "not configured" the same way
-`ERROR_REPORTING_WEBHOOK_URL` already did — KI-046 fully resolved, with new
-test coverage in `apps/api/src/env.test.ts`. New `docs/deployment.md`
-documents the full production deploy procedure end to end. `.env.example`
-confirmed already complete — no changes needed there.
-`.claude/context/known-issues.md`, `docs/tasks.md`, `docs/changelog.md`,
-`.claude/context/project-state.md` all updated. Next logical task: CR-082
-(pin MinIO/review base images), CR-092 (critical-journey e2e specs), or
+CR-082 closed — Deployment section (`docs/tasks.md`) is now fully complete,
+CR-074 through CR-082. MinIO pinning confirmed already done (CR-009). Fixed
+the real gap: `.github/dependabot.yml` now has a `docker` entry per actual
+Dockerfile directory and a `docker-compose` entry for both compose files —
+previously nothing that sets a base image version anywhere in the repo was
+actually reachable by any Dependabot scan. Base image tags themselves
+unchanged by design (Dependabot is now the ongoing review mechanism).
+`docs/tasks.md`, `docs/changelog.md`, `.claude/context/project-state.md`
+all updated. Next logical task: CR-092 (critical-journey e2e specs) or
 CR-083 (registration idempotency) — no fixed order decided yet.
