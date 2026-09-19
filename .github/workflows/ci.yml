@@ -33,11 +33,48 @@ jobs:
         image: redis:8-alpine
         ports:
           - 6379:6379
+      # CR-080/KI-015. Same pinned tag as docker-compose.yml's local-dev
+      # service — keeps the two environments consistent. Unlike postgres/
+      # redis above, MinIO needs a bucket created before anything can use it
+      # (see the "Create MinIO bucket" step) — a fresh container has none.
+      minio:
+        image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+        env:
+          MINIO_ROOT_USER: minio
+          MINIO_ROOT_PASSWORD: minio12345
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/coffee_ride
       REDIS_URL: redis://localhost:6379
+      # CR-080. apps/api's own test suite builds its `env` objects directly
+      # (never reads these), but the Playwright e2e job below boots a real
+      # `apps/api` process via `server.ts`, which does — AUTH_SECRET/
+      # WEB_ORIGIN were never needed in this job before that existed.
+      AUTH_SECRET: ci-only-secret-not-for-production
+      WEB_ORIGIN: http://localhost:3000
+      # CR-080/KI-015. Matches the bucket the "Create MinIO bucket" step
+      # below creates. Configuring these makes both `pnpm test`'s new
+      # route-storage.live.test.ts (skips itself when unset — see that
+      # file) and the e2e job's real GPX-upload paths exercise a real,
+      # live S3-compatible store instead of staying permanently unverified
+      # (KI-015 has been open since CR-006 for exactly this reason).
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: minio
+      S3_SECRET_ACCESS_KEY: minio12345
+      S3_BUCKET: coffee-ride-ci
+      # route-storage.live.test.ts's own explicit opt-in — see that file's
+      # comment for why S3_* alone isn't a safe enough signal (a local .env
+      # has them configured for MinIO whether or not MinIO is running).
+      RUN_LIVE_S3_TESTS: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +98,19 @@ jobs:
       - name: Run database migrations
         run: pnpm --filter db db:migrate
 
+      # CR-080/KI-015. MinIO starts with no buckets — aws-cli ships
+      # preinstalled on ubuntu-latest runners, so no extra container/binary
+      # is needed just to run one `s3 mb` against the service's root
+      # credentials (real AWS creds are never involved — --endpoint-url
+      # points this at the local MinIO service, not real AWS).
+      - name: Create MinIO bucket
+        run: |
+          aws --endpoint-url http://localhost:9000 s3 mb s3://coffee-ride-ci
+        env:
+          AWS_ACCESS_KEY_ID: minio
+          AWS_SECRET_ACCESS_KEY: minio12345
+          AWS_DEFAULT_REGION: us-east-1
+
       - name: Format check
         run: pnpm format:check
 
@@ -78,3 +128,13 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # CR-080/KI-007. Wired in for the first time — playwright.config.ts's
+      # webServer array starts a real apps/api (this job's real, migrated
+      # Postgres + the env above) and a real apps/web `next dev` in order,
+      # so this is a genuine end-to-end check, not a static-page smoke test.
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: pnpm test:e2e

@@ -548,7 +548,21 @@ Deliberately deferred until there is something to deploy (see `docs/changelog.md
 - [x] CR-079 Structured logging (pino + request id) and error reporting; background job
       failures must be visible (`.claude/rules/resilience.md`) — done 2026-09-17.
       See `docs/changelog.md`.
-- [ ] CR-080 CI gaps: MinIO service, migration step, Playwright e2e job
+- [x] CR-080 CI gaps: MinIO service, migration step, Playwright e2e job —
+      done 2026-09-19: the migration-step complaint was already stale
+      (real since CR-011, KI-007's text just never corrected). Added a
+      `minio` service to `ci.yml` (same pinned tag as `docker-compose.yml`) + a bucket-creation step + `S3_*`/`AUTH_SECRET`/`WEB_ORIGIN`/
+      `RUN_LIVE_S3_TESTS` env, a Playwright browser install step, and an
+      `E2E tests` step. New `apps/api/.../route-storage.live.test.ts`
+      exercises a real (unmocked) S3 round trip, gated on
+      `RUN_LIVE_S3_TESTS=1` (KI-015). `playwright.config.ts`'s `webServer`
+      is now a two-entry array (`apps/api` then `apps/web`) since `/` has
+      called the real API since CR-024; `e2e/home.spec.ts` rewritten off
+      CR-002's removed placeholder copy onto the real discovery page.
+      Live-verified locally: `pnpm test:e2e` passes end to end against a
+      freshly started `apps/api`/`apps/web`; the live S3 test skips cleanly
+      without the flag and genuinely attempts (and fails, no local MinIO)
+      with it forced on. See `docs/changelog.md`.
 - [ ] CR-081 Full production environment variable set in `.env.example` + deployment
       documentation
 - [ ] CR-082 Pin `minio/minio` to a release tag; review base image versions
@@ -568,3 +582,13 @@ Found during the 2026-09-11 audit, cheaper before the related feature is built.
       upload cap + streaming SAX parse, no worker thread. See `docs/decisions.md`.
 - [ ] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
       (direct S3 vs proxy) — needed by CR-017
+- [ ] CR-092 Real critical-journey Playwright specs (new, added 2026-09-19 during
+      CR-080 — same "real gap, add a ticket" precedent as CR-088..091):
+      `.claude/rules/testing.md`'s three named e2e journeys (participant
+      discovers and registers; organizer creates/publishes a ride; organizer
+      views participants) still don't exist — `apps/web/e2e/home.spec.ts` is a
+      one-page smoke check, not this. CR-080 only wired the existing suite into
+      CI; writing the actual journeys (needs real fixtures — a registered/
+      verified user, an organizer profile, a published ride — via API calls in
+      a Playwright setup, not through the UI for every step) is this ticket's
+      own scope.

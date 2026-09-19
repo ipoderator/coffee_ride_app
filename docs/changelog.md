@@ -3991,3 +3991,96 @@ the Dockerfiles/production manifest, not a new one worth a separate entry.
 Follow-up: CR-080 (CI gaps), CR-081 (full production env var set +
 deployment documentation), CR-082 (pin MinIO/review base images) remain
 open, no fixed order decided among them.
+
+## 2026-09-19 — CR-080 — CI gaps: MinIO service, Playwright e2e job (KI-007)
+
+Summary: the next open Deployment-section ticket after CR-078. KI-007 named
+three gaps in `.github/workflows/ci.yml`: no MinIO service, no migration
+step, no Playwright job. The migration-step complaint turned out to be
+stale — `pnpm --filter db db:migrate` has been a real CI step since CR-011
+(`git log` confirms); KI-007's text was simply never corrected after that
+landed. The other two were real.
+Investigation: `apps/web/src/app/page.tsx` (`/`) has been the real discovery
+screen since CR-024, calling the real `GET /v1/rides` through `apps/web`'s
+own `/api/v1/*` rewrite — not the CR-002 bootstrap placeholder
+`apps/web/e2e/home.spec.ts` still asserted on ("Платформа собирается...",
+copy that no longer exists anywhere in the app). Wiring that spec into CI
+unmodified would have just added an immediately-failing check. This also
+meant `apps/api` now has to be running for any e2e spec to work at all —
+`playwright.config.ts`'s `webServer` only ever started `apps/web`.
+`.claude/rules/testing.md` names three critical-journey specs (discover+
+register, organizer create+publish, organizer view participants) that don't
+exist yet — no ticket owned writing them; out of scope for "wire CI", so
+opened as a new ticket (CR-092) rather than silently expanding scope or
+leaving it untracked (same precedent as CR-088..091). Confirmed
+`apps/api`'s existing S3 test suite (`route.routes.test.ts`) mocks
+`@aws-sdk/client-s3` at the module level — no test anywhere hits a real
+store, which is exactly what KI-015 has flagged as unverified since CR-006,
+blocked every session so far by the local sandbox's unreachable Docker
+daemon. A GitHub Actions runner has real Docker for service containers —
+different environment, actually able to close that gap for the first time.
+Implementation: `ci.yml` gained a `minio` service (`quay.io/minio/minio:
+RELEASE.2025-09-07T16-13-09Z`, same pinned tag as `docker-compose.yml`), a
+"Create MinIO bucket" step (`aws s3 mb` against it — `ubuntu-latest` ships
+`aws-cli` preinstalled, no extra container/binary needed), `S3_*`/
+`AUTH_SECRET`/`WEB_ORIGIN`/`RUN_LIVE_S3_TESTS` added to the job's `env:`
+(the first two were never needed before — nothing booted a real `apps/api`
+process in this job until now), a Playwright browser install step, and an
+"E2E tests" step after Build. New `apps/api/src/modules/rides/
+route-storage.live.test.ts`: a real, unmocked upload/download/delete round
+trip through `route-storage.ts`'s exported functions. Gated on
+`RUN_LIVE_S3_TESTS === '1'`, not merely "are `S3_*` set" — a local `.env`
+has them configured for MinIO whether or not MinIO is actually running
+(docker-compose.yml/.env.example's defaults), and this session hit exactly
+that false positive: the first version of this gate (S3_*-presence only)
+failed against this environment's real `.env` instead of skipping, since
+Docker/MinIO aren't running here (KI-019). `apps/web/playwright.config.ts`'s
+`webServer` became a two-entry array (Playwright's own supported
+multi-server ordering since 1.34): `apps/api` first (`tsx src/server.ts`,
+no `--watch`, waited on `/health`, env defaulted to the same local-dev
+values `docker-compose.yml` uses so a developer needs nothing exported),
+then `apps/web` unchanged — this is what makes `pnpm test:e2e` work
+identically in CI and local dev without any CI-YAML-specific
+background-process handling. `e2e/home.spec.ts` rewritten: asserts the real
+page title and, deliberately not assuming an empty database (CI's is,
+local dev's usually isn't after a while), accepts either the empty state or
+at least one real ride card — proving the full round trip resolved instead
+of hanging on the loading skeleton or falling into the error state.
+Decisions: none new at the ADR level — same "implementation, not an
+architectural decision" precedent as CR-076/077/078/079.
+Validation — the part that matters here, since none of this can be proven
+by an actual GitHub Actions run from this sandbox: ran `pnpm test:e2e`
+locally for real, from a clean state (killed two stale dev-server processes
+first — see Discovered issues) — the new two-webServer config started a
+real `apps/api` and `apps/web` and the rewritten spec passed end to end
+against this environment's real local Postgres, in ~12s total including
+both servers' startup. Separately ran `route-storage.live.test.ts` twice:
+once with no `RUN_LIVE_S3_TESTS` (this environment's normal state) —
+skipped cleanly; once with it forced to `1` — genuinely attempted a real
+connection and failed with `RouteStorageError` (no MinIO running here),
+proving the gate itself discriminates correctly before trusting it to guard
+CI's real run. `pnpm turbo run lint typecheck build test` (via
+`--filter='!web'`, `apps/web` built separately per KI-038's own documented
+workaround): 25/25 tasks green, 299 passed + 1 skipped `apps/api` tests
+(the new live-S3 file, correctly skipped locally).
+Discovered issues: found (and fixed, not just noted) a real self-inflicted
+one while investigating why the rewritten e2e spec hung on the loading
+skeleton against an already-running local dev server: CR-078's own earlier
+`NODE_ENV=production pnpm --filter web build` in this same session had
+overwritten `apps/web/.next` with production output, so the long-running
+`next dev` process from before that (pid still listening on :3000) was
+serving stale HTML referencing chunk paths that no longer existed on disk —
+404s on every `_next/static/chunks/*` request, so React never hydrated and
+the discovery fetch never ran. Killed both stale processes (`apps/api`'s
+and `apps/web`'s) and re-ran clean; not a bug in this ticket's own changes,
+but a real trap worth naming for any future session that runs a production
+build and a dev server in the same working tree without restarting the
+latter afterward.
+Known limitations: KI-007 resolved (moved to Resolved section). The
+MinIO-service/CI-job combination itself is unverified by an actual GitHub
+Actions run (none available in this sandbox) — same category of gap as
+KI-043/KI-045's Docker artifacts, not a new one. CR-092 (critical-journey
+e2e specs) is new and open.
+Follow-up: CR-081 (full production env var set + deployment documentation),
+CR-082 (pin MinIO/review base images), and the new CR-092 (critical-journey
+e2e specs) remain open, no fixed order decided among them.

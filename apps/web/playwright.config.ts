@@ -1,11 +1,23 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// e2e smoke config (CR-008). Root package.json's "test:e2e" already
-// delegates here via `turbo test:e2e`. NOT wired into CI yet — KI-007
-// already names that CR-080's job (no migration/MinIO service in
-// .github/workflows/ci.yml either); this runs locally against `next dev`
-// for now, per `.claude/rules/testing.md`'s critical-journey list, starting
-// with the one journey that exists today (the bootstrap placeholder loads).
+// e2e config (CR-008; wired into CI + a second webServer entry by CR-080).
+// Root package.json's "test:e2e" delegates here via `turbo test:e2e`.
+//
+// `/` has called the real GET /v1/rides through apps/web's own /api/v1/*
+// rewrite since CR-024 — it is no longer a static page, so apps/api must be
+// running for any spec here to work, wired into CI or not. `webServer` as an
+// array (supported since Playwright 1.34) starts each entry in order,
+// waiting on its own `url` before starting the next — apps/api first, then
+// apps/web — instead of a hand-rolled background-process dance in CI's own
+// YAML, so the exact same config works identically in local dev and CI.
+//
+// apps/api's entry runs `tsx` directly (no `--watch`): this is a one-shot
+// process for the test run's lifetime, not a dev loop. Its env falls back to
+// the same local-dev defaults docker-compose.yml/.env.example already use,
+// so a developer with no exported env still gets a working e2e run the first
+// time (apps/api's own `server.ts` additionally loads the root .env itself,
+// but CI has no such file — these defaults plus ci.yml's real job env cover
+// both cases without duplicating values here).
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -16,11 +28,30 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
   },
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: 'pnpm exec tsx src/server.ts',
+      cwd: '../api',
+      url: 'http://localhost:4000/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        API_PORT: '4000',
+        DATABASE_URL:
+          process.env.DATABASE_URL ??
+          'postgresql://postgres:postgres@localhost:5432/coffee_ride',
+        AUTH_SECRET: process.env.AUTH_SECRET ?? 'e2e-local-secret',
+        WEB_ORIGIN: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+      },
+    },
+    {
+      command: 'pnpm dev',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+  ],
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

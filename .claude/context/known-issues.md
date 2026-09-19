@@ -26,14 +26,6 @@ Workaround: none needed for CR-075 — the images exist now.
 Next action: CR-075. (Neither new Dockerfile has had an actual `docker build` run
 against it yet — see KI-019, same root cause, same environment.)
 
-### KI-007 — CI cannot test uploads or run e2e
-
-Status: open. Discovered: 2026-09-11.
-Problem: no MinIO service, no migration step, no Playwright job in `.github/workflows/ci.yml`.
-Impact: the three critical journeys named in `.claude/rules/testing.md` are never verified
-automatically.
-Next action: CR-080.
-
 ### KI-008 — CI fails at `pnpm install --frozen-lockfile`
 
 Status: resolved 2026-09-12 (CR-001). Discovered: 2026-09-10.
@@ -694,6 +686,54 @@ actually builds and applies cleanly — before trusting this manifest as more th
 ---
 
 ## Resolved
+
+### KI-007 — CI cannot test uploads or run e2e
+
+Resolved: 2026-09-19 (CR-080). Discovered: 2026-09-11.
+Problem: no MinIO service, no Playwright job in `.github/workflows/ci.yml`
+(the "no migration step" third of the original problem statement was
+actually already stale by the time this session picked it up — `pnpm
+--filter db db:migrate` has been a real CI step since CR-011; this entry's
+text was simply never corrected after that landed).
+Impact: the three critical journeys named in `.claude/rules/testing.md`
+were never verified automatically, and KI-015 (S3 client never connected to
+a live MinIO) could never be resolved inside CI either, since no MinIO
+existed there.
+Resolution: `ci.yml` gained a `minio` service (same pinned tag as
+`docker-compose.yml`), a bucket-creation step (`aws s3 mb` against it —
+`ubuntu-latest` ships `aws-cli` preinstalled), `S3_*`/`AUTH_SECRET`/
+`WEB_ORIGIN`/`RUN_LIVE_S3_TESTS` in the job env, a Playwright browser
+install step, and an `E2E tests` step. New `apps/api/src/modules/rides/
+route-storage.live.test.ts` exercises a real (unmocked) upload/download/
+delete round trip through `route-storage.ts` — gated on
+`RUN_LIVE_S3_TESTS=1`, not merely "are `S3_*` set" (a local `.env` has them
+configured for MinIO whether or not MinIO is actually running, confirmed by
+this session hitting exactly that false-positive locally before adding the
+explicit flag). `apps/web/playwright.config.ts`'s `webServer` became a
+two-entry array (`apps/api` then `apps/web`, Playwright's own supported
+multi-server ordering since 1.34) since `/` has called the real `GET
+/v1/rides` through `apps/web`'s rewrite since CR-024 — no longer a static
+page a lone `next dev` could serve meaningfully. The pre-existing
+`e2e/home.spec.ts` asserted on CR-002's bootstrap-placeholder copy, which no
+longer exists anywhere in the app (`/` has been the real discovery screen
+since CR-024) — rewritten to assert against the real page, tolerant of
+either an empty or a populated rides list (a local dev database usually
+isn't empty; CI's freshly migrated one is).
+Live-verified in this session, not just reasoned about: ran `pnpm
+test:e2e` locally end to end (both `apps/api` and `apps/web` started fresh
+by the new two-webServer config, against this environment's real local
+Postgres) — passed. Separately confirmed `route-storage.live.test.ts`
+skips cleanly with no `RUN_LIVE_S3_TESTS` set (this environment's normal
+state) and correctly attempts a real connection (failing, since no MinIO
+runs here) when the flag is forced on — proving the gate itself works
+before trusting it to guard CI's real run. The MinIO-service/CI-job
+combination itself cannot be verified from this sandbox (no GitHub Actions
+runner available here) — same category of gap as KI-043/KI-045's Docker
+artifacts, not a new one.
+Next action: none for this ticket. The still-missing critical-journey e2e
+specs `.claude/rules/testing.md` names (discover+register, organizer
+create+publish, view participants) are tracked as CR-092 — writing them was
+out of this ticket's scope ("wire CI", not "write the e2e suite").
 
 ### KI-003 — Redis has no password, no persistence, no healthcheck
 

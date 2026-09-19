@@ -29,16 +29,23 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-078 (Postgres backups, live-verified restore) just closed —
-CR-080 (CI gaps), CR-081 (full prod env var set + deployment docs), CR-082
-(pin MinIO/review base images) are the remaining Deployment-section tickets,
-no fixed order decided among them.
+None active. CR-080 (CI gaps: MinIO service + Playwright e2e job, KI-007)
+just closed — CR-081 (full prod env var set + deployment docs), CR-082 (pin
+MinIO/review base images) are the remaining Deployment-section tickets, no
+fixed order decided among them. CR-092 (real critical-journey e2e specs,
+opened this session) is a new, separate open ticket.
 
 ## Implemented
 
 **Infra/tooling**: pnpm + Turborepo monorepo, Node 24 LTS. Git on `main`, remote
 `origin` (github.com/ipoderator/coffee_ride_app, public). CI (GitHub Actions) runs
-format/lint/typecheck/build/test plus DB migrations. Husky/lint-staged is
+format/lint/typecheck/build/test plus DB migrations, and (CR-080, new) a real
+`minio` service + a genuine, unmocked S3 round-trip test
+(`route-storage.live.test.ts`, gated on `RUN_LIVE_S3_TESTS=1`) plus a Playwright
+e2e job (`playwright.config.ts`'s `webServer` now starts both `apps/api` and
+`apps/web` in order) — the first place KI-015 (S3 client never connected to a
+live store) and KI-007 (no e2e in CI) can actually be closed, since GitHub
+Actions runners have real Docker unlike this local sandbox. Husky/lint-staged is
 workspace-aware (each package linted with its own config). `docker-compose.yml`
 defines Postgres/Redis/MinIO but has never been live-booted in this environment —
 Docker's daemon is unreachable here (KI-019; see `docker-desktop-unavailable` in
@@ -242,10 +249,14 @@ hop, not just `web`'s internal one). Deployment: CR-074/075/076/077/079
 (Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
 ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
 password + AOF persistence; request-id correlation + error-reporting funnel)
-and CR-078 (Postgres backups, real backup/restore mechanism + a live-verified
-restore) are all closed. CR-080 (CI gaps), CR-081 (full prod env var set +
+CR-078 (Postgres backups, real backup/restore mechanism + a live-verified
+restore), and CR-080 (CI gaps: MinIO service + real S3 round-trip test +
+Playwright e2e job, KI-007) are all closed. CR-081 (full prod env var set +
 deployment docs), CR-082 (pin MinIO/review base images) remain open, no
-fixed order decided among them yet. KI-046 (CR-079,
+fixed order decided among them yet. CR-092 (real critical-journey e2e
+specs, opened this session — `.claude/rules/testing.md`'s discover
++register/create+publish/view-participants journeys still don't exist) is
+also open, tracked separately from Deployment. KI-046 (CR-079,
 still open — CR-077's scope was the local-dev `docker-compose.yml`, not
 this file): `docker-compose.prod.yml` passes an unset `REDIS_URL`/
 `S3_ENDPOINT` through as an empty string, which their bare
@@ -327,6 +338,16 @@ compose run` (KI-043, KI-045) — Docker's daemon is unreachable throughout this
   itself (migration execution during deploy) is resolved — the migration
   script's own concurrency-safety was proven live on the host; only the
   container-build step around it is unverified.
+- CI (CR-080, KI-007 resolved) now runs a real e2e job and a real,
+  unmocked S3 round-trip test against a `minio` service — the first place
+  either can actually be exercised, since GitHub Actions runners have real
+  Docker unlike this local sandbox (KI-019). Neither has been proven by an
+  actual GitHub Actions run yet (none available from this sandbox) — same
+  category of "verified locally, not against the exact real CI runner" gap
+  as KI-043/KI-045's Docker artifacts. The three critical-journey e2e specs
+  `.claude/rules/testing.md` names (discover+register, organizer
+  create+publish, view participants) still don't exist — tracked as the new
+  CR-092, out of CR-080's own "wire CI" scope.
 - Rate limiting is in-memory per-IP-only, single-instance, no per-account limiting,
   API-wide (KI-022, narrowed) — CR-058 upgrades this once KI-014 (Redis unverified in
   this environment) is resolved, and should also settle KI-044 (new, CR-075):
@@ -451,8 +472,16 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   deliberately stays outside this funnel;
 - `lib/request-id.ts`'s bounded charset/length check on an inbound
   `X-Request-Id` header before it's trusted into every log line (CR-079) —
-  don't relax it to accept an arbitrary client-supplied value verbatim.
+  don't relax it to accept an arbitrary client-supplied value verbatim;
+- `route-storage.live.test.ts`'s `RUN_LIVE_S3_TESTS === '1'` gate staying an
+  explicit opt-in, not just "are `S3_*` set" (CR-080) — a local `.env` has
+  them configured for MinIO whether or not MinIO is actually running, and
+  this session hit that exact false positive before adding the flag; only
+  `ci.yml` should ever set it;
+- `playwright.config.ts`'s `webServer` staying a two-entry array (`apps/api`
+  then `apps/web`, CR-080) — `/` has called the real API since CR-024, so a
+  lone `apps/web` dev server is no longer sufficient for any e2e spec here.
 
 ## Last updated
 
-2026-09-19 (CR-078)
+2026-09-19 (CR-080)
