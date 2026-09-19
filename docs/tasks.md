@@ -483,9 +483,21 @@ test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
 
 - [x] CR-057 Password hashing (Argon2id/bcrypt) + minimum password policy — delivered
       as part of CR-011 (Argon2id via the `argon2` package, 12+ char minimum).
-- [ ] CR-058 Auth rate limiting (login/register/forgot-password, per IP + per account) —
-      CR-011 shipped an interim in-memory, per-IP-only tier on register/verify-email;
-      this ticket is the Redis-backed, per-account upgrade (KI-022, blocked on KI-014).
+- [x] CR-058 Auth rate limiting (login/register/forgot-password, per IP + per account) —
+      done 2026-09-19: Docker/a live Redis happened to be up this session
+      (KI-014's connection-level gap had just closed), so this ticket was
+      picked up instead of waiting further. Global `@fastify/rate-limit`
+      registration (`apps/api/src/app.ts`) now uses a Redis-backed
+      `RedisStore` (shared across instances) when `REDIS_URL` is configured,
+      `skipOnError: true` so a degraded Redis fails open rather than
+      blocking a critical journey; falls back to the plugin's in-memory
+      store otherwise, unchanged. New independent per-account tier
+      (`apps/api/src/lib/account-rate-limit.ts`, atomic `MULTI INCR +
+    PEXPIRE ... NX EXEC`) on `/register`/`/login`/`/forgot-password`,
+      keyed by normalized email, also fail-open. Live-verified against the
+      real Redis this session (including stopping it mid-session to confirm
+      login still replies `401` in ~1.3s, not hung) — resolves KI-022. See
+      `docs/changelog.md`.
 - [x] CR-059 Email verification flow (gates organizer publish action) — CR-011 shipped
       the token issue/verify mechanism itself (`POST /v1/auth/verify-email`); the
       remaining scope — gating organizer publish on `emailVerified` — closed 2026-09-14
@@ -643,3 +655,11 @@ registrations/registrations.service.ts`) now return `{ resource, created }`;
       `packages/maps-2gis/src/route.ts` and re-verified live. No consumer
       wired in yet (still zero callers of `create2GisMapProvider`) — that's
       KI-032/CR-028/CR-084 follow-up. See `docs/changelog.md`.
+- [ ] CR-094 Wire `SIGTERM`/`SIGINT` in `apps/api/src/server.ts` to actually
+      call `app.close()` (then `process.exit(0)`, with a hard fallback
+      timeout) — found 2026-09-19 while live-verifying CR-058's fail-open
+      behavior: `modules/notifications/queue.ts`'s `onClose` hook already
+      assumes a real graceful shutdown triggers it ("e.g. SIGTERM"), but
+      nothing in `server.ts` ever registers a signal handler, so `app.close()`
+      never runs on a real `docker stop`/orchestrator shutdown today. See
+      KI-048.

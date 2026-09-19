@@ -8,9 +8,11 @@ import {
   verifyEmailRequestSchema,
 } from 'types';
 import type { Env } from '../../env.js';
+import { isAccountRateLimited } from '../../lib/account-rate-limit.js';
 import { requireAuth, SESSION_COOKIE_NAME } from '../../plugins/auth.js';
 import { userResponseSchema } from '../users/user-response.schema.js';
 import {
+  AuthServiceError,
   loginUser,
   registerUser,
   requestPasswordReset,
@@ -48,10 +50,24 @@ const meResponseSchema = z.object({
 });
 
 // Stricter tier than the general API default (`.claude/rules/security.md`,
-// `docs/api.md`). In-memory `@fastify/rate-limit` store per this ticket's scope
-// boundaries (KI-014: Redis unverified in this environment) — CR-058 upgrades
-// this to a Redis-backed, per-IP-and-per-account limiter.
+// `docs/api.md`). Redis-backed when `REDIS_URL` is configured (`app.ts`'s
+// global `rateLimit` registration passes `app.redis` into the plugin), the
+// plugin's own in-memory store otherwise — either way, per-IP only. CR-058
+// pairs this with the independent per-account tier below.
 const AUTH_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
+
+// Independent of AUTH_RATE_LIMIT above — a separate gate, not a combined
+// key (`.claude/rules/security.md`: "per IP and per account"). Same order of
+// magnitude as the per-IP tier: whichever of the two a real attacker trips
+// first is the one that blocks them; no separate policy was asked for beyond
+// "both dimensions exist." Only applies to register/login/forgot-password —
+// verify-email/reset-password operate on opaque single-use tokens, not an
+// account identifiable from the request body.
+const ACCOUNT_RATE_LIMIT = { max: 5, windowMs: 60_000 };
+
+function accountRateLimitKey(routeName: string, email: string) {
+  return `auth-rl:account:${routeName}:${email}`;
+}
 
 /**
  * `.claude/rules/architecture.md`: first capability module under
@@ -69,6 +85,27 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
   const { env } = opts;
   const isProd = env.NODE_ENV === 'production';
 
+  // CR-058's per-account tier. Throws the same `AuthServiceError` convention
+  // every other domain error in this module uses, so it flows through the
+  // existing RFC 9457 error handler unchanged (no new error-handling code).
+  async function enforceAccountRateLimit(routeName: string, email: string) {
+    const limited = await isAccountRateLimited({
+      redis: app.redis,
+      key: accountRateLimitKey(routeName, email),
+      max: ACCOUNT_RATE_LIMIT.max,
+      windowMs: ACCOUNT_RATE_LIMIT.windowMs,
+      logger: app.log,
+    });
+    if (limited) {
+      throw new AuthServiceError(
+        'account_rate_limited',
+        429,
+        'Too Many Requests',
+        'Too many attempts for this account. Try again later.',
+      );
+    }
+  }
+
   app.post(
     '/register',
     {
@@ -77,6 +114,8 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         response: { 201: registerResponseSchema },
       },
       config: { rateLimit: AUTH_RATE_LIMIT },
+      preHandler: async (request) =>
+        enforceAccountRateLimit('register', request.body.email),
     },
     async (request, reply) => {
       const { user, verificationToken } = await registerUser(
@@ -121,6 +160,8 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         response: { 200: loginResponseSchema },
       },
       config: { rateLimit: AUTH_RATE_LIMIT },
+      preHandler: async (request) =>
+        enforceAccountRateLimit('login', request.body.email),
     },
     async (request, reply) => {
       // Generic `invalid_credentials` for both "no such account" and "wrong
@@ -153,12 +194,16 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     {
       schema: { body: forgotPasswordRequestSchema },
       config: { rateLimit: AUTH_RATE_LIMIT },
+      preHandler: async (request) =>
+        enforceAccountRateLimit('forgot-password', request.body.email),
     },
     async (request, reply) => {
       // Result is deliberately discarded — `.claude/rules/security.md`: the
       // response must be identical whether or not the email belongs to a
       // real account. `204` carries no body, so there is nothing for the two
-      // cases to differ on.
+      // cases to differ on. The new per-account 429 above doesn't weaken
+      // this: it fires purely from request *count* against that exact email
+      // string, identical whether or not it belongs to a real account.
       await requestPasswordReset(app.db, request.body.email);
       return reply.status(204).send();
     },

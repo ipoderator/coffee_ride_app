@@ -4411,3 +4411,97 @@ either KI-032 (geocode-by-address UI in `EditRideForm`) or CR-028/CR-084's
 route rendering. Separately, if/when a public MapGL key is provided, KI-031
 becomes actionable (build the render-layer type in `packages/maps-core` +
 `packages/maps-2gis`'s MapGL implementation).
+
+## 2026-09-19 — CR-058 — Redis-backed, per-IP-and-per-account auth rate limiting
+
+Goal: `docs/tasks.md`'s last unblocked backlog item besides CR-086. CR-011
+shipped an interim in-memory, per-IP-only tier on auth endpoints; this
+ticket is the Redis-backed, per-account upgrade `.claude/rules/security.md`
+names, blocked on KI-014 ("Redis unverified in this environment") since
+CR-011. This session found Docker up and both `redis`/`minio` containers
+already healthy (started by a prior session ~35 minutes earlier) — took the
+opportunity instead of waiting for another one.
+
+Implementation: `apps/api/src/app.ts`'s global `@fastify/rate-limit`
+registration now passes `app.redis` into the plugin's own `redis` option
+(its built-in `RedisStore`, atomic Lua `INCR`+`PEXPIRE`) whenever
+`REDIS_URL` is configured — shared across instances instead of each process
+counting independently — and falls back to the plugin's in-memory store
+otherwise, unchanged from before. Added `skipOnError: true` globally (not
+just for auth): a degraded Redis must never turn into a false `429` blocking
+a critical journey (`.claude/rules/resilience.md`), only cost the
+shared-counter protection.
+
+Per-account tier is new and independent of the per-IP one (two separate
+gates, not a combined key — `.claude/rules/security.md`: "per IP and per
+account"). `@fastify/rate-limit` v11.2.0 has no supported way to stack a
+second, independently-keyed limit on one route (confirmed by reading its
+source: one `config.rateLimit` object per route, no array support), so this
+is a small new helper (`apps/api/src/lib/account-rate-limit.ts`) using
+`MULTI INCR + PEXPIRE key windowMs NX EXEC` — atomic, no Lua needed (Redis
+7+'s `PEXPIRE ... NX` sets the TTL only on the window's first hit, the same
+semantics the library's own script implements), bounded by the existing
+`raceTimeout` helper (ioredis commands accept no `AbortSignal`). Wired as a
+`preHandler` on `/register`/`/login`/`/forgot-password` only — the three
+endpoints `.claude/rules/security.md` names, keyed by the normalized email
+already produced by each route's Zod schema. `/verify-email`/`/reset-password`
+are untouched: they operate on opaque single-use tokens, not an
+account identifiable from the request body. A 429 throws the existing
+`AuthServiceError` convention, so it flows through the unchanged RFC 9457
+error handler. Both tiers fail OPEN on a Redis error/timeout/absence, never
+closed — login/register are critical journeys.
+
+Testing: `apps/api/src/lib/account-rate-limit.test.ts` (new, 6 tests) —
+mocked Redis, covers not-configured/under-threshold/over-threshold/
+first-hit-TTL/error-fails-open/null-exec-fails-open. `auth.routes.test.ts`
+gained a new describe block, live against the real Redis this session had
+running (`it.skipIf` when `REDIS_URL` isn't set — CI's job env sets it
+unconditionally, so it isn't a local-only check): confirms `buildApp()`
+boots and rate-limits correctly end to end with a real `REDIS_URL` wired all
+the way through, plus a `/health` check confirming `redis: "ok"`. Its
+`beforeEach` flushes the `fastify-rate-limit-*`/`auth-rl:account:*` key
+namespaces first — real external Redis state persists across separate test
+runs (unlike the in-memory store every other test in the file uses), and a
+first version of this test was flaky against leftover state from a prior
+run within the same 60s TTL window before this fix.
+
+Found and fixed one real regression along the way: `routes/health.test.ts`'s
+mocked `ioredis` client lacked `defineCommand`, which `RedisStore`'s
+constructor now calls unconditionally on any non-null `app.redis` (previously
+never invoked, since nothing passed `app.redis` into `@fastify/rate-limit`
+before this ticket) — crashed at boot with `this.redis.defineCommand is not
+a function`. Fixed by predefining `rateLimit`/`rateLimitRead` directly on
+the mock (`RedisStore`'s constructor skips `defineCommand` entirely when
+those already exist) rather than faking `defineCommand`'s dynamic-command
+machinery for a suite that has nothing to do with rate limiting.
+
+Live verification beyond the test suite: stopped the real `redis` container
+mid-session (`docker compose stop redis`) and, via a throwaway script
+(`buildApp()` + `.inject()`, deleted after use), confirmed `POST
+/v1/auth/login` still replied `401` in ~1.3s — not hung, not `500` — proving
+the fail-open claim above is real, not just reasoned about. Restarted Redis
+and re-ran the full `apps/api` suite twice to confirm no lingering state
+issues (313 passed, 1 skipped both times). `pnpm turbo run lint typecheck
+build`: 24/24 green. `pnpm turbo run test`: 5/5 packages green.
+
+Incidental finding (not fixed here, out of this ticket's scope): while
+timing that fail-open check, `app.close()` itself resolved in the expected
+~3s, but the Node process never exited on its own afterward — traced to
+`apps/api/src/server.ts` never registering a `SIGTERM`/`SIGINT` handler at
+all, so `modules/notifications/queue.ts`'s `onClose` hook (which assumes a
+real graceful shutdown triggers it) never runs on a real `docker stop`.
+Recorded as KI-048, new ticket CR-094.
+
+Decisions: none new at the ADR level. No behavior change when `REDIS_URL`
+is unset — every pre-existing test using the plain `testEnv` (no Redis)
+passes unmodified.
+
+Known issues resolved: KI-022 (auth endpoints' rate-limiting gap against
+`.claude/rules/security.md`'s full checklist) — moved to
+`.claude/context/known-issues.md`'s Resolved section.
+
+Known issues discovered: KI-048 (no `SIGTERM`/`SIGINT` handler calls
+`app.close()` — no real graceful shutdown exists), new ticket CR-094.
+
+Follow-up: CR-094 (wire graceful shutdown). CR-086 (cover image pipeline)
+is now the only unchecked, unblocked ticket left in `docs/tasks.md`.

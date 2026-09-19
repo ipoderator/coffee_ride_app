@@ -2,70 +2,79 @@
 
 ## Task ID
 
-CR-093 — Connect a live 2GIS Geocoder/Directions key, resolve KI-016.
+CR-058 — Redis-backed, per-IP-and-per-account auth rate limiting (resolves
+KI-022). Closed.
 
 ## Goal
 
-User supplied a real 2GIS API key ("подключи карту 2gis по api"). 2GIS
-splits credentials into two unrelated products (CR-071): a public
-`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (browser map rendering) and a private
-`MAPS_2GIS_API_KEY` (server-side Geocoder/Directions, billed per request,
-never shipped to the browser). Confirmed with the user which product the
-key was issued for before touching anything, since the two have opposite
-security postures.
+`.claude/rules/security.md`: "Rate-limit `/v1/auth/login`, `/v1/auth/register`,
+`/v1/auth/forgot-password`, per IP and per account, more aggressively than
+general API rate limits." CR-011 shipped an interim in-memory, per-IP-only
+tier. Blocked on KI-014 since CR-011; this session found Docker up and a
+live Redis already healthy (from a prior session), so it was picked up
+instead of waiting further.
 
-## Requirements / acceptance criteria
+## Requirements / acceptance criteria — all met
 
-- Key stored only where its product dictates (server-side key → `.env`
-  only, never `.env.example`, never committed — `.env` is already
-  `.gitignore`d).
-- KI-016's documented "next action" (verify `packages/maps-2gis`'s
-  geocode/route field-name guesses against a real 2GIS account) actually
-  performed, not just assumed.
-- Any real bug found gets fixed at the root and re-verified live, per
-  CLAUDE.md's self-correction protocol — not papered over.
+- Per-IP tier Redis-backed when `REDIS_URL` configured, in-memory fallback
+  otherwise. Done (`app.ts`).
+- Independent per-account tier on register/login/forgot-password only. Done
+  (`lib/account-rate-limit.ts`).
+- Both tiers fail OPEN on a Redis error/timeout — live-verified, not just
+  reasoned about (stopped the real `redis` container mid-session, confirmed
+  `POST /v1/auth/login` still replied `401` in ~1.3s).
+- No behavior change with `REDIS_URL` unset — all pre-existing tests pass
+  unmodified.
 
-## Decision
+## Implementation
 
-- User confirmed the key is the server-side Geocoder/Directions product →
-  set `MAPS_2GIS_API_KEY` in local `.env`. Did not touch
-  `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` — that's a different key the user
-  hasn't provided (KI-031 stays open).
-- Verified live via a throwaway script calling `create2GisMapProvider`
-  directly (deleted after use, never committed — not part of the package's
-  source or tests).
-
-## Bugs found and fixed
-
-- `geocode`/`reverseGeocode`: field-name guesses (`point.lat`/`point.lon`,
-  `full_name`) confirmed correct against the real API — no change needed.
-- `getRoute`: `total_distance`/`total_duration` guess confirmed correct.
-  The `geometry` guess was wrong and silently degraded on every call: the
-  real polyline is under `maneuvers[].outcoming_path.geometry[]`, each a
-  WKT `LINESTRING(lon lat, lon lat, ...)` string, not a flat `{lat, lon}`
-  array. Fixed in `packages/maps-2gis/src/route.ts` (new
-  `parseWktLineString`, rewritten `extractGeometry`); `provider.test.ts`'s
-  fixture updated to the verified real shape.
+- `apps/api/src/app.ts`: global `rateLimit` registration gains
+  `redis: app.redis` (when configured) + `skipOnError: true`.
+- `apps/api/src/lib/account-rate-limit.ts` (new): atomic `MULTI INCR +
+PEXPIRE ... NX EXEC` per-account counter, fail-open.
+- `apps/api/src/modules/auth/auth.routes.ts`: `preHandler` on
+  register/login/forgot-password calling the new helper; 429 via the
+  existing `AuthServiceError` convention.
+- `apps/api/src/lib/account-rate-limit.test.ts` (new, 6 tests, mocked Redis).
+- `apps/api/src/modules/auth/auth.routes.test.ts`: new describe block, live
+  against the real Redis (`it.skipIf` when `REDIS_URL` unset; CI sets it
+  unconditionally). `beforeEach` flushes the rate-limit key namespaces first
+  — real external Redis state persists across test runs, unlike the
+  in-memory store every other test in the file uses; caught this via a real
+  flaky failure on a second back-to-back local run before adding the flush.
+- `apps/api/src/routes/health.test.ts`: fixed a real regression this ticket
+  surfaced — the mocked `ioredis` client lacked `defineCommand`, which
+  `RedisStore`'s constructor now calls unconditionally on any non-null
+  `app.redis`. Fixed by predefining `rateLimit`/`rateLimitRead` directly on
+  the mock instead (sidesteps needing to fake `defineCommand`'s dynamic
+  machinery for a suite unrelated to rate limiting).
 
 ## Validation results
 
-- `pnpm --filter maps-2gis test`: 11/11 passing.
-- `pnpm --filter maps-2gis typecheck`: clean.
-- `pnpm --filter maps-2gis lint`: clean.
-- `pnpm --filter maps-2gis... build` (maps-core, resilience, maps-2gis):
-  green.
-- Live re-check after the fix: `getRoute` now returns a real multi-point
-  road-following polyline instead of the two-point waypoint fallback.
+- `pnpm --filter api exec eslint .`: clean.
+- `pnpm --filter api typecheck`: clean.
+- `pnpm --filter api test` (real Postgres + real Redis): 313 passed, 1
+  skipped (RUN_LIVE_S3_TESTS gate) — run twice back to back, both clean.
+- `pnpm turbo run lint typecheck build`: 24/24 green.
+- `pnpm turbo run test`: 5/5 packages green.
+- Live fail-open check: stopped `redis` container, confirmed login replied
+  `401` in ~1.3s (not hung/500), restarted container, re-ran full suite
+  clean.
+
+## Discovered issues
+
+- KI-048 (new): nothing calls `app.close()` on SIGTERM/SIGINT —
+  `server.ts` never registers a signal handler, so `queue.ts`'s `onClose`
+  hook (which assumes a real graceful shutdown triggers it) never runs on a
+  real `docker stop`. Not fixed here (out of CR-058's scope) — recorded as
+  CR-094 in `docs/tasks.md`.
 
 ## Final result
 
-CR-093 closed. `.env` has a live `MAPS_2GIS_API_KEY`; the adapter's
-geocode/route parsing is now verified against a real account and its one
-real bug fixed. KI-016 resolved. `create2GisMapProvider` still has zero
-callers in `apps/api`/`apps/web` — wiring an actual consumer (KI-032's
-geocode-by-address UI, or CR-028/CR-084's route rendering) is the natural
-next step, not part of this ticket's scope. MapGL browser rendering
-(KI-031) is unchanged — still blocked on a separate public key the user
-has not provided. `docs/tasks.md`, `docs/changelog.md`,
-`.claude/context/project-state.md`, `.claude/context/known-issues.md` all
-updated.
+CR-058 closed. Both rate-limit tiers are Redis-backed and fail-open,
+live-verified against a real Redis including a real Redis-down scenario.
+KI-022 resolved (moved to known-issues.md's Resolved section). Only two
+open, actionable tickets remain in `docs/tasks.md`: CR-086 (cover image
+pipeline) and CR-094 (graceful shutdown, KI-048). `docs/tasks.md`,
+`docs/changelog.md`, `.claude/context/project-state.md`,
+`.claude/context/known-issues.md` all updated.

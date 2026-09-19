@@ -29,12 +29,14 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-093 (connect live 2GIS Geocoder/Directions key, resolve
-KI-016) just closed — every ticket in `docs/tasks.md` is now checked off or
-explicitly blocked (CR-058 on KI-014/live Redis). Next logical step if a
-`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` or a real geocoding consumer is wanted:
-KI-032 (geocode-by-address UI) or KI-031 (MapGL browser rendering, needs a
-separate public key not yet provided).
+None active. CR-058 (Redis-backed, per-IP-and-per-account auth rate
+limiting, resolving KI-022) just closed — Docker/a live Redis happened to be
+up this session, so it was picked up instead of waiting further. Only one
+unchecked, unblocked ticket remains in `docs/tasks.md`: CR-086 (cover image
+pipeline). CR-094 (new, KI-048 — wire real `SIGTERM`/`SIGINT` graceful
+shutdown) was also added this session as a discovered gap, unblocked but not
+started. Next logical step: CR-086, or CR-094, or (if a
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`/geocoding consumer is wanted) KI-032/KI-031.
 
 ## Implemented
 
@@ -177,7 +179,14 @@ queue (`modules/notifications/queue.ts`, CR-050) when `REDIS_URL` is configured,
 in-process `Worker` in the same process does the actual insert; falls back to the
 pre-CR-050 direct synchronous insert when it isn't (this environment — KI-014,
 Docker unreachable, live Redis still unverified end to end). Log-and-swallow either
-way on failure. Auth endpoints are rate-limited in-memory only (KI-014). `reviews`
+way on failure. Auth endpoints (`register`/`login`/`forgot-password`) are
+rate-limited on two independent tiers (CR-058, resolving KI-022): the
+general per-IP tier (`app.ts`), backed by `@fastify/rate-limit`'s own
+`RedisStore` when `REDIS_URL` is configured (shared across instances) or its
+in-memory store otherwise, plus a new per-account tier
+(`lib/account-rate-limit.ts`, keyed by normalized email) independent of it.
+Both fail open on a Redis error/timeout — a degraded Redis costs only the
+shared-counter protection, never blocks login/register. `reviews`
 (CR-042, its own
 capability module): `POST`/`GET /v1/rides/:id/reviews` — create is eligibility-gated
 (active registration on a `finished` ride, one review per user per ride), list is
@@ -253,11 +262,12 @@ None.
 `docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
 Post-ride (CR-042/CR-043), Quality (CR-044..048), Resilience (CR-049..052), and
 Extensibility foundations (CR-053..056) sections are all now fully complete.
-Security foundations: one ticket remains, CR-058 (Redis-backed, per-account auth
-rate limiting), blocked on KI-014 until a live Redis is reachable in this
-environment — also now has a second reason to check when unblocked: KI-044
-(whether `apps/api` sees each real client's IP through the new Caddy→web→api
-hop, not just `web`'s internal one). Deployment: CR-074/075/076/077/078/079/080
+Security foundations section is now fully complete: CR-058 (Redis-backed,
+per-IP-and-per-account auth rate limiting) closed 2026-09-19, once Docker/a
+live Redis happened to be reachable in this environment. KI-044 (whether
+`apps/api` sees each real client's IP through the Caddy→web→api hop, not
+just `web`'s internal one) stays open — it matters for the per-IP tier
+specifically, unaffected by this ticket. Deployment: CR-074/075/076/077/078/079/080
 (Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
 ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
 password + AOF persistence; Postgres backups + a live-verified restore;
@@ -272,9 +282,10 @@ of an already-successful call now returns the existing row instead of
 `409`, no client change needed) and CR-092 (real critical-journey e2e
 specs — `apps/web/e2e/critical-journeys.spec.ts`, the three journeys
 `.claude/rules/testing.md` names, API-seeded fixtures + real UI-driven
-assertions) are also closed. Every ticket in `docs/tasks.md` is now checked
-off or explicitly blocked (CR-058 on KI-014/live Redis) — no open,
-actionable ticket remains.
+assertions) are also closed, and CR-058 (Redis-backed auth rate limiting)
+closed 2026-09-19 (above). Two open, actionable tickets remain in
+`docs/tasks.md`: CR-086 (cover image pipeline) and CR-094 (new — wire real
+`SIGTERM`/`SIGINT` graceful shutdown, KI-048).
 
 ## Important decisions
 
@@ -370,17 +381,19 @@ test:e2e` — same "not yet proven against the exact real CI runner" caveat
 env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not configured"
   the same way `ERROR_REPORTING_WEBHOOK_URL` already did (KI-046, resolved), with new
   test coverage in `apps/api/src/env.test.ts`.
-- Rate limiting is in-memory per-IP-only, single-instance, no per-account limiting,
-  API-wide (KI-022, narrowed) — CR-058 upgrades this once KI-014 (Redis unverified in
-  this environment) is resolved, and should also settle KI-044 (new, CR-075):
-  whether `apps/api` sees each real client's IP or just `web`'s single internal
-  one through the new Caddy→web→api hop is unverified. `apps/api`'s production
-  boot crash on
+- Rate limiting is now Redis-backed (shared across instances) plus a new
+  independent per-account tier when `REDIS_URL` is configured, both failing
+  open on a Redis error (CR-058, resolving KI-022 — see `docs/changelog.md`).
+  Still open: KI-044 (whether `apps/api` sees each real client's IP or just
+  `web`'s single internal one through the Caddy→web→api hop is unverified —
+  matters for the per-IP tier specifically, not the new per-account one,
+  which is keyed by email, not IP). `apps/api`'s production boot crash on
   `db`/`types`'s raw-TS-source exports (KI-017) and missing `@fastify/helmet`
-  security headers (the other half of KI-022) are both now resolved (ADR-017,
-  CR-061) — `packages/maps-2gis` still exports raw source too, unaffected by
-  ADR-017 (nothing in `apps/api` consumes it yet, so it was never actually
-  blocking).
+  security headers are both resolved (ADR-017, CR-061).
+- KI-048 (new, CR-058): nothing calls `app.close()` on `SIGTERM`/`SIGINT` —
+  `server.ts` never registers a signal handler, so a real `docker stop`
+  today kills the process without draining in-flight BullMQ jobs or running
+  any `onClose` hook. New ticket CR-094.
 - Geocoding is now verified against a live 2GIS account and its one real bug (route
   geometry parsing) fixed (KI-016, resolved CR-093), but still has zero real
   consumers. No live MapGL browser credential — MapGL rendering is still unverified;
@@ -511,7 +524,19 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 - `playwright.config.ts`'s `webServer` staying a two-entry array (`apps/api`
   then `apps/web`, CR-080) — `/` has called the real API since CR-024, so a
   lone `apps/web` dev server is no longer sufficient for any e2e spec here.
+- both rate-limit tiers (`app.ts`'s global `@fastify/rate-limit`
+  registration and `lib/account-rate-limit.ts`'s per-account check, CR-058)
+  failing OPEN on a Redis error/timeout, never closed — login/register are
+  critical journeys (`.claude/rules/resilience.md`); don't add a
+  `skipOnError: false`/fail-closed path "for security" without re-reading
+  that rule first;
+- the per-account rate-limit tier staying independent of the per-IP one
+  (two separate gates keyed differently, not a combined key) and scoped to
+  exactly `/register`/`/login`/`/forgot-password` (the three endpoints
+  `.claude/rules/security.md` names) — don't extend it to
+  `/verify-email`/`/reset-password`, which operate on opaque tokens, not an
+  identifiable account from the request body.
 
 ## Last updated
 
-2026-09-19 (CR-092)
+2026-09-19 (CR-058)

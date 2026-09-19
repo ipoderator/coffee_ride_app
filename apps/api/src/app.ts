@@ -94,10 +94,23 @@ export async function buildApp(env: Env) {
   // support) is needed here.
   await app.register(cookie);
 
-  // Lenient global default (in-memory store — see auth.routes.ts's own comment
-  // on why not Redis yet); auth routes override it with a stricter per-route
-  // tier via `config.rateLimit` (`.claude/rules/security.md`).
-  await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+  // Lenient global default; auth routes override it with a stricter
+  // per-route tier via `config.rateLimit` (`.claude/rules/security.md`).
+  // CR-058: backed by `app.redis` (registerNotificationQueue, above) when
+  // `REDIS_URL` is configured — shared across instances instead of each
+  // process counting independently; falls back to the plugin's own
+  // in-memory store otherwise (KI-014's remaining unconfigured-Redis case).
+  // `skipOnError: true` applies to every rate-limited route, not just auth:
+  // a degraded Redis must never turn into a false 429 blocking a critical
+  // journey (`.claude/rules/resilience.md`) — only the shared-counter
+  // protection is lost, same fail-open choice `lib/account-rate-limit.ts`
+  // makes for the per-account tier.
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    ...(app.redis ? { redis: app.redis } : {}),
+    skipOnError: true,
+  });
 
   await app.register(healthRoutes);
   await app.register(v1Routes, { prefix: '/v1', env });

@@ -27,6 +27,29 @@ vi.mock('ioredis', () => {
     ping(...args: unknown[]) {
       return redisPingMock(...args);
     }
+    // CR-058: `app.ts`'s global rate-limit registration now passes `app.redis`
+    // into `@fastify/rate-limit`'s `RedisStore`, which every request (`/health`
+    // included) goes through. `RedisStore` only calls `defineCommand` when
+    // `rateLimit`/`rateLimitRead` don't already exist on the client — predefining
+    // both here (always "first hit, never limited") means this suite, which has
+    // nothing to do with rate limiting, never needs to fake ioredis's dynamic
+    // `defineCommand` machinery at all.
+    rateLimit(
+      _key: string,
+      timeWindow: number,
+      _max: number,
+      _continueExceeding: boolean,
+      _exponentialBackoff: boolean,
+      cb: (err: Error | null, result: [number, number]) => void,
+    ) {
+      cb(null, [1, timeWindow]);
+    }
+    rateLimitRead(
+      _key: string,
+      cb: (err: Error | null, result: [number, number]) => void,
+    ) {
+      cb(null, [0, 0]);
+    }
   }
   return { Redis: MockRedis };
 });

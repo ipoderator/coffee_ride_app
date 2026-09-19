@@ -335,67 +335,6 @@ resolving the CLI-targeting question. `FormField` has no shadcn equivalent
 (this project's own composition of label + control + error/hint), so it isn't
 relevant to this issue either way. Still open; next action unchanged.
 
-### KI-022 — Auth endpoints ship with an interim, weaker security posture than `.claude/rules/security.md`'s full checklist
-
-Status: open — narrowed, not a regression. Discovered: 2026-09-13 (CR-011).
-Problem: CR-011 is the first ticket to add real auth endpoints
-(`POST /v1/auth/register`, `POST /v1/auth/verify-email`), but three items
-`.claude/rules/security.md` calls for were deliberately not yet in place,
-per the CR-011 plan's own documented scope boundaries (not oversights):
-(1) rate limiting on `/v1/auth/*` uses `@fastify/rate-limit`'s in-memory
-store, per-IP only (5/min) — no per-account limiting, and the counter resets
-on every process restart / isn't shared across multiple `apps/api` instances;
-(2) no `@fastify/helmet` security headers (CSP, X-Content-Type-Options,
-frame-ancestors) on any response yet; (3) no `Origin`/`Referer` CSRF check
-on unsafe methods yet.
-Update 2026-09-13 (CR-012): item (3) is resolved — `apps/api/src/plugins/
-csrf.ts` now rejects a mismatched `Origin`/`Referer` on every unsafe `/v1`
-method (`403 csrf_origin_mismatch`), live-verified with curl against a real
-Postgres + running `apps/api`. Items (1) and (2) remain open.
-Impact: lower than at CR-011 time — the CSRF gap that mattered most once a
-real cookie session existed (CR-012) is now closed. `/v1/auth/register` and
-the new session-bearing endpoints are still reachable with only IP-based
-in-memory rate limiting and no security-header hardening standing between
-them and abuse.
-Workaround: none needed for CSRF. Still do not deploy `apps/api` publicly
-before CR-061 (security headers) lands.
-Next action: CR-058 (`docs/tasks.md`) upgrades auth rate limiting to a
-Redis-backed, per-IP-and-per-account limiter once KI-014 (Redis unverified in
-this environment) is resolved; CR-061 (now headers-only, see `docs/tasks.md`)
-adds `@fastify/helmet`. Revisit this entry once both land.
-Update 2026-09-16 (CR-047, "Security review"): re-verified against the full
-`.claude/rules/security.md` checklist, not just auth. Both remaining items are
-broader than originally scoped here — (1) is every abuse-prone endpoint, not
-just `/v1/auth/*` (the same in-memory, per-IP-only `@fastify/rate-limit`
-default store is the only rate limiting registered anywhere in `apps/api`);
-(2) is every response `apps/api` sends, not just auth responses (no
-`@fastify/helmet` or equivalent is registered at all — zero security headers,
-API-wide). Everything else on the checklist (Argon2id hashing, no plaintext
-anywhere, account-enumeration-safe login errors, session cookie flags,
-consistent server-side ownership checks, Zod on every route, parameterized
-Drizzle queries, minimized participant responses, audit columns) was verified
-compliant this session — no new gaps found beyond these two, already-tracked
-ones. Scope decision: fix only what's this task's own (CR-044/045/046/048),
-document CR-058/CR-061's exact scope rather than implement it under CR-047,
-per `.claude/context/current-task.md`.
-Update 2026-09-17 (CR-061, "Security headers"): item (2) is resolved —
-`@fastify/helmet` is now registered globally in `apps/api/src/app.ts`
-(`plugins/security-headers.ts`), so every response (`/health`, `/docs`,
-`/v1/*` alike) carries `Content-Security-Policy`,
-`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
-and helmet's other standard headers. CSP is customized, not left at helmet's
-raw defaults: `upgrade-insecure-requests` is explicitly removed (this app
-never terminates TLS itself — the default directive would break `/docs` over
-local `http://`, rewriting its own same-origin sub-requests to `https://`
-with no listener there) and `frame-ancestors`/`X-Frame-Options` are tightened
-to `'none'`/`DENY` (helmet's own defaults are `'self'`/`SAMEORIGIN`). Only
-item (1) remains open — narrower now than CR-047's audit found it, since
-CR-058 is the tracked ticket for it (blocked on KI-014).
-Impact: lowered further — the two items CR-047's audit widened to "every
-endpoint"/"every response" are now one item, not two.
-Next action: CR-058 only (Redis-backed, per-account auth rate limiting,
-blocked on KI-014 until a live Redis is reachable).
-
 ### KI-023 — Profile avatar/photo upload is not implemented
 
 Status: open. Discovered: 2026-09-14 (CR-013). Widened: 2026-09-14 (CR-014,
@@ -685,9 +624,134 @@ prod.yml --profile migrate run --rm migrate` to confirm the migration image
 actually builds and applies cleanly — before trusting this manifest as more than
 "the YAML parses."
 
+### KI-048 — Nothing calls `app.close()` on SIGTERM/SIGINT; no real graceful shutdown exists
+
+Status: open. Discovered: 2026-09-19 (CR-058, "Redis-backed auth rate
+limiting" session), incidentally while live-verifying that a rate-limit
+Redis-store failure fails open rather than hanging a request.
+Problem: `apps/api/src/modules/notifications/queue.ts`'s own `onClose` hook
+comment says its bounded `raceTimeout`s exist so "a degraded Redis... would
+hang the whole app's graceful shutdown (`app.close()`, e.g. on SIGTERM)" —
+but `apps/api/src/server.ts` never registers a `SIGTERM`/`SIGINT` handler at
+all (confirmed by grep: `queue.ts`'s comment is the only place either string
+appears in `apps/api/src`). `app.listen()` is called and the process just
+runs; on a real `docker stop`/orchestrator SIGTERM, Node's default behavior
+for an unhandled `SIGTERM` is immediate termination — `app.close()` (and
+therefore every `onClose` hook: the notification queue's worker/producer
+disconnect, any DB pool close, etc.) never runs at all.
+Impact: medium — a production deploy/redeploy (`docker compose up -d
+--build`, CR-075/ADR-018) or a scaling-down event kills `apps/api`
+mid-request and mid-in-flight-BullMQ-job with zero drain time, not "hangs
+briefly then recovers" as the existing code comments imply. Confirmed this
+session isn't specific to a degraded Redis either — the gap is that nothing
+triggers `app.close()` at all, degraded dependency or not.
+Workaround: none in production. Confirmed via a throwaway script
+(`buildApp()` + `app.inject()` + explicit `app.close()`, deleted after use,
+same technique CR-093's live check used) that `app.close()` ITSELF is
+correctly bounded (~3s, matching `CLOSE_TIMEOUT_MS`) and the triggering
+request (`POST /v1/auth/login` with Redis stopped) replied `401` in ~1.3s,
+not hung — so the resilience mechanics `queue.ts` already built (bounded
+close, fail-open rate limiting) work correctly once `app.close()` actually
+runs; they just never get invoked by a real process signal today.
+Next action: needs its own ticket (same "real gap, add a ticket" discipline
+as KI-024/025/026) — a `process.on('SIGTERM', ...)`/`SIGINT` handler in
+`server.ts` calling `await app.close()` then `process.exit(0)`, with a hard
+fallback timeout in case some `onClose` hook doesn't resolve. Added as
+CR-094 (`docs/tasks.md`, Deployment section). Out of CR-058's own scope —
+discovered while verifying CR-058's fail-open behavior, not something it
+introduced or regressed.
+
 ---
 
 ## Resolved
+
+### KI-022 — Auth endpoints ship with an interim, weaker security posture than `.claude/rules/security.md`'s full checklist
+
+Resolved: 2026-09-19 (CR-058). Discovered: 2026-09-13 (CR-011).
+Problem: CR-011 is the first ticket to add real auth endpoints
+(`POST /v1/auth/register`, `POST /v1/auth/verify-email`), but three items
+`.claude/rules/security.md` calls for were deliberately not yet in place,
+per the CR-011 plan's own documented scope boundaries (not oversights):
+(1) rate limiting on `/v1/auth/*` uses `@fastify/rate-limit`'s in-memory
+store, per-IP only (5/min) — no per-account limiting, and the counter resets
+on every process restart / isn't shared across multiple `apps/api` instances;
+(2) no `@fastify/helmet` security headers (CSP, X-Content-Type-Options,
+frame-ancestors) on any response yet; (3) no `Origin`/`Referer` CSRF check
+on unsafe methods yet.
+Update 2026-09-13 (CR-012): item (3) is resolved — `apps/api/src/plugins/
+csrf.ts` now rejects a mismatched `Origin`/`Referer` on every unsafe `/v1`
+method (`403 csrf_origin_mismatch`), live-verified with curl against a real
+Postgres + running `apps/api`. Items (1) and (2) remain open.
+Impact: lower than at CR-011 time — the CSRF gap that mattered most once a
+real cookie session existed (CR-012) is now closed. `/v1/auth/register` and
+the new session-bearing endpoints are still reachable with only IP-based
+in-memory rate limiting and no security-header hardening standing between
+them and abuse.
+Workaround: none needed for CSRF. Still do not deploy `apps/api` publicly
+before CR-061 (security headers) lands.
+Next action: CR-058 (`docs/tasks.md`) upgrades auth rate limiting to a
+Redis-backed, per-IP-and-per-account limiter once KI-014 (Redis unverified in
+this environment) is resolved; CR-061 (now headers-only, see `docs/tasks.md`)
+adds `@fastify/helmet`. Revisit this entry once both land.
+Update 2026-09-16 (CR-047, "Security review"): re-verified against the full
+`.claude/rules/security.md` checklist, not just auth. Both remaining items are
+broader than originally scoped here — (1) is every abuse-prone endpoint, not
+just `/v1/auth/*` (the same in-memory, per-IP-only `@fastify/rate-limit`
+default store is the only rate limiting registered anywhere in `apps/api`);
+(2) is every response `apps/api` sends, not just auth responses (no
+`@fastify/helmet` or equivalent is registered at all — zero security headers,
+API-wide). Everything else on the checklist (Argon2id hashing, no plaintext
+anywhere, account-enumeration-safe login errors, session cookie flags,
+consistent server-side ownership checks, Zod on every route, parameterized
+Drizzle queries, minimized participant responses, audit columns) was verified
+compliant this session — no new gaps found beyond these two, already-tracked
+ones. Scope decision: fix only what's this task's own (CR-044/045/046/048),
+document CR-058/CR-061's exact scope rather than implement it under CR-047,
+per `.claude/context/current-task.md`.
+Update 2026-09-17 (CR-061, "Security headers"): item (2) is resolved —
+`@fastify/helmet` is now registered globally in `apps/api/src/app.ts`
+(`plugins/security-headers.ts`), so every response (`/health`, `/docs`,
+`/v1/*` alike) carries `Content-Security-Policy`,
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+and helmet's other standard headers. CSP is customized, not left at helmet's
+raw defaults: `upgrade-insecure-requests` is explicitly removed (this app
+never terminates TLS itself — the default directive would break `/docs` over
+local `http://`, rewriting its own same-origin sub-requests to `https://`
+with no listener there) and `frame-ancestors`/`X-Frame-Options` are tightened
+to `'none'`/`DENY` (helmet's own defaults are `'self'`/`SAMEORIGIN`). Only
+item (1) remains open — narrower now than CR-047's audit found it, since
+CR-058 is the tracked ticket for it (blocked on KI-014).
+Impact: lowered further — the two items CR-047's audit widened to "every
+endpoint"/"every response" are now one item, not two.
+Update 2026-09-19 (CR-058, "Redis-backed, per-IP-and-per-account auth rate
+limiting"): item (1) is resolved. Docker/a live Redis happened to be up in
+this session (KI-014's connection-level gap had just closed), so this
+session took the opportunity instead of waiting further. `app.ts`'s global
+`@fastify/rate-limit` registration now passes `app.redis` into the plugin's
+own `RedisStore` when `REDIS_URL` is configured (shared across instances,
+not per-process) with `skipOnError: true` — falls back to the plugin's
+in-memory store when Redis isn't configured, unchanged from before. A new,
+independent per-account tier (`apps/api/src/lib/account-rate-limit.ts`,
+atomic `MULTI INCR + PEXPIRE ... NX EXEC`, no Lua needed) applies to
+`/register`/`/login`/`/forgot-password` — the three endpoints
+`.claude/rules/security.md` names — keyed by the normalized email, entirely
+independent of the per-IP tier. Both tiers fail OPEN on a Redis error/
+timeout (`.claude/rules/resilience.md`: login/register are critical
+journeys) — live-verified, not just reasoned about: stopped the real `redis`
+container mid-session and confirmed `POST /v1/auth/login` still replied
+`401` in ~1.3s (not hung, not `500`), then restarted it. Also live-verified
+(twice, back to back) against the real, currently-running Redis: 38/38
+`auth.routes.test.ts` tests pass, including two new tests that boot
+`buildApp()` with a real `REDIS_URL` — something no existing test exercised
+before this session. Found and fixed one real regression along the way:
+`routes/health.test.ts`'s mocked `ioredis` client lacked `defineCommand`,
+which `RedisStore`'s constructor now calls unconditionally on `app.redis` —
+fixed by predefining `rateLimit`/`rateLimitRead` directly on the mock
+(sidesteps needing to fake `defineCommand`'s dynamic-command machinery for a
+suite that has nothing to do with rate limiting). See `docs/changelog.md`'s
+CR-058 entry.
+Next action: none for this KI. Incidentally discovered a separate, real gap
+while live-verifying the fail-open behavior — see KI-048 (new) / CR-094.
 
 ### KI-007 — CI cannot test uploads or run e2e
 

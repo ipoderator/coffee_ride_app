@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv, type Env } from '../../env.js';
 import { requestPasswordReset } from './auth.service.js';
+import { createRedisClient } from '../../redis.js';
 import { hashSessionToken } from './session.js';
 
 // These tests exercise the real service/repository layers against a live
@@ -32,6 +33,21 @@ const testEnv = loadEnv({
   DATABASE_URL: process.env.DATABASE_URL,
   WEB_ORIGIN,
 });
+
+// CR-058: only set when a real Redis is actually reachable (this repo's
+// standing constraint, KI-014 — Docker's daemon doesn't come up in every
+// session). Present in `.github/workflows/ci.yml`'s job env unconditionally,
+// so this suite genuinely runs the Redis-backed path there, not just when a
+// session happens to have Docker up locally.
+const testEnvWithRedis = process.env.REDIS_URL
+  ? loadEnv({
+      NODE_ENV: 'test',
+      AUTH_SECRET: 'a-test-only-secret',
+      DATABASE_URL: process.env.DATABASE_URL,
+      WEB_ORIGIN,
+      REDIS_URL: process.env.REDIS_URL,
+    })
+  : undefined;
 
 function uniqueEmail() {
   return `${randomUUID()}@example.test`;
@@ -868,4 +884,84 @@ describe('CSRF: Origin/Referer check on /v1 unsafe methods', () => {
 
     await app.close();
   });
+});
+
+// CR-058, resolving the remaining half of KI-022 (blocked on KI-014). Live
+// against a real Redis, not mocked — `lib/account-rate-limit.test.ts` already
+// covers the per-account counter's own logic in isolation (mocked); this
+// suite instead proves `buildApp()` boots and rate-limits correctly with a
+// *real* `REDIS_URL` wired all the way through (`app.redis` decorated,
+// `@fastify/rate-limit`'s `RedisStore`, and the per-account preHandler all
+// sharing one live connection) — something no existing test exercised before
+// this session (every other Redis-touching suite fully mocks `ioredis`).
+// `it.skipIf` rather than a hard `throw` (unlike the top-of-file
+// `DATABASE_URL` check): unlike Postgres, a live Redis is optional
+// infrastructure by design (KI-014) — a session without Docker up should
+// still be able to run this file's Postgres-backed tests.
+describe('CR-058: Redis-backed rate limiting (live Redis)', () => {
+  beforeEach(async () => {
+    if (!testEnvWithRedis) return;
+    // Real Redis is external, persistent state — unlike the in-memory store
+    // every other test in this file uses, a leftover per-IP counter from a
+    // previous run of this same suite (same synthetic .inject() IP) survives
+    // until its own TTL expires. Flushing both key namespaces first makes
+    // this describe block repeatable regardless of when it was last run.
+    const flusher = createRedisClient(testEnvWithRedis.REDIS_URL!);
+    flusher.on('error', () => {});
+    const keys = await flusher.keys('fastify-rate-limit-*');
+    const accountKeys = await flusher.keys('auth-rl:account:*');
+    const staleKeys = [...keys, ...accountKeys];
+    if (staleKeys.length > 0) await flusher.del(...staleKeys);
+    flusher.disconnect();
+
+    const app = await buildApp(testEnvWithRedis);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  it.skipIf(!testEnvWithRedis)(
+    'boots with a real REDIS_URL and still rate-limits repeated attempts against the same account',
+    async () => {
+      const app = await buildApp(testEnvWithRedis!);
+      expect(app.redis).not.toBeNull();
+
+      const email = uniqueEmail();
+      const attempts = 6; // both tiers are 5/window — see auth.routes.ts
+
+      const responses = [];
+      for (let i = 0; i < attempts; i += 1) {
+        responses.push(
+          await app.inject({
+            method: 'POST',
+            url: '/v1/auth/login',
+            payload: { email, password: 'wrong-password-attempt' },
+          }),
+        );
+      }
+
+      const statuses = responses.map((r) => r.statusCode);
+      // 401 (invalid_credentials) for the attempts under threshold, 429 once
+      // either tier trips — with a single .inject() IP and a single email
+      // both tiers reach their threshold on the same request, so this proves
+      // the Redis-backed path end to end without asserting which of the two
+      // fired (`account-rate-limit.test.ts` already isolates that).
+      expect(statuses.filter((s) => s === 401).length).toBe(5);
+      expect(statuses.at(-1)).toBe(429);
+
+      await app.close();
+    },
+  );
+
+  it.skipIf(!testEnvWithRedis)(
+    'the general (non-auth) rate-limit tier also stays healthy against a real Redis',
+    async () => {
+      const app = await buildApp(testEnvWithRedis!);
+
+      const response = await app.inject({ method: 'GET', url: '/health' });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().dependencies.redis).toBe('ok');
+
+      await app.close();
+    },
+  );
 });
