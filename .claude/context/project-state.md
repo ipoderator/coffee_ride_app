@@ -29,9 +29,9 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-083 (registration/waitlist-join idempotency) just closed.
-CR-092 (real critical-journey e2e specs) is the one remaining open ticket
-not blocked on anything unavailable in this environment.
+None active. CR-092 (real critical-journey e2e specs) just closed — every
+ticket in `docs/tasks.md` is now checked off or explicitly blocked (CR-058
+on KI-014/live Redis).
 
 ## Implemented
 
@@ -258,11 +258,12 @@ nothing that sets a base image version had ever actually been scanned by
 Dependabot before this) are all closed — the entire Deployment section is
 now done. CR-083 (registration/waitlist-join idempotency — a network retry
 of an already-successful call now returns the existing row instead of
-`409`, no client change needed) is also closed. CR-092 (real
-critical-journey e2e specs — `.claude/rules/testing.md`'s
-discover+register/create+publish/view-participants journeys still don't
-exist) is the one remaining open ticket, unblocked by anything in this
-environment.
+`409`, no client change needed) and CR-092 (real critical-journey e2e
+specs — `apps/web/e2e/critical-journeys.spec.ts`, the three journeys
+`.claude/rules/testing.md` names, API-seeded fixtures + real UI-driven
+assertions) are also closed. Every ticket in `docs/tasks.md` is now checked
+off or explicitly blocked (CR-058 on KI-014/live Redis) — no open,
+actionable ticket remains.
 
 ## Important decisions
 
@@ -347,8 +348,10 @@ compose run` (KI-043, KI-045) — Docker's daemon is unreachable throughout this
   category of "verified locally, not against the exact real CI runner" gap
   as KI-043/KI-045's Docker artifacts. The three critical-journey e2e specs
   `.claude/rules/testing.md` names (discover+register, organizer
-  create+publish, view participants) still don't exist — tracked as the new
-  CR-092, out of CR-080's own "wire CI" scope.
+  create+publish, view participants) now exist (CR-092,
+  `apps/web/e2e/critical-journeys.spec.ts`) and pass locally via `pnpm
+test:e2e` — same "not yet proven against the exact real CI runner" caveat
+  as the rest of this bullet.
 - `docs/deployment.md` (new, CR-081) documents the full production deploy procedure
   (prerequisites, `.env` setup, first-boot migrate-then-serve order, verification,
   redeploy/rollback) but — same as every other Deployment-section artifact — has not
@@ -498,4 +501,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-19 (CR-083)
+2026-09-19 (CR-092)

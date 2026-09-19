@@ -4285,3 +4285,62 @@ Known limitations: none new.
 
 Follow-up: CR-092 (critical-journey e2e specs) is the one remaining open
 ticket with no dependency on anything blocked in this environment.
+
+## 2026-09-19 — CR-092 — Real critical-journey Playwright specs
+
+Goal: write the three e2e journeys `.claude/rules/testing.md` names
+(participant discovers+registers; organizer creates+publishes a ride;
+organizer views participants) — `home.spec.ts` is a one-page smoke check,
+not this; CR-080 only wired the suite into CI.
+
+Implementation: new `apps/web/e2e/helpers/api-fixtures.ts`
+(`registerAndVerify`/`login`/`createOrganizerProfile`/`createPublishedRide`/
+`registerForRide`/`setDisplayName`, all direct `/api/v1/...` calls with the
+CSRF `Origin` header a real browser fetch sends automatically but
+Playwright's `APIRequestContext` does not) and new
+`apps/web/e2e/critical-journeys.spec.ts` with the three journeys. Each spec
+seeds only its own preconditions via API (no UI verify-email screen exists
+anyway, KI-026) and drives the actually-tested journey through real UI
+interaction — form fills, button clicks, rendered-state assertions — not a
+second API script pretending to be a UI test. `test.describe.configure({
+mode: 'serial' })` groups all three in one file: `/v1/auth/register` and
+`/v1/auth/login` each carry their own 5/min/IP in-memory rate limit
+(KI-014's interim tier), and the three journeys together need exactly 5 of
+each — spec 3 reuses `page.request`'s already-logged-in organizer cookie
+jar instead of a redundant second UI login, which is what keeps the total
+at 5 instead of 6.
+
+Two real bugs found and fixed while writing these (not pre-existing
+regressions — surfaced by actually running the specs, not assumed):
+`loginViaUi`'s original version clicked the login submit button and
+immediately called `page.goto(...)`, racing `LoginForm`'s own
+`await login(...)` — the goto's hard navigation could cancel that in-flight
+fetch before the session cookie was ever set. Fixed by waiting for the
+post-login `router.replace('/me')` navigation (`page.waitForURL('/me')`)
+before proceeding. Also added `assertOk()` to every fixture helper — the
+first version let a failed setup call (e.g. rate-limited) surface as a
+confusing `Cannot read properties of undefined` several calls downstream
+instead of a clear error at the actual failure point.
+
+Decisions: none new at the ADR level — test-suite work, not an
+architectural decision.
+
+Validation: `pnpm --filter web typecheck`/`lint`: clean. `pnpm turbo run
+test:e2e`: 4/4 passing (`home.spec.ts` unchanged + the 3 new journeys), run
+twice to confirm no flakiness once outside the rate-limit collision window
+(a single back-to-back manual rerun within the same ~60s did trip the
+shared login/register limit once during development — expected given 5 of
+each per run, not a bug; a single real CI run only executes the suite
+once). Full `pnpm turbo run lint typecheck build test` (real local
+`DATABASE_URL`): 29/29 tasks green — also cleared an unrelated stale
+`apps/web/.next/types` artifact from an earlier session's production build
+that was making `web#typecheck` fail on files that no longer existed; not
+caused by this ticket's changes, `rm -rf apps/web/.next` was the fix (Next
+regenerates it on the next `dev`/`build`/`typecheck` run).
+
+Known limitations: none new. This was the one remaining open ticket with no
+dependency on anything unavailable in this environment (Docker/Redis/S3/
+2GIS all still as documented in `.claude/context/known-issues.md`).
+
+Follow-up: none currently queued — every ticket in `docs/tasks.md` is
+either checked off or explicitly blocked (CR-058 on KI-014/live Redis).

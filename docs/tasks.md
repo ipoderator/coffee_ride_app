@@ -619,13 +619,15 @@ registrations/registrations.service.ts`) now return `{ resource, created }`;
       upload cap + streaming SAX parse, no worker thread. See `docs/decisions.md`.
 - [ ] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
       (direct S3 vs proxy) — needed by CR-017
-- [ ] CR-092 Real critical-journey Playwright specs (new, added 2026-09-19 during
-      CR-080 — same "real gap, add a ticket" precedent as CR-088..091):
-      `.claude/rules/testing.md`'s three named e2e journeys (participant
-      discovers and registers; organizer creates/publishes a ride; organizer
-      views participants) still don't exist — `apps/web/e2e/home.spec.ts` is a
-      one-page smoke check, not this. CR-080 only wired the existing suite into
-      CI; writing the actual journeys (needs real fixtures — a registered/
-      verified user, an organizer profile, a published ride — via API calls in
-      a Playwright setup, not through the UI for every step) is this ticket's
-      own scope.
+- [x] CR-092 Real critical-journey Playwright specs — done 2026-09-19: new
+      `apps/web/e2e/helpers/api-fixtures.ts` (register/verify/login/organizer
+      profile/publish-ride/register-for-ride, all via direct API calls) and
+      `apps/web/e2e/critical-journeys.spec.ts` — the three journeys
+      `.claude/rules/testing.md` names, `test.describe.serial` in one file
+      (keeps the shared `/v1/auth/{register,login}` 5/min/IP rate limit,
+      KI-014, from tripping across the group — exactly 5 register + 5 login
+      calls total). Each spec seeds only its preconditions via API and drives
+      the actual journey through real UI interactions (fill forms, click
+      buttons, assert rendered state) — not scripted through the API
+      end-to-end. Live-verified locally, twice, via `pnpm test:e2e`: 4/4
+      passing. See `docs/changelog.md`.
