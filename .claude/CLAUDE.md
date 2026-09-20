@@ -168,6 +168,10 @@ If `docs/changelog.md` grows large, follow its own archiving section (`docs/chan
 → "Archiving") to move old entries into `docs/changelog-archive/`. Only the most recent
 entries need to be read for routine work.
 
+When a `.claude/context/known-issues.md` issue is resolved, move its entry immediately
+into `.claude/context/known-issues-archive.md` per that file's own Archiving section —
+don't let a "Resolved" section accumulate in the live file.
+
 ## Task state
 
 `.claude/context/current-task.md` is temporary working memory for the active task.
