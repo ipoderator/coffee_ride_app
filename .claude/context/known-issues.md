@@ -352,12 +352,25 @@ fields list "cover image") with no way to set it yet — same gap a third time,
 not a new one.
 Impact: low — every affected screen is fully usable without a photo; every
 other field on each works end to end.
-Workaround: none needed — no UI currently expects an avatar/logo/cover image
-to exist.
-Next action: build alongside CR-086 (cover image pipeline: size/type limits,
-resizing, S3-vs-proxy serving) once KI-015 is resolved and that pipeline
-exists — reuse it for `User`, `OrganizerProfile`, and `Ride` rather than
-building a separate upload path per entity.
+Workaround: none needed — no UI currently expects an avatar/logo to exist.
+Update 2026-09-20 (CR-086, "Cover image pipeline"): the `Ride` third of this
+gap is resolved — `rides.cover_image_key`/`cover_image_content_type`/
+`cover_image_size_bytes` (renamed/added, ADR-019) plus
+`POST`/`PATCH`/`DELETE`/`GET /v1/rides/:id/cover` (validate via `sharp`,
+resize to 1920×1920 max, serve through an API proxy, never a direct S3 URL)
+give organizers a real upload/replace/delete path, wired from
+`/organizer/rides/[id]/cover`. Live-verified against the real running MinIO
+this session: upload → `GET /v1/rides/:id` shows the real `coverImageUrl` →
+download round-trips the actual bytes → replacing a 3000×2000 image
+confirmed the 1920-max resize → delete confirmed both the DB field and the
+`GET .../cover` 404 afterward. `storage.ts`/`cover-image.ts` were written
+generic enough to reuse (per this entry's own prior note), but wiring actual
+`User`/`OrganizerProfile` avatar endpoints stays out of CR-086's scope —
+still open for those two entities.
+Next action: a real avatar endpoint for `User`/`OrganizerProfile`, reusing
+`cover-image.ts`'s validate/resize logic and `cover-image-storage.ts`'s S3
+wrapper shape rather than building a third one from scratch — no ticket
+number assigned yet.
 
 ### KI-026 — No verify-email web screen exists, and two organizer actions now hard-depend on it
 

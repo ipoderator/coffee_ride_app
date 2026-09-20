@@ -361,6 +361,14 @@ export interface GetRouteGeometryResponse {
   points: RouteGeometryPoint[];
 }
 
+// ADR-019/CR-086: `POST`/`PATCH /v1/rides/:id/cover`'s response. Deliberately
+// minimal (not the whole `Ride`) — `coverImageUrl` is the only field either
+// mutation changes; `GET /v1/rides/:id`'s embedded `ride.coverImageUrl` is the
+// same value, same "return just the sub-resource" precedent as `RouteSummary`.
+export interface CoverImageResponse {
+  coverImageUrl: string;
+}
+
 // CR-030 ("Stops", `.claude/context/current-task.md`): `position` is never part of the
 // request — server-assigned on create (appended at the end), immutable on `PATCH` (no
 // reorder support in this ticket, no design-doc UI names one).

@@ -30,19 +30,16 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 ## Current task
 
 None active. CR-095 (test-suite data-loss guard + backup safety net,
-resolving KI-049) just closed, out of band — a previous session's `apps/api`
-test run had wiped the real local dev Postgres because the suite read
-`DATABASE_URL` directly. Every `apps/api` test file that touches a real
-Postgres now reads `TEST_DATABASE_URL` instead (a variable `.env` never
-sets), plus a name-based refusal even if that var is set wrong; `.env`/
-`.env.example`/`ci.yml` updated accordingly; `docker-compose.prod.yml`
-gained an always-on `backup` service (`packages/db/scripts/backup.sh` on a
-schedule, no profile gate needed since it's read-only). Only one unchecked,
-unblocked ticket remains in `docs/tasks.md`: CR-086 (cover image pipeline)
-— its files are already fully present in the working tree from an earlier
-session (implemented, uncommitted) but untouched by CR-095. Next logical
-step: commit/verify CR-086, or (if a `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`/
-geocoding consumer is wanted) KI-032/KI-031.
+resolving KI-049) and CR-086 (cover image pipeline, ADR-019) both closed
+this session. CR-086's code had been implemented in an earlier session but
+left uncommitted with its docs half unfinished — this session validated it
+(typecheck/lint/test/build all clean, plus a real live upload/download/
+replace/delete round trip against the running MinIO), finished
+`docs/api.md`/`docs/database.md`, and committed it. No unchecked ticket
+remains in `docs/tasks.md`. Next logical step: pick a new one — candidates
+are an avatar endpoint for `User`/`OrganizerProfile` (KI-023's remainder,
+no ticket number yet) or wiring a real consumer for `packages/maps-2gis`
+(KI-032/KI-031, or CR-028/CR-084's route rendering).
 
 ## Implemented
 
@@ -126,7 +123,9 @@ list+map split view at `lg`+ (both panels always mounted, the inactive one
 CSS-gated `hidden lg:block`); a shared `xl` max-width-1200px-centered container
 wraps every page from the root `layout.tsx`; every `ErrorState` call site now
 offers `onRetry`; `RideCard`/`RideDetailView`'s cover image uses `next/image`
-(still inert — `coverImageUrl` is always `null` until CR-086).
+— live since CR-086, no longer inert. `/organizer/rides/[id]/cover`
+(CR-086, new): upload/replace/delete a ride's cover image, linked from
+`EditRideForm`.
 
 **apps/api**: Fastify 5 + Zod + RFC 9457 errors + OpenAPI (ADR-011, `/v1` prefix,
 cursor pagination). Every request gets a correlatable id (CR-079,
@@ -160,7 +159,12 @@ gated on `emailVerified`), `rides` (create/edit draft, every lifecycle transitio
 owner's "mine" list, public list + detail with filters/bbox/pagination, GPX route
 upload/download/geometry, distance/elevation reconciliation, stop CRUD and route-point
 CRUD — both draft-only, embedded as additive `stops`/`routePoints` arrays on ride
-detail), `registrations` (its own capability module, `POST`/`DELETE
+detail; CR-086/ADR-019: cover image upload/replace/delete/download —
+JPEG/PNG/WebP verified by decoding with `sharp`, 8 MB cap, resized to
+1920×1920 max, served via an API proxy never a direct S3 URL, same
+ownership/draft-only + viewer-visibility rules as route — `coverImageUrl` on
+ride detail is now real, computed from the stored S3 key), `registrations`
+(its own capability module, `POST`/`DELETE
 /v1/rides/:id/register` — capacity + duplicate protection via one `SELECT ... FOR
 UPDATE` row lock; idempotent (CR-083) — a repeat register/waitlist-join call while
 the caller already has that exact row returns `200` with the existing row instead of
@@ -299,9 +303,10 @@ of an already-successful call now returns the existing row instead of
 specs — `apps/web/e2e/critical-journeys.spec.ts`, the three journeys
 `.claude/rules/testing.md` names, API-seeded fixtures + real UI-driven
 assertions) are also closed, and CR-058 (Redis-backed auth rate limiting)
-closed 2026-09-19 (above). Two open, actionable tickets remain in
-`docs/tasks.md`: CR-086 (cover image pipeline) and CR-094 (new — wire real
-`SIGTERM`/`SIGINT` graceful shutdown, KI-048).
+closed 2026-09-19 (above). CR-094 (SIGTERM/SIGINT graceful shutdown,
+KI-048), CR-095 (test-suite data-loss guard + backup schedule, KI-049), and
+CR-086 (cover image pipeline, ADR-019) are also closed — `docs/tasks.md` has
+no unchecked ticket left.
 
 ## Important decisions
 
@@ -454,8 +459,10 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   out of scope (ADR-016).
 - Provisional/deferred: `RideService`/registration-state terminology keys pending a
   real DB enum (KI-021); shadcn CLI's vendoring target still points at `apps/web`, not
-  `packages/ui`, for any future structurally-complex primitive (KI-020); avatar/logo
-  upload needs the S3 pipeline (KI-023).
+  `packages/ui`, for any future structurally-complex primitive (KI-020); `Ride`
+  cover images now work end to end (CR-086, ADR-019) — `User`/`OrganizerProfile`
+  avatar upload is KI-023's only remaining gap, reusing CR-086's validate/resize/
+  storage modules when built.
 
 ## Do not break
 
@@ -572,8 +579,16 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   exactly `/register`/`/login`/`/forgot-password` (the three endpoints
   `.claude/rules/security.md` names) — don't extend it to
   `/verify-email`/`/reset-password`, which operate on opaque tokens, not an
-  identifiable account from the request body.
+  identifiable account from the request body;
+- cover images served only through `GET /v1/rides/:id/cover` (API proxy),
+  never a direct S3 URL — the bucket stays private, and this is what lets
+  `next.config.ts` skip an `images.remotePatterns` entry (CR-086, ADR-019);
+  file type is verified by actually decoding with `sharp`, never trusted
+  from the client `Content-Type` header (SVG stays excluded — XSS risk);
+  don't reintroduce a direct-URL/trust-the-extension shortcut for this or
+  any future entity that reuses the same modules (`User`/`OrganizerProfile`
+  avatars, KI-023).
 
 ## Last updated
 
-2026-09-20 (CR-095)
+2026-09-20 (CR-086)

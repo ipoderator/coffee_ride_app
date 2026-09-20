@@ -35,6 +35,7 @@ import {
   Skeleton,
   StatusBadge,
 } from 'ui';
+import { apiAssetUrl } from '@/lib/api/asset-url';
 import {
   ApiError,
   getRideDetail,
@@ -267,14 +268,12 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   return (
     <div className="flex flex-col gap-6">
       {ride.coverImageUrl ? (
-        // `coverImageUrl` is always `null` today (KI-023, no S3 pipeline yet).
-        // `next/image` needs the eventual S3 domain in `next.config.ts`'s
-        // `images.remotePatterns`, which is CR-086's job alongside the pipeline
-        // itself — this only swaps the tag (CR-048) so the branch is already
-        // optimized once that value exists.
+        // ADR-019/CR-086: `coverImageUrl` is the API's bare `/v1/...` path
+        // (ADR-011) — `apiAssetUrl` adds the `/api` same-origin rewrite prefix.
+        // Same-origin either way, so no `images.remotePatterns` entry needed.
         <div className="relative h-64 w-full overflow-hidden rounded-xl">
           <Image
-            src={ride.coverImageUrl}
+            src={apiAssetUrl(ride.coverImageUrl)}
             alt=""
             fill
             className="object-cover"

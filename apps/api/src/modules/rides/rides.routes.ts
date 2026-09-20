@@ -16,6 +16,7 @@ import { registrationResponseSchema } from '../registrations/registration-respon
 import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-response.schema.js';
 import { reviewResponseSchema } from '../reviews/review-response.schema.js';
 import {
+  coverImageResponseSchema,
   rideOrganizerSummarySchema,
   rideResponseSchema,
   routeGeometryResponseSchema,
@@ -31,10 +32,12 @@ import {
   createRide,
   createRoutePoint,
   createStop,
+  deleteCoverImage,
   deleteRoute,
   deleteRoutePoint,
   deleteStop,
   finishRide,
+  getCoverImageDownload,
   getRideForViewer,
   getRouteDownload,
   getRouteGeometry,
@@ -42,11 +45,13 @@ import {
   listPublicRides,
   openRegistration,
   publishRide,
+  replaceCoverImage,
   replaceRoute,
   startRide,
   updateRideDraft,
   updateRoutePoint,
   updateStop,
+  uploadCoverImage,
   uploadRoute,
 } from './rides.service.js';
 
@@ -84,6 +89,44 @@ async function readGpxUpload(
     throw err;
   }
   return { filename: part.filename, buffer };
+}
+
+// ADR-019/CR-086: smaller than GPX's global 10 MB cap (`GPX_MAX_UPLOAD_BYTES`) —
+// `@fastify/multipart`'s per-call `limits.fileSize` override, same mechanism
+// `readGpxUpload` uses, just a different value for this specific route.
+const COVER_IMAGE_MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+const COVER_IMAGE_TOO_LARGE = () =>
+  new RideServiceError(
+    'cover_image_too_large',
+    400,
+    'Cover image too large',
+    'The uploaded file exceeds the maximum cover image upload size.',
+  );
+
+/**
+ * Same shape as {@link readGpxUpload}, with its own (smaller) size limit override.
+ */
+async function readCoverImageUpload(
+  request: FastifyRequest,
+): Promise<{ buffer: Buffer } | null> {
+  const part = await request.file({
+    limits: { fileSize: COVER_IMAGE_MAX_UPLOAD_BYTES },
+  });
+  if (!part) {
+    return null;
+  }
+  try {
+    return { buffer: await part.toBuffer() };
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
+    ) {
+      throw COVER_IMAGE_TOO_LARGE();
+    }
+    throw err;
+  }
 }
 
 const rideResponseWrapper = z.object({ ride: rideResponseSchema });
@@ -488,6 +531,98 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.params.id,
       );
       return reply.status(200).send(geometry);
+    },
+  );
+
+  // ADR-019/CR-086 ("Cover image"): create/replace/delete/download an image, same
+  // 4-verb shape as `.../route`. Ownership/draft-only gate for mutations, viewer-
+  // visibility rule for the download — both resolved in `rides.service.ts`.
+  app.post(
+    '/:id/cover',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 201: coverImageResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const file = await readCoverImageUpload(request);
+      const result = await uploadCoverImage(
+        app.db,
+        app.s3,
+        request.user!.id,
+        request.params.id,
+        file,
+      );
+      return reply.status(201).send(result);
+    },
+  );
+
+  // Replaces an existing cover image. `404 cover_image_not_found` if none exists yet
+  // — use `POST` instead.
+  app.patch(
+    '/:id/cover',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: coverImageResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const file = await readCoverImageUpload(request);
+      const result = await replaceCoverImage(
+        app.db,
+        app.s3,
+        request.user!.id,
+        request.params.id,
+        file,
+      );
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.delete(
+    '/:id/cover',
+    {
+      schema: { params: rideIdParamsSchema },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      await deleteCoverImage(
+        app.db,
+        app.s3,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(204).send();
+    },
+  );
+
+  // Streams the raw image bytes. Same viewer-visibility rule as `GET /:id`
+  // (`resolveOptionalUser`) — not JSON, so no Zod `response` schema.
+  app.get(
+    '/:id/cover',
+    {
+      schema: { params: rideIdParamsSchema },
+      preHandler: resolveOptionalUser,
+    },
+    async (request, reply) => {
+      const { body, contentType } = await getCoverImageDownload(
+        app.db,
+        app.s3,
+        request.user?.id ?? null,
+        request.params.id,
+      );
+      // Every upload gets a fresh random S3 key (never reused, same discipline
+      // `.../route` follows), so a long/immutable cache is safe with no cache-
+      // busting query param needed (ADR-019).
+      return reply
+        .status(200)
+        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .type(contentType)
+        .send(body);
     },
   );
 

@@ -176,8 +176,9 @@ endpoint). Body: any subset of `title`, `description`, `bicycleType`,
 each `null` to clear; `startLat` in `[-90, 90]`, `startLng` in
 `[-180, 180]`), `participantLimit`, `priceRub`, `distanceKm`,
 `elevationGainMeters`, `paceKmh`, `durationMinutes`, `difficulty` — every
-field CR-017 left `null` at creation. `coverImageUrl` stays out (KI-023,
-deferred to the S3 pipeline); `startLat`/`startLng` are entered manually —
+field CR-017 left `null` at creation. `coverImageUrl` stays out — it is
+computed, not settable, from the dedicated `.../cover` endpoints below
+(ADR-019/CR-086); `startLat`/`startLng` are entered manually —
 no geocode-by-address UI exists yet (KI-016). `200` → `{ ride }` with the
 updated fields, `400 validation_error` on an invalid field.
 
@@ -378,6 +379,59 @@ route_not_found` if the ride has no route. `200` → `{ points }`
 separate from `GET /v1/rides/:id`'s `route` summary field, which deliberately has no
 `geometry`). No S3 call — the geometry is already in the `routes` row from `POST/PATCH
 .../route`, so there is no `route_storage_unavailable` case here.
+
+## Cover image
+
+POST `/v1/rides/:id/cover` — **implemented (CR-086, ADR-019)**. Same
+auth/ownership/draft-only rules as `POST .../route` (`resolveOwnDraftRide`):
+`404 ride_not_found` if the ride doesn't exist or isn't the caller's, `409
+ride_not_editable` once it has left `draft`. `multipart/form-data`, one file
+field named `file`. Accepted types: JPEG/PNG/WebP, verified by actually
+decoding the file with `sharp` — never trusted from the client
+`Content-Type` (`.claude/rules/security.md`); SVG is explicitly excluded
+(script-in-SVG XSS risk). `400 cover_image_missing` if no file part is sent,
+`400 cover_image_too_large` past an 8 MB raw-upload cap (smaller than GPX's
+10 MB, `@fastify/multipart`'s per-call `limits.fileSize`), `400
+cover_image_invalid` if `sharp` can't decode it as one of the accepted
+types. `409 cover_image_already_exists` if the ride already has a cover
+image (use `PATCH` to replace it). The image is resized to a 1920×1920 max
+(`fit: 'inside'`, no upscaling), EXIF orientation baked in via `.rotate()`,
+then remaining metadata (including any GPS EXIF) stripped — original format
+preserved, no forced re-encode. `503 cover_storage_unavailable` if the
+S3-compatible object store is unreachable or unconfigured. `201` →
+`{ coverImageUrl }` — always the same computed path,
+`/v1/rides/:id/cover`, never a direct S3 URL (the bucket stays fully
+private — same reasoning as `.../route/download`).
+
+PATCH `/v1/rides/:id/cover` — **implemented (CR-086)**. Same auth/ownership/
+draft-only/validation rules and request shape as `POST`. `404
+cover_image_not_found` if the ride has no cover image yet (use `POST`
+instead). `200` → `{ coverImageUrl }`, replacing the stored image — the old
+S3 object is deleted best-effort, only after the DB row already points at
+the new one (`.claude/rules/resilience.md`: the DB row is the source of
+truth).
+
+DELETE `/v1/rides/:id/cover` — **implemented (CR-086)**. Same
+auth/ownership/draft-only rules. `404 cover_image_not_found` if none
+exists. `204` — the DB row is cleared first; the S3 object is deleted
+best-effort afterward (never blocks the response).
+
+GET `/v1/rides/:id/cover` — **implemented (CR-086)**. Same viewer-visibility
+rule as `GET /v1/rides/:id`/`.../route/download` (`resolveOptionalUser`:
+the ride's owner always, anyone else only once the ride has left `draft`).
+`404 ride_not_found` for a non-existent/someone-else's-draft ride (same
+resource-enumeration-safe rule as every other viewer-facing endpoint), `404
+cover_image_not_found` if the ride has no cover image. `200` → the raw
+image bytes, `Content-Type` matching the stored, `sharp`-verified format.
+`503 cover_storage_unavailable` on a storage failure, same as
+`POST`/`PATCH`. Deliberately a proxy, not a redirect to a direct S3 URL —
+`next.config.ts` needs no `images.remotePatterns` entry as a result
+(relative, same-origin path).
+
+`GET /v1/rides/:id`'s `coverImageUrl` field (present since CR-017, always
+`null` until this ticket) is now real once a cover image exists — computed
+from `rides.cover_image_key` at response time, not stored as a URL
+directly (`docs/database.md`'s Rides table).
 
 POST `/v1/rides/:id/stops` — **implemented (CR-030, "Stops")**. Same
 auth/ownership/draft-only rules as `POST .../route` (`resolveOwnDraftRide`): `404

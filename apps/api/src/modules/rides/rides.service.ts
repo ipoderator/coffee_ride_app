@@ -13,6 +13,7 @@ import {
 } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
+  CoverImageResponse,
   CreateRideRequest,
   CreateRoutePointRequest,
   CreateStopRequest,
@@ -58,6 +59,13 @@ import {
   downloadGpxObject,
   uploadGpxObject,
 } from './route-storage.js';
+import { CoverImageInvalidError, processCoverImage } from './cover-image.js';
+import {
+  CoverImageStorageError,
+  deleteCoverImageObject,
+  downloadCoverImageObject,
+  uploadCoverImageObject,
+} from './cover-image-storage.js';
 import type { S3Handle } from '../../plugins/s3.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
@@ -206,6 +214,48 @@ const ROUTE_NOT_FOUND = () =>
     'This ride has no route uploaded yet.',
   );
 
+// ADR-019/CR-086 ("Cover image"). Same pattern as the `ROUTE_*`/`GPX_*` codes
+// above — a distinct code per outcome, resource-enumeration-safe where relevant.
+const COVER_IMAGE_MISSING = () =>
+  new RideServiceError(
+    'cover_image_missing',
+    400,
+    'Cover image missing',
+    'Upload an image in the "file" field.',
+  );
+
+const COVER_IMAGE_INVALID = (detail: string) =>
+  new RideServiceError(
+    'cover_image_invalid',
+    400,
+    'Invalid cover image',
+    detail,
+  );
+
+const COVER_IMAGE_ALREADY_EXISTS = () =>
+  new RideServiceError(
+    'cover_image_already_exists',
+    409,
+    'Cover image already exists',
+    'This ride already has a cover image — use PATCH to replace it.',
+  );
+
+const COVER_IMAGE_NOT_FOUND = () =>
+  new RideServiceError(
+    'cover_image_not_found',
+    404,
+    'Cover image not found',
+    'This ride has no cover image uploaded yet.',
+  );
+
+const COVER_STORAGE_UNAVAILABLE = () =>
+  new RideServiceError(
+    'cover_storage_unavailable',
+    503,
+    'Cover image storage unavailable',
+    'File storage is temporarily unavailable. Try again shortly.',
+  );
+
 // CR-030 ("Stops"): distinct from `RIDE_NOT_FOUND` — the ride itself was already
 // resolved (ownership + draft-only checked via `resolveOwnDraftRide`) by the time this
 // fires. Used for both "no such stop" and "stop belongs to a different ride", the same
@@ -258,13 +308,21 @@ const ROUTE_STORAGE_UNAVAILABLE = () =>
 // `toRegistration`/`toWaitlistEntry` — a function value only called inside another
 // function body, not at module init, so the resulting import cycle resolves fine
 // under Node's ESM live bindings).
+// ADR-019: the public `coverImageUrl` field is a same-origin API-proxy path,
+// computed from the ride id — never the stored S3 key, and never a direct S3
+// URL (the bucket stays private). Exported for `rides.routes.ts` to reuse when
+// building `POST`/`PATCH .../cover`'s response without re-deriving the path.
+export function coverImageUrlPath(rideId: string): string {
+  return `/v1/rides/${rideId}/cover`;
+}
+
 export function toPublicRide(row: typeof rides.$inferSelect): Ride {
   return {
     id: row.id,
     organizerId: row.organizerId,
     title: row.title,
     description: row.description,
-    coverImageUrl: row.coverImageUrl,
+    coverImageUrl: row.coverImageKey ? coverImageUrlPath(row.id) : null,
     bicycleType: row.bicycleType,
     startsAt: row.startsAt.toISOString(),
     startTimezone: row.startTimezone,
@@ -1401,6 +1459,224 @@ export async function getRouteGeometry(
   }
 
   return { points: routeRow.geometry as RouteGeometryPoint[] };
+}
+
+/**
+ * ADR-019/CR-086 ("Cover image"): validates, resizes, and stores a new cover image
+ * for a ride that has none yet. Same ownership + draft-only gate as
+ * {@link uploadRoute} ({@link resolveOwnDraftRide}). `409
+ * cover_image_already_exists` if one is already present — use
+ * {@link replaceCoverImage} instead.
+ */
+export async function uploadCoverImage(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string,
+  rideId: string,
+  file: { buffer: Buffer } | null,
+): Promise<CoverImageResponse> {
+  if (!file) {
+    throw COVER_IMAGE_MISSING();
+  }
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [existing] = await db
+    .select({ coverImageKey: rides.coverImageKey })
+    .from(rides)
+    .where(eq(rides.id, rideId))
+    .limit(1);
+  if (existing?.coverImageKey) {
+    throw COVER_IMAGE_ALREADY_EXISTS();
+  }
+
+  const processed = await processUploadedCoverImage(file.buffer);
+  const key = `covers/${rideId}/${randomUUID()}.${processed.ext}`;
+  try {
+    await uploadCoverImageObject(
+      s3,
+      key,
+      processed.buffer,
+      processed.contentType,
+    );
+  } catch (err) {
+    if (err instanceof CoverImageStorageError)
+      throw COVER_STORAGE_UNAVAILABLE();
+    throw err;
+  }
+
+  await db
+    .update(rides)
+    .set({
+      coverImageKey: key,
+      coverImageContentType: processed.contentType,
+      coverImageSizeBytes: processed.buffer.byteLength,
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
+    .where(eq(rides.id, rideId));
+
+  return { coverImageUrl: coverImageUrlPath(rideId) };
+}
+
+/**
+ * ADR-019/CR-086: replaces an existing cover image. `404 cover_image_not_found` if
+ * none exists yet — use {@link uploadCoverImage} instead. The old S3 object is
+ * deleted only after the DB row already points at the new one, and only
+ * best-effort (`.claude/rules/resilience.md`: the DB row is the source of truth).
+ */
+export async function replaceCoverImage(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string,
+  rideId: string,
+  file: { buffer: Buffer } | null,
+): Promise<CoverImageResponse> {
+  if (!file) {
+    throw COVER_IMAGE_MISSING();
+  }
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [existing] = await db
+    .select({ coverImageKey: rides.coverImageKey })
+    .from(rides)
+    .where(eq(rides.id, rideId))
+    .limit(1);
+  if (!existing?.coverImageKey) {
+    throw COVER_IMAGE_NOT_FOUND();
+  }
+
+  const processed = await processUploadedCoverImage(file.buffer);
+  const key = `covers/${rideId}/${randomUUID()}.${processed.ext}`;
+  try {
+    await uploadCoverImageObject(
+      s3,
+      key,
+      processed.buffer,
+      processed.contentType,
+    );
+  } catch (err) {
+    if (err instanceof CoverImageStorageError)
+      throw COVER_STORAGE_UNAVAILABLE();
+    throw err;
+  }
+
+  await db
+    .update(rides)
+    .set({
+      coverImageKey: key,
+      coverImageContentType: processed.contentType,
+      coverImageSizeBytes: processed.buffer.byteLength,
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
+    .where(eq(rides.id, rideId));
+
+  try {
+    await deleteCoverImageObject(s3, existing.coverImageKey);
+  } catch {
+    // Best-effort — see the function's own doc comment.
+  }
+
+  return { coverImageUrl: coverImageUrlPath(rideId) };
+}
+
+/**
+ * ADR-019/CR-086: removes a ride's cover image. `404 cover_image_not_found` if
+ * none exists. The DB row is updated first — S3 cleanup is best-effort and never
+ * blocks the delete (`.claude/rules/resilience.md`).
+ */
+export async function deleteCoverImage(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  await resolveOwnDraftRide(db, userId, rideId);
+
+  const [existing] = await db
+    .select({ coverImageKey: rides.coverImageKey })
+    .from(rides)
+    .where(eq(rides.id, rideId))
+    .limit(1);
+  if (!existing?.coverImageKey) {
+    throw COVER_IMAGE_NOT_FOUND();
+  }
+
+  await db
+    .update(rides)
+    .set({
+      coverImageKey: null,
+      coverImageContentType: null,
+      coverImageSizeBytes: null,
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
+    .where(eq(rides.id, rideId));
+
+  try {
+    await deleteCoverImageObject(s3, existing.coverImageKey);
+  } catch {
+    // Best-effort — see `replaceCoverImage`'s doc comment.
+  }
+}
+
+/**
+ * ADR-019/CR-086: streams the stored cover image back — the actual body behind
+ * `GET /v1/rides/:id`'s `coverImageUrl` path. Same viewer-visibility rule as
+ * {@link getRouteDownload} (owner always, others only once the ride has left
+ * `draft`).
+ */
+export async function getCoverImageDownload(
+  db: DbClient,
+  s3: S3Handle | null,
+  userId: string | null,
+  rideId: string,
+): Promise<{ body: Buffer; contentType: string }> {
+  const [row] = await db
+    .select({
+      status: rides.status,
+      organizerUserId: organizerProfiles.userId,
+      coverImageKey: rides.coverImageKey,
+      coverImageContentType: rides.coverImageContentType,
+    })
+    .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(eq(rides.id, rideId))
+    .limit(1);
+  if (!row) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const isOwner = userId !== null && row.organizerUserId === userId;
+  if (!isOwner && row.status === 'draft') {
+    throw RIDE_NOT_FOUND();
+  }
+
+  if (!row.coverImageKey) {
+    throw COVER_IMAGE_NOT_FOUND();
+  }
+
+  try {
+    const downloaded = await downloadCoverImageObject(s3, row.coverImageKey);
+    return {
+      body: downloaded.body,
+      contentType: row.coverImageContentType ?? 'application/octet-stream',
+    };
+  } catch (err) {
+    if (err instanceof CoverImageStorageError)
+      throw COVER_STORAGE_UNAVAILABLE();
+    throw err;
+  }
+}
+
+async function processUploadedCoverImage(buffer: Buffer) {
+  try {
+    return await processCoverImage(buffer);
+  } catch (err) {
+    if (err instanceof CoverImageInvalidError)
+      throw COVER_IMAGE_INVALID(err.message);
+    throw err;
+  }
 }
 
 /**

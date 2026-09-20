@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { PublicRide } from 'types';
+import { apiAssetUrl } from '@/lib/api/asset-url';
 import {
   Card,
   MetricRow,
@@ -34,14 +35,14 @@ export function RideCard({ ride }: { ride: PublicRide }) {
     <Link href={`/rides/${ride.id}`}>
       <Card className="flex flex-col gap-3 transition-opacity hover:opacity-90">
         {ride.coverImageUrl ? (
-          // Always `null` today (KI-023, no S3 pipeline yet) — same inert branch
-          // `RideDetailView` already carries. `next/image` needs the eventual S3
-          // domain in `next.config.ts`'s `images.remotePatterns`, which is
-          // CR-086's job alongside the pipeline itself — this only swaps the tag
-          // (CR-048) so the branch is already optimized once that value exists.
+          // ADR-019/CR-086: `coverImageUrl` is the API's bare `/v1/...` path
+          // (ADR-011) — `apiAssetUrl` adds the `/api` same-origin rewrite
+          // prefix (`next.config.ts`). Same-origin either way, so `next/image`
+          // needs no `images.remotePatterns` entry — that config is only for
+          // cross-origin sources.
           <div className="relative h-40 w-full overflow-hidden rounded-lg">
             <Image
-              src={ride.coverImageUrl}
+              src={apiAssetUrl(ride.coverImageUrl)}
               alt=""
               fill
               className="object-cover"

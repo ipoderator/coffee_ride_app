@@ -1,0 +1,1 @@
+ALTER TABLE "rides" DROP COLUMN "cover_image_url";

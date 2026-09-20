@@ -49,7 +49,12 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   data loss), `title` (not null, 1-140 chars), `description` (nullable, ≤2000
   chars — Zod-layer limit only, no DB CHECK; CR-018 set the actual value, the
   `≤5000` CR-017 had provisionally noted here was never enforced anywhere),
-  `coverImageUrl` (nullable, deferred to the S3 pipeline like KI-023),
+  `coverImageKey` (nullable text, S3 object key — CR-086/ADR-019, renamed from
+  the original never-populated `coverImageUrl` column once cover images are
+  served via an API proxy rather than a stored direct URL; the public
+  `coverImageUrl` API field is now computed from this key at response time),
+  plus `coverImageContentType`/`coverImageSizeBytes` (nullable, set together
+  with the key; `coverImageSizeBytes` CHECK `>= 0`),
   `bicycleType` (not null, pg enum `road`/`gravel`/`mtb`/`any`), `startsAt`
   (`timestamptz`, not null) + `startTimezone` (IANA identifier, not null,
   ADR-012 §2), `participantLimit` (nullable int, CHECK `>= 1`), `priceRub`

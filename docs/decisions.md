@@ -631,6 +631,98 @@ with TLS, sane restart behavior, and resource limits. `docs/architecture.md` cal
 reverse proxy choice a "production provider choice" that "must be recorded as ADRs" —
 recorded here.
 
+## ADR-019 — Cover image pipeline: size/type limits, resize bound, API-proxied serving
+
+Status: Accepted.
+
+Resolves backlog item CR-086 ("Cover image pipeline: size/type limits, resizing, how
+files are served (direct S3 vs proxy) — needed by CR-017"), decided together with
+CR-086's implementation rather than as a separate prior session — same precedent as
+ADR-014/CR-026 and ADR-015/CR-027.
+
+### Decision
+
+1. **Accepted types, verified by decoding, not by trusting the client.** JPEG, PNG,
+   WebP. `apps/api/src/modules/rides/cover-image.ts` hands the uploaded buffer to
+   `sharp` and reads back the format `sharp` itself detected — an upload whose actual
+   bytes aren't one of these three is rejected (`400 cover_image_invalid`) regardless
+   of what `Content-Type`/filename extension the client sent
+   (`.claude/rules/security.md`: never trust client input). SVG is deliberately not
+   accepted — an SVG can embed `<script>`/`foreignObject` content, a known image-upload
+   XSS vector, and gains nothing a raster cover photo needs.
+2. **8 MB upload cap**, smaller than GPX's 10 MB (ADR-015) — enforced the same way,
+   `@fastify/multipart`'s per-call `limits.fileSize` override on `request.file(...)`
+   (`readCoverImageUpload`, mirroring `readGpxUpload`). Generous for a real exported
+   phone/camera photo, small enough to bound the resize step's worst-case work.
+3. **Resize, don't crop.** `sharp(buffer).rotate().resize({ width: 1920, height: 1920,
+fit: 'inside', withoutEnlargement: true })` — bounds storage/bandwidth to a sane
+   maximum without upscaling a smaller image, and `.rotate()` with no argument bakes in
+   the EXIF orientation tag before it's discarded. The original format is kept (no
+   forced re-encode to one canonical format) and no crop/aspect ratio is applied — a
+   deliberate scope limit: `docs/design.md` §14 explicitly lists "cover-image aspect
+   ratio and crop behavior" as still open, pending a real photo sample. `RideCard`/
+   `RideDetailView` already crop to their container via CSS `object-cover` (CR-048),
+   independent of the stored image's own ratio — this decision must not preempt that
+   still-open design question by baking in a server-side crop.
+4. **Metadata is stripped**, not preserved — `sharp`'s default behavior once `.rotate()`
+   has already consumed the EXIF orientation tag it needs. Incidental but real privacy
+   benefit: phone photos routinely carry GPS EXIF tags that would otherwise leak an
+   organizer's (or a ride's start location's) precise coordinates through a "just a
+   cover photo" upload.
+5. **Served via API proxy** (`GET /v1/rides/:id/cover`), the same shape as `GET
+/v1/rides/:id/route/download` (ADR-015/CR-027) — not a direct S3/MinIO URL. The
+   object stays behind `apps/api/src/plugins/s3.ts`'s existing private bucket
+   credentials; nothing needed a bucket ACL/policy change. The returned `coverImageUrl`
+   is a same-origin relative path, so `next/image` needs no `images.remotePatterns`
+   entry either (that config is only for cross-origin `next/image` sources) — this
+   corrects speculative comments already left in `RideCard.tsx`/`RideDetailView.tsx`
+   anticipating a remote-pattern addition; those are updated alongside this decision.
+6. **DB:** `rides.cover_image_url` (text, added at CR-017, never actually populated) is
+   renamed to `rides.cover_image_key` — an S3 object key, same naming convention as
+   `routes.gpx_file_key` — plus new nullable `cover_image_content_type`/
+   `cover_image_size_bytes` columns. The public API field name (`coverImageUrl` on
+   `GetRideResponse`) is unchanged; it's now computed from the key at response time
+   (`/v1/rides/:id/cover`) instead of stored verbatim.
+7. **Scope: `Ride` only.** KI-023 also names `User`/`OrganizerProfile` avatars as
+   wanting the same pipeline — the storage (`cover-image-storage.ts`) and resize
+   (`cover-image.ts`) helpers are written generically (parameterized by S3 key/prefix,
+   no `rides`-specific assumptions baked into either), so a later ticket can reuse them
+   for an avatar upload endpoint without rebuilding this decision — but wiring actual
+   `User`/`OrganizerProfile` endpoints is explicitly out of this CR's scope.
+
+### Rationale
+
+- Reuses the exact resilience/ownership/draft-only/viewer-visibility patterns
+  `.../route` already established (ADR-015, CR-027/028) rather than inventing a second
+  file-upload shape — one pattern for "the app stores and serves an organizer-uploaded
+  file", not two.
+- Proxy-over-direct-S3 keeps the "everything bound to 127.0.0.1, no public bucket"
+  posture this project has held since `docs/decisions.md`'s Docker Compose port
+  decisions (CR-072) — a public-read bucket/CDN is a real, separate infrastructure
+  decision this ticket doesn't need to make to satisfy CR-017's actual requirement (the
+  ride detail/card screens showing a photo).
+- Resize-only (no crop) avoids the trap of two independent tickets each half-deciding
+  the same open design question (`docs/design.md` §14) from different layers.
+
+### What this does NOT mean
+
+- It does not mean the bucket can never become public/CDN-fronted — if image-serving
+  load ever becomes a measured problem at the API layer, that is a real infrastructure
+  decision (new ADR), not a default this one already picked.
+- It does not extend this pipeline to `User`/`OrganizerProfile` avatars — KI-023 stays
+  open for that follow-up work specifically, even though the low-level helpers are
+  already reusable.
+- It does not settle cover-image aspect ratio/crop behavior — that remains explicitly
+  open in `docs/design.md` §14 until a real photo sample exists.
+
+### When to revisit
+
+If image-serving load through the API ever becomes a measured bottleneck, or once
+`docs/design.md` settles a real aspect ratio/crop behavior (at which point a
+server-side crop step could be added to `cover-image.ts`), or when the `User`/
+`OrganizerProfile` avatar follow-up (KI-023) is picked up and needs to decide whether
+to reuse this proxy shape as-is.
+
 ### Decision
 
 1. **Caddy 2** is the reverse proxy, not nginx+certbot or Traefik. One `deploy/

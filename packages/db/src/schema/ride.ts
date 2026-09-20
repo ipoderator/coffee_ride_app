@@ -65,9 +65,14 @@ export const rides = pgTable(
     title: text('title').notNull(),
     // Nullable — filled in via CR-018's edit screen (see the scope note above).
     description: text('description'),
-    // Deferred to the S3 pipeline, same KI-023 gap `OrganizerProfile`/`User` already
-    // carry — not a new one.
-    coverImageUrl: text('cover_image_url'),
+    // CR-086/ADR-019: S3 object key (not a full URL — same convention as
+    // `routes.gpxFileKey`), plus enough metadata to serve it without a second S3
+    // round trip. Renamed from the original `cover_image_url` column (CR-017, never
+    // actually populated) once ADR-019 decided images are served via an API proxy
+    // (`GET /v1/rides/:id/cover`), not a stored direct URL.
+    coverImageKey: text('cover_image_key'),
+    coverImageContentType: text('cover_image_content_type'),
+    coverImageSizeBytes: integer('cover_image_size_bytes'),
     bicycleType: bicycleTypeEnum('bicycle_type').notNull(),
     // ADR-012: the instant, plus the IANA zone of the ride's start (below) — neither
     // alone answers "what did the organizer mean by 08:00".
@@ -145,6 +150,10 @@ export const rides = pgTable(
     check(
       'rides_duration_minutes_non_negative',
       sql`${table.durationMinutes} is null or ${table.durationMinutes} >= 0`,
+    ),
+    check(
+      'rides_cover_image_size_bytes_non_negative',
+      sql`${table.coverImageSizeBytes} is null or ${table.coverImageSizeBytes} >= 0`,
     ),
     check(
       'rides_difficulty_range',

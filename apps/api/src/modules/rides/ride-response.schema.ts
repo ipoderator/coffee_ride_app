@@ -76,6 +76,12 @@ export const routeGeometryResponseSchema = z.object({
   ),
 });
 
+// ADR-019/CR-086 ("Cover image"): `POST`/`PATCH /v1/rides/:id/cover`'s response —
+// deliberately minimal, see `packages/types`' `CoverImageResponse` doc comment.
+export const coverImageResponseSchema = z.object({
+  coverImageUrl: z.string(),
+});
+
 // CR-030 ("Stops"): the one "stop over the wire" shape, embedded as an array in
 // `GET /v1/rides/:id`'s response and returned by `POST`/`PATCH .../stops`.
 export const stopResponseSchema = z.object({

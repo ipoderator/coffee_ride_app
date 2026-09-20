@@ -629,8 +629,37 @@ registrations/registrations.service.ts`) now return `{ resource, created }`;
 - [x] CR-085 GPX parsing must not block the event loop: size limit, streaming or worker —
       needed by CR-027 — decided together with CR-027 (ADR-015, 2026-09-15): 10 MB
       upload cap + streaming SAX parse, no worker thread. See `docs/decisions.md`.
-- [ ] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
-      (direct S3 vs proxy) — needed by CR-017
+- [x] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
+      (direct S3 vs proxy) — needed by CR-017. Implemented in an earlier
+      session (uncommitted); validated and committed 2026-09-20. ADR-019:
+      JPEG/PNG/WebP verified by decoding with `sharp` (never trusts client
+      `Content-Type`), 8 MB upload cap, resize to 1920×1920 max
+      (`fit: 'inside'`, EXIF-rotated then stripped), served via an API proxy
+      (`GET /v1/rides/:id/cover`), never a direct S3 URL. `rides.cover_image_url`
+      (never populated) renamed to `cover_image_key` + new
+      `cover_image_content_type`/`cover_image_size_bytes` columns.
+      `POST`/`PATCH`/`DELETE`/`GET /v1/rides/:id/cover`, same auth/ownership/
+      draft-only gate as `.../route`. `/organizer/rides/[id]/cover` screen,
+      linked from `EditRideForm`; `RideCard`/`RideDetailView`'s existing
+      `next/image` branches (CR-048) go live. Scope: `Ride` only — `User`/
+      `OrganizerProfile` avatars stay open (KI-023), reusing the same
+      validate/resize/storage modules when built.
+      This session's validation: `pnpm --filter api/web typecheck/lint`
+      clean; `pnpm --filter api test` 345 passed/1 skipped (incl. 27/27 new
+      cover-image tests); `pnpm --filter web test` 185 passed;
+      `pnpm turbo run build` clean (new `/organizer/rides/[id]/cover` route
+      compiles). Live-verified against the real running MinIO — not just
+      mocked-S3 unit tests: registered a user, created a draft ride,
+      uploaded a 400×300 JPEG (`201`, ride's `coverImageUrl` field became
+      real), downloaded it back byte-correct as owner (`200`, decodes as a
+      real 400×300 JPEG), confirmed `404` for an unauthenticated viewer of
+      the still-draft ride (same visibility rule as route download, not a
+      bug), replaced it with a 3000×2000 image and confirmed the resize
+      bound (downloaded back as exactly 1920×1280), deleted it and confirmed
+      both the `204`/`coverImageUrl: null` and a subsequent `404`. Test data
+      cleaned up from the real dev database afterward. Also finished
+      `docs/api.md`/`docs/database.md`, which the implementing session had
+      left describing the old deferred state — see `docs/changelog.md`.
 - [x] CR-092 Real critical-journey Playwright specs — done 2026-09-19: new
       `apps/web/e2e/helpers/api-fixtures.ts` (register/verify/login/organizer
       profile/publish-ride/register-for-ride, all via direct API calls) and

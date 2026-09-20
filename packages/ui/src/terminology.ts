@@ -375,6 +375,8 @@ export const RIDE_EDIT_TERMS = {
   startLngLabel: 'Долгота старта',
   // CR-027 ("GPX upload"): link into `/organizer/rides/[id]/route`.
   routeLink: 'Маршрут →',
+  // ADR-019/CR-086 ("Cover image"): link into `/organizer/rides/[id]/cover`.
+  coverLink: 'Обложка →',
   // CR-037 ("Organizer participant list"): link into
   // `/organizer/rides/[id]/participants`.
   participantsLink: 'Участники →',
@@ -512,6 +514,35 @@ export const RIDE_ROUTE_TERMS = {
   metricsMismatchTrack: 'по треку',
   metricsSyncAction: 'Использовать данные трека',
   metricsSyncSuccess: 'Дистанция и набор высоты заезда обновлены из трека.',
+} as const;
+
+/**
+ * `/organizer/rides/[id]/cover` (ADR-019/CR-086, `docs/design.md` §14). Same
+ * shape as `RIDE_ROUTE_TERMS` — one image field, create/replace/delete.
+ */
+export const RIDE_COVER_TERMS = {
+  pageTitle: 'Обложка заезда',
+  backToEdit: 'К редактированию заезда',
+  loadError: 'Не удалось загрузить заезд. Попробуйте ещё раз.',
+  notEditable: 'Обложку можно менять только у черновика заезда.',
+  emptyTitle: 'Обложка ещё не загружена',
+  emptyDescription:
+    'Загрузите изображение (JPEG, PNG или WebP), чтобы добавить обложку.',
+  uploadLabel: 'Файл изображения',
+  upload: 'Загрузить обложку',
+  uploadPending: 'Загрузка…',
+  uploadSuccess: 'Обложка загружена.',
+  replace: 'Заменить обложку',
+  replacePending: 'Замена…',
+  replaceSuccess: 'Обложка обновлена.',
+  delete: 'Удалить обложку',
+  deletePending: 'Удаление…',
+  deleteSuccess: 'Обложка удалена.',
+  deleteConfirm: 'Удалить загруженную обложку? Это действие необратимо.',
+  coverImageMissing: 'Выберите файл изображения для загрузки.',
+  coverImageInvalid: 'Файл не распознан как изображение JPEG, PNG или WebP.',
+  coverImageTooLarge: 'Файл превышает допустимый размер (8 МБ).',
+  storageUnavailable: 'Загрузка недоступна. Попробуйте ещё раз позже.',
 } as const;
 
 /**

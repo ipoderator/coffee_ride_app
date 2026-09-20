@@ -4639,3 +4639,79 @@ Follow-up: CR-086 (cover image pipeline) remains the only unchecked,
 unblocked ticket in `docs/tasks.md` — its files are already in the working
 tree from an earlier session (implemented, uncommitted) but were not
 touched by this task.
+
+## 2026-09-20 — CR-086 — Cover image pipeline (ADR-019)
+
+`rides.coverImageUrl` had existed as a nullable column since CR-017 with no
+way to ever set it (KI-023). This ticket's code was fully implemented in an
+earlier session but left uncommitted, and its docs half (`docs/api.md`,
+`docs/database.md`) was never finished — both completed this session before
+committing.
+
+ADR-019 decisions: accepted types are JPEG/PNG/WebP, verified by actually
+decoding the file with `sharp` rather than trusting the client
+`Content-Type` (SVG explicitly excluded — script-in-SVG XSS risk); 8 MB
+upload cap via `@fastify/multipart`'s per-call `limits.fileSize`; resize to
+1920×1920 max (`fit: 'inside'`, no upscaling), `.rotate()` to bake in EXIF
+orientation, then remaining metadata stripped (incidental privacy win —
+phone photos often carry GPS EXIF), original format preserved rather than a
+forced re-encode; served via an API proxy (`GET /v1/rides/:id/cover`), never
+a direct S3 URL, keeping the bucket fully private and needing no
+`next.config.ts` `images.remotePatterns` entry. `rides.cover_image_url`
+(text, never populated) renamed to `cover_image_key` (S3 key, matching
+`routes.gpx_file_key`'s convention) plus new
+`cover_image_content_type`/`cover_image_size_bytes` columns — the public API
+field name `coverImageUrl` is unchanged, now computed from the key at
+response time. Scope: `Ride` only, matching the literal ticket wording — the
+validate/resize/storage modules (`apps/api/src/modules/rides/cover-image.ts`,
+`cover-image-storage.ts`) are written generic enough to reuse for `User`/
+`OrganizerProfile` avatars (KI-023's other two entities, still open).
+
+API: `POST`/`PATCH`/`DELETE`/`GET /v1/rides/:id/cover`, same
+auth/ownership/draft-only gate as `.../route` for the three mutations, same
+viewer-visibility rule as `.../route/download` for `GET`. Error codes: `400
+cover_image_missing`/`cover_image_too_large`/`cover_image_invalid`, `409
+cover_image_already_exists`, `404 cover_image_not_found`, `503
+cover_storage_unavailable`.
+
+Frontend: `/organizer/rides/[id]/cover` (new feature module,
+`apps/web/src/features/organizer/cover-image/`), linked from
+`EditRideForm` next to the route/participants/updates links.
+`RideCard`/`RideDetailView`'s `next/image` branches (already built in CR-048,
+previously always inert since `coverImageUrl` was always `null`) go live.
+
+Testing/validation (this session): `pnpm --filter api typecheck`/`lint` and
+`pnpm --filter web typecheck`/`lint` clean. `pnpm --filter api test`: 345
+passed, 1 skipped, including 27/27 new cover-image tests (resize/validate
+helper unit tests, service-layer tests with `@aws-sdk/client-s3` mocked,
+route auth/ownership/validation tests). `pnpm --filter web test`: 185
+passed, including the new frontend form test. `pnpm turbo run build`: clean,
+`/organizer/rides/[id]/cover` compiles as a real route. Live-verified
+against the real running MinIO (Docker up this session) — not just mocked-S3
+unit tests: registered a user, created a draft ride, uploaded a 400×300
+JPEG (`201`, ride's `coverImageUrl` field went from `null` to real), an
+unauthenticated `GET .../cover` on the still-draft ride correctly `404`s
+(same visibility rule as route download — confirmed this wasn't a bug by
+re-requesting as the owner, which returned the actual bytes decoding as a
+real 400×300 JPEG), replaced it with a 3000×2000 image and confirmed the
+resize bound by downloading it back as exactly 1920×1280, deleted it and
+confirmed both the `204`/`coverImageUrl: null` response and a subsequent
+`404`. Both the previously-empty Docker Compose `coffee_ride` database and
+the real native `coffee_ride_dev` were migrated with the two new migrations
+this ticket added (`0014_tense_revanche.sql`, `0015_high_owl.sql`) before
+running any of this. All live-verification test data (the one ride/
+organizer profile/user created for this check) was cleaned up from the real
+`coffee_ride_dev` database afterward — confirmed the real user count was
+unchanged before and after.
+
+Decisions: ADR-019 (new) — see `docs/decisions.md`.
+
+Known issues resolved: KI-023's `Ride` third is resolved (the entry stays
+open for `User`/`OrganizerProfile` avatars, which reuse the same modules
+when built).
+
+Follow-up: `docs/tasks.md` has no other unchecked, unblocked ticket right
+now. Next candidates: an avatar endpoint for `User`/`OrganizerProfile`
+(KI-023's remainder, no ticket number yet), or wiring a real consumer for
+`packages/maps-2gis` (KI-032's geocode-by-address UI, or CR-028/CR-084's
+route rendering — both still zero-consumer per KI-016's resolution note).
