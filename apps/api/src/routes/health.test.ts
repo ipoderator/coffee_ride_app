@@ -1,5 +1,6 @@
 import { HeadBucketCommand } from '@aws-sdk/client-s3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getTestDatabaseUrl } from '../test-support/test-database-url.js';
 
 // Same "mock the SDK wire call, exercise the real wiring code" technique as
 // `route.routes.test.ts` (S3) and `queue.test.ts` (bullmq/ioredis) — this suite
@@ -80,25 +81,21 @@ vi.mock('bullmq', () => {
 const { buildApp } = await import('../app.js');
 const { loadEnv } = await import('../env.js');
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL is required to run apps/api tests (health.test.ts needs a real, migrated Postgres database).',
-  );
-}
+const DATABASE_URL = getTestDatabaseUrl();
 
 const WEB_ORIGIN = 'http://localhost:3000';
 
 const envWithoutRedisOrS3 = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
 });
 
 const envWithRedisAndS3 = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
   REDIS_URL: 'redis://localhost:6379',
   S3_ENDPOINT: 'http://localhost:9000',

@@ -115,6 +115,42 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
 
+  # CR-096/KI-049. Unlike `migrate`, no profile — starts automatically with
+  # a plain `docker compose up`, the same way `caddy`/`web`/`api` do: a
+  # backup that has to be remembered and started by hand is exactly the gap
+  # that left `packages/db/scripts/backup.sh` unrun since CR-078 first added
+  # it. Read-only against the database (mounts backup.sh itself read-only,
+  # writes only into its own volume) — never in the request path of
+  # `api`/`web`, so a stuck/slow backup can't degrade them
+  # (`.claude/rules/resilience.md`). Runs an immediate backup on start, then
+  # loops on BACKUP_INTERVAL_SECONDS (default: daily); a failed run logs and
+  # retries next interval rather than crash-looping the container.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./packages/db/scripts/backup.sh:/scripts/backup.sh:ro
+      - postgres_backups:/backups
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        while true; do
+          /scripts/backup.sh || echo "backup.sh failed, will retry next interval" >&2
+          sleep "$$BACKUP_INTERVAL_SECONDS"
+        done
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
 volumes:
   caddy_data:
   caddy_config:
+  postgres_backups:

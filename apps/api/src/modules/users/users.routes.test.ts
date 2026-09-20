@@ -4,22 +4,19 @@ import { users } from 'db/schema';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
+import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 
 // Same rationale as `auth.routes.test.ts`: a real Postgres, `DELETE FROM
 // users` (not `TRUNCATE ... CASCADE`) to avoid the cross-file lock deadlock
 // documented there.
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL is required to run apps/api tests (users.routes.test.ts needs a real, migrated Postgres database).',
-  );
-}
+const DATABASE_URL = getTestDatabaseUrl();
 
 const WEB_ORIGIN = 'http://localhost:3000';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
 });
 

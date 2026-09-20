@@ -4,6 +4,7 @@ import { sessions } from 'db/schema';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
+import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 import { registerUser } from './auth.service.js';
 import {
   createSession,
@@ -13,16 +14,12 @@ import {
 } from './session.js';
 
 // Same live-Postgres contract as auth.routes.test.ts.
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL is required to run apps/api tests (session.test.ts needs a real, migrated Postgres database).',
-  );
-}
+const DATABASE_URL = getTestDatabaseUrl();
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN: 'http://localhost:3000',
 });
 

@@ -493,7 +493,7 @@ test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
       blocking a critical journey; falls back to the plugin's in-memory
       store otherwise, unchanged. New independent per-account tier
       (`apps/api/src/lib/account-rate-limit.ts`, atomic `MULTI INCR +
-  PEXPIRE ... NX EXEC`) on `/register`/`/login`/`/forgot-password`,
+PEXPIRE ... NX EXEC`) on `/register`/`/login`/`/forgot-password`,
       keyed by normalized email, also fail-open. Live-verified against the
       real Redis this session (including stopping it mid-session to confirm
       login still replies `401` in ~1.3s, not hung) — resolves KI-022. See
@@ -662,3 +662,43 @@ graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
       signals — 5 tests cover clean shutdown, a rejecting `app.close()`, a
       10s hard-fallback force-exit, and a second signal mid-shutdown forcing
       an immediate exit. Resolves KI-048. See `docs/changelog.md`.
+- [x] CR-095 Give `apps/api`'s test suite its own disposable database
+      (`TEST_DATABASE_URL` or `.env.test`), separate from `.env`'s
+      `DATABASE_URL` — found 2026-09-20 (KI-049): running the suite locally
+      with `.env` sourced wiped the real native dev database's accumulated
+      manual-QA data (`DELETE FROM rides`/`users` in `beforeEach`/`afterAll`,
+      cascading), since nothing distinguishes a real `DATABASE_URL` from a
+      disposable one today. Done 2026-09-20: new
+      `apps/api/src/test-support/test-database-url.ts` (`getTestDatabaseUrl`)
+      — all 13 `apps/api` test files that touch a real Postgres now read
+      `TEST_DATABASE_URL`, never `DATABASE_URL`, so sourcing `.env` can no
+      longer feed the suite a real database at all. Second, independent
+      guard: even a correctly-set `TEST_DATABASE_URL` is refused unless its
+      database name looks disposable (contains "test", or is exactly
+      "coffee_ride") — live-verified this refuses `coffee_ride_dev` by name.
+      `.env.example`/`.env`/`ci.yml` all set `TEST_DATABASE_URL` (CI: same
+      disposable per-run Postgres service it already used); `.env`'s value
+      uses `127.0.0.1` explicitly rather than `localhost`, since this
+      machine's native Postgres (`DATABASE_URL`) and Docker's Postgres
+      (`TEST_DATABASE_URL`) both listen on port 5432 on different address
+      families and `localhost`'s resolution order was part of how this
+      incident could happen unnoticed. Live-verified end to end: sourced
+      `.env`, ran the full `apps/api` suite (345 tests, all passing) against
+      the now-migrated Docker Compose `coffee_ride` database, and confirmed
+      `coffee_ride_dev`'s row count was unchanged before/after.
+      Also addressed the backup half of the same incident (KI-049 found no
+      backup existed to restore from): took an immediate real backup of
+      `coffee_ride_dev` (`packages/db/backups/`, gitignored); added a
+      `backup` service to `docker-compose.prod.yml` that runs
+      `packages/db/scripts/backup.sh` automatically on `docker compose up`
+      (no `migrate`-style profile — a backup is read-only against the
+      database, so it's safe to always run) and repeats on
+      `BACKUP_INTERVAL_SECONDS` (default daily), replacing the previous
+      "documented cron one-liner nobody ever installed" state; validated
+      with `docker compose -f docker-compose.prod.yml config` (caught and
+      fixed a real bug along the way — an unescaped `$BACKUP_INTERVAL_SECONDS`
+      inside the service's shell command was being interpolated by Compose
+      itself at config-render time instead of passed through to the
+      container's shell; fixed with `$$`). `docs/database.md`'s Backups
+      section rewritten to describe the new automatic schedule instead of
+      the old manual cron instructions. See `docs/changelog.md`.

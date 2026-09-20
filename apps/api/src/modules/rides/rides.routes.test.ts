@@ -4,23 +4,20 @@ import { organizerProfiles, rides, users } from 'db/schema';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
+import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 
 // Same rationale as `organizers.routes.test.ts`: a real Postgres, `DELETE FROM users`
 // (cascades to `organizer_profiles`; `rides.organizer_id` references
 // `organizer_profiles` with `ON DELETE RESTRICT`, so this file's own `beforeEach`
 // clears `rides` first, then `organizer_profiles`/`users` — see below).
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL is required to run apps/api tests (rides.routes.test.ts needs a real, migrated Postgres database).',
-  );
-}
+const DATABASE_URL = getTestDatabaseUrl();
 
 const WEB_ORIGIN = 'http://localhost:3000';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
 });
 

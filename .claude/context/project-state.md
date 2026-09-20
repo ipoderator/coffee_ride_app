@@ -29,15 +29,20 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-094 (wire `SIGTERM`/`SIGINT` graceful shutdown, resolving
-KI-048) just closed: new `apps/api/src/lib/graceful-shutdown.ts`
-(`registerGracefulShutdown`, dependency-injected signals/exit for unit
-testing), wired into `server.ts` right after `buildApp()` — first signal
-calls `app.close()` under a 10s hard-fallback timer, a second signal
-mid-shutdown forces an immediate exit. Only one unchecked, unblocked ticket
-remains in `docs/tasks.md`: CR-086 (cover image pipeline). Next logical
-step: CR-086, or (if a `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`/geocoding consumer
-is wanted) KI-032/KI-031.
+None active. CR-095 (test-suite data-loss guard + backup safety net,
+resolving KI-049) just closed, out of band — a previous session's `apps/api`
+test run had wiped the real local dev Postgres because the suite read
+`DATABASE_URL` directly. Every `apps/api` test file that touches a real
+Postgres now reads `TEST_DATABASE_URL` instead (a variable `.env` never
+sets), plus a name-based refusal even if that var is set wrong; `.env`/
+`.env.example`/`ci.yml` updated accordingly; `docker-compose.prod.yml`
+gained an always-on `backup` service (`packages/db/scripts/backup.sh` on a
+schedule, no profile gate needed since it's read-only). Only one unchecked,
+unblocked ticket remains in `docs/tasks.md`: CR-086 (cover image pipeline)
+— its files are already fully present in the working tree from an earlier
+session (implemented, uncommitted) but untouched by CR-095. Next logical
+step: commit/verify CR-086, or (if a `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`/
+geocoding consumer is wanted) KI-032/KI-031.
 
 ## Implemented
 
@@ -208,7 +213,17 @@ entirely by `DATABASE_URL`, same hosting-agnostic shape as `migrate.ts` —
 Restore live-verified this session against this environment's real local
 Postgres (marker row round-tripped through a real backup into a scratch
 database, all 14 tables' counts matched, then cleaned up) — see
-`docs/changelog.md`'s CR-078 entry.
+`docs/changelog.md`'s CR-078 entry. `docker-compose.prod.yml`'s new `backup`
+service (CR-095) actually runs `backup.sh` on a schedule now — see below.
+
+**Test isolation** (CR-095, new): `apps/api/src/test-support/
+test-database-url.ts` (`getTestDatabaseUrl`) is the only way any `apps/api`
+test file obtains a database connection string — reads `TEST_DATABASE_URL`
+only (never `DATABASE_URL`, which `.env` sets for real dev/prod use) and
+refuses to run unless the resolved database name looks disposable
+(contains "test", or is exactly "coffee_ride"). Resolves KI-049 (a real
+local dev database was wiped by the test suite's unscoped `DELETE FROM`
+cleanup running against `.env`'s real `DATABASE_URL`).
 
 **packages/types**: shared Zod contracts + domain types for everything above;
 `ProblemDetails`/`Paginated<T>` (ADR-011).
@@ -391,6 +406,14 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   which is keyed by email, not IP). `apps/api`'s production boot crash on
   `db`/`types`'s raw-TS-source exports (KI-017) and missing `@fastify/helmet`
   security headers are both resolved (ADR-017, CR-061).
+- KI-049 (found and resolved same session, CR-095): a previous session's
+  `apps/api` test run wiped the real local dev Postgres (`.env`'s
+  `DATABASE_URL`) because the suite ran its unscoped cleanup against
+  whatever database it was pointed at. Fixed structurally, not just
+  documented: tests now read `TEST_DATABASE_URL` (`.env` never sets it) plus
+  a name-based refusal; `docker-compose.prod.yml` gained an always-on
+  `backup` service so a scheduled backup actually exists once production is
+  deployed, replacing the previous unactioned "add a cron entry" doc note.
 - KI-048 (found CR-058, resolved CR-094): `server.ts` now registers a real
   `SIGTERM`/`SIGINT` handler (`lib/graceful-shutdown.ts`,
   `registerGracefulShutdown`) — first signal calls `app.close()` (draining
@@ -528,6 +551,16 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 - `playwright.config.ts`'s `webServer` staying a two-entry array (`apps/api`
   then `apps/web`, CR-080) — `/` has called the real API since CR-024, so a
   lone `apps/web` dev server is no longer sufficient for any e2e spec here.
+- `apps/api` test files reading `TEST_DATABASE_URL` via
+  `test-support/test-database-url.ts`'s `getTestDatabaseUrl()`, never
+  `process.env.DATABASE_URL` directly (CR-095, KI-049) — don't reintroduce a
+  direct `DATABASE_URL` read in a new test file; the disposable-name guard
+  only protects files that go through this helper;
+- the `docker-compose.prod.yml` `backup` service staying un-gated (no
+  `migrate`-style profile) — it's read-only against the database and meant
+  to run by default; and its shell command's `$$BACKUP_INTERVAL_SECONDS`
+  staying double-escaped (Compose interpolates a bare `$VAR` itself at
+  config-render time otherwise, turning it into an empty string);
 - both rate-limit tiers (`app.ts`'s global `@fastify/rate-limit`
   registration and `lib/account-rate-limit.ts`'s per-account check, CR-058)
   failing OPEN on a Redis error/timeout, never closed — login/register are
@@ -543,4 +576,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-19 (CR-058)
+2026-09-20 (CR-095)

@@ -53,6 +53,12 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/coffee_ride
+      # CR-096/KI-049. apps/api's own test suite reads TEST_DATABASE_URL, never
+      # DATABASE_URL, so a real database can never leak into it — see
+      # apps/api/src/test-support/test-database-url.ts. Same disposable
+      # per-run `postgres` service as DATABASE_URL above; deliberately not
+      # just reusing DATABASE_URL so the two stay structurally independent.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/coffee_ride
       REDIS_URL: redis://localhost:6379
       # CR-080. apps/api's own test suite builds its `env` objects directly
       # (never reads these), but the Playwright e2e job below boots a real

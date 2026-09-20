@@ -194,14 +194,33 @@ into a scratch database) — either way it drops and recreates every object
 first rather than erroring on "already exists".
 
 Backup _destination_ (this local directory vs. syncing it to S3/offsite
-storage, and how often) is deliberately left to whoever operates the real
-Postgres instance, for the same reason its host is undecided — wiring a
-specific offsite target here would invent a hosting decision this repo hasn't
-made. A daily cron entry is a reasonable minimum once a host is chosen:
+storage) is deliberately left to whoever operates the real Postgres instance,
+for the same reason its host is undecided — wiring a specific offsite target
+here would invent a hosting decision this repo hasn't made.
 
-```text
-0 3 * * * cd /path/to/coffeeride && DATABASE_URL=postgresql://... BACKUP_DIR=/var/backups/coffee-ride pnpm --filter db db:backup >> /var/log/coffee-ride-backup.log 2>&1
-```
+Scheduling itself is no longer left to a cron entry someone has to remember to
+add (CR-096: the original version of this section only documented a cron
+one-liner, and no session ever actually installed it anywhere — `backup.sh`
+sat unused until it accidentally became the _only_ thing standing between a
+real data-loss incident and a restore, see KI-049). `docker-compose.prod.yml`'s
+`backup` service now runs `backup.sh` automatically — no `migrate`-style
+profile flag needed, since a backup is read-only against the database and
+therefore safe to always run. It takes an immediate backup on `docker compose
+up`, then repeats every `BACKUP_INTERVAL_SECONDS` (default 86400 = daily),
+writing into the `postgres_backups` named volume; `BACKUP_RETENTION_DAYS`
+(default 14 in that service, vs. this script's own 7-day default) controls
+pruning the same way it does when the script is run by hand. A failed run
+logs to the container's stdout and retries next interval rather than
+crash-looping. Copying files out of the `postgres_backups` volume to actual
+offsite storage is still the operator's own responsibility — this only
+guarantees a recent restorable dump always exists on the host.
+
+For local development, there is no equivalent automatic schedule — a local
+dev database is normally disposable (that's the whole point of KI-049's fix:
+`apps/api`'s test suite now runs only against a disposable database, never a
+real one). If a local database does accumulate real data you'd mind losing
+(manual QA, a demo), run `pnpm --filter db db:backup` by hand before anything
+destructive, or point `BACKUP_DIR` at wherever you want the dump kept.
 
 A restore was live-verified against this environment's real local Postgres
 (2026-09-19, CR-078): a backup of the working `coffee_ride_dev` database was

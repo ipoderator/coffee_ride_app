@@ -2,78 +2,118 @@
 
 ## Task ID
 
-CR-094 — Wire `SIGTERM`/`SIGINT` in `apps/api/src/server.ts` to actually
-call `app.close()`, resolving KI-048. Closed.
+CR-095 — Give `apps/api`'s test suite its own disposable database
+(`TEST_DATABASE_URL`), separate from `.env`'s `DATABASE_URL` (KI-049) —
+already the pre-created ticket for this exact gap (`docs/tasks.md`, last
+unchecked entry). Widened in this session to also cover the backup side of
+the same incident (no working backup schedule existed anywhere). Interrupts
+CR-086 (cover image pipeline), whose files are already in the working tree,
+implemented but uncommitted, and left untouched by this task — see "Note on
+CR-086" below.
 
 ## Goal
 
-KI-048: nothing called `app.close()` on `SIGTERM`/`SIGINT` — `modules/
-notifications/queue.ts`'s `onClose` hook already assumed a real graceful
-shutdown triggers it, but no signal handler existed, so on a real
-`docker stop`/orchestrator shutdown the process just died without running
-any `onClose` hook (notification queue worker/producer disconnect, `db.ts`'s
-Postgres pool close).
+Previous session's `apps/api` test run wiped the real local dev Postgres
+(`coffee_ride_dev`) because the test suite's unscoped `DELETE FROM
+users`/`DELETE FROM rides` ran against whatever `DATABASE_URL` was in the
+environment — no distinction between a disposable test database and the real
+one (KI-049). User confirmed the lost data was test/QA data and does not need
+restoring. Two things are actually asked for:
 
-## Requirements / acceptance criteria — all met
+1. Make this structurally impossible against real data going forward (not
+   just a documented workaround to remember).
+2. Set up backups — the mechanism (`packages/db/scripts/backup.sh`) has
+   existed since CR-078 but has never actually been run or scheduled
+   anywhere, local or prod.
 
-- `SIGTERM` and `SIGINT` each trigger `app.close()` then `process.exit(0)`
-  on success. Done.
-- A hard fallback timeout (10s) forces `process.exit(1)` if `app.close()`
-  doesn't finish in time — defense in depth beyond `queue.ts`'s own bounded
-  (3s) `onClose` hook, also covers `db.ts`'s unbounded pool `.end()`. Done.
-- A second signal mid-shutdown forces an immediate exit instead of
-  waiting/re-entering. Done.
-- `app.close()` rejecting (an `onClose` hook throwing) still exits
-  non-zero instead of hanging. Done.
-- Dependency-injectable (signals source + exit function) so it's
-  unit-testable without real OS signals or killing the test process. Done.
+## Requirements / acceptance criteria
 
-## Implementation
+- `apps/api`'s test suite reads a `TEST_DATABASE_URL` env var, never
+  `DATABASE_URL` — sourcing `.env` (which only sets `DATABASE_URL`) can no
+  longer feed the suite a real database under any circumstance.
+- Defense in depth: even with `TEST_DATABASE_URL` set, the suite refuses to
+  run its destructive `beforeEach`/`afterAll` cleanup if the resolved
+  database name doesn't look disposable (must contain `test`, or be exactly
+  `coffee_ride`) — guards against someone exporting `TEST_DATABASE_URL`
+  wrong, not just against `.env` being sourced.
+- CI's `TEST_DATABASE_URL` points at the same disposable service-container
+  Postgres it already uses for `DATABASE_URL` — no behavior change in CI,
+  same isolation guarantee made explicit.
+- `.env.example`/`.env` document/set `TEST_DATABASE_URL` pointing at the
+  Docker Compose `postgres` service's `coffee_ride` database — never at
+  `coffee_ride_dev`.
+- A real, current backup of `coffee_ride_dev` exists on disk right now
+  (immediate safety net for the 2 real users currently in it).
+- `docker-compose.prod.yml` gets a real scheduled backup mechanism (not just
+  a documented cron one-liner nobody runs) — activates automatically the
+  moment production is ever deployed (KI-001/045: not deployed yet).
+- Local recurring backups: ask the user before installing anything at the
+  OS level (launchd) — that's outside the repo and persists on their
+  machine regardless of this session.
 
-- `apps/api/src/lib/graceful-shutdown.ts` (new): `registerGracefulShutdown(app,
-deps?)`. Tracks a `shuttingDown` flag; first `SIGTERM`/`SIGINT` starts an
-  unref'd 10s force-exit timer and calls `app.close()`; success clears the
-  timer and exits 0, rejection logs and exits 1, timeout exits 1. A second
-  signal while `shuttingDown` is true exits 1 immediately without a second
-  `app.close()` call.
-- `apps/api/src/lib/graceful-shutdown.test.ts` (new, 5 tests): fake
-  `signals.on`/`exit` deps, `vi.useFakeTimers()` for the force-exit-timeout
-  case. Covers registration, clean shutdown, `close()` rejection, force-exit
-  timeout, and double-signal.
-- `apps/api/src/server.ts`: calls `registerGracefulShutdown(app)` (real
-  `process`) right after `buildApp()`, before `app.listen()`.
+## Note on CR-086
+
+Its files (cover-image pipeline) are already fully present in the working
+tree per `git status` at session start, but `docs/tasks.md` still shows it
+unchecked and this file still said "Starting now." — stale, not this
+session's job to resolve. Left entirely alone; do not commit, discard, or
+edit any CR-086 file as part of this task.
+
+## Planned files
+
+`apps/api/src/test-support/test-database-url.ts` (new),
+13 `apps/api/src/**/*.test.ts` files (swap `process.env.DATABASE_URL` for
+the new helper), `.env.example`, `.env` (gitignored, local only),
+`.github/workflows/ci.yml`, `docker-compose.prod.yml`,
+`docs/database.md`, `docs/deployment.md`, `docs/changelog.md`,
+`docs/tasks.md`, `.claude/context/known-issues.md` (resolve KI-049),
+`.claude/context/project-state.md`.
+
+## Implementation progress
+
+Done.
+
+- `apps/api/src/test-support/test-database-url.ts` (new): `getTestDatabaseUrl()`.
+- All 13 `apps/api` test files that touch a real Postgres switched from
+  `process.env.DATABASE_URL` to this helper.
+- `.env.example`/`.env`/`.github/workflows/ci.yml`: `TEST_DATABASE_URL` added.
+- Migrated the previously-empty Docker Compose `coffee_ride` database so
+  `TEST_DATABASE_URL` actually points at something usable.
+- Took an immediate real backup of `coffee_ride_dev` into
+  `packages/db/backups/` (gitignored).
+- `docker-compose.prod.yml`: new always-on `backup` service.
+- `docs/database.md` Backups section rewritten; `docs/tasks.md` CR-095
+  checked off; `docs/changelog.md` entry appended; `.claude/context/
+known-issues.md` KI-049 moved to Resolved; this file and `project-state.md`
+  updated.
 
 ## Validation results
 
-- `pnpm --filter api exec vitest run src/lib/graceful-shutdown.test.ts`:
-  5/5 passed.
-- `pnpm --filter api typecheck`: clean (one real error surfaced and fixed —
-  `Pick<NodeJS.Process, 'on'>`'s `on()` return type is `Process`, so the
-  test's fake `on` needed a type assertion, not a structural match).
-- `pnpm --filter api exec eslint .`: clean.
-- `pnpm --filter api test`: 55 passed, 1 skipped, 12 failed — every failure
-  is a pre-existing `DATABASE_URL is required` guard in a DB-dependent
-  suite unrelated to this change (KI-014/KI-019, Docker unreachable in this
-  sandbox, same standing constraint as every prior session). No suite this
-  change touches is among the failures.
-- `pnpm turbo run lint typecheck build`: 24/24 green.
-- `git diff --stat`: touches only `apps/api/src/server.ts` +
-  `apps/api/src/lib/graceful-shutdown.{ts,test.ts}` (plus context docs) —
-  no unrelated changes.
+- `pnpm --filter api test`: 345 passed, 1 skipped — run with `.env` sourced
+  (the exact scenario that caused the original incident).
+- Real dev DB (`coffee_ride_dev`) user count confirmed unchanged (2 before,
+  2 after) across that run.
+- Guard live-verified to refuse `TEST_DATABASE_URL` pointed at
+  `coffee_ride_dev` by name, with a clear error.
+- `pnpm --filter api typecheck` / `pnpm --filter api lint`: clean.
+- `docker compose -f docker-compose.prod.yml config`: clean after fixing a
+  real bug (`$BACKUP_INTERVAL_SECONDS` needed `$$`-escaping — Compose was
+  interpolating it to an empty string at config-render time instead of
+  passing it through to the container's shell).
 
 ## Discovered issues
 
-None new. Real signal delivery (`docker stop` against a running container)
-still can't be live-verified in this sandbox (KI-019, Docker daemon
-unreachable) — verified via the dependency-injected unit tests instead,
-same limitation every Redis/S3/Docker-dependent CR in this project has
-hit.
+- The `$$`-escaping bug above, found and fixed during validation, not left
+  for a future session.
+- Not addressed: local recurring backups (OS-level scheduling, e.g. macOS
+  launchd) were deliberately not installed — that's a persistent change to
+  the user's machine outside the repo, left for the user to decide on.
 
 ## Final result
 
-CR-094 closed. `SIGTERM`/`SIGINT` now run a real, bounded, double-signal-safe
-graceful shutdown. KI-048 resolved (moved to known-issues.md's Resolved
-section). Only one open, actionable ticket remains in `docs/tasks.md`:
-CR-086 (cover image pipeline). `docs/tasks.md`, `docs/changelog.md`,
-`.claude/context/project-state.md`, `.claude/context/known-issues.md` all
-updated.
+KI-049 resolved. Real dev data (currently 2 users) can no longer be wiped by
+the test suite, structurally, not just by convention. A real backup of the
+current real data exists on disk now, and any future production deployment
+gets automatic scheduled backups out of the box. CR-086 (cover image
+pipeline) remains the only unchecked ticket in `docs/tasks.md`, untouched by
+this task.

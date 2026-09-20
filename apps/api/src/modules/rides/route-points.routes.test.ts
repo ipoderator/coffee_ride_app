@@ -3,22 +3,19 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
+import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 
 // Same rationale as `stops.routes.test.ts`: a real Postgres, `DELETE FROM rides`
 // before `DELETE FROM users` (`rides.organizer_id -> organizer_profiles.id` is
 // `ON DELETE RESTRICT`).
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL is required to run apps/api tests (route-points.routes.test.ts needs a real, migrated Postgres database).',
-  );
-}
+const DATABASE_URL = getTestDatabaseUrl();
 
 const WEB_ORIGIN = 'http://localhost:3000';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
 });
 

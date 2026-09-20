@@ -626,6 +626,65 @@ actually builds and applies cleanly — before trusting this manifest as more th
 
 ## Resolved
 
+### KI-049 — `apps/api`'s test suite deletes real data when run against `.env`'s native `DATABASE_URL`
+
+Resolved: 2026-09-20 (CR-095). Discovered: 2026-09-20 (CR-086 session),
+while running the local dev servers for manual browser QA.
+Problem: most `apps/api/src/modules/**/*.routes.test.ts` files run `DELETE FROM
+rides`/`DELETE FROM users` (cascading via FK to `organizer_profiles`,
+`sessions`, `routes`, `stops`, `route_points`, `registrations`,
+`waitlist_entries`, `notifications`, `reviews`, etc.) in `beforeEach`/`afterAll`
+against whatever `DATABASE_URL` is present in the environment — there was no
+distinction between a disposable CI/test database and a real one. That
+session ran `pnpm --filter api test`/`pnpm turbo run test` with `.env` sourced
+first (`set -a && source .env && set +a`) to get `DATABASE_URL` populated
+(the test files threw immediately if it was unset) — but per KI-047, `.env`'s
+`DATABASE_URL` deliberately points at the real native Homebrew Postgres
+(`coffee_ride_dev`) carrying real accumulated manual-QA data (22 users, 13
+rides, 7 registrations as of KI-047's 2026-09-19 discovery), not a disposable
+test database. The suite ran clean (all green) but wiped that data as a side
+effect: `coffee_ride_dev` had 1 user/0 rides immediately afterward.
+Impact: high for local manual-QA continuity (every organizer/ride an earlier
+session hand-created via the running dev app disappeared with no warning),
+zero for CI (its `DATABASE_URL` points at a disposable per-run Postgres
+service container, the intended target of these cleanup statements) and zero
+for production (this is the developer's own local machine, `coffee_ride_dev`
+is never a deployed database). User confirmed the lost data was
+disposable test/QA data and did not need restoring.
+Resolution: new `apps/api/src/test-support/test-database-url.ts`
+(`getTestDatabaseUrl`) — all 13 `apps/api` test files that touch a real
+Postgres now read `TEST_DATABASE_URL`, a variable `.env` never sets at all,
+instead of `DATABASE_URL`. Sourcing `.env` can therefore no longer feed the
+suite a real database under any circumstance — a structural fix, not a
+workaround to remember. Second, independent layer: even a correctly-set
+`TEST_DATABASE_URL` is refused unless its database name looks disposable
+(contains "test", or is exactly "coffee_ride") — live-verified this refuses
+`coffee_ride_dev` by name with a clear error. `.env.example`/`.env`/
+`.github/workflows/ci.yml` all set `TEST_DATABASE_URL`; local `.env`'s value
+uses `127.0.0.1` explicitly rather than `localhost`, since this machine runs
+both a native Postgres (`DATABASE_URL`, resolves via `::1`) and Docker
+Compose's Postgres (`TEST_DATABASE_URL`) on port 5432 at once — relying on
+`localhost`'s address-family resolution order to keep them apart was part of
+how this incident happened unnoticed. Live-verified end to end: migrated the
+previously-empty Docker Compose `coffee_ride` database, sourced `.env` (the
+exact scenario that caused the incident), ran the full `apps/api` suite (345
+passed, 1 skipped), and confirmed `coffee_ride_dev`'s row count was
+unchanged before and after.
+Also addressed the backup gap this incident exposed (no backup existed to
+restore from): took an immediate real backup of `coffee_ride_dev`
+(`packages/db/backups/`, gitignored); `docker-compose.prod.yml` gained a
+`backup` service that runs `packages/db/scripts/backup.sh` (CR-078)
+automatically on `docker compose up` — not gated behind a profile, since a
+backup is read-only against the database — repeating on
+`BACKUP_INTERVAL_SECONDS` (default daily), replacing the previous
+"documented cron line nobody ever installed" state. `docs/database.md`'s
+Backups section rewritten accordingly. See `docs/changelog.md`'s CR-095
+entry for full detail, including a real bug caught and fixed while
+validating the compose change (`$$`-escaping needed for the backup loop's
+interval variable so Compose doesn't interpolate it at config-render time).
+Next action: none for this KI. CR-086 (cover image pipeline) remains the
+only unchecked, unblocked ticket in `docs/tasks.md`.
+
 ### KI-048 — Nothing calls `app.close()` on SIGTERM/SIGINT; no real graceful shutdown exists
 
 Resolved: 2026-09-19 (CR-094). Discovered: 2026-09-19 (CR-058, "Redis-backed

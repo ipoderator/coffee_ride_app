@@ -4555,3 +4555,87 @@ section.
 
 Follow-up: CR-086 (cover image pipeline) is now the only unchecked,
 unblocked ticket left in `docs/tasks.md`.
+
+## 2026-09-20 — CR-095 — Test-suite data-loss guard + backup safety net (KI-049)
+
+Problem: the previous session ran `apps/api`'s test suite with `.env` sourced
+into the shell to populate `DATABASE_URL`. `.env`'s `DATABASE_URL`
+deliberately points at the real native Homebrew Postgres (`coffee_ride_dev`,
+real accumulated manual-QA data), not a disposable test database — but every
+`apps/api/src/modules/**/*.routes.test.ts` file's `beforeEach`/`afterAll`
+runs an unscoped `DELETE FROM rides`/`DELETE FROM users` (cascading via FK to
+most of the schema) against whatever `DATABASE_URL` is in the environment.
+The suite ran clean and wiped the real database as a side effect. User
+confirmed the lost data was disposable test/QA data and does not need
+restoring; this session's job was making the class of incident impossible
+going forward, and giving a real restore point for whatever real data exists
+from here on.
+
+Root cause fix: `apps/api/src/test-support/test-database-url.ts`
+(`getTestDatabaseUrl`) — every one of the 13 `apps/api` test files that
+touches a real Postgres now reads `TEST_DATABASE_URL`, a variable `.env`
+never sets at all, instead of `DATABASE_URL`. Sourcing `.env` for any reason
+can therefore no longer feed the suite a real database — not a documented
+workaround to remember, a structural change. Second, independent layer:
+even a correctly-set `TEST_DATABASE_URL` is refused unless its database name
+looks disposable (contains "test", or is exactly "coffee_ride") — guards
+against a wrong value (e.g. copy-pasted from `DATABASE_URL`), not just
+against `.env` itself. Live-verified this refuses `coffee_ride_dev` by name
+with a clear error, not a silent pass-through.
+
+`.env.example`/`.env`/`.github/workflows/ci.yml` all set `TEST_DATABASE_URL`.
+CI's points at the same disposable per-run Postgres service container it
+already used for `DATABASE_URL` (no behavior change there, just an explicit,
+independent variable). Local `.env`'s value uses `127.0.0.1` explicitly,
+not `localhost` — this machine runs both a native Postgres (`DATABASE_URL`,
+`[::1]:5432`) and Docker Compose's Postgres (`TEST_DATABASE_URL`,
+`127.0.0.1:5432`) at once, and relying on `localhost`'s address-family
+resolution order to keep them apart is exactly the kind of ambiguity that
+let this incident happen unnoticed.
+
+Live-verified end to end, not just reasoned about: migrated the previously
+empty Docker Compose `coffee_ride` database (`pnpm --filter db db:migrate`
+against it), recorded `coffee_ride_dev`'s user count (2), sourced `.env`
+(the exact scenario that caused the incident), ran `pnpm --filter api test`
+— 345 passed, 1 skipped — then re-checked `coffee_ride_dev`'s user count:
+still 2, unchanged. `pnpm --filter api typecheck`/`lint`: clean.
+
+Backup side of the same incident: KI-049 also found there was no backup to
+restore from — `packages/db/scripts/backup.sh` has existed since CR-078 but
+had never actually been run anywhere, local or prod, and `docs/database.md`
+only ever documented a cron one-liner nobody had installed. Took an
+immediate real backup of `coffee_ride_dev` into `packages/db/backups/`
+(gitignored) as an immediate safety net. `docker-compose.prod.yml` gained a
+`backup` service that runs `backup.sh` automatically on `docker compose up`
+— deliberately not gated behind a `migrate`-style profile, since a backup is
+read-only against the database and therefore safe to always run — taking an
+immediate backup on start and repeating every `BACKUP_INTERVAL_SECONDS`
+(default 86400s/daily) into a new `postgres_backups` named volume; a failed
+run logs and retries next interval instead of crash-looping. Validated with
+`docker compose -f docker-compose.prod.yml config` — caught and fixed a real
+bug in the process: an unescaped `$BACKUP_INTERVAL_SECONDS` inside the
+service's shell `command:` was being interpolated by Compose itself at
+config-render time (to an empty string) instead of passed through to the
+container's own shell; fixed with `$$BACKUP_INTERVAL_SECONDS`, confirmed the
+escaped form survives `docker compose config` unresolved as intended.
+`docs/database.md`'s Backups section rewritten to describe this automatic
+schedule instead of the old "add a cron entry yourself" instructions, and to
+note local dev intentionally has no equivalent — a local database is now
+meant to be disposable by construction (this task's own fix).
+
+Testing: `pnpm --filter api test` (345 passed/1 skipped, against the now
+correctly TEST_DATABASE_URL-isolated suite), `pnpm --filter api
+typecheck`/`lint` clean, `docker compose -f docker-compose.prod.yml config`
+clean (including the `$$` fix).
+
+Decisions: none new at the ADR level — this operationalizes CR-078's
+existing backup mechanism and KI-049's own already-scoped next action,
+neither a new architectural decision.
+
+Known issues resolved: KI-049 (test suite wiped real dev data) — moved to
+`.claude/context/known-issues.md`'s Resolved section.
+
+Follow-up: CR-086 (cover image pipeline) remains the only unchecked,
+unblocked ticket in `docs/tasks.md` — its files are already in the working
+tree from an earlier session (implemented, uncommitted) but were not
+touched by this task.

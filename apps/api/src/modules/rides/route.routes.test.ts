@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 
 // CR-027 ("GPX upload"): mocks the S3 wire call only (`S3Client.prototype.send`) —
 // same technique CR-008 used for `packages/maps-2gis`'s `fetch` — so this suite runs
@@ -28,18 +29,14 @@ vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
 const { buildApp } = await import('../../app.js');
 const { loadEnv } = await import('../../env.js');
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL is required to run apps/api tests (route.routes.test.ts needs a real, migrated Postgres database).',
-  );
-}
+const DATABASE_URL = getTestDatabaseUrl();
 
 const WEB_ORIGIN = 'http://localhost:3000';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
   S3_ENDPOINT: 'http://localhost:9000',
   S3_REGION: 'us-east-1',
@@ -54,7 +51,7 @@ const testEnv = loadEnv({
 const testEnvNoS3 = loadEnv({
   NODE_ENV: 'test',
   AUTH_SECRET: 'a-test-only-secret',
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL,
   WEB_ORIGIN,
 });
 
