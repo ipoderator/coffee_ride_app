@@ -731,3 +731,24 @@ graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
       container's shell; fixed with `$$`). `docs/database.md`'s Backups
       section rewritten to describe the new automatic schedule instead of
       the old manual cron instructions. See `docs/changelog.md`.
+- [x] CR-097 Avatar upload for `User`/`OrganizerProfile` — resolves KI-023's
+      remainder (CR-086 already closed the `Ride` third). Done 2026-09-20:
+      relocated CR-086's `cover-image.ts`/`cover-image-storage.ts` out of
+      `modules/rides/` into generic `apps/api/src/lib/image-processing.ts`/
+      `image-storage.ts` (module-boundary reasons —
+      `.claude/rules/resilience.md`), added `avatar_key`/
+      `avatar_content_type`/`avatar_size_bytes` to `users` and
+      `organizer_profiles` (migration `0016_avatar_columns.sql`), and added
+      `POST`/`PATCH`/`DELETE`/`GET /v1/users/me/avatar` (fully "me"-scoped)
+      plus `POST`/`PATCH`/`DELETE /v1/organizers/me/avatar` and a public
+      `GET /v1/organizers/:id/avatar`. `RideOrganizerSummary`/
+      `OrganizerProfile`/`User` gained an additive `avatarUrl` field.
+      `packages/ui` gained a real `Avatar` component (named in design.md §9
+      since CR-063, never built) and `AVATAR_TERMS`; upload UI wired into
+      `/me/profile` and `/organizer/profile`. `pnpm turbo build`/`lint`/
+      `typecheck` clean across all 9 packages; `pnpm --filter api test` 369
+      passed/1 skipped (24 new avatar tests); `pnpm --filter ui test` 94
+      passed (4 new); `pnpm --filter web test` 198 passed (13 new). Found
+      but did not fix (logged as KI-050, out of this ticket's scope):
+      `turbo.json`'s `test` task doesn't pass through `TEST_DATABASE_URL`.
+      See `docs/changelog.md`.

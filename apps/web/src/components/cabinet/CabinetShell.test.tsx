@@ -25,6 +25,7 @@ const user: User = {
   displayName: null,
   phone: null,
   bio: null,
+  avatarUrl: null,
 };
 
 // Deliberately not any real feature's nav item — proves `CabinetShell`

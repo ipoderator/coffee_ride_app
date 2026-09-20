@@ -4715,3 +4715,93 @@ now. Next candidates: an avatar endpoint for `User`/`OrganizerProfile`
 (KI-023's remainder, no ticket number yet), or wiring a real consumer for
 `packages/maps-2gis` (KI-032's geocode-by-address UI, or CR-028/CR-084's
 route rendering — both still zero-consumer per KI-016's resolution note).
+
+## 2026-09-20 — CR-097 — User/OrganizerProfile avatars (resolve KI-023)
+
+KI-023's remainder: real avatar upload/replace/delete/download for `User` and
+`OrganizerProfile`, reusing CR-086/ADR-019's generic image pipeline exactly as
+that ADR's point 7 anticipated, rather than building a third one.
+
+Relocation (prerequisite): CR-086's `cover-image.ts`/`cover-image-storage.ts`
+lived inside `modules/rides/`. `modules/rides`, `modules/users`, and
+`modules/organizers` are three separate capability modules
+(`.claude/rules/architecture.md`), so `users`/`organizers` importing a
+`rides`-owned file directly would be the "reach into another module's
+internals" `.claude/rules/resilience.md` warns against. Moved both files to
+`apps/api/src/lib/image-processing.ts`/`image-storage.ts` with generic names
+(`processImage`, `ImageInvalidError`, `ImageStorageError`,
+`uploadImageObject`/`downloadImageObject`/`deleteImageObject`) — same
+behavior, same single shared S3 circuit breaker, `rides.service.ts`'s import
+updated, its own tests re-verified passing unchanged. Also extracted a small
+`lib/read-upload.ts` (`readUploadedFile`/`UploadTooLargeError`) for the two
+new avatar route files' multipart-read boilerplate; `rides.routes.ts`'s
+existing GPX/cover-image copies were deliberately left alone (lower risk than
+touching an already-shipped path for this ticket).
+
+DB: `users`/`organizer_profiles` each gained nullable `avatar_key`/
+`avatar_content_type`/`avatar_size_bytes` columns (same shape as
+`rides.cover_image_*`) plus a non-negative-size CHECK constraint, migration
+`0016_avatar_columns.sql`.
+
+API: `POST`/`PATCH`/`DELETE`/`GET /v1/users/me/avatar` — fully "me"-scoped
+(matches this module's existing "no `GET /v1/users/:id`" posture; no `:id`
+variant exists). `POST`/`PATCH`/`DELETE /v1/organizers/me/avatar` ("me"-scoped
+mutations) plus a public, no-auth `GET /v1/organizers/:id/avatar` — an
+`OrganizerProfile`'s identity (including a photo) is already public via
+`RideOrganizerSummary`, so unlike a ride's draft-gated cover there is no
+viewer-visibility branch to write. Same error codes/shape as the ride cover
+image (`avatar_missing`/`avatar_invalid`/`avatar_too_large`/
+`avatar_already_exists`/`avatar_not_found`/`avatar_storage_unavailable`).
+`RideOrganizerSummary`/`OrganizerProfile`/`User` all gained an additive
+`avatarUrl` field (`.claude/rules/extensibility.md`: additive contract
+change); `rides.service.ts` and `registrations.service.ts` both compute it by
+importing `organizerAvatarUrlPath` from `organizers.service.ts` — the same
+cross-capability-module reuse precedent those two files already had for
+`reviews.service.ts`'s `getOrganizerRatingSummary(ies)`.
+
+Frontend: `packages/ui` gained its first real `Avatar` component (named in
+`docs/design.md` §9's inventory since CR-063, never built until now — image
+with initials/silhouette fallback, framework-neutral plain `<img>`) plus a
+shared `AVATAR_TERMS`. Upload UI (`AvatarUploadForm`, same 3-verb shape as
+`CoverImageUploadForm` minus a draft gate — an avatar has no draft state)
+duplicated once per cabinet (`features/participant/profile/`,
+`features/organizer/profile/`) rather than shared — not in design.md's fixed
+shared-component inventory, and this repo already keeps near-identical
+GPX/cover-image upload UI feature-local rather than force an abstraction.
+Wired into `/me/profile` (`ProfileForm`'s existing screen) and
+`/organizer/profile` (only once an `OrganizerProfile` exists, since the API
+requires one to upload against).
+
+Testing/validation (this session): `pnpm --filter api typecheck`/`lint`,
+`pnpm --filter web typecheck`/`lint`, `pnpm --filter ui typecheck`/`lint`,
+`pnpm --filter db typecheck`/`lint`, `pnpm --filter types typecheck`/`lint`
+all clean. `pnpm turbo build` clean across all 9 packages. `pnpm --filter
+api test` (against the real disposable `TEST_DATABASE_URL` Postgres,
+migrated with the new migration first): 369 passed, 1 skipped (the
+opt-in live-S3 test), including 24 new avatar route tests (14 user, 10
+organizer, covering auth, missing/invalid/too-large/already-exists/
+not-found, storage-unavailable degraded response, replace deleting the old
+S3 object, and the organizer avatar's public-download and
+`RideOrganizerSummary`/`GET /v1/organizers/me` propagation). Several
+pre-existing tests across `apps/api`/`apps/web` needed a one-line
+`avatarUrl: null`/`avatarUrl` fixture update for the new required field —
+same cost `User`'s own doc comment already anticipated for exactly this
+kind of change. `pnpm --filter ui test`: 94 passed, including 4 new `Avatar`
+tests. `pnpm --filter web test`: 198 passed, including 13 new
+`AvatarUploadForm` tests (8 participant, 5 organizer).
+
+Decisions: none new — this implements ADR-019 point 7's already-decided
+scope, not a fresh architectural choice; `packages/types/src/api/media.ts`
+(new file, `AvatarResponse`) and the `lib/` relocation are implementation
+detail, not architecture change.
+
+Known issues resolved: KI-023 fully resolved (`Ride`/`User`/`OrganizerProfile`
+avatar/cover-image gap is closed for all three entities now).
+
+Follow-up: turbo.json's `test` task `env` allowlist doesn't include
+`TEST_DATABASE_URL` (added by CR-095/KI-049, never added to `turbo.json`) —
+`pnpm turbo test` silently drops it and every `apps/api` DB test fails with
+"TEST_DATABASE_URL is required"; `pnpm --filter api test` (with `.env`
+sourced, or CI's own direct env var) is unaffected and is what this session
+used throughout. Logged as KI-050, not fixed here (unrelated to this
+ticket's scope).

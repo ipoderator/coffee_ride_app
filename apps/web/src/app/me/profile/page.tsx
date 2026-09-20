@@ -1,6 +1,7 @@
 'use client';
 
 import { PROFILE_TERMS } from 'ui';
+import { AvatarUploadForm } from '@/features/participant/profile/components/AvatarUploadForm';
 import { ProfileForm } from '@/features/participant/profile/components/ProfileForm';
 import { useCurrentUser } from '@/lib/auth/current-user-context';
 
@@ -15,6 +16,10 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-semibold text-text">
         {PROFILE_TERMS.pageTitle}
       </h1>
+      <AvatarUploadForm
+        initialAvatarUrl={user.avatarUrl}
+        name={user.displayName}
+      />
       <ProfileForm initialUser={user} />
     </div>
   );

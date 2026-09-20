@@ -1,11 +1,14 @@
 import {
   boolean,
+  check,
+  integer,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // First domain table (CR-011, `.claude/rules/database.md`/`docs/database.md`).
 //
@@ -41,6 +44,13 @@ export const users = pgTable(
     // else to restrict yet, but this is the constraint to preserve once one does.
     phone: text('phone'),
     bio: text('bio'),
+    // CR-097 (KI-023 remainder, ADR-019's reuse point 7): same S3-key-plus-
+    // metadata shape as `rides.cover_image_*`, stored/served through the
+    // relocated `lib/image-processing.ts`/`lib/image-storage.ts` pair rather
+    // than a new pipeline.
+    avatarKey: text('avatar_key'),
+    avatarContentType: text('avatar_content_type'),
+    avatarSizeBytes: integer('avatar_size_bytes'),
     // ADR-012: every timestamp column is `timestamptz`, never bare `timestamp`.
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -49,5 +59,11 @@ export const users = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [uniqueIndex('users_email_unique').on(table.email)],
+  (table) => [
+    uniqueIndex('users_email_unique').on(table.email),
+    check(
+      'users_avatar_size_bytes_non_negative',
+      sql`${table.avatarSizeBytes} is null or ${table.avatarSizeBytes} >= 0`,
+    ),
+  ],
 );

@@ -77,6 +77,36 @@ concepts). `400 validation_error` on an invalid field. `phone`/`bio` are
 private — returned only to the profile's own owner; no endpoint exposes
 another user's row yet (`.claude/rules/security.md`).
 
+### Avatar (User)
+
+CR-097 (KI-023 remainder, ADR-019 point 7): reuses the same validate/resize/
+storage pipeline `POST/PATCH/DELETE/GET /v1/rides/:id/cover` already
+established (`apps/api/src/lib/image-processing.ts`/`image-storage.ts`,
+relocated there from `modules/rides/` once a second and third caller
+appeared) — same accepted types (JPEG/PNG/WebP, decoded not trusted), same 8
+MB cap, same 1920×1920 resize bound, same metadata-stripping. Entirely
+"me"-scoped, no `:id` variant — there is no `GET /v1/users/:id` at all
+(`.claude/rules/security.md`: no endpoint exposes another user's row), so
+neither does its avatar.
+
+POST `/v1/users/me/avatar` — Requires a valid session cookie (`401`
+otherwise). `multipart/form-data`, one file field named `file`. `400
+avatar_missing`/`avatar_invalid`/`avatar_too_large`, `409
+avatar_already_exists` (use `PATCH` to replace), `503
+avatar_storage_unavailable`. `201` → `{ avatarUrl }`, always
+`/v1/users/me/avatar`.
+
+PATCH `/v1/users/me/avatar` — same rules as `POST`. `404 avatar_not_found`
+if none exists yet. `200` → `{ avatarUrl }`; the old S3 object is deleted
+best-effort after the DB row already points at the new one.
+
+DELETE `/v1/users/me/avatar` — `404 avatar_not_found` if none exists.
+`204` — DB row cleared first, S3 cleanup best-effort afterward.
+
+GET `/v1/users/me/avatar` — authenticated, "me"-scoped (unlike the ride
+cover/organizer avatar downloads below, this is never public). `404
+avatar_not_found` if none exists. `200` → the raw image bytes.
+
 ## Organizers
 
 POST `/v1/organizers/me` — **implemented (CR-014)**. Requires a valid session
@@ -102,14 +132,44 @@ field.
 
 CR-043 ("Organizer rating summary"): all three `/v1/organizers/me` responses above
 additively carry `rating`/`reviewCount` siblings alongside `organizerProfile` — see
-`## Reviews` below.
+`## Reviews` below. CR-097 additively carries `avatarUrl` too (see "Avatar" below).
 
-No public `GET /v1/organizers/:id` endpoint exists, and none is planned for
-just this — CR-023 ("Ride detail") embeds `{ id, name }` directly on `GET
+No public `GET /v1/organizers/:id` JSON endpoint exists, and none is planned
+for just this — CR-023 ("Ride detail") embeds `{ id, name }` directly on `GET
 /v1/rides/:id`'s response instead (`docs/product.md` Principle 2: "complete
 ride record, not a link out"). A standalone public organizer-read endpoint
 would only be added if something else genuinely needs to look up an
-organizer independently of a ride.
+organizer independently of a ride. `GET /v1/organizers/:id/avatar` (below) is
+the one exception — it serves raw image bytes, not a JSON organizer read, and
+an organizer's `id`/`name` are already public via `RideOrganizerSummary`.
+
+### Avatar (OrganizerProfile)
+
+CR-097 (KI-023 remainder, ADR-019 point 7): same pipeline as the Users avatar
+above and `.../rides/:id/cover`. Unlike the user avatar, mutations are
+"me"-scoped but the download is keyed by `:id` and fully public (no session
+consulted at all) — an `OrganizerProfile`'s identity, including a photo, is
+already public via `RideOrganizerSummary` on every ride listing, so there is
+no viewer-visibility check to make the way a `Ride`'s draft-gated cover needs.
+
+POST `/v1/organizers/me/avatar` — Requires a valid session cookie (`401`
+otherwise) and an existing `OrganizerProfile` (`404
+organizer_profile_not_found` otherwise — create one first via `POST
+/v1/organizers/me`). Same file/size/type rules as the ride cover image.
+`409 avatar_already_exists` (use `PATCH`). `201` → `{ avatarUrl }`,
+`/v1/organizers/:id/avatar`.
+
+PATCH `/v1/organizers/me/avatar` — same rules as `POST`. `404
+avatar_not_found` if none exists yet. `200` → `{ avatarUrl }`.
+
+DELETE `/v1/organizers/me/avatar` — `404 avatar_not_found` if none exists.
+`204`.
+
+GET `/v1/organizers/:id/avatar` — public, no session required. `404
+avatar_not_found` for a non-existent organizer id or one with no avatar
+uploaded (same 404 either way — organizer ids are already public, so there
+is nothing to protect by distinguishing the two). `200` → the raw image
+bytes.
 
 ## Rides
 

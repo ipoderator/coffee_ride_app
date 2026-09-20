@@ -22,6 +22,7 @@ import {
   updateOrganizerProfile,
   updateOrganizerProfileRequestSchema,
 } from '../api';
+import { AvatarUploadForm } from './AvatarUploadForm';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -195,6 +196,13 @@ export function OrganizerProfileForm() {
 
   return (
     <div className="flex flex-col gap-4">
+      {profile && (
+        <AvatarUploadForm
+          initialAvatarUrl={profile.avatarUrl}
+          name={profile.name}
+        />
+      )}
+
       {profile && (
         <Card className="flex flex-col gap-1">
           <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">

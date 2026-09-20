@@ -67,6 +67,7 @@ describe('RegisterForm', () => {
         displayName: null,
         phone: null,
         bio: null,
+        avatarUrl: null,
       },
     });
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
@@ -138,6 +139,7 @@ describe('RegisterForm', () => {
         displayName: null,
         phone: null,
         bio: null,
+        avatarUrl: null,
       },
       verificationUrl: '/v1/auth/verify-email?token=abc123',
     });
@@ -159,6 +161,7 @@ describe('RegisterForm', () => {
         displayName: null,
         phone: null,
         bio: null,
+        avatarUrl: null,
       },
     });
 

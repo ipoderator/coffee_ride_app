@@ -277,6 +277,33 @@ export const ORGANIZER_TERMS = {
   ratingReviewsCount: formatReviewsCount,
 } as const;
 
+/**
+ * CR-097 (KI-023 remainder): shared between `/me/profile` and `/organizer/
+ * profile`'s avatar upload UI — identical wording either way, same "share
+ * via packages/ui" precedent `RIDE_COVER_TERMS` would follow if a second
+ * cover-image screen ever needed it. No `notEditable`/draft-gate copy here —
+ * unlike a ride cover, an avatar has no draft state to gate on.
+ */
+export const AVATAR_TERMS = {
+  emptyDescription: 'Загрузите изображение (JPEG, PNG или WebP).',
+  uploadLabel: 'Файл изображения',
+  upload: 'Загрузить фото',
+  uploadPending: 'Загрузка…',
+  uploadSuccess: 'Фото загружено.',
+  replace: 'Заменить фото',
+  replacePending: 'Замена…',
+  replaceSuccess: 'Фото обновлено.',
+  delete: 'Удалить фото',
+  deletePending: 'Удаление…',
+  deleteSuccess: 'Фото удалено.',
+  deleteConfirm: 'Удалить загруженное фото? Это действие необратимо.',
+  avatarMissing: 'Выберите файл изображения для загрузки.',
+  avatarInvalid: 'Файл не распознан как изображение JPEG, PNG или WebP.',
+  avatarTooLarge: 'Файл превышает допустимый размер (8 МБ).',
+  storageUnavailable: 'Загрузка недоступна. Попробуйте ещё раз позже.',
+  genericError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
+} as const;
+
 export interface TimezoneOption {
   /** IANA identifier, e.g. `Asia/Krasnoyarsk` — what actually gets stored/sent
    * (ADR-012 §2). */

@@ -39,6 +39,7 @@ const baseRide: PublicRide = {
   organizer: {
     id: 'org-1',
     name: 'Гравийный клуб',
+    avatarUrl: null,
     rating: null,
     reviewCount: 0,
   },

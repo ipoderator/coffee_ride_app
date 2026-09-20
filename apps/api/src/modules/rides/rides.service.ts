@@ -46,6 +46,11 @@ import {
   getOrganizerRatingSummary,
   toReview,
 } from '../reviews/reviews.service.js';
+// CR-097 (KI-023 remainder): same cross-capability-module reuse precedent as the
+// `reviews.service.ts` import above — `RideOrganizerSummary.avatarUrl` is
+// computed the same way `organizers.service.ts` computes `OrganizerProfile.
+// avatarUrl`, so this reuses that one function rather than a second copy.
+import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
 import {
   CursorError,
   clampLimit,
@@ -59,13 +64,13 @@ import {
   downloadGpxObject,
   uploadGpxObject,
 } from './route-storage.js';
-import { CoverImageInvalidError, processCoverImage } from './cover-image.js';
+import { ImageInvalidError, processImage } from '../../lib/image-processing.js';
 import {
-  CoverImageStorageError,
-  deleteCoverImageObject,
-  downloadCoverImageObject,
-  uploadCoverImageObject,
-} from './cover-image-storage.js';
+  ImageStorageError,
+  deleteImageObject,
+  downloadImageObject,
+  uploadImageObject,
+} from '../../lib/image-storage.js';
 import type { S3Handle } from '../../plugins/s3.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
@@ -584,6 +589,7 @@ export async function listPublicRides(
       ride: rides,
       organizerId: organizerProfiles.id,
       organizerName: organizerProfiles.name,
+      organizerAvatarKey: organizerProfiles.avatarKey,
     })
     .from(rides)
     .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
@@ -621,6 +627,9 @@ export async function listPublicRides(
         organizer: {
           id: row.organizerId,
           name: row.organizerName,
+          avatarUrl: row.organizerAvatarKey
+            ? organizerAvatarUrlPath(row.organizerId)
+            : null,
           rating: summary.rating,
           reviewCount: summary.reviewCount,
         },
@@ -659,6 +668,7 @@ export async function getRideForViewer(
       ride: rides,
       organizerId: organizerProfiles.id,
       organizerName: organizerProfiles.name,
+      organizerAvatarKey: organizerProfiles.avatarKey,
       organizerUserId: organizerProfiles.userId,
     })
     .from(rides)
@@ -772,6 +782,9 @@ export async function getRideForViewer(
     organizer: {
       id: row.organizerId,
       name: row.organizerName,
+      avatarUrl: row.organizerAvatarKey
+        ? organizerAvatarUrlPath(row.organizerId)
+        : null,
       rating: ratingSummary.rating,
       reviewCount: ratingSummary.reviewCount,
     },
@@ -1492,15 +1505,9 @@ export async function uploadCoverImage(
   const processed = await processUploadedCoverImage(file.buffer);
   const key = `covers/${rideId}/${randomUUID()}.${processed.ext}`;
   try {
-    await uploadCoverImageObject(
-      s3,
-      key,
-      processed.buffer,
-      processed.contentType,
-    );
+    await uploadImageObject(s3, key, processed.buffer, processed.contentType);
   } catch (err) {
-    if (err instanceof CoverImageStorageError)
-      throw COVER_STORAGE_UNAVAILABLE();
+    if (err instanceof ImageStorageError) throw COVER_STORAGE_UNAVAILABLE();
     throw err;
   }
 
@@ -1548,15 +1555,9 @@ export async function replaceCoverImage(
   const processed = await processUploadedCoverImage(file.buffer);
   const key = `covers/${rideId}/${randomUUID()}.${processed.ext}`;
   try {
-    await uploadCoverImageObject(
-      s3,
-      key,
-      processed.buffer,
-      processed.contentType,
-    );
+    await uploadImageObject(s3, key, processed.buffer, processed.contentType);
   } catch (err) {
-    if (err instanceof CoverImageStorageError)
-      throw COVER_STORAGE_UNAVAILABLE();
+    if (err instanceof ImageStorageError) throw COVER_STORAGE_UNAVAILABLE();
     throw err;
   }
 
@@ -1572,7 +1573,7 @@ export async function replaceCoverImage(
     .where(eq(rides.id, rideId));
 
   try {
-    await deleteCoverImageObject(s3, existing.coverImageKey);
+    await deleteImageObject(s3, existing.coverImageKey);
   } catch {
     // Best-effort — see the function's own doc comment.
   }
@@ -1614,7 +1615,7 @@ export async function deleteCoverImage(
     .where(eq(rides.id, rideId));
 
   try {
-    await deleteCoverImageObject(s3, existing.coverImageKey);
+    await deleteImageObject(s3, existing.coverImageKey);
   } catch {
     // Best-effort — see `replaceCoverImage`'s doc comment.
   }
@@ -1657,23 +1658,22 @@ export async function getCoverImageDownload(
   }
 
   try {
-    const downloaded = await downloadCoverImageObject(s3, row.coverImageKey);
+    const downloaded = await downloadImageObject(s3, row.coverImageKey);
     return {
       body: downloaded.body,
       contentType: row.coverImageContentType ?? 'application/octet-stream',
     };
   } catch (err) {
-    if (err instanceof CoverImageStorageError)
-      throw COVER_STORAGE_UNAVAILABLE();
+    if (err instanceof ImageStorageError) throw COVER_STORAGE_UNAVAILABLE();
     throw err;
   }
 }
 
 async function processUploadedCoverImage(buffer: Buffer) {
   try {
-    return await processCoverImage(buffer);
+    return await processImage(buffer);
   } catch (err) {
-    if (err instanceof CoverImageInvalidError)
+    if (err instanceof ImageInvalidError)
       throw COVER_IMAGE_INVALID(err.message);
     throw err;
   }

@@ -19,6 +19,7 @@ const baseUser: User = {
   displayName: null,
   phone: null,
   bio: null,
+  avatarUrl: null,
 };
 
 function submit() {

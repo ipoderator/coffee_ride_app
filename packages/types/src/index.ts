@@ -12,6 +12,7 @@ export * from './api/rides.js';
 export * from './api/registrations.js';
 export * from './api/notifications.js';
 export * from './api/reviews.js';
+export * from './api/media.js';
 export * from './domain/user.js';
 export * from './domain/organizer-profile.js';
 export * from './domain/ride.js';

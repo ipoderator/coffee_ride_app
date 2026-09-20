@@ -8,14 +8,16 @@ import {
   callWithResilience,
   ResilienceError,
 } from 'resilience';
-import type { S3Handle } from '../../plugins/s3.js';
+import type { S3Handle } from '../plugins/s3.js';
 
-// ADR-019 (CR-086): same shape as `route-storage.ts` — a dedicated module (and
-// breaker) per S3-backed integration, `.claude/rules/resilience.md`'s "shares one
-// CircuitBreaker instance across every call it makes" scoped to this module, not
-// shared globally across every S3 consumer. Written generically (a plain
-// key/buffer/contentType, no `rides`-specific assumptions) so a future avatar
-// upload endpoint (KI-023) can reuse it without rebuilding this wrapper.
+// ADR-019 (CR-086), relocated to `lib/` (CR-097/KI-023) — see
+// `image-processing.ts`'s doc comment for why. Same shape as `modules/rides/
+// route-storage.ts`: a dedicated module (and breaker) per S3-backed integration
+// (`.claude/rules/resilience.md`), now shared by every caller that stores an
+// organizer-/user-uploaded image (ride covers, user avatars, organizer avatars) —
+// one integration (the same S3 bucket, the same access pattern), so one breaker
+// for all of it, still scoped to this module only, not shared globally across
+// every S3 consumer (`route-storage.ts` keeps its own).
 const TIMEOUT_MS = 8000;
 const MAX_ATTEMPTS = 2; // 1 initial + 1 retry.
 const BREAKER_FAILURE_THRESHOLD = 5;
@@ -26,7 +28,7 @@ const breaker = new CircuitBreaker({
   cooldownMs: BREAKER_COOLDOWN_MS,
 });
 
-export class CoverImageStorageError extends Error {}
+export class ImageStorageError extends Error {}
 
 async function withResilience<T>(
   operation: (signal: AbortSignal) => Promise<T>,
@@ -39,10 +41,10 @@ async function withResilience<T>(
     });
   } catch (error) {
     if (error instanceof ResilienceError) {
-      throw new CoverImageStorageError(
+      throw new ImageStorageError(
         error.code === 'circuit_open'
           ? 'S3 is temporarily unavailable (circuit open).'
-          : `S3 cover-image operation failed: ${error.message}`,
+          : `S3 image operation failed: ${error.message}`,
       );
     }
     throw error;
@@ -51,14 +53,12 @@ async function withResilience<T>(
 
 function requireS3(s3: S3Handle | null): S3Handle {
   if (!s3) {
-    throw new CoverImageStorageError(
-      'S3 is not configured in this environment.',
-    );
+    throw new ImageStorageError('S3 is not configured in this environment.');
   }
   return s3;
 }
 
-export async function uploadCoverImageObject(
+export async function uploadImageObject(
   s3: S3Handle | null,
   key: string,
   body: Buffer,
@@ -78,7 +78,7 @@ export async function uploadCoverImageObject(
   );
 }
 
-export async function downloadCoverImageObject(
+export async function downloadImageObject(
   s3: S3Handle | null,
   key: string,
 ): Promise<{ body: Buffer; contentType: string | undefined }> {
@@ -90,17 +90,17 @@ export async function downloadCoverImageObject(
     );
     const bytes = await result.Body?.transformToByteArray();
     if (!bytes) {
-      throw new CoverImageStorageError('S3 object body was empty.');
+      throw new ImageStorageError('S3 object body was empty.');
     }
     return { body: Buffer.from(bytes), contentType: result.ContentType };
   });
 }
 
 // Best-effort — same reasoning as `route-storage.ts`'s `deleteGpxObject`: the DB
-// row is the source of truth for whether a cover image exists, so a delete
-// failure here is logged by the caller, not re-thrown to block a DB change that
-// already committed.
-export async function deleteCoverImageObject(
+// row is the source of truth for whether an image exists, so a delete failure
+// here is logged by the caller, not re-thrown to block a DB change that already
+// committed.
+export async function deleteImageObject(
   s3: S3Handle | null,
   key: string,
 ): Promise<void> {

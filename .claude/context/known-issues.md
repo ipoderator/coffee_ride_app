@@ -147,6 +147,15 @@ Health-check-level connectivity is now confirmed; a real
 `PutObject`/`GetObject`/`DeleteObject` round trip through
 `route-storage.ts` itself (e.g. an actual GPX upload) was not exercised this
 session — that remains the next action.
+Update 2026-09-20 (CR-097): a real `PutObject`/`GetObject`/`DeleteObject`
+round trip was exercised end to end this session, through `lib/
+image-storage.ts` (the module `route-storage.ts`'s cover-image/avatar
+siblings share, relocated from `cover-image-storage.ts` — see
+`docs/changelog.md`), via a live avatar upload/download/delete against the
+real `coffee-ride` MinIO bucket (confirmed with `mc find` before and after).
+This proves the S3 client/credential/bucket path genuinely works, but
+`route-storage.ts`'s own GPX-specific code path is still, narrowly,
+unexercised — leaving this open rather than resolving it outright.
 
 ### KI-017 — `packages/maps-2gis`/`packages/db`/`packages/types` export raw TS source, not compiled `dist`
 
@@ -243,30 +252,6 @@ Resolution: `packages/config/tsconfig/node-library.json` no longer extends
 build`/`typecheck` still green for all three (unaffected by construction),
 and `packages/maps-2gis`'s Vitest suite now collects and passes.
 
-### KI-019 — `docker-compose.yml` has never been booted live in this environment
-
-Status: open. Discovered: 2026-09-13 (CR-009).
-Problem: the Docker daemon does not come up in this Claude Code environment (same
-standing constraint already hit in CR-004/CR-005/CR-006 — see
-`docker-desktop-unavailable` in Claude's project memory; `docker info` fails,
-`docker compose up -d` fails with "Cannot connect to the Docker daemon"). CR-009
-brought the compose file itself to a correct state (KI-004/KI-005 fixed below) and
-validated it with `docker compose -f docker-compose.yml config`, which parses/
-resolves the file but does not pull images, run healthchecks, or prove the services
-actually start and become healthy together.
-Impact: low today (no application code connects to these services yet — `apps/api`'s
-Redis/S3 clients are separately tracked as unverified in KI-014/KI-015, and
-`packages/db`'s Postgres connection was verified in CR-004 against a local Homebrew
-Postgres instead, not compose). But the compose file as a whole — three services,
-their healthchecks, and the new MinIO image/registry from this task — has literally
-never been started end to end by any session.
-Workaround: `docker compose -f docker-compose.yml config` is a reasonable syntax/
-interpolation check and was run clean after every change in CR-009.
-Next action: the first session with a working Docker daemon should run `docker
-compose up -d` followed by `docker compose ps` (confirm all three reach `healthy`,
-not just `running`) before trusting this file for CR-050/CR-058/CR-027/CR-086's live
-verification work (KI-014/KI-015/KI-016).
-
 ### KI-021 — `RideService`/registration-state keys in the terminology module are provisional
 
 Status: open. Discovered: 2026-09-13 (CR-064).
@@ -334,43 +319,6 @@ primitives too (unlike CR-065's four) but, like `Skeleton`, structurally trivial
 resolving the CLI-targeting question. `FormField` has no shadcn equivalent
 (this project's own composition of label + control + error/hint), so it isn't
 relevant to this issue either way. Still open; next action unchanged.
-
-### KI-023 — Profile avatar/photo upload is not implemented
-
-Status: open. Discovered: 2026-09-14 (CR-013). Widened: 2026-09-14 (CR-014,
-same gap on a second entity). Widened again: 2026-09-14 (CR-017, a third).
-Problem: `docs/design.md` §9 lists `Avatar` in `packages/ui`'s intended
-component inventory, and a profile screen conventionally includes a photo, but
-CR-013 shipped only text fields (`displayName`/`phone`/`bio`) — deliberately,
-not an oversight. Uploading and serving an image needs the S3 pipeline
-(`apps/api/src/s3.ts`), which has never been connected to a live object store
-in this environment (KI-015) and has no consumer yet. CR-014's
-`OrganizerProfile` hit the identical gap (a logo/photo would be the natural
-public-facing image) and was scoped out the same way; CR-017's `Ride` table
-already has a nullable `coverImageUrl` column (`docs/product.md`'s Ride
-fields list "cover image") with no way to set it yet — same gap a third time,
-not a new one.
-Impact: low — every affected screen is fully usable without a photo; every
-other field on each works end to end.
-Workaround: none needed — no UI currently expects an avatar/logo to exist.
-Update 2026-09-20 (CR-086, "Cover image pipeline"): the `Ride` third of this
-gap is resolved — `rides.cover_image_key`/`cover_image_content_type`/
-`cover_image_size_bytes` (renamed/added, ADR-019) plus
-`POST`/`PATCH`/`DELETE`/`GET /v1/rides/:id/cover` (validate via `sharp`,
-resize to 1920×1920 max, serve through an API proxy, never a direct S3 URL)
-give organizers a real upload/replace/delete path, wired from
-`/organizer/rides/[id]/cover`. Live-verified against the real running MinIO
-this session: upload → `GET /v1/rides/:id` shows the real `coverImageUrl` →
-download round-trips the actual bytes → replacing a 3000×2000 image
-confirmed the 1920-max resize → delete confirmed both the DB field and the
-`GET .../cover` 404 afterward. `storage.ts`/`cover-image.ts` were written
-generic enough to reuse (per this entry's own prior note), but wiring actual
-`User`/`OrganizerProfile` avatar endpoints stays out of CR-086's scope —
-still open for those two entities.
-Next action: a real avatar endpoint for `User`/`OrganizerProfile`, reusing
-`cover-image.ts`'s validate/resize logic and `cover-image-storage.ts`'s S3
-wrapper shape rather than building a third one from scratch — no ticket
-number assigned yet.
 
 ### KI-026 — No verify-email web screen exists, and two organizer actions now hard-depend on it
 
@@ -637,7 +585,81 @@ prod.yml --profile migrate run --rm migrate` to confirm the migration image
 actually builds and applies cleanly — before trusting this manifest as more than
 "the YAML parses."
 
+### KI-050 — `turbo.json`'s `test` task doesn't pass through `TEST_DATABASE_URL`
+
+Status: open. Discovered: 2026-09-20 (CR-097 session), while running the full
+monorepo check sweep (`pnpm turbo test`) after CR-095/KI-049 added
+`TEST_DATABASE_URL` as the variable `apps/api`'s test suite actually reads.
+Problem: `turbo.json`'s `test` task declares an explicit `env` allowlist
+(`NEXT_PUBLIC_*`, `API_PORT`, `DATABASE_URL`, `REDIS_URL`, `S3_*`,
+`AUTH_SECRET`, `MAPS_2GIS_API_KEY`) for cache-hashing purposes;
+`TEST_DATABASE_URL` was never added to it when CR-095 introduced the
+variable, so Turborepo strips it from the child process's environment even
+when it's exported in the parent shell. A plain `pnpm turbo test` therefore
+fails 15/25 `apps/api` test files with "TEST_DATABASE_URL is required" — not
+a real regression, just an invocation that silently loses the variable it
+needs.
+Impact: low — `pnpm --filter api test` (what this repo's CI actually runs,
+`.github/workflows/ci.yml`, with `TEST_DATABASE_URL` set as a real job-level
+env var rather than routed through `pnpm turbo test`'s env-passthrough) is
+unaffected; only a plain top-level `pnpm turbo test` invocation hits this.
+Workaround: run `pnpm --filter api test` (or `pnpm --filter api exec vitest
+run`) with `TEST_DATABASE_URL` exported directly, not through `pnpm turbo
+test`.
+Next action: add `TEST_DATABASE_URL` to `turbo.json`'s `test` task `env`
+array — a one-line config fix, not attempted this session (found during
+CR-097's own validation sweep, unrelated to that ticket's actual scope).
+
 ## Resolved
+
+### KI-019 — `docker-compose.yml` had never been booted live in this environment
+
+Resolved: 2026-09-20 (this became true at least by CR-086's session, which
+live-verified against real running MinIO — this entry just hadn't been
+updated). Discovered: 2026-09-13 (CR-009).
+Problem: the Docker daemon didn't come up in earlier Claude Code sessions in
+this environment (see `docker-desktop-unavailable` in Claude's project
+memory) — `docker compose up -d` failed with "Cannot connect to the Docker
+daemon", so the compose file (Postgres/Redis/MinIO) had only ever been
+syntax-checked (`docker compose config`), never actually started.
+Resolution: this environment now has a working Docker daemon —
+`docker ps` this session showed all three `coffeeride-{postgres,minio,redis}-1`
+containers `Up`/`healthy`, and `GET /health` against a live-booted `apps/api`
+returned `{"db":"ok","redis":"ok","s3":"ok"}`, all three genuinely reachable
+(not just configured). CR-097's own avatar work was live-verified end to end
+against this real stack (register → verify → login → upload → real MinIO
+object confirmed via `mc find` → download round-trips real resized bytes →
+delete confirmed both the DB field and a real S3 object removal). Whether a
+_future_ session's environment still has Docker is not guaranteed by this
+entry — if `docker ps`/`docker info` fails again, that's a new occurrence of
+the same underlying constraint, not a regression of this fix.
+Workaround: n/a — re-open a new entry if the daemon becomes unreachable in a
+future session.
+
+### KI-023 — Profile avatar/photo upload is not implemented
+
+Resolved: 2026-09-20 (CR-097). Discovered: 2026-09-14 (CR-013). Widened:
+2026-09-14 (CR-014, CR-017 — same gap on `OrganizerProfile` then `Ride`).
+Problem: `docs/design.md` §9 named an `Avatar` component in `packages/ui`'s
+inventory, but none of `User`/`OrganizerProfile`/`Ride` had a real
+upload/serve path — deliberately scoped out of each entity's own ticket, not
+an oversight.
+Resolution, in two stages: CR-086 (2026-09-20, ADR-019) resolved the `Ride`
+third — cover image validate/resize/S3-storage pipeline, deliberately written
+generic for reuse. CR-097 (this session) resolved the remaining two: relocated
+CR-086's `cover-image.ts`/`cover-image-storage.ts` out of `modules/rides/`
+into `apps/api/src/lib/image-processing.ts`/`image-storage.ts` (generic
+names) so `modules/users`/`modules/organizers` could reuse them without
+reaching into another capability module's internals
+(`.claude/rules/resilience.md`), added `avatar_key`/`avatar_content_type`/
+`avatar_size_bytes` to both `users` and `organizer_profiles`, and added
+`POST`/`PATCH`/`DELETE`/`GET /v1/users/me/avatar` ("me"-scoped, no public
+`:id` variant) and `POST`/`PATCH`/`DELETE /v1/organizers/me/avatar` plus a
+public `GET /v1/organizers/:id/avatar` (an organizer's identity is already
+public via `RideOrganizerSummary`, so this needed no viewer-visibility
+check). `packages/ui` gained its first real `Avatar` component; upload UI
+wired into `/me/profile` and `/organizer/profile`. See `docs/changelog.md`
+2026-09-20 CR-097 for full detail.
 
 ### KI-049 — `apps/api`'s test suite deletes real data when run against `.env`'s native `DATABASE_URL`
 

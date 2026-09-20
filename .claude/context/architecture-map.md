@@ -611,6 +611,46 @@ breaker in either direction). `queue.ts` gained a second decoration,
 `notificationQueue` already owns, reused for the ping rather than opening a
 fourth connection. No new package/dependency-direction edge.
 
+CR-097 ("User/OrganizerProfile avatars", 2026-09-20, resolving KI-023): CR-086's
+two generic image-handling modules (`cover-image.ts`/`cover-image-storage.ts`)
+moved out of `modules/rides/` into `apps/api/src/lib/` as `image-processing.ts`/
+`image-storage.ts` (generic names, generic `processImage`/`ImageStorageError`/
+`uploadImageObject`/etc.) — `modules/rides/`, `modules/users/`, and
+`modules/organizers/` are three separate capability modules, and `users`/
+`organizers` importing a `rides`-owned file would be exactly the "reach into
+another module's internals" `.claude/rules/resilience.md` warns against, so
+this now lives beside `lib/cursor.ts`/`lib/account-rate-limit.ts` instead.
+`rides.service.ts` switched its import; behavior unchanged (verified by the
+full existing suite passing). A new `lib/read-upload.ts` (`readUploadedFile`/
+`UploadTooLargeError`) does the same for the small "read one multipart file,
+map the too-large error" helper `rides.routes.ts`'s `readGpxUpload`/
+`readCoverImageUpload` each still hand-roll their own copy of — only the two
+new avatar route files use the shared version; the GPX/cover-image routes were
+deliberately left untouched (lower risk than refactoring an already-shipped
+path for this ticket). `users`/`organizer_profiles` each gained `avatar_key`/
+`avatar_content_type`/`avatar_size_bytes` columns (same shape as `rides.
+cover_image_*`). New routes: `POST`/`PATCH`/`DELETE`/`GET /v1/users/me/avatar`
+(fully "me"-scoped, no `:id` variant — matches this module's existing
+"no `GET /me`, no public read" posture) and `POST`/`PATCH`/`DELETE /v1/
+organizers/me/avatar` plus a public, unauthenticated `GET /v1/organizers/:id/
+avatar` (an `OrganizerProfile`'s identity, including a photo, is already public
+via `RideOrganizerSummary` — unlike a `Ride`'s draft-gated cover, there is no
+visibility check to make). `RideOrganizerSummary`/`OrganizerProfile` both
+gained an additive `avatarUrl` field; `rides.service.ts` and
+`registrations.service.ts` (its `/v1/registrations` "my registrations" list)
+both import `organizerAvatarUrlPath` from `organizers.service.ts` to compute
+it — the same cross-capability-module reuse precedent those two files already
+had for `reviews.service.ts`'s `getOrganizerRatingSummary(ies)`, not a new
+exception. `packages/ui` gained its first real `Avatar` component (named in
+`docs/design.md` §9's inventory since CR-063 but never built) plus a shared
+`AVATAR_TERMS`; the actual upload UI (`AvatarUploadForm`) is duplicated once
+per cabinet feature module (`features/participant/profile/`, `features/
+organizer/profile/`) rather than extracted into `packages/ui` — it isn't in
+design.md's fixed shared-component inventory, and this repo's existing
+precedent (GPX upload vs. cover-image upload) is to keep near-identical
+upload-form UI feature-local rather than force a shared abstraction. No new
+package/dependency-direction edge.
+
 ## Target structure
 
 apps/

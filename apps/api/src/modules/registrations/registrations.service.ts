@@ -30,6 +30,7 @@ import {
   type NotificationQueue,
 } from '../notifications/notifications.service.js';
 import { getOrganizerRatingSummaries } from '../reviews/reviews.service.js';
+import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -402,6 +403,7 @@ export async function listMyRegistrations(
       ride: rides,
       organizerId: organizerProfiles.id,
       organizerName: organizerProfiles.name,
+      organizerAvatarKey: organizerProfiles.avatarKey,
     })
     .from(registrations)
     .innerJoin(rides, eq(registrations.rideId, rides.id))
@@ -444,6 +446,9 @@ export async function listMyRegistrations(
           organizer: {
             id: row.organizerId,
             name: row.organizerName,
+            avatarUrl: row.organizerAvatarKey
+              ? organizerAvatarUrlPath(row.organizerId)
+              : null,
             rating: summary.rating,
             reviewCount: summary.reviewCount,
           },

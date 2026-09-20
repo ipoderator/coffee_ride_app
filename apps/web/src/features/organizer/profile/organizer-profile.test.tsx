@@ -37,6 +37,7 @@ const baseProfile: OrganizerProfile = {
   userId: 'user-1',
   name: 'Гравийный клуб',
   description: 'Ездим по субботам.',
+  avatarUrl: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

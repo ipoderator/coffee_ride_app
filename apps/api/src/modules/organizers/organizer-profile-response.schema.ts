@@ -9,6 +9,10 @@ export const organizerProfileResponseSchema = z.object({
   userId: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  // CR-097 (KI-023 remainder): computed API-proxy path (`GET /v1/organizers/:id/
+  // avatar`, public), never a stored URL — same precedent as `Ride.coverImageUrl`
+  // (ADR-019).
+  avatarUrl: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -79,6 +79,7 @@ describe('LoginForm', () => {
         displayName: null,
         phone: null,
         bio: null,
+        avatarUrl: null,
       },
     });
 

@@ -16,4 +16,10 @@ export interface User {
   displayName: string | null;
   phone: string | null;
   bio: string | null;
+  // CR-097 (KI-023 remainder): computed from `avatarKey`, same "API-proxy path,
+  // never a direct S3 URL" precedent as `Ride.coverImageUrl` (ADR-019) — always
+  // `/v1/users/me/avatar` since this type is only ever the caller's own profile,
+  // never someone else's (there is no `GET /v1/users/:id` — `.claude/rules/
+  // security.md`: no endpoint exposes another user's row).
+  avatarUrl: string | null;
 }

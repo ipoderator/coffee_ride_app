@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { CoverImageInvalidError, processCoverImage } from './cover-image.js';
+import { ImageInvalidError, processImage } from './image-processing.js';
 
 function solidJpeg(width: number, height: number): Promise<Buffer> {
   return sharp({
@@ -15,11 +15,11 @@ function solidJpeg(width: number, height: number): Promise<Buffer> {
     .toBuffer();
 }
 
-describe('processCoverImage', () => {
+describe('processImage', () => {
   it('rejects a file that cannot be decoded as an image', async () => {
     await expect(
-      processCoverImage(Buffer.from('not an image at all')),
-    ).rejects.toThrow(CoverImageInvalidError);
+      processImage(Buffer.from('not an image at all')),
+    ).rejects.toThrow(ImageInvalidError);
   });
 
   it('rejects an SVG (accepted-format allowlist, not a decode failure)', async () => {
@@ -28,14 +28,12 @@ describe('processCoverImage', () => {
     );
     // sharp can decode SVG (librsvg) — this asserts the allowlist rejects it
     // even though decoding itself would succeed (ADR-019's XSS reasoning).
-    await expect(processCoverImage(svg)).rejects.toThrow(
-      CoverImageInvalidError,
-    );
+    await expect(processImage(svg)).rejects.toThrow(ImageInvalidError);
   });
 
   it('resizes an oversized image to fit within 1920x1920, preserving aspect ratio', async () => {
     const source = await solidJpeg(3000, 2000);
-    const result = await processCoverImage(source);
+    const result = await processImage(source);
 
     expect(result.contentType).toBe('image/jpeg');
     expect(result.ext).toBe('jpg');
@@ -46,7 +44,7 @@ describe('processCoverImage', () => {
 
   it('does not upscale an image already smaller than the bound', async () => {
     const source = await solidJpeg(300, 200);
-    const result = await processCoverImage(source);
+    const result = await processImage(source);
 
     const metadata = await sharp(result.buffer).metadata();
     expect(metadata.width).toBe(300);
@@ -65,7 +63,7 @@ describe('processCoverImage', () => {
       .png()
       .toBuffer();
 
-    const result = await processCoverImage(source);
+    const result = await processImage(source);
 
     expect(result.contentType).toBe('image/png');
     expect(result.ext).toBe('png');
@@ -91,7 +89,7 @@ describe('processCoverImage', () => {
     const sourceMetadata = await sharp(source).metadata();
     expect(sourceMetadata.exif).toBeDefined();
 
-    const result = await processCoverImage(source);
+    const result = await processImage(source);
     const metadata = await sharp(result.buffer).metadata();
     expect(metadata.exif).toBeUndefined();
   });

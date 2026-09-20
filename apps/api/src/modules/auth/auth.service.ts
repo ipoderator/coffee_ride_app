@@ -47,8 +47,17 @@ export function toPublicUser(row: typeof users.$inferSelect): User {
     displayName: row.displayName,
     phone: row.phone,
     bio: row.bio,
+    // CR-097 (KI-023 remainder): always `/v1/users/me/avatar` when set — this
+    // type only ever describes the caller's own profile (see `User.avatarUrl`'s
+    // own doc comment in `packages/types`).
+    avatarUrl: row.avatarKey ? USER_AVATAR_URL_PATH : null,
   };
 }
+
+// CR-097: same "computed from the key, not stored verbatim" precedent as
+// `rides.ts`' `coverImageUrlPath` (ADR-019) — just a fixed path here since there
+// is no `:id` for a "me"-scoped resource.
+const USER_AVATAR_URL_PATH = '/v1/users/me/avatar';
 
 export interface RegisterResult {
   user: User;

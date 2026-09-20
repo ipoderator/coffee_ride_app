@@ -92,6 +92,7 @@ function baseDetailResponse(
     organizer: {
       id: 'org-1',
       name: 'Гравийный клуб',
+      avatarUrl: null,
       rating: null,
       reviewCount: 0,
     },
@@ -467,6 +468,7 @@ describe('RideDetailView', () => {
           organizer: {
             id: 'org-1',
             name: 'Гравийный клуб',
+            avatarUrl: null,
             rating: 4.5,
             reviewCount: 3,
           },

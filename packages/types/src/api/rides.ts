@@ -72,9 +72,14 @@ export interface CreateRideResponse {
 // concepts under different names"). `rating` is `null` with `reviewCount: 0` when the
 // organizer has no reviews yet — never `0` (`docs/design.md` §6: a missing value and
 // a real zero are different facts).
+// CR-097 (KI-023 remainder): additive `avatarUrl`, same "embed it here" precedent
+// as `rating`/`reviewCount` (CR-043) — `RideCard`/organizer identity needs a photo
+// alongside the name, and there is still no separate public organizer-read
+// endpoint. `null` when the organizer has no avatar uploaded.
 export interface RideOrganizerSummary {
   id: string;
   name: string;
+  avatarUrl: string | null;
   rating: number | null;
   reviewCount: number;
 }

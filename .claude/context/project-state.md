@@ -29,17 +29,21 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-095 (test-suite data-loss guard + backup safety net,
-resolving KI-049) and CR-086 (cover image pipeline, ADR-019) both closed
-this session. CR-086's code had been implemented in an earlier session but
-left uncommitted with its docs half unfinished — this session validated it
-(typecheck/lint/test/build all clean, plus a real live upload/download/
-replace/delete round trip against the running MinIO), finished
-`docs/api.md`/`docs/database.md`, and committed it. No unchecked ticket
-remains in `docs/tasks.md`. Next logical step: pick a new one — candidates
-are an avatar endpoint for `User`/`OrganizerProfile` (KI-023's remainder,
-no ticket number yet) or wiring a real consumer for `packages/maps-2gis`
-(KI-032/KI-031, or CR-028/CR-084's route rendering).
+None active. CR-097 (avatar upload for `User`/`OrganizerProfile`, resolving
+KI-023's remainder) closed this session, on top of CR-095/CR-086 from the
+prior session. Relocated CR-086's generic image-processing/S3-storage
+modules from `modules/rides/` to `apps/api/src/lib/` (module-boundary
+reasons), added `avatar_key`/`avatar_content_type`/`avatar_size_bytes` to
+`users`/`organizer_profiles`, added `/v1/users/me/avatar` (fully "me"-scoped)
+and `/v1/organizers/me/avatar` + public `/v1/organizers/:id/avatar`, added
+`packages/ui`'s first real `Avatar` component, and wired upload UI into both
+profile screens. Docker was up this session (KI-019 now resolved) — live-
+verified the whole flow end to end against real Postgres/MinIO, not just
+mocked-S3 unit tests. No unchecked ticket remains in `docs/tasks.md`. Next
+logical step: pick a new one — candidates are wiring a real consumer for
+`packages/maps-2gis` (KI-032/KI-031, or CR-028/CR-084's route rendering), or
+the one-line `turbo.json` fix for KI-050 (`test` task's `env` allowlist
+missing `TEST_DATABASE_URL`).
 
 ## Implemented
 
@@ -440,15 +444,18 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   ADR-007's still-Pending email delivery, not just a screen.
 - Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
   when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
-  pre-CR-050 direct synchronous insert when it isn't. Live Redis reachability
-  itself is still unverified end to end in this environment (KI-014, Docker
-  unreachable) — this session only verified the unreachable-Redis behavior (bounded,
-  logged, never hangs).
-- `GET /health` (CR-051) live-verified in this environment: real Postgres reachable
-  (`db: "ok"`), Redis/S3 genuinely unreachable (`redis`/`s3`: `"error"`) — always
-  `200`, distinguishing a live dependency from an actual failure exactly as
-  documented. The reachable-Redis/S3 round trip itself is still unverified
-  end to end (same KI-014/KI-015 gap, unrelated to this endpoint's own correctness).
+  pre-CR-050 direct synchronous insert when it isn't. Live connection-level
+  Redis reachability was already confirmed as of 2026-09-19 (KI-014); this
+  session reconfirmed it via `GET /health` (`redis: "ok"`) — the specific
+  gap KI-014 still leaves open (an enqueued job actually round-tripping
+  through the `Worker` into a real `notifications` row) was not exercised
+  again this session.
+- `GET /health` (CR-051): this session, with Docker up (KI-019 resolved),
+  returned `{"db":"ok","redis":"ok","s3":"ok"}` against the real stack —
+  confirms KI-014/KI-015's connection-level reachability holds again, not a
+  new fact by itself; the endpoint's own degraded-vs-error distinction
+  (always `200`, `error` only for a genuine failure, `not_configured` for an
+  absent optional dependency) remains as documented either way.
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
   are deferred, no design-doc backing yet (KI-030).
 - Observability (CR-079/KI-006): request-id correlation and structured
@@ -459,10 +466,9 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   out of scope (ADR-016).
 - Provisional/deferred: `RideService`/registration-state terminology keys pending a
   real DB enum (KI-021); shadcn CLI's vendoring target still points at `apps/web`, not
-  `packages/ui`, for any future structurally-complex primitive (KI-020); `Ride`
-  cover images now work end to end (CR-086, ADR-019) — `User`/`OrganizerProfile`
-  avatar upload is KI-023's only remaining gap, reusing CR-086's validate/resize/
-  storage modules when built.
+  `packages/ui`, for any future structurally-complex primitive (KI-020). `Ride` cover
+  images (CR-086, ADR-019) and `User`/`OrganizerProfile` avatars (CR-097) now both
+  work end to end — KI-023 is fully resolved, no entity still lacks a photo path.
 
 ## Do not break
 
@@ -580,15 +586,25 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   `.claude/rules/security.md` names) — don't extend it to
   `/verify-email`/`/reset-password`, which operate on opaque tokens, not an
   identifiable account from the request body;
-- cover images served only through `GET /v1/rides/:id/cover` (API proxy),
+- cover images/avatars served only through their API-proxy path (`GET
+/v1/rides/:id/cover`, `/v1/users/me/avatar`, `/v1/organizers/:id/avatar`),
   never a direct S3 URL — the bucket stays private, and this is what lets
-  `next.config.ts` skip an `images.remotePatterns` entry (CR-086, ADR-019);
-  file type is verified by actually decoding with `sharp`, never trusted
-  from the client `Content-Type` header (SVG stays excluded — XSS risk);
-  don't reintroduce a direct-URL/trust-the-extension shortcut for this or
-  any future entity that reuses the same modules (`User`/`OrganizerProfile`
-  avatars, KI-023).
+  `next.config.ts` skip an `images.remotePatterns` entry (CR-086/CR-097,
+  ADR-019); file type is verified by actually decoding with `sharp`, never
+  trusted from the client `Content-Type` header (SVG stays excluded — XSS
+  risk); don't reintroduce a direct-URL/trust-the-extension shortcut;
+- `lib/image-processing.ts`/`lib/image-storage.ts` (relocated from
+  `modules/rides/cover-image*.ts`, CR-097) are shared by `rides`, `users`,
+  and `organizers` — don't move them back into one capability module, and
+  don't let `users`/`organizers` import a `rides`-owned file directly if a
+  fourth caller ever needs this pipeline again;
+- `users`/`organizers` avatar mutations stay "me"-scoped only (no `:id`
+  variant for either) — only the organizer avatar _download_ is public and
+  keyed by `:id` (`GET /v1/organizers/:id/avatar`), because an organizer's
+  identity is already public via `RideOrganizerSummary`; don't extend that
+  same public-by-id pattern to `users` without a real product reason (there
+  is still no `GET /v1/users/:id` of any kind).
 
 ## Last updated
 
-2026-09-20 (CR-086)
+2026-09-20 (CR-097)

@@ -19,4 +19,7 @@ export const userResponseSchema = z.object({
   displayName: z.string().nullable(),
   phone: z.string().nullable(),
   bio: z.string().nullable(),
+  // CR-097 (KI-023 remainder): computed API-proxy path, never a stored URL —
+  // same precedent as `Ride.coverImageUrl` (ADR-019).
+  avatarUrl: z.string().nullable(),
 });

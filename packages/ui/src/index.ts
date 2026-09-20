@@ -27,3 +27,4 @@ export * from './components/Input';
 export * from './components/Textarea';
 export * from './components/FormField';
 export * from './components/Card';
+export * from './components/Avatar';

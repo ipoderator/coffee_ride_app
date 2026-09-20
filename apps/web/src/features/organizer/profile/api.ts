@@ -1,6 +1,7 @@
 import {
   createOrganizerProfileRequestSchema,
   updateOrganizerProfileRequestSchema,
+  type AvatarResponse,
   type CreateOrganizerProfileRequest,
   type CreateOrganizerProfileResponse,
   type GetOrganizerProfileResponse,
@@ -24,6 +25,7 @@ export type {
 };
 
 const ORGANIZERS_ME_ENDPOINT = '/api/v1/organizers/me';
+const AVATAR_ENDPOINT = '/api/v1/organizers/me/avatar';
 
 /**
  * Typed client for this feature only (`.claude/rules/extensibility.md`). Throws
@@ -80,4 +82,42 @@ export async function updateOrganizerProfile(
   }
 
   return body as UpdateOrganizerProfileResponse;
+}
+
+// CR-097 (KI-023 remainder): same "me"-scoped mutation shape as
+// `features/participant/profile/api.ts`'s avatar functions — the current
+// avatar state comes from `getOrganizerProfile()`'s `organizerProfile.
+// avatarUrl`, not a separate fetch.
+async function uploadOrReplace(
+  method: 'POST' | 'PATCH',
+  file: File,
+): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+
+  const response = await fetch(AVATAR_ENDPOINT, { method, body: formData });
+  const body = (await response.json()) as AvatarResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as AvatarResponse).avatarUrl;
+}
+
+/** 409 `avatar_already_exists` if one exists — use {@link replaceOrganizerAvatar}. */
+export function uploadOrganizerAvatar(file: File): Promise<string> {
+  return uploadOrReplace('POST', file);
+}
+
+/** 404 `avatar_not_found` if none exists yet — use {@link uploadOrganizerAvatar}. */
+export function replaceOrganizerAvatar(file: File): Promise<string> {
+  return uploadOrReplace('PATCH', file);
+}
+
+export async function deleteOrganizerAvatar(): Promise<void> {
+  const response = await fetch(AVATAR_ENDPOINT, { method: 'DELETE' });
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
 }

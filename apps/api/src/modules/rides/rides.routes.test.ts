@@ -411,6 +411,7 @@ describe('/v1/rides', () => {
       expect(byId.get(publishedId)?.organizer).toEqual({
         id: organizerProfile!.id,
         name: 'Гравийный клуб',
+        avatarUrl: null,
         rating: null,
         reviewCount: 0,
       });
@@ -845,6 +846,9 @@ describe('/v1/rides', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().ride.id).toBe(created.json().ride.id);
       expect(response.json().organizer.name).toBe('Гравийный клуб');
+      // CR-097 (KI-023 remainder): additive field, null until an avatar is
+      // uploaded via `POST /v1/organizers/me/avatar`.
+      expect(response.json().organizer.avatarUrl).toBeNull();
       // CR-030 ("Stops"): additive field, empty until a stop is created.
       expect(response.json().stops).toEqual([]);
 
@@ -888,6 +892,7 @@ describe('/v1/rides', () => {
             .where(eq(organizerProfiles.userId, owner.userId))
         )[0]!.id,
         name: 'Гравийный клуб',
+        avatarUrl: null,
         rating: null,
         reviewCount: 0,
       });

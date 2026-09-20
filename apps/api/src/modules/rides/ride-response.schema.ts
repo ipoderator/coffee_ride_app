@@ -38,6 +38,8 @@ export const rideResponseSchema = z.object({
 export const rideOrganizerSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
+  // CR-097 (KI-023 remainder): additive.
+  avatarUrl: z.string().nullable(),
   rating: z.number().nullable(),
   reviewCount: z.number(),
 });

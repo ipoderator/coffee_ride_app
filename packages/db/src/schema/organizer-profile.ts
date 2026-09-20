@@ -1,10 +1,13 @@
 import {
+  check,
+  integer,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { users } from './user.js';
 
 // Third domain table (CR-014, `.claude/rules/database.md`/`docs/database.md`).
@@ -38,6 +41,12 @@ export const organizerProfiles = pgTable(
     // Length (≤500 chars) is enforced by `packages/types`' Zod schema at the API
     // boundary, not a DB CHECK constraint — same convention as `users.ts`.
     description: text('description'),
+    // CR-097 (KI-023 remainder, ADR-019's reuse point 7): same shape as
+    // `users.avatar_*`/`rides.cover_image_*` — public-facing, unlike anything
+    // else on this table.
+    avatarKey: text('avatar_key'),
+    avatarContentType: text('avatar_content_type'),
+    avatarSizeBytes: integer('avatar_size_bytes'),
     // ADR-012: every timestamp column is `timestamptz`, never bare `timestamp`.
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -48,5 +57,9 @@ export const organizerProfiles = pgTable(
   },
   (table) => [
     uniqueIndex('organizer_profiles_user_id_unique').on(table.userId),
+    check(
+      'organizer_profiles_avatar_size_bytes_non_negative',
+      sql`${table.avatarSizeBytes} is null or ${table.avatarSizeBytes} >= 0`,
+    ),
   ],
 );

@@ -1,86 +1,98 @@
 # Current task
 
-## Task ID
+Task ID: CR-097 (KI-023 remainder — avatar upload for `User`/`OrganizerProfile`).
 
-CR-086 — Cover image pipeline (ADR-019). Last unchecked ticket in
-`docs/tasks.md`; its code was already implemented in an earlier session but
-left uncommitted with the docs half unfinished.
+Status: **Done.**
 
 ## Goal
 
-Validate the already-implemented cover image pipeline end to end (not just
-trust that it was written correctly), finish the documentation it left
-incomplete (`docs/api.md`, `docs/database.md` still described the old
-deferred `coverImageUrl` state), and commit.
+Resolve the KI-023 remainder: real avatar upload/replace/delete/download
+endpoints for `User` and `OrganizerProfile`, reusing CR-086/ADR-019's generic
+image-processing (resize/validate) and S3 wrapper modules rather than
+rebuilding a third one.
 
-## Requirements / acceptance criteria
+## Requirements / acceptance criteria — all met
 
-Per the original CR-086 plan (already implemented): `POST`/`PATCH`/`DELETE`/
-`GET /v1/rides/:id/cover`, JPEG/PNG/WebP validated by decoding with `sharp`,
-8 MB cap, resize to 1920×1920 max, served via API proxy never a direct S3
-URL, `/organizer/rides/[id]/cover` screen, `RideCard`/`RideDetailView`'s
-`next/image` branches go live. This session's own bar: typecheck/lint/test/
-build all clean, plus a real (not mocked) upload → download → replace →
-delete round trip against the actually-running MinIO.
+- DB: `avatar_key`/`avatar_content_type`/`avatar_size_bytes` on `users` and
+  `organizer_profiles`, non-negative CHECK constraint, real migration
+  (`0016_avatar_columns.sql`).
+- Relocated `modules/rides/cover-image.ts`/`cover-image-storage.ts` to
+  `apps/api/src/lib/image-processing.ts`/`image-storage.ts` (generic names)
+  so `users`/`organizers` don't reach into `rides`' internals
+  (`.claude/rules/resilience.md`). `rides.service.ts` updated; its own tests
+  re-verified passing unchanged.
+- `POST/PATCH/DELETE/GET /v1/users/me/avatar` — fully "me"-scoped.
+- `POST/PATCH/DELETE /v1/organizers/me/avatar` + public `GET
+/v1/organizers/:id/avatar`.
+- `User.avatarUrl`, `OrganizerProfile.avatarUrl`, `RideOrganizerSummary.
+avatarUrl` — all additive.
+- `packages/ui` `Avatar` component (new) + `AVATAR_TERMS`; upload UI wired
+  into `/me/profile` and `/organizer/profile`.
+- No cross-module import of a `rides`-owned file from `users`/`organizers`.
 
-## Planned files
+## Implementation summary
 
-None new — validating and documenting already-written code. Docs:
-`docs/api.md` (new "## Cover image" section), `docs/database.md` (Rides
-table field list), `.claude/context/known-issues.md` (KI-023 update),
-`docs/tasks.md`, `docs/changelog.md`, this file, `project-state.md`.
-
-## Implementation progress
-
-Done — validation + documentation only, no code changes.
-
-- `pnpm --filter api/web typecheck`/`lint`: clean.
-- `pnpm --filter db db:migrate` run against both `coffee_ride_dev` (real
-  native Postgres) and the Docker Compose `coffee_ride` database — CR-086's
-  two migrations (`0014_tense_revanche.sql`, `0015_high_owl.sql`) applied to
-  both.
-- `pnpm --filter api test`: 345 passed, 1 skipped (27/27 cover-image tests
-  among them). `pnpm --filter web test`: 185 passed.
-- `pnpm turbo run build`: clean, `/organizer/rides/[id]/cover` compiles.
-- Live round trip against the real running MinIO via curl against the
-  already-running dev `apps/api`: register → verify → login → create
-  organizer profile → create draft ride → `POST .../cover` (400×300 JPEG,
-  `201`) → `GET /v1/rides/:id` shows the real `coverImageUrl` → anonymous
-  `GET .../cover` on the draft ride correctly `404`s → authenticated `GET
-.../cover` returns the actual bytes, decodes as a real 400×300 JPEG →
-  `PATCH .../cover` with a 3000×2000 image → downloaded back as exactly
-  1920×1280 (resize bound confirmed) → `DELETE .../cover` → `204`,
-  `coverImageUrl` back to `null`, subsequent `GET` `404`s.
-- Test data (the one ride/organizer profile/user created for the live
-  check) deleted from the real `coffee_ride_dev` database afterward —
-  confirmed the real user count was unchanged before/after.
-- `docs/api.md`: new "## Cover image" section (all four endpoints), and
-  `PATCH /v1/rides/:id`'s note about `coverImageUrl` updated (was "deferred
-  to the S3 pipeline (KI-023)", now "computed... from the dedicated
-  `.../cover` endpoints").
-- `docs/database.md`: Rides table entry updated —
-  `coverImageUrl`→`coverImageKey` rename + two new columns.
-- `.claude/context/known-issues.md`: KI-023 updated — `Ride` resolved,
-  `User`/`OrganizerProfile` avatars stay open, noted as reusing CR-086's
-  modules.
-- `docs/tasks.md`: CR-086 checked off with full detail.
-- `docs/changelog.md`: entry appended.
-- `project-state.md`: updated (current task, apps/web section, apps/api
-  section, Next, Known limitations, Do not break, Last updated).
-- Committed and pushed to `main`.
+- `packages/db/src/schema/{user,organizer-profile}.ts` — new columns + CHECK.
+- `packages/db/migrations/0016_avatar_columns.sql`.
+- `apps/api/src/lib/{image-processing,image-storage,read-upload}.ts` (new/
+  relocated).
+- `apps/api/src/modules/rides/rides.service.ts` — import switched to `lib/`.
+- `apps/api/src/modules/users/{users.service,users.routes,
+user-response.schema}.ts` — avatar functions/routes/schema.
+- `apps/api/src/modules/organizers/{organizers.service,organizers.routes,
+organizer-profile-response.schema}.ts` — avatar functions/routes/schema +
+  exported `organizerAvatarUrlPath`.
+- `apps/api/src/modules/rides/{rides.service,ride-response.schema}.ts`,
+  `apps/api/src/modules/registrations/registrations.service.ts` — additive
+  `avatarUrl` on the organizer summary (imports `organizerAvatarUrlPath`).
+- `apps/api/src/modules/auth/auth.service.ts` — `toPublicUser` computes
+  `avatarUrl`.
+- `packages/types/src/{domain/user,domain/organizer-profile,api/rides,
+api/media}.ts` — new/updated types.
+- `packages/ui/src/components/Avatar.tsx` (+ test), `terminology.ts`
+  (`AVATAR_TERMS`).
+- `apps/web/src/features/{participant,organizer}/profile/{api.ts,
+components/AvatarUploadForm.tsx}` (+ tests), wired into both profile
+  pages/forms.
+- New tests: `apps/api/src/modules/{users,organizers}/avatar.routes.test.ts`,
+  `packages/ui/src/components/Avatar.test.tsx`,
+  `apps/web/src/features/{participant,organizer}/profile/
+avatar-upload-form.test.tsx`. Fixed several pre-existing fixtures needing
+  `avatarUrl`.
 
 ## Validation results
 
-All green — see Implementation progress above for the exact commands/counts.
+- `pnpm turbo build` — clean, all 9 packages.
+- `pnpm turbo lint typecheck` — clean, all 17 tasks.
+- `pnpm --filter api test` (real `TEST_DATABASE_URL` Postgres, migrated
+  first): 369 passed, 1 skipped.
+- `pnpm --filter ui test`: 94 passed.
+- `pnpm --filter web test`: 198 passed.
+- Live end-to-end verification against the real running Docker stack
+  (Postgres/Redis/MinIO all healthy this session): register → verify →
+  login → upload user avatar (3000×2000 → confirmed resized to 1920×1280 on
+  download) → confirmed real object in MinIO via `mc find` → delete →
+  confirmed 404 + object gone from MinIO. Same for organizer avatar, plus
+  confirmed the public `GET /v1/organizers/:id/avatar` works with zero
+  cookies, and `GET /v1/rides/:id`'s embedded `organizer.avatarUrl` reflects
+  it. All live test data cleaned up (DB rows deleted, orphaned S3 object
+  removed) afterward.
 
-## Discovered issues
+## Discovered issues (logged, not fixed — out of scope)
 
-None — the previous session's implementation held up under both automated
-tests and a real live round trip with no fixes needed.
+- KI-050 (new): `turbo.json`'s `test` task doesn't pass through
+  `TEST_DATABASE_URL`, so a plain `pnpm turbo test` fails 15/25 `apps/api`
+  files. `pnpm --filter api test` (this session's actual invocation, matches
+  CI) is unaffected.
+- KI-019 resolved as a side effect (Docker confirmed reachable this
+  session — was stale since at least CR-086).
 
 ## Final result
 
-CR-086 done, committed, pushed. `docs/tasks.md` has no unchecked ticket
-left. Next candidates (no ticket number assigned yet): an avatar endpoint
-for `User`/`OrganizerProfile` (KI-023's remainder), or a real consumer for
-`packages/maps-2gis` (KI-032/KI-031, or CR-028/CR-084's route rendering).
+All acceptance criteria met, all checks green, live-verified. Persistent
+context updated: `docs/changelog.md` (CR-097 entry), `docs/tasks.md`
+(checked off), `docs/api.md` (new endpoint docs), `.claude/context/
+known-issues.md` (KI-023 resolved, KI-019 resolved, KI-015 updated, KI-050
+opened), `.claude/context/project-state.md` (overwritten), `.claude/context/
+architecture-map.md` (structural-change entry appended). No new ADR — this
+implements ADR-019 point 7's already-decided scope.
