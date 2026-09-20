@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
@@ -121,6 +122,18 @@ export function LoginForm() {
         <Button type="submit" isLoading={isPending}>
           {isPending ? AUTH_TERMS.loginSubmitPending : AUTH_TERMS.loginSubmit}
         </Button>
+
+        <div className="flex flex-col gap-1 text-sm">
+          <Link
+            href="/forgot-password"
+            className="text-primary hover:underline"
+          >
+            {AUTH_TERMS.forgotPasswordLink}
+          </Link>
+          <Link href="/register" className="text-primary hover:underline">
+            {AUTH_TERMS.registerLink}
+          </Link>
+        </div>
       </form>
     </Card>
   );

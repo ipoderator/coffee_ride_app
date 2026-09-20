@@ -678,6 +678,28 @@ session: the native dev `DATABASE_URL` database had never had migration
 `0016_avatar_columns.sql` (CR-097) applied, causing `GET /v1/rides` to 500 —
 ran `pnpm --filter db db:migrate` against it (KI-051, resolved same session).
 
+CR-099 ("Fix findings from a user-run QA pass", 2026-09-20): `apps/web` gained
+a new `(public)` route group (`app/(public)/layout.tsx`) wrapping `/`,
+`/register`, `/login` — same three routes, moved in unchanged — rendering a
+new shared `components/site/SiteHeader.tsx` (a plain Server Component, no
+client state). Deliberately not applied to `/organizer/*`/`/me/*`
+(`CabinetShell` already owns their nav) or `/rides/[id]` (outside this
+ticket's reported gap). `features/auth/` gained three new modules
+(`verify-email`, `forgot-password`, `reset-password`), same `api.ts` +
+component + `page.tsx` shape as the existing `register`/`login` — each calls
+an endpoint that already existed (`auth.routes.ts`'s `/verify-email`,
+`/forgot-password`, `/reset-password`) but previously had no web screen
+(KI-026/KI-042, both narrowed, not fully resolved — real usability still
+depends on ADR-007's pending email delivery). `app/organizer/rides/[id]/
+loading.tsx` (new) is this codebase's first per-segment Next.js loading
+boundary — every prior route relied solely on its own client component's
+`Skeleton`, which only covers the gap after that component mounts, not
+during the RSC navigation that precedes it. `apps/web/src/app/layout.tsx`
+gained a `beforeInteractive` inline script activating `packages/ui`'s
+already-defined `.dark` token set from `prefers-color-scheme` — no new
+dependency, no manual toggle, just the missing activation for tokens that
+had existed unused since CR-063.
+
 ## Target structure
 
 apps/

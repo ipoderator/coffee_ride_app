@@ -759,9 +759,9 @@ graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
       render-layer types (`MapRenderer`/`MapHandle`/`MapMarkerInput`/
       `MapRenderOptions`) to `packages/maps-core` (ADR-020) — previously just
       a deferred comment — and implemented them in `packages/maps-2gis/src/
-    render.ts` against the real `@2gis/mapgl` SDK (new dependency, browser-
+render.ts` against the real `@2gis/mapgl` SDK (new dependency, browser-
       only, dynamically imported). New composition point `apps/web/src/lib/
-    maps/create-map-renderer.ts`, the one file allowed to import
+maps/create-map-renderer.ts`, the one file allowed to import
       `maps-2gis` directly (scoped `eslint.config.mjs` override, CR-056).
       New `DiscoveryMap` client component replaces `RideMapPlaceholder` on
       `/`, plotting each published ride's `startLat`/`startLng` as a marker;
@@ -776,5 +776,26 @@ graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
       gap along the way (not this ticket's scope): the native dev
       `DATABASE_URL` database had never had migration `0016_avatar_columns.sql`
       (CR-097) applied, so `GET /v1/rides` 500'd — ran `pnpm --filter db
-    db:migrate` against it, resolved (logged as KI-051). See
+db:migrate` against it, resolved (logged as KI-051). See
       `docs/changelog.md`.
+- [x] CR-099 Fix findings from a user-run QA pass against a live browser —
+      done 2026-09-20: dark theme now activates (`prefers-color-scheme`,
+      no toggle — KI-052, resolved); new `SiteHeader` on `/`/`/register`/
+      `/login` plus cross-links in `RegisterForm`/`LoginForm` (KI-053,
+      resolved); real `/verify-email`, `/forgot-password`, `/reset-password`
+      screens built (KI-026/KI-042 narrowed — screens now exist and are
+      live-verified end to end, production usability still blocked on
+      ADR-007's pending email delivery); `RegisterForm`'s dev-only
+      verification link now points at the real web page instead of the
+      raw, POST-only API path; new `apps/web/src/app/organizer/rides/[id]/
+loading.tsx` gives that segment's five leaves an immediate loading
+      boundary (KI-054, resolved). Two reported findings investigated and
+      found not to be bugs, no code change: the 2GIS map's flat visual
+      background in a headless sandbox browser (real key/tiles/markers
+      confirmed via network/DOM — same conclusion as CR-098's own finding);
+      the duplicate `GET /v1/organizers/me` request (React 18 Strict Mode's
+      intentional dev-only double-invoke of `useEffect`, universal to this
+      codebase's fetch pattern, absent in production builds). `pnpm --filter
+ui typecheck`/`pnpm --filter web typecheck,lint,build` clean; `pnpm
+--filter web test` 208/208 passing (10 new). Live-verified in a real
+      browser against the real running stack. See `docs/changelog.md`.

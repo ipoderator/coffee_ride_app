@@ -1156,3 +1156,118 @@ Follow-up: KI-036 (route-detail map — reuse `MapRenderer`, extend additively i
 polyline/typed-marker-icon capability is needed, don't build a second interface);
 marker clustering at city zoom and click-to-select-with-keyboard-equivalent both stay
 explicitly out of scope (`docs/design.md` §15/§12) until a real product need exists.
+
+## 2026-09-20 — CR-099 — Fix findings from a user-run QA pass against a live browser
+
+User ran a manual QA pass against a real browser session and reported seven findings.
+Five were real bugs, fixed; two were investigated and found not to be bugs.
+
+**Fixed:**
+
+1. **Dark theme never activated** (KI-052, new, resolved same session). `packages/
+ui/src/tokens.css` has defined a full `.dark` token set since CR-063, and
+   `docs/design.md` calls it "not optional or later," but nothing ever applied the
+   `.dark` class — emulating `prefers-color-scheme: dark` left the page fully light.
+   `apps/web/src/app/layout.tsx` now injects a `next/script` `beforeInteractive`
+   inline script that adds `.dark` to `<html>` when the OS preference matches,
+   before hydration/paint (no flash of the wrong theme). No manual toggle —
+   `docs/design.md` only requires the theme to exist and respond to the system
+   preference. Live-verified: `document.documentElement.className` gains `dark`
+   under emulation, `body`'s computed background flips from `rgb(250, 249, 247)`
+   (`#faf9f7`) to `rgb(23, 22, 20)` (`#171614`) — an exact match to `tokens.css`.
+
+2. **No shared nav on `/`, `/register`, `/login`** (KI-053, new, resolved same
+   session). None of the three linked to each other or into a cabinet. New
+   `SiteHeader` (`apps/web/src/components/site/SiteHeader.tsx`, a plain Server
+   Component), applied via a new `(public)` route group wrapping exactly these
+   three routes (moved in, same URLs) — deliberately not `/organizer/*`/`/me/*`
+   (already have `CabinetShell`'s nav) or `/rides/[id]` (not part of the reported
+   gap). Static by design: shows all four links (Заезды/Войти/Регистрация/Личный
+   кабинет) unconditionally rather than fetching the session just to decide what
+   to show — `/me` already redirects a logged-out visitor to `/login`. Also added
+   direct cross-links inside the forms: `RegisterForm` → `/login`, `LoginForm` →
+   `/register` and the new `/forgot-password`. New terms in `packages/ui/src/
+terminology.ts` (`SITE_HEADER_TERMS`, three new `AUTH_TERMS` entries) — no
+   hard-coded Russian strings in the component (`.claude/rules/frontend.md`).
+
+3. **Register success screen's "verification link" 404'd** (part of KI-026).
+   The dev-only note rendered `verificationUrl` verbatim — `/v1/auth/
+verify-email?token=...`, a relative path missing `/api` _and_ a POST-only
+   route, not a GET page — as if it were a clickable link. `RegisterForm` now
+   extracts the token and links to the real `/verify-email?token=...` web page
+   built for finding 4 below, instead of the raw API path.
+
+4. **`/forgot-password`, `/reset-password`, `/verify-email` all 404'd** (KI-026,
+   KI-042, both narrowed — the screens now exist, but production usability is
+   still blocked on ADR-007's pending real email delivery, so neither is fully
+   resolved). Three new `features/auth/*` modules (`verify-email`,
+   `forgot-password`, `reset-password`), same pattern as the existing
+   `register`/`login` ones: typed `api.ts` calling the corresponding already-
+   built endpoint, a form/status component with loading/error/success states,
+   a thin `app/*/page.tsx`. `verify-email`/`reset-password` read `?token=` via
+   Next 15's `searchParams` Promise prop. New terminology blocks
+   (`VERIFY_EMAIL_TERMS`, `FORGOT_PASSWORD_TERMS`, `RESET_PASSWORD_TERMS`).
+   Live-verified end to end in a real browser against the real running stack:
+   registered a real account through the UI, followed the rendered link, got
+   "Email подтверждён"; `/forgot-password` showed the correct generic success
+   state regardless of account existence (`.claude/rules/security.md` — no
+   account enumeration); `/reset-password`'s missing-token state confirmed live,
+   its token-present path covered by new tests against the same three server
+   error codes `auth.routes.test.ts` already exercises server-side. No dev-only
+   token field was added to `/forgot-password` — deliberately unchanged, by the
+   same no-enumeration rule.
+
+5. **No loading indicator on organizer edit/route/cover screens** (KI-054, new,
+   resolved same session). Each screen's own client component (`EditRideForm`,
+   `RouteUploadForm`, `CoverImageUploadForm`) already renders a `Skeleton` once
+   mounted, but there was no Next.js `loading.tsx` for `/organizer/rides/[id]/*`
+   — during the RSC navigation itself, nothing changed on screen until the new
+   segment's payload arrived, reading as "~2-3.5s with only the static `<h1>`
+   visible, looks hung." New `apps/web/src/app/organizer/rides/[id]/loading.tsx`
+   — one shared boundary covering all five leaves (`edit`/`route`/`cover`/
+   `participants`/`updates`), reusing the same `Skeleton` shapes.
+
+**Investigated, not bugs — no code change:**
+
+6. **2GIS map shows no visible street geometry in a headless sandbox browser.**
+   Same conclusion CR-098 already reached and documented (KI-036's update,
+   `project-state.md`): real key, real style/tile requests, real correctly-
+   positioned markers, confirmed via network/DOM inspection — a headless/
+   software-WebGL rasterization limit of the sandbox, not an integration bug.
+   Recommended the user re-check in a normal, GPU-backed browser.
+
+7. **Duplicate `GET /v1/organizers/me` on `/organizer` and `/organizer/profile`.**
+   Each page fetches it from exactly one `useEffect` (`OrganizerProfileWidget`,
+   `OrganizerProfileForm`) — the duplicate is React 18 Strict Mode's intentional
+   dev-only double-invoke of effects (Next.js's default `reactStrictMode: true`,
+   no override in `next.config.ts`): mount → cleanup → remount, correctly guarded
+   against a double `setState` by each effect's own `cancelled` flag, but the
+   underlying `fetch` still fires twice. Universal to every `useEffect`-based
+   fetch in this codebase (`EditRideForm`, `RouteUploadForm`, `CabinetShell`, …),
+   not specific to these two files; absent from a production build; not worth
+   removing Strict Mode (a real safety net) to silence.
+
+Files: `apps/web/src/app/layout.tsx`, `apps/web/src/components/site/SiteHeader.tsx`
+(new), `apps/web/src/app/(public)/{layout,page}.tsx` (new group; `page.tsx`/
+`register/page.tsx`/`login/page.tsx` moved in unchanged), `apps/web/src/features/
+auth/{register/components/RegisterForm,login/components/LoginForm}.tsx`,
+`apps/web/src/features/auth/{verify-email,forgot-password,reset-password}/**` (new),
+`apps/web/src/app/{verify-email,forgot-password,reset-password}/page.tsx` (new),
+`apps/web/src/app/organizer/rides/[id]/loading.tsx` (new), `packages/ui/src/
+terminology.ts`.
+
+Validation: `pnpm --filter ui typecheck` clean; `pnpm --filter web typecheck`/`lint`/
+`build` clean; `pnpm --filter web test` 208/208 passing (10 new: verify-email,
+forgot-password, reset-password). Live-verified in a real browser (dark mode
+emulation, full register → verify-email → forgot-password flow, nav link
+resolution on all three public routes) against the real running stack — zero
+console errors, zero failed requests (beyond one `net::ERR_ABORTED` from the test
+script's own mid-navigation cleanup, not a real failure). Test accounts created
+during live verification deleted afterward.
+
+Follow-up: KI-026/KI-042 still need ADR-007's real email delivery before either
+verification/reset flow is usable by a real production user, not just in dev/QA — the
+screens alone don't close that. A manual dark-theme toggle remains a reasonable future
+enhancement if a real user asks for one. The Strict-Mode double-fetch pattern is
+universal across this codebase's data-fetching components — worth an SWR/React Query
+adoption discussion someday, but out of scope for a QA-findings fix.

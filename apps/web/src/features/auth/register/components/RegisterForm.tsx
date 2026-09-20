@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
@@ -7,6 +8,20 @@ import { ApiError, registerAccount, registerRequestSchema } from '../api';
 interface FieldErrors {
   email?: string;
   password?: string;
+}
+
+/**
+ * The API's dev-only `verificationUrl` is the raw endpoint path
+ * (`/v1/auth/verify-email?token=...`, a POST-only route — see
+ * `auth.routes.ts`), not something a browser can navigate to. Extracts just
+ * the token and points at the real `/verify-email` web page (CR-099) instead
+ * of rendering the API path as if it were a clickable link.
+ */
+function toVerifyEmailWebPath(verificationUrl: string): string | null {
+  const token = new URL(verificationUrl, 'http://localhost').searchParams.get(
+    'token',
+  );
+  return token ? `/verify-email?token=${encodeURIComponent(token)}` : null;
 }
 
 /**
@@ -26,6 +41,10 @@ export function RegisterForm() {
   const [succeeded, setSucceeded] = useState(false);
 
   if (succeeded) {
+    const verifyEmailPath = verificationUrl
+      ? toVerifyEmailWebPath(verificationUrl)
+      : null;
+
     return (
       <Card role="status" aria-live="polite">
         <h2 className="text-xl font-semibold text-text">
@@ -34,9 +53,15 @@ export function RegisterForm() {
         <p className="mt-2 text-text-secondary">
           {AUTH_TERMS.registerSuccessBody}
         </p>
-        {verificationUrl && (
-          <p className="mt-4 rounded-lg border border-border bg-bg p-3 font-mono text-sm break-all text-text-secondary">
-            {AUTH_TERMS.registerSuccessDevNote} {verificationUrl}
+        {verifyEmailPath && (
+          <p className="mt-4 rounded-lg border border-border bg-bg p-3 text-sm text-text-secondary">
+            {AUTH_TERMS.registerSuccessDevNote}{' '}
+            <Link
+              href={verifyEmailPath}
+              className="font-mono break-all text-primary hover:underline"
+            >
+              {verifyEmailPath}
+            </Link>
           </p>
         )}
       </Card>
@@ -142,6 +167,10 @@ export function RegisterForm() {
             ? AUTH_TERMS.registerSubmitPending
             : AUTH_TERMS.registerSubmit}
         </Button>
+
+        <Link href="/login" className="text-sm text-primary hover:underline">
+          {AUTH_TERMS.loginLink}
+        </Link>
       </form>
     </Card>
   );

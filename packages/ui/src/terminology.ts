@@ -185,6 +185,77 @@ export const AUTH_TERMS = {
   loginSubmit: 'Войти',
   loginSubmitPending: 'Вход…',
   invalidCredentials: 'Неверный email или пароль.',
+  loginLink: 'Уже есть аккаунт? Войти',
+  registerLink: 'Нет аккаунта? Зарегистрироваться',
+  forgotPasswordLink: 'Забыли пароль?',
+} as const;
+
+/**
+ * `/verify-email` (CR-099, closes KI-026's screen gap). `verifying` covers
+ * the moment before `POST /v1/auth/verify-email` resolves; `missingToken`
+ * covers a direct visit with no `?token=` in the URL, distinct from a real
+ * server-side `invalid_or_expired_token` rejection.
+ */
+export const VERIFY_EMAIL_TERMS = {
+  pageTitle: 'Подтверждение email',
+  verifying: 'Подтверждаем адрес…',
+  successTitle: 'Email подтверждён',
+  successBody: 'Адрес подтверждён. Теперь можно пользоваться аккаунтом.',
+  missingToken: 'Ссылка неполная — отсутствует код подтверждения.',
+  invalidOrExpired:
+    'Ссылка недействительна или уже была использована. Запросите новую при следующем входе.',
+  genericError: 'Не удалось подтвердить email. Попробуйте ещё раз позже.',
+  loginLink: 'Перейти ко входу',
+} as const;
+
+/** `/forgot-password` (CR-099, closes KI-042's screen gap). `.claude/rules/
+ * security.md`: the success state must be identical whether or not the email
+ * belongs to a real account — `successBody` never confirms account
+ * existence. */
+export const FORGOT_PASSWORD_TERMS = {
+  pageTitle: 'Восстановление пароля',
+  emailLabel: 'Email',
+  submit: 'Отправить ссылку для сброса',
+  submitPending: 'Отправка…',
+  successTitle: 'Проверьте почту',
+  successBody:
+    'Если аккаунт с таким email существует, на него отправлена ссылка для сброса пароля.',
+  genericError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
+} as const;
+
+/** `/reset-password` (CR-099, closes KI-042's screen gap). Same password
+ * policy copy as `AUTH_TERMS.passwordHint` (12+ characters). */
+export const RESET_PASSWORD_TERMS = {
+  pageTitle: 'Новый пароль',
+  passwordLabel: 'Новый пароль',
+  passwordHint: 'Минимум 12 символов.',
+  submit: 'Сохранить новый пароль',
+  submitPending: 'Сохранение…',
+  successTitle: 'Пароль изменён',
+  successBody: 'Теперь можно войти с новым паролем.',
+  missingToken: 'Ссылка неполная — отсутствует код сброса.',
+  invalidOrExpired:
+    'Ссылка недействительна или уже была использована. Запросите новую.',
+  genericError: 'Не удалось сохранить пароль. Попробуйте ещё раз.',
+  loginLink: 'Перейти ко входу',
+} as const;
+
+/**
+ * Shared header (CR-099) for the three public, pre-cabinet screens (`/`,
+ * `/register`, `/login`) — `docs/design.md` never named this component
+ * explicitly, but the QA finding that there was no way to move between them,
+ * or into a cabinet, without typing a URL was real. Deliberately static (no
+ * session fetch): `/me` already redirects to `/login` for a logged-out
+ * visitor (`CabinetShell`), so showing all three links unconditionally is
+ * correct without adding a client-side auth check just for nav display.
+ */
+export const SITE_HEADER_TERMS = {
+  brand: 'Coffee Ride',
+  navLabel: 'Основная навигация',
+  homeLink: 'Заезды',
+  loginLink: 'Войти',
+  registerLink: 'Регистрация',
+  cabinetLink: 'Личный кабинет',
 } as const;
 
 /**

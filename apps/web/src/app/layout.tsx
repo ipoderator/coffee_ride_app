@@ -1,6 +1,21 @@
 import type { Metadata } from 'next';
 import { Golos_Text, IBM_Plex_Mono } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
+
+// `docs/design.md` "Dark theme": "not optional or later." `packages/ui/src/
+// tokens.css` defines the `.dark` token set but nothing ever applied the
+// class — this is that activation. `beforeInteractive` runs from the initial
+// HTML, before hydration/paint, so the correct theme is there on first paint
+// (no flash of the wrong theme). No manual toggle: design.md only requires
+// the theme to exist and respond to the system preference, not a switch.
+const THEME_INIT_SCRIPT = `
+  try {
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) {}
+`;
 
 // docs/design.md §4: Golos Text (Cyrillic-first grotesque) for UI text, IBM
 // Plex Mono for tabular/data text (hex values, IDs). Both bundle a
@@ -35,6 +50,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className={`${golosText.variable} ${ibmPlexMono.variable}`}>
+      <head>
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
+      </head>
       <body>
         {/* docs/design.md §11: "xl (>= 1280): max content width 1200px, centered" —
             one shared cap here rather than repeated per-page, per

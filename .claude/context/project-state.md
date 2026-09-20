@@ -29,35 +29,44 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-098 (live 2GIS MapGL rendering on the discovery map,
-resolving KI-031's discovery half, ADR-020) closed this session, on top of
-CR-097 from the prior session. User supplied a real public
-`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (same 2GIS project key as the existing
-server-side `MAPS_2GIS_API_KEY`). Added the render-layer types
-`packages/maps-core` had deliberately deferred (`MapRenderer`/`MapHandle`/
-`MapMarkerInput`/`MapRenderOptions`), implemented them in
-`packages/maps-2gis/src/render.ts` against the real `@2gis/mapgl` SDK (this
-package's first genuine npm vendor dependency), and built the one
-composition point `.claude/rules/architecture.md` already described but
-that had never existed (`apps/web/src/lib/maps/create-map-renderer.ts`, plus
-a scoped `eslint.config.mjs` override for it). New `DiscoveryMap` replaces
-`RideMapPlaceholder` on `/`, plotting each published ride's `startLat`/
-`startLng`; falls back to the same placeholder on a missing key or failed
-render. Live-verified in a real headless browser against real seeded rides:
-real 2GIS key/style/tile requests all `200`, three marker `<svg>` elements
-at three distinct positions matching three seeded rides, zero console
-errors — the flat screenshot background is attributed to a headless/
-software-WebGL rasterization limitation, not the integration, given the
-airtight network/DOM evidence. Route-detail map rendering
-(`RouteMapPlaceholder`, `Route.geometry`/`RoutePoint`/`Stop` markers)
-deliberately untouched — stays KI-036's open follow-up. Found and fixed one
-unrelated pre-existing gap: the native dev `DATABASE_URL` database was
-missing CR-097's migration, causing `GET /v1/rides` to 500 — migrated,
-logged as KI-051 (resolved same session). No unchecked ticket remains in
-`docs/tasks.md`. Next logical step: pick a new one — candidates are KI-036
-(route-detail map), the one-line `turbo.json` fix for KI-050 (`test` task's
-`env` allowlist missing `TEST_DATABASE_URL`), or beginning dedicated
-frontend/UI-design work now that the map actually renders.
+None active. CR-099 (fix findings from a user-run QA pass against a live
+browser) closed this session, on top of CR-098 from the prior session. The
+user ran manual QA against a real browser and reported seven findings; five
+were real bugs, fixed:
+
+1. Dark theme never activated (`.dark` tokens existed since CR-063, nothing
+   ever applied the class) — fixed via a `beforeInteractive` script reading
+   `prefers-color-scheme` in `app/layout.tsx`. No manual toggle.
+2. No shared nav on `/`, `/register`, `/login` — fixed via a new `SiteHeader`
+   in a new `(public)` route group wrapping exactly those three routes, plus
+   direct cross-links in `RegisterForm`/`LoginForm`.
+3. Register success screen's "verification link" was the raw, POST-only API
+   path (`/v1/auth/verify-email?token=...`, missing `/api`, 404s in a
+   browser) rendered as if clickable — fixed to link to the real web page.
+4. `/verify-email`, `/forgot-password`, `/reset-password` all 404'd (API
+   existed, no screens — KI-026/KI-042) — fixed: three new `features/auth/*`
+   modules + pages, live-verified end to end (register → click link → "Email
+   подтверждён"). Both KIs narrowed, not fully resolved: real production
+   usability still needs ADR-007's pending email delivery.
+5. No loading indicator on `/organizer/rides/[id]/{edit,route,cover}` during
+   navigation (~2-3.5s of only the static `<h1>`) — fixed with a new shared
+   `loading.tsx` for that route segment (covers `participants`/`updates`
+   too).
+
+Two findings investigated, found not to be bugs, no code change: the 2GIS
+map's flat visual in a headless sandbox browser (same conclusion CR-098
+already reached — real key/tiles/markers confirmed via network/DOM, a
+sandbox WebGL rasterization limit, not an integration bug); the duplicate
+`GET /v1/organizers/me` request (React 18 Strict Mode's intentional
+dev-only double-invoke of `useEffect`, universal to this codebase's
+fetch pattern, absent from production builds).
+
+`pnpm --filter ui typecheck` clean; `pnpm --filter web typecheck`/`lint`/
+`build` clean; `pnpm --filter web test` 208/208 passing (10 new). No
+unchecked ticket remains in `docs/tasks.md`. Next logical step: pick a new
+one — candidates are KI-036 (route-detail map), the one-line `turbo.json`
+fix for KI-050 (`test` task's `env` allowlist missing `TEST_DATABASE_URL`),
+or ADR-007 (real email delivery) to fully close KI-026/KI-042.
 
 ## Implemented
 
@@ -103,8 +112,14 @@ needs real public DNS, unverifiable in any sandbox) — the migration fix itself
 was still live-verified, just on the host directly rather than in a container.
 
 **apps/web**: Next.js 15 + React 19 + TS 6.0.3, Tailwind v4 + shadcn/ui, real design
-tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Screens:
-`/register`, `/login`, `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
+tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Dark theme
+now activates from `prefers-color-scheme` (CR-099, `app/layout.tsx`'s pre-hydration
+script) — the `.dark` tokens had existed unused since CR-063. `/`, `/register`, `/login`
+live in a `(public)` route group sharing a new `SiteHeader` (CR-099) — the only nav
+between them and into a cabinet previously required typing a URL. Screens:
+`/register`, `/login`, `/verify-email`, `/forgot-password`, `/reset-password` (last
+three new, CR-099 — narrows KI-026/KI-042, real usability still blocked on ADR-007's
+pending email delivery), `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
 `/organizer` (dashboard) + `/organizer/profile` + `/organizer/rides`
 (list/new/[id]/edit/[id]/route/[id]/participants/[id]/updates), `/` (public
 discovery — list/map toggle, bicycleType filter, upcoming-only sort) and
@@ -465,11 +480,11 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   degraded placeholder. A ride's finish point has no coordinates (KI-033); route points
   have no participant-facing UI yet, API + organizer management only, pending real map
   rendering (KI-036).
-- No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
-  no in-app recovery path (KI-026). Same gap for password reset (KI-042, CR-060): API-only,
-  and unlike verify-email's dev-only link, the reset token is never exposed over HTTP in
-  any environment (no-account-enumeration requirement) — real end-to-end use needs
-  ADR-007's still-Pending email delivery, not just a screen.
+- `/verify-email`, `/forgot-password`, `/reset-password` screens now exist (CR-099,
+  narrows KI-026/KI-042) and are live-verified end to end in dev/QA. Real end-to-end
+  use by a production user still needs ADR-007's still-Pending email delivery — the
+  reset token still isn't exposed over HTTP in any environment, by design
+  (no-account-enumeration requirement) — a screen alone doesn't close that half.
 - Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
   when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
   pre-CR-050 direct synchronous insert when it isn't. Live connection-level
