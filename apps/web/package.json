@@ -18,7 +18,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.6.0",
-    "lucide-react": "^1.45.0",
+    "lucide-react": "^1.47.0",
     "maps-core": "workspace:*",
     "maps-2gis": "workspace:*",
     "types": "workspace:*",
