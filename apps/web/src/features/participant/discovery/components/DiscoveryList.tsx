@@ -13,7 +13,7 @@ import { listPublicRides } from '../api';
 import { RideCard } from './RideCard';
 import { RideFilters } from './RideFilters';
 import { DiscoveryViewToggle, type DiscoveryView } from './DiscoveryViewToggle';
-import { RideMapPlaceholder } from './RideMapPlaceholder';
+import { DiscoveryMap } from './DiscoveryMap';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -30,10 +30,11 @@ type LoadStatus = 'loading' | 'ready' | 'error';
  * `docs/design.md` §10's own example) with a "Сбросить фильтры" action; an
  * unfiltered empty result keeps the plain `emptyTitle`.
  *
- * CR-026 ("Map discovery"): the map view renders `RideMapPlaceholder` — no live
- * 2GIS credential exists in this environment (KI-016), so a real map render would
- * be unverifiable (`.claude/context/current-task.md`'s investigation). Switching to
- * "Карта" does not refetch or otherwise change the underlying list/filter state.
+ * CR-026 ("Map discovery") shipped `RideMapPlaceholder` (no live 2GIS credential
+ * existed yet — KI-016). CR-098/ADR-020 replaces it with `DiscoveryMap`, a real
+ * MapGL render of each ride's start pin, falling back to the same placeholder if
+ * no key is configured or the render itself fails. Switching to "Карта" does not
+ * refetch or otherwise change the underlying list/filter state.
  *
  * CR-044 (`docs/design.md` §11: "lg: Discovery becomes split list + map"): both
  * panels are always mounted — the inactive one is gated behind `hidden lg:block`
@@ -140,7 +141,7 @@ export function DiscoveryList() {
           data-testid="discovery-map-panel"
           className={view === 'list' ? 'hidden lg:block' : undefined}
         >
-          <RideMapPlaceholder />
+          <DiscoveryMap rides={rides} />
         </div>
       </div>
     </div>

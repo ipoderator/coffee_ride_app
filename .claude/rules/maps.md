@@ -41,14 +41,18 @@ Lint-enforced, not convention-only (CR-056): every workspace member's `eslint.co
 carries a `no-restricted-imports` rule rejecting any import specifier matching `*2gis*`;
 `packages/maps-2gis`'s own config is the one place that opts out
 (`nodeLibraryConfig({ allowMapsSdkImports: true })`,
-`packages/config/eslint/node-library.js`). No 2GIS SDK package is actually installed
-anywhere yet (`packages/maps-2gis` calls 2GIS's REST APIs via plain `fetch`) — this rule is
-preventative, guarding the day a real vendor package (e.g. for browser MapGL rendering,
-KI-031) gets installed somewhere it shouldn't.
+`packages/config/eslint/node-library.js`). `provider.ts`'s Geocoder/Directions methods
+still call 2GIS's REST APIs via plain `fetch`, no SDK; `render.ts` (ADR-020, CR-098) is
+the one real 2GIS SDK dependency in the monorepo (`@2gis/mapgl`), browser-only and
+dynamically imported.
 
 `apps/web` and `apps/api` depend only on `packages/maps-core`'s interface types plus
 whichever concrete adapter is wired in at the composition point (a single place — e.g. a
-provider factory read from config — not scattered imports).
+provider factory read from config — not scattered imports). `apps/web/src/lib/maps/
+create-map-renderer.ts` is that one composition point for rendering (ADR-020): the
+`*2gis*` glob also matches the bare `maps-2gis` workspace specifier, not just a vendor
+SDK name, so `apps/web/eslint.config.mjs` carries a `files`-scoped override for exactly
+this one path rather than a blanket relaxation.
 
 ### Interface contract (`packages/maps-core`)
 
@@ -79,12 +83,38 @@ export interface MapProvider {
   geocode(query: string): Promise<GeocodeResult[]>;
   reverseGeocode(point: LatLng): Promise<GeocodeResult | null>;
   getRoute(request: RouteRequest): Promise<RouteResult>;
-  // Web-only rendering surface — server code never calls this.
-  // Concrete shape (container element, options, returned map handle) is defined by
-  // packages/maps-core for the render layer; kept provider-neutral at the type level,
-  // implemented per-provider in packages/maps-2gis.
 }
 ```
+
+### Render-layer contract (`packages/maps-core/src/render.ts`, ADR-020)
+
+Web-only — server code never imports this file. Kept separate from `MapProvider`
+above since server code has no business seeing a render method at all.
+
+```ts
+export interface MapMarkerInput {
+  id: string;
+  point: LatLng;
+}
+
+export interface MapRenderOptions {
+  container: HTMLElement;
+  center: LatLng;
+  zoom?: number;
+}
+
+export interface MapHandle {
+  setMarkers(markers: MapMarkerInput[]): void;
+  destroy(): void;
+}
+
+export interface MapRenderer {
+  render(options: MapRenderOptions): Promise<MapHandle>;
+}
+```
+
+`packages/maps-2gis/src/render.ts` implements this against the real `@2gis/mapgl` SDK,
+converting to MapGL's own `[longitude, latitude]` coordinate order at this one boundary.
 
 Every method must apply the resilience rules in `.claude/rules/resilience.md`
 (timeout, bounded retries for idempotent calls, circuit breaker, defined fallback) at the

@@ -20,6 +20,7 @@
     "tailwind-merge": "^3.6.0",
     "lucide-react": "^1.45.0",
     "maps-core": "workspace:*",
+    "maps-2gis": "workspace:*",
     "types": "workspace:*",
     "ui": "workspace:*"
   },

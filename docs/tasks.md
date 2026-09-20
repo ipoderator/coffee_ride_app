@@ -752,3 +752,29 @@ graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
       but did not fix (logged as KI-050, out of this ticket's scope):
       `turbo.json`'s `test` task doesn't pass through `TEST_DATABASE_URL`.
       See `docs/changelog.md`.
+- [x] CR-098 Live 2GIS MapGL rendering on the discovery map, resolve KI-031 —
+      done 2026-09-20: user supplied a real public MapGL key (confirmed it's
+      the same project key as `MAPS_2GIS_API_KEY`, valid for both products in
+      this 2GIS project) as `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`. Added the
+      render-layer types (`MapRenderer`/`MapHandle`/`MapMarkerInput`/
+      `MapRenderOptions`) to `packages/maps-core` (ADR-020) — previously just
+      a deferred comment — and implemented them in `packages/maps-2gis/src/
+    render.ts` against the real `@2gis/mapgl` SDK (new dependency, browser-
+      only, dynamically imported). New composition point `apps/web/src/lib/
+    maps/create-map-renderer.ts`, the one file allowed to import
+      `maps-2gis` directly (scoped `eslint.config.mjs` override, CR-056).
+      New `DiscoveryMap` client component replaces `RideMapPlaceholder` on
+      `/`, plotting each published ride's `startLat`/`startLng` as a marker;
+      falls back to the existing degraded `ErrorState` notice if no key is
+      configured or the render fails. Scope deliberately limited to the
+      discovery map — the route-detail map (`RouteMapPlaceholder`,
+      `RoutePoint`/`Stop`/polyline rendering) stays KI-036's open follow-up.
+      Live-verified in a real headless browser: real 2GIS key
+      validation/style/vector-tile requests all `200`, three real marker SVG
+      elements at three distinct positions matching three seeded published
+      rides, zero console errors. Found and fixed one unrelated pre-existing
+      gap along the way (not this ticket's scope): the native dev
+      `DATABASE_URL` database had never had migration `0016_avatar_columns.sql`
+      (CR-097) applied, so `GET /v1/rides` 500'd — ran `pnpm --filter db
+    db:migrate` against it, resolved (logged as KI-051). See
+      `docs/changelog.md`.

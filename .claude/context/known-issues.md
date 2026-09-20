@@ -425,6 +425,16 @@ Next action: once KI-031 is resolved (a live 2GIS MapGL credential exists)
 and the real map render layer is built, plot each ride's `routePoints` as
 typed markers on `/rides/[id]`'s route map — that is the natural, asked-for
 participant surface for this data, not a new textual list component.
+Update 2026-09-20 (CR-098, ADR-020): KI-031's discovery half is resolved and
+the render layer now exists — `packages/maps-core`'s `MapRenderer`/
+`MapHandle` plus `packages/maps-2gis`'s real `@2gis/mapgl` implementation,
+proven working end to end on `/`. This ticket's own scope (route-detail map:
+`RouteMapPlaceholder` → real render, `Route.geometry` polyline +
+`routePoints` typed markers + `Stop` markers) is deliberately unstarted —
+reuse the existing `MapRenderer` interface, extending it additively
+(`.claude/rules/extensibility.md`) if a polyline layer or typed marker icons
+turn out to need capabilities the discovery-only MVP doesn't have, rather
+than building a second, parallel render abstraction.
 
 ### KI-038 — `next build` crashes if a `development`-valued `NODE_ENV` reaches it from the shell
 
@@ -609,6 +619,37 @@ test`.
 Next action: add `TEST_DATABASE_URL` to `turbo.json`'s `test` task `env`
 array — a one-line config fix, not attempted this session (found during
 CR-097's own validation sweep, unrelated to that ticket's actual scope).
+
+### KI-051 — Native dev `DATABASE_URL` database was missing CR-097's migration, 500ing every ride read
+
+Status: resolved same session, 2026-09-20 (CR-098 session). Discovered:
+2026-09-20 (CR-098 session), while starting local dev servers to live-verify
+the discovery map.
+Problem: `GET /v1/rides` 500'd with a `DrizzleQueryError`: `column
+organizer_profiles.avatar_key does not exist`. CR-097 (prior session) added
+that column via migration `0016_avatar_columns.sql` and validated against
+`TEST_DATABASE_URL` (Docker Compose Postgres) — its own live end-to-end
+verification apparently also went through a different Postgres than this
+session's `.env`-configured native `DATABASE_URL` (`coffee_ride_dev`, the
+same native Homebrew Postgres KI-049 already documents as distinct from
+Docker's, both on port 5432 under different address families), which never
+had migration `0016` applied.
+Impact: high for this session's immediate task (blocked live-verifying any
+ride-listing endpoint, including the new discovery map) — zero for CI/tests
+(both go through `TEST_DATABASE_URL`, already migrated) and zero for actual
+avatar functionality (CR-097's own feature code is correct; only this one
+native database's applied-migrations state was stale).
+Workaround: none needed — see Resolution.
+Resolution: ran `pnpm --filter db db:migrate` with `DATABASE_URL` sourced
+from `.env`, applying the pending migration to `coffee_ride_dev` directly.
+`GET /v1/rides` confirmed working immediately after (`{"items":[],
+"nextCursor":null}`, no error). No data loss — an ordinary additive
+migration, not the KI-049 incident's destructive `DELETE FROM` pattern.
+Next action: none for this specific occurrence. Worth remembering: this
+native database needs its own `pnpm --filter db db:migrate` run after any
+session that adds a migration but only validated/live-verified against
+`TEST_DATABASE_URL` — the same two-Postgres-instances setup KI-049 already
+flagged, one more concrete consequence of it.
 
 ## Resolved
 
@@ -1368,9 +1409,13 @@ blindly.
 
 ### KI-031 — No live 2GIS MapGL rendering yet; `/`'s map view is a degraded placeholder
 
-Status: open — widened 2026-09-15 (CR-028, "Route rendering"): `/rides/[id]`'s new
-route map section hits the identical gap, same reasoning, second surface.
-Discovered: 2026-09-15 (CR-026, "Map discovery" session).
+Status: narrowed 2026-09-20 (CR-098, ADR-020) — the discovery half is resolved;
+the route-detail half stays open, folded into KI-036 (below) rather than kept
+here, since building it is now purely "extend the same `MapRenderer` to a
+second surface", not "no render layer exists at all". Previously widened
+2026-09-15 (CR-028, "Route rendering"): `/rides/[id]`'s new route map section
+hit the identical gap, same reasoning, second surface. Discovered: 2026-09-15
+(CR-026, "Map discovery" session).
 Problem: no `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` is configured anywhere in this
 environment (`.env.example` only — grepped `apps/web/src`, no matches), so a
 real 2GIS MapGL JS integration could not be built and live-verified this
@@ -1390,13 +1435,21 @@ reason. The elevation profile half of that same section does not need 2GIS
 and ships as a real, live-verified chart (resolves KI-035).
 Workaround: none needed for the list-based discovery journey or for a ride's
 elevation profile — neither placeholder blocks anything, per its own design.
-Next action: once a real `MAPS_2GIS_MAPGL_KEY`/`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`
-pair exists, build the actual render layer `.claude/rules/maps.md` describes
-(a `packages/maps-core` render-layer type + a `packages/maps-2gis`
-implementation loading the real MapGL script) and wire markers from each
-ride's `startLat`/`startLng` (discovery) and `Route.geometry` (ride detail —
-both placeholders need replacing, not just the first one built). Blocked on
-KI-016 (same missing credential).
+Next action: none for the discovery half — done. See the route-detail
+follow-up under KI-036.
+Update 2026-09-20 (CR-098, ADR-020): user supplied a real public
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`. Built the render layer this entry
+described: `packages/maps-core/src/render.ts` (`MapRenderer`/`MapHandle`/
+`MapMarkerInput`/`MapRenderOptions`) and `packages/maps-2gis/src/render.ts`
+(real `@2gis/mapgl` SDK, dynamically imported, browser-only). New
+`DiscoveryMap` component replaces `RideMapPlaceholder` on `/`, plotting each
+published ride's `startLat`/`startLng`; falls back to the same placeholder on
+a missing key or a failed render. Live-verified in a real headless browser:
+`keys.api.2gis.com` key validation, `styles.api.2gis.com` style fetch, and
+ten `tile*-sdk.maps.2gis.com` vector tile requests all real `200`s; three
+marker `<svg>` elements at three distinct screen positions matching three
+seeded published rides; zero console errors. The route-detail placeholder
+(`RouteMapPlaceholder`) is untouched — see KI-036.
 
 ### KI-032 — No geocode-by-address UI; ride coordinates are entered manually
 

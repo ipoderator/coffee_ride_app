@@ -55,9 +55,14 @@ const eslintConfig = [
         },
       ],
       // CR-056 (ADR-010, `.claude/rules/maps.md`): only packages/maps-2gis
-      // may import a 2GIS SDK package. No such package is installed
-      // anywhere yet — preventative, same shape as packages/resilience
-      // (CR-049).
+      // may import a 2GIS SDK package, and only the single composition
+      // point below may import packages/maps-2gis itself
+      // (`.claude/rules/architecture.md`'s "one composition point ...
+      // to wire the concrete adapter"). The `*2gis*` glob also matches the
+      // bare workspace specifier `maps-2gis`, not just a vendor SDK name —
+      // that's intentional here, since importing the workspace package
+      // directly is exactly what's restricted to one file (see the
+      // `files`-scoped override below, ADR-020).
       'no-restricted-imports': [
         'error',
         {
@@ -70,6 +75,16 @@ const eslintConfig = [
           ],
         },
       ],
+    },
+  },
+  {
+    // ADR-020: the one composition point allowed to import `maps-2gis`
+    // directly, to wire its concrete 2GIS MapGL renderer behind
+    // `maps-core`'s provider-neutral `MapRenderer` interface. No other
+    // apps/web module gets this exception.
+    files: ['src/lib/maps/create-map-renderer.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
 ];

@@ -651,6 +651,33 @@ precedent (GPX upload vs. cover-image upload) is to keep near-identical
 upload-form UI feature-local rather than force a shared abstraction. No new
 package/dependency-direction edge.
 
+CR-098 ("Live 2GIS MapGL rendering", 2026-09-20, resolving KI-031, ADR-020): a
+real public `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` now exists. `packages/maps-core`
+gained `src/render.ts` — `MapMarkerInput`/`MapRenderOptions`/`MapHandle`/
+`MapRenderer`, provider-neutral (only `LatLng` + `HTMLElement`), kept separate
+from `provider.ts`'s server-safe `MapProvider` since server code never renders
+a map. `packages/maps-2gis` gained a real npm SDK dependency for the first
+time, `@2gis/mapgl` — previously every method was plain-`fetch` REST, no
+vendor SDK object anywhere in this package; `src/render.ts` dynamically
+imports it (browser-only, no side effect outside a real `render()` call) and
+converts to MapGL's own `[longitude, latitude]` coordinate order at this one
+boundary. New dependency-direction edge: `apps/web` → `maps-2gis`, but through
+exactly one file, `apps/web/src/lib/maps/create-map-renderer.ts` — the
+composition point `.claude/rules/architecture.md` already described but that
+had never actually been built (zero consumers existed before this ticket).
+CR-056's `*2gis*` `no-restricted-imports` glob also matches the bare
+`maps-2gis` specifier, so `apps/web/eslint.config.mjs` gained a `files`-scoped
+override for exactly this one path. New `DiscoveryMap` client component
+(`features/participant/discovery/components/`) replaces `RideMapPlaceholder`
+on `/`'s map view, plotting each published ride's `startLat`/`startLng`;
+`RideMapPlaceholder` itself is kept, now serving as the fallback for a missing
+key or a failed render (`docs/design.md` §10's degraded-state requirement).
+Route-detail map rendering (`RouteMapPlaceholder`) is unchanged — deliberately
+scoped out, stays KI-036's open follow-up. Also fixed, found live this
+session: the native dev `DATABASE_URL` database had never had migration
+`0016_avatar_columns.sql` (CR-097) applied, causing `GET /v1/rides` to 500 —
+ran `pnpm --filter db db:migrate` against it (KI-051, resolved same session).
+
 ## Target structure
 
 apps/
@@ -665,7 +692,8 @@ packages/
 - ui/ ← exists (CR-007, empty)
 - config/ ← exists (CR-007, shared tooling)
 - maps-core/ ← exists (CR-007; provider-neutral map interface — ADR-010)
-- maps-2gis/ ← exists (CR-007; 2GIS adapter, only package allowed to speak to 2GIS)
+- maps-2gis/ ← exists (CR-007; 2GIS adapter, only package allowed to speak to 2GIS;
+  CR-098 added a real SDK dependency, `@2gis/mapgl`, for browser MapGL rendering)
 
 ## Web responsibilities
 

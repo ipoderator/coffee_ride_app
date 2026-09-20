@@ -2,7 +2,10 @@
   "extends": ["../../tsconfig.base.json", "config/tsconfig/node-library.json"],
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // "DOM" is needed only for render.ts (the web-only MapGL renderer,
+    // .claude/rules/maps.md) — the REST adapter files stay plain ES2022.
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

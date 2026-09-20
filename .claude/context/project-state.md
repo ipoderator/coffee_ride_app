@@ -29,21 +29,35 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-097 (avatar upload for `User`/`OrganizerProfile`, resolving
-KI-023's remainder) closed this session, on top of CR-095/CR-086 from the
-prior session. Relocated CR-086's generic image-processing/S3-storage
-modules from `modules/rides/` to `apps/api/src/lib/` (module-boundary
-reasons), added `avatar_key`/`avatar_content_type`/`avatar_size_bytes` to
-`users`/`organizer_profiles`, added `/v1/users/me/avatar` (fully "me"-scoped)
-and `/v1/organizers/me/avatar` + public `/v1/organizers/:id/avatar`, added
-`packages/ui`'s first real `Avatar` component, and wired upload UI into both
-profile screens. Docker was up this session (KI-019 now resolved) — live-
-verified the whole flow end to end against real Postgres/MinIO, not just
-mocked-S3 unit tests. No unchecked ticket remains in `docs/tasks.md`. Next
-logical step: pick a new one — candidates are wiring a real consumer for
-`packages/maps-2gis` (KI-032/KI-031, or CR-028/CR-084's route rendering), or
-the one-line `turbo.json` fix for KI-050 (`test` task's `env` allowlist
-missing `TEST_DATABASE_URL`).
+None active. CR-098 (live 2GIS MapGL rendering on the discovery map,
+resolving KI-031's discovery half, ADR-020) closed this session, on top of
+CR-097 from the prior session. User supplied a real public
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (same 2GIS project key as the existing
+server-side `MAPS_2GIS_API_KEY`). Added the render-layer types
+`packages/maps-core` had deliberately deferred (`MapRenderer`/`MapHandle`/
+`MapMarkerInput`/`MapRenderOptions`), implemented them in
+`packages/maps-2gis/src/render.ts` against the real `@2gis/mapgl` SDK (this
+package's first genuine npm vendor dependency), and built the one
+composition point `.claude/rules/architecture.md` already described but
+that had never existed (`apps/web/src/lib/maps/create-map-renderer.ts`, plus
+a scoped `eslint.config.mjs` override for it). New `DiscoveryMap` replaces
+`RideMapPlaceholder` on `/`, plotting each published ride's `startLat`/
+`startLng`; falls back to the same placeholder on a missing key or failed
+render. Live-verified in a real headless browser against real seeded rides:
+real 2GIS key/style/tile requests all `200`, three marker `<svg>` elements
+at three distinct positions matching three seeded rides, zero console
+errors — the flat screenshot background is attributed to a headless/
+software-WebGL rasterization limitation, not the integration, given the
+airtight network/DOM evidence. Route-detail map rendering
+(`RouteMapPlaceholder`, `Route.geometry`/`RoutePoint`/`Stop` markers)
+deliberately untouched — stays KI-036's open follow-up. Found and fixed one
+unrelated pre-existing gap: the native dev `DATABASE_URL` database was
+missing CR-097's migration, causing `GET /v1/rides` to 500 — migrated,
+logged as KI-051 (resolved same session). No unchecked ticket remains in
+`docs/tasks.md`. Next logical step: pick a new one — candidates are KI-036
+(route-detail map), the one-line `turbo.json` fix for KI-050 (`test` task's
+`env` allowlist missing `TEST_DATABASE_URL`), or beginning dedicated
+frontend/UI-design work now that the map actually renders.
 
 ## Implemented
 
@@ -249,13 +263,26 @@ live server-side `MAPS_2GIS_API_KEY` (Geocoder/Directions product) now exists in
 `geocode`/`reverseGeocode` field-name guesses were correct; `getRoute`'s geometry guess
 was wrong (real polyline lives in `maneuvers[].outcoming_path.geometry[]` as WKT
 `LINESTRING` strings, not a flat `{lat, lon}` array) and has been fixed and
-re-verified — KI-016 resolved. Still no consumer wired into any route/use case (that's
-the next step: KI-032's geocode-by-address UI, or CR-028/CR-084's route rendering). No
-`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (public browser MapGL key — a separate 2GIS product,
-CR-071) exists yet, so every map-rendering surface (discovery map, route map) still
-shows a real, live-verified degraded state (KI-031) rather than an actual MapGL render.
-`fetchJson` retries once and shares one `CircuitBreaker` across all three methods
-(CR-049, below), replacing its previous timeout-only logic.
+re-verified — KI-016 resolved. `MapProvider` (geocode/reverseGeocode/getRoute) itself still has zero real consumers
+(KI-032's geocode-by-address UI remains open). `fetchJson` retries once and shares one
+`CircuitBreaker` across all three methods (CR-049, below), replacing its previous
+timeout-only logic.
+
+CR-098 (2026-09-20, ADR-020): a real public `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` now
+exists (same 2GIS project key as `MAPS_2GIS_API_KEY`). Added `packages/maps-core/src/
+render.ts` (`MapRenderer`/`MapHandle`/`MapMarkerInput`/`MapRenderOptions`,
+provider-neutral, kept separate from `MapProvider` since server code never renders a
+map) and `packages/maps-2gis/src/render.ts` implementing it against the real
+`@2gis/mapgl` SDK (this package's first genuine npm vendor dependency, dynamically
+imported, browser-only). `apps/web/src/lib/maps/create-map-renderer.ts` is the one
+composition point allowed to import `maps-2gis` directly (scoped `eslint.config.mjs`
+override). `DiscoveryMap` (new) replaces `RideMapPlaceholder` on `/`, plotting each
+published ride's `startLat`/`startLng`; falls back to the same placeholder on a missing
+key or failed render. Live-verified in a real headless browser: real key/style/tile
+requests all `200`, three markers at three distinct positions matching three seeded
+rides, zero console errors — KI-031's discovery half is resolved. The route-detail map
+(`RouteMapPlaceholder`, `Route.geometry` polyline, `RoutePoint`/`Stop` markers) is
+untouched, deliberately deferred to KI-036.
 
 **packages/resilience** (new, CR-049): shared `callWithResilience` (timeout via
 `AbortSignal` + bounded retry with jittered backoff) and `CircuitBreaker`
@@ -431,11 +458,12 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   exit. Dependency-injected for unit testing; real signal delivery against a
   live container still unverified in this sandbox (KI-019).
 - Geocoding is now verified against a live 2GIS account and its one real bug (route
-  geometry parsing) fixed (KI-016, resolved CR-093), but still has zero real
-  consumers. No live MapGL browser credential — MapGL rendering is still unverified;
-  every map surface shows a real degraded state instead (KI-031). No geocode-by-address
-  UI (KI-032); a ride's finish point has no coordinates (KI-033); route points have no
-  participant-facing UI yet, API + organizer management only, pending real map
+  geometry parsing) fixed (KI-016, resolved CR-093), but `MapProvider` still has zero
+  real consumers — no geocode-by-address UI (KI-032). MapGL rendering is now real and
+  live-verified on the discovery map (CR-098, ADR-020, KI-031's discovery half
+  resolved); the route-detail map (KI-036) stays an open follow-up, still showing its
+  degraded placeholder. A ride's finish point has no coordinates (KI-033); route points
+  have no participant-facing UI yet, API + organizer management only, pending real map
   rendering (KI-036).
 - No `/verify-email` web screen exists yet (API-only) — an organizer who needs it has
   no in-app recovery path (KI-026). Same gap for password reset (KI-042, CR-060): API-only,
@@ -603,8 +631,18 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   keyed by `:id` (`GET /v1/organizers/:id/avatar`), because an organizer's
   identity is already public via `RideOrganizerSummary`; don't extend that
   same public-by-id pattern to `users` without a real product reason (there
-  is still no `GET /v1/users/:id` of any kind).
+  is still no `GET /v1/users/:id` of any kind);
+- the render-layer/server-provider split in `packages/maps-core`
+  (`render.ts`'s `MapRenderer` vs. `provider.ts`'s `MapProvider`) — don't
+  merge them onto one interface; server code must never see a render method
+  (CR-098, ADR-020);
+- exactly one file, `apps/web/src/lib/maps/create-map-renderer.ts`, imports
+  `maps-2gis` — don't add a second import site, and don't widen its
+  `eslint.config.mjs` override beyond that one `files` path;
+- `DiscoveryMap`'s fallback to `RideMapPlaceholder` on a missing key or a
+  failed `render()`/`load()` call — never let a map surface show a blank
+  panel (`docs/design.md` §10).
 
 ## Last updated
 
-2026-09-20 (CR-097)
+2026-09-20 (CR-098)

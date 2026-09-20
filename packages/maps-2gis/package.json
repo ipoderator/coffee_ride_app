@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@2gis/mapgl": "^1.78.0",
     "maps-core": "workspace:*",
     "resilience": "workspace:*"
   },

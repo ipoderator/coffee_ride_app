@@ -4805,3 +4805,110 @@ Follow-up: turbo.json's `test` task `env` allowlist doesn't include
 sourced, or CI's own direct env var) is unaffected and is what this session
 used throughout. Logged as KI-050, not fixed here (unrelated to this
 ticket's scope).
+
+## 2026-09-20 — CR-098 — Live 2GIS MapGL rendering on the discovery map (resolve KI-031, ADR-020)
+
+Summary: user supplied a real public `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (confirmed it's
+the same project key as `MAPS_2GIS_API_KEY` — one 2GIS project key valid for both the
+Geocoder/Directions and MapGL JS products). Built the render-layer types
+`packages/maps-core` had deliberately deferred (`MapRenderer`/`MapHandle`/
+`MapMarkerInput`/`MapRenderOptions`, kept separate from the server-safe `MapProvider`),
+implemented them in `packages/maps-2gis/src/render.ts` against the real `@2gis/mapgl`
+SDK (this package's first genuine npm vendor dependency — previously 100% REST/`fetch`),
+and wired one composition point in `apps/web`
+(`src/lib/maps/create-map-renderer.ts`) — the "one composition point ... to wire the
+concrete adapter" rule `.claude/rules/architecture.md` already stated but that had never
+actually been built. New `DiscoveryMap` client component replaces `RideMapPlaceholder`
+on `/`, plotting each published ride's `startLat`/`startLng` as a marker; falls back to
+the same placeholder on a missing key or a failed render (`docs/design.md` §10's
+degraded-state requirement, verified still working the same way in tests). Scope
+deliberately limited to the discovery map — the route-detail map
+(`RouteMapPlaceholder`, `Route.geometry` polyline, `RoutePoint`/`Stop` markers) is
+KI-036's untouched follow-up, not widened into this ticket.
+
+Implementation:
+
+- `packages/maps-core/src/render.ts` (new): `MapMarkerInput { id, point }`,
+  `MapRenderOptions { container: HTMLElement, center, zoom? }`, `MapHandle {
+setMarkers, destroy }`, `MapRenderer { render(options): Promise<MapHandle> }`.
+  Provider-neutral by construction (only `LatLng` + ordinary browser DOM types).
+  `provider.ts`'s own doc comment updated to point at this file instead of carrying an
+  inline "not added yet" note.
+- `packages/maps-core`/`packages/maps-2gis` `tsconfig.json`: added `"lib": ["ES2022",
+"DOM"]` (needed only for `render.ts`'s `HTMLElement` — the base `tsconfig.base.json`
+  fragment stays `ES2022`-only for everything else in both packages).
+- `packages/maps-2gis/src/render.ts` (new): `create2GisMapRenderer({ apiKey })` —
+  `import('@2gis/mapgl')` dynamically inside `render()` (no import-time side effect,
+  no `window`/DOM dependency until actually called from a browser), `mapglAPI.Map`/
+  `Marker` wrapped behind `MapRenderer`/`MapHandle`. Coordinate order flip
+  (`{lat, lng}` → `[lng, lat]`) happens once, at this boundary — confirmed against
+  `@2gis/mapgl`'s own shipped `.d.ts` files (`Marker.setCoordinates`'s doc comment:
+  "Coordinates `[longitude, latitude]`"), not assumed from an ambiguous README example.
+- `packages/maps-2gis/package.json`: new dependency `@2gis/mapgl@^1.78.0`.
+- `apps/web/src/lib/maps/create-map-renderer.ts` (new): the one composition point,
+  reads `process.env.NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, returns `null` when unset so
+  callers can degrade instead of throwing.
+- `apps/web/eslint.config.mjs`: `files`-scoped override (`no-restricted-imports: 'off'`)
+  for exactly `src/lib/maps/create-map-renderer.ts` — CR-056's `*2gis*` glob also
+  matches the bare `maps-2gis` workspace specifier, not just a vendor SDK name, so this
+  is the one place that's now allowed to import it directly.
+- `apps/web/package.json`: new workspace dependency `maps-2gis` (module resolution for
+  the composition point above).
+- `apps/web/src/features/participant/discovery/components/DiscoveryMap.tsx` (new):
+  renders into a ref'd `<div>`, computes plottable rides (non-null `startLat`/
+  `startLng`), centers on the first one (Moscow as a non-empty fallback otherwise),
+  sets one marker per plottable ride, falls back to `RideMapPlaceholder` on no
+  renderer/a failed `render()` call. Deliberately re-renders the map once per mount,
+  not on every `rides` change (a real "update markers in place" path is follow-up work,
+  noted inline).
+- `apps/web/src/features/participant/discovery/components/DiscoveryList.tsx`: swapped
+  `RideMapPlaceholder` for `DiscoveryMap`, updated its own doc comment.
+- `RideMapPlaceholder.tsx`: doc comment updated — now documents itself as the fallback
+  `DiscoveryMap` renders on failure, not "the map view" outright.
+
+Validation: `pnpm turbo lint typecheck build` clean (all packages, including a stale
+`.next/types` artifact from a concurrent build/typecheck race cleared with `rm -rf
+apps/web/.next` before the final green run — same KI-038-adjacent gotcha CR-093 hit
+before). `pnpm --filter web test` 198/198 passing (the existing CR-026 discovery test
+asserting the degraded notice on the map tab is unaffected — `NEXT_PUBLIC_MAPS_2GIS_
+MAPGL_KEY` is never set in the Vitest process env, so `createMapRenderer()` still
+returns `null` in that suite, same fallback path exercised as before). `pnpm --filter
+maps-2gis test` 11/11 passing.
+
+Live verification (real headless browser, real Docker Postgres/Redis/MinIO, real 2GIS
+API): seeded 3 published rides with real Moscow-area coordinates via the running API,
+then drove `http://localhost:3000/` with the browser-automation skill. Confirmed via
+network capture: `keys.api.2gis.com` key validation `200`, `styles.api.2gis.com` style
+fetch `200`, ten `tile{0-3}-sdk.maps.2gis.com` vector tile requests `200` — zero failed
+requests, zero console errors beyond one benign WebGL performance warning. Confirmed via
+DOM inspection: the map panel contains a real MapGL `<canvas>` (with the SDK's own CSS
+classes, zoom controls, and "2GIS" attribution watermark) plus three marker `<svg>`
+elements at three distinct screen positions, matching the three seeded rides exactly.
+The rendered screenshot itself showed a flat background rather than visible street
+geometry — network/DOM evidence points at a headless/software-WebGL rasterization
+limitation in this sandboxed browser, not a bug in the integration (real key validated,
+real tiles fetched with the exact requested coordinates, real markers positioned
+correctly); flagged here rather than silently assumed. All seeded test data (3 rides, 1
+user, 1 organizer profile) deleted afterward; dev servers stopped.
+
+Found and fixed one unrelated pre-existing gap while starting the dev servers for live
+verification: the native dev `DATABASE_URL` database (`coffee_ride_dev`) had never had
+CR-097's migration `0016_avatar_columns.sql` applied, so `GET /v1/rides` 500'd. Ran
+`pnpm --filter db db:migrate` against it — resolved, logged as KI-051 (new, resolved
+same session) rather than silently worked around.
+
+Files: `packages/maps-core/src/{render,provider}.ts`, `packages/maps-core/src/index.ts`,
+`packages/maps-core/tsconfig.json`, `packages/maps-2gis/src/{render,index}.ts`,
+`packages/maps-2gis/{package,tsconfig}.json`, `apps/web/src/lib/maps/
+create-map-renderer.ts`, `apps/web/eslint.config.mjs`, `apps/web/package.json`,
+`apps/web/src/features/participant/discovery/components/{DiscoveryMap,DiscoveryList,
+RideMapPlaceholder}.tsx`.
+
+Decisions: ADR-020 (`docs/decisions.md`) — render-layer types in `maps-core`, one
+composition point in `apps/web`, scoped ESLint override. `.claude/rules/maps.md`
+updated to match (render-layer contract, composition-point note).
+
+Follow-up: KI-036 (route-detail map — reuse `MapRenderer`, extend additively if a
+polyline/typed-marker-icon capability is needed, don't build a second interface);
+marker clustering at city zoom and click-to-select-with-keyboard-equivalent both stay
+explicitly out of scope (`docs/design.md` §15/§12) until a real product need exists.

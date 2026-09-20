@@ -144,6 +144,9 @@ importers:
       lucide-react:
         specifier: ^1.45.0
         version: 1.45.0(react@19.3.0)
+      maps-2gis:
+        specifier: workspace:*
+        version: link:../../packages/maps-2gis
       maps-core:
         specifier: workspace:*
         version: link:../../packages/maps-core
@@ -264,6 +267,9 @@ importers:
 
   packages/maps-2gis:
     dependencies:
+      '@2gis/mapgl':
+        specifier: ^1.78.0
+        version: 1.78.0
       maps-core:
         specifier: workspace:*
         version: link:../maps-core
@@ -413,6 +419,10 @@ importers:
         version: 5.0.0(@types/node@24.13.4)(jsdom@30.0.1)(vite@8.3.0(@types/node@24.13.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
 packages:
+
+  '@2gis/mapgl@1.78.0':
+    resolution: {integrity: sha512-PLyHeDZESsRZHwxIhIcM2NsrkbEZGWw1PBAMilaVR0HBZ6Xho1N37fi4Uzp8CQtgCXAH4IKmcTBqGfj02ZCaaA==}
+    engines: {node: '>=16.0.0'}
 
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
@@ -1757,6 +1767,9 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/geojson@7946.0.16':
+    resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -4191,6 +4204,10 @@ packages:
 
 snapshots:
 
+  '@2gis/mapgl@1.78.0':
+    dependencies:
+      '@types/geojson': 7946.0.16
+
   '@adobe/css-tools@4.5.0': {}
 
   '@alloc/quick-lru@5.3.0': {}
@@ -5263,6 +5280,8 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/geojson@7946.0.16': {}
 
   '@types/json-schema@7.0.15': {}
 

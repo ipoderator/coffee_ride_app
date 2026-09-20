@@ -779,3 +779,60 @@ directly (bypassing `web`), add an explicit Caddy route for them and give `apps/
 a `trustProxy` setting at that point — today they're only ever called from inside the
 compose network (Docker healthchecks, `web`'s own dev-time Swagger link), so trusting
 proxy headers on `apps/api` was deliberately left alone.
+
+## ADR-020 — Live MapGL rendering: render-layer types in `maps-core`, one composition point in `apps/web`
+
+Status: Accepted.
+
+CR-098 (`docs/tasks.md`): a real public `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` now exists,
+making `packages/maps-core`'s `MapProvider` interface comment ("Web-only rendering
+surface... not added yet... adding an unused rendering surface now would be
+speculative") no longer true (KI-031). This records the design that comment was
+deferring.
+
+### Decision
+
+1. **Render-layer types live in `packages/maps-core/src/render.ts`, separate from
+   `provider.ts`'s server-safe `MapProvider`.** `MapMarkerInput`/`MapRenderOptions`/
+   `MapHandle`/`MapRenderer` — provider-neutral (only this package's own `LatLng` plus
+   ordinary browser `HTMLElement`, never a 2GIS/vendor SDK type), same ADR-010 boundary
+   `MapProvider` already keeps. Kept as a separate interface rather than added to
+   `MapProvider` itself, since server code never renders a map and should never see a
+   render method on the interface it depends on.
+2. **`packages/maps-2gis/src/render.ts` implements it against the real `@2gis/mapgl`
+   npm package** (a genuine vendor SDK dependency, unlike `provider.ts`'s plain-`fetch`
+   REST calls) — dynamically imported inside `render()`, so importing this module has
+   no side effect and no `window`/DOM dependency outside a real browser call. MapGL's
+   own coordinate convention (`[longitude, latitude]`, confirmed against the SDK's
+   shipped type declarations) is converted at this one boundary, not by every caller.
+3. **Exactly one composition point in `apps/web`** (`src/lib/maps/create-map-renderer.ts`)
+   is allowed to import `maps-2gis` directly, per `.claude/rules/architecture.md`'s
+   already-stated "one composition point ... to wire the concrete adapter" rule —
+   this ticket is what actually builds that point for the first time. CR-056's
+   `no-restricted-imports` `*2gis*` ban in `apps/web/eslint.config.mjs` also matches the
+   bare workspace specifier `maps-2gis` (not just a vendor SDK name), so a narrowly
+   `files`-scoped override was added for exactly this one file rather than relaxing the
+   rule globally.
+4. **Missing key or a failed render falls back to the existing degraded `ErrorState`
+   notice** (`docs/design.md` §10), never a blank panel — `RideMapPlaceholder` is kept,
+   not deleted, and now serves purely as that fallback.
+
+### What this does NOT mean
+
+- It does not wire the route-detail map (`RouteMapPlaceholder`, `RoutePoint`/`Stop`/
+  polyline rendering) — that stays KI-036's open follow-up, deliberately not widened
+  into this ticket.
+- It does not decide marker clustering at city zoom (`docs/design.md` §15, still an
+  open product question pending real ride density) or add any click-to-select
+  interaction on a marker (would need a keyboard/list equivalent per §12 — out of
+  scope until such an interaction is actually built).
+- It does not change `MapProvider` (geocode/reverseGeocode/getRoute) at all — that
+  interface and its one real consumer path (still zero callers, KI-032) are untouched.
+
+### When to revisit
+
+When the route-detail map is built (KI-036), reuse this same `MapRenderer` interface
+rather than inventing a second one — if it turns out to need capabilities this MVP
+interface doesn't have (a polyline layer, typed marker icons), extend
+`packages/maps-core/src/render.ts` additively, the same discipline
+`.claude/rules/extensibility.md` already applies to shared contracts.

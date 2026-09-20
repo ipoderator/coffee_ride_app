@@ -2,7 +2,11 @@
   "extends": ["../../tsconfig.base.json", "config/tsconfig/node-library.json"],
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // "DOM" is needed only for render.ts's HTMLElement (the web-only
+    // rendering surface, .claude/rules/maps.md) — the rest of this package
+    // stays plain ES2022, no DOM globals actually used elsewhere.
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
