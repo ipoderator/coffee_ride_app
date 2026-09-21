@@ -898,3 +898,10 @@ layout.tsx`. See `docs/changelog.md`.
       rides renders as a normal all-zero ready state, not a special empty
       state — `/organizer/rides` already owns the "create your first ride"
       empty state. See `docs/changelog.md`.
+- [x] CR-105 Sticky mobile registration CTA — the `/impeccable critique
+    apps/web` P1 ("registration CTA is the hardest element to reach on
+      `/rides/[id]`, no sticky/mobile placement"), done 2026-09-21: below
+      `md`, `RegistrationButton` repositions into a fixed bottom bar instead
+      of rendering 7 content blocks down; `md`+ is unchanged (in normal
+      flow). Behind `FEATURE_STICKY_REGISTRATION_CTA` per
+      `.claude/rules/extensibility.md`/CR-055. See `docs/changelog.md`.

@@ -7,6 +7,7 @@ import type {
   Review,
   Ride,
   RouteGeometryPoint,
+  RoutePoint,
   RouteSummary,
   Stop,
   WaitlistEntry,
@@ -44,6 +45,7 @@ import {
 } from '../api';
 import { ElevationProfileChart } from './ElevationProfileChart';
 import { RegistrationButton } from './RegistrationButton';
+import { RouteMap } from './RouteMap';
 import { RouteMapPlaceholder } from './RouteMapPlaceholder';
 import { ReviewForm } from './ReviewForm';
 import { ReviewList, type ReviewListStatus } from './ReviewList';
@@ -62,9 +64,13 @@ type GeometryStatus = 'loading' | 'ready' | 'error';
 function RouteSection({
   rideId,
   route,
+  routePoints,
+  stops,
 }: {
   rideId: string;
   route: RouteSummary;
+  routePoints: RoutePoint[];
+  stops: Stop[];
 }) {
   const [status, setStatus] = useState<GeometryStatus>('loading');
   const [points, setPoints] = useState<RouteGeometryPoint[]>([]);
@@ -95,7 +101,11 @@ function RouteSection({
       <h2 className="text-lg font-semibold text-text">
         {ROUTE_RENDERING_TERMS.sectionTitle}
       </h2>
-      <RouteMapPlaceholder />
+      {status === 'loading' && <Skeleton className="h-80 w-full" />}
+      {status === 'error' && <RouteMapPlaceholder />}
+      {status === 'ready' && (
+        <RouteMap geometry={points} routePoints={routePoints} stops={stops} />
+      )}
       <div className="flex flex-col gap-2">
         <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
           {ROUTE_RENDERING_TERMS.elevationProfileLabel}
@@ -178,7 +188,13 @@ function ReviewsSection({
  * for all three, never revealing which (same discipline `EditRideForm` follows for
  * its own owner-scoped 404).
  */
-export function RideDetailView({ rideId }: { rideId: string }) {
+export function RideDetailView({
+  rideId,
+  stickyRegistrationCta = false,
+}: {
+  rideId: string;
+  stickyRegistrationCta?: boolean;
+}) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [ride, setRide] = useState<Ride | null>(null);
   const [organizerName, setOrganizerName] = useState<string>('');
@@ -186,6 +202,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [organizerReviewCount, setOrganizerReviewCount] = useState(0);
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
+  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
   const [registrationsCount, setRegistrationsCount] = useState(0);
   const [viewerRegistration, setViewerRegistration] =
     useState<Registration | null>(null);
@@ -207,6 +224,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         setOrganizerReviewCount(response.organizer.reviewCount);
         setRoute(response.route);
         setStops(response.stops);
+        setRoutePoints(response.routePoints);
         setRegistrationsCount(response.registrationsCount);
         setViewerRegistration(response.viewerRegistration);
         setViewerWaitlistEntry(response.viewerWaitlistEntry);
@@ -264,6 +282,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
 
   const statusTerm = RIDE_STATUS_TERMS[ride.status];
   const startDate = new Date(ride.startsAt);
+  const hasRouteOrStops = route !== null || stops.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -284,8 +303,19 @@ export function RideDetailView({ rideId }: { rideId: string }) {
       {/* docs/design.md §11 ("md: two-column ride detail"): primary content
           (title/metrics/registration) on the left, route + stops on the right.
           Reviews stay full-width below both — a long-form list doesn't fit a
-          fixed-width column. Single stacked column below `md`. */}
-      <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start md:gap-x-8 md:gap-y-6">
+          fixed-width column. Single stacked column below `md`. Route and stops
+          are both optional per-ride data (`docs/product.md`) — when neither
+          exists there's nothing for the right column to hold, so the two-column
+          grid collapses to one rather than reserving half the width for
+          nothing (confirmed live: a route/stops-less ride left ~55% of the
+          viewport blank). */}
+      <div
+        className={
+          hasRouteOrStops
+            ? 'flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start md:gap-x-8 md:gap-y-6'
+            : 'flex flex-col gap-6'
+        }
+      >
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
@@ -373,43 +403,66 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             )}
           </div>
 
-          <RegistrationButton
-            rideId={rideId}
-            rideStatus={ride.status}
-            participantLimit={ride.participantLimit}
-            registrationsCount={registrationsCount}
-            viewerRegistration={viewerRegistration}
-            viewerWaitlistEntry={viewerWaitlistEntry}
-            onChange={(registration) => {
-              setViewerRegistration(registration);
-              if (registration) {
-                setRegistrationsCount((count) => count + 1);
-                return;
-              }
-              // CR-036 ("Waitlist"): cancelling may have silently promoted the
-              // oldest waiting entry into the freed spot server-side, so the
-              // count might not actually have gone down — refetch instead of
-              // guessing (`.claude/rules/database.md`: "live status, not stale
-              // coordination").
-              getRideDetail(rideId)
-                .then((response) => {
-                  setRegistrationsCount(response.registrationsCount);
-                  setViewerWaitlistEntry(response.viewerWaitlistEntry);
-                })
-                .catch(() => {
-                  // Best-effort refresh only — the cancellation itself already
-                  // succeeded; a stale count here is not worth surfacing an
-                  // error for.
-                });
-            }}
-            onWaitlistChange={setViewerWaitlistEntry}
-          />
+          {/* CR-105: same single `RegistrationButton` instance, just repositioned
+              below `md` when the flag is on — a fixed bottom bar (`CabinetShell`'s
+              own pattern) instead of a second mounted instance, so there's no
+              duplicate pending/error state or double-submit risk between a mobile
+              and desktop copy. Returns `null` itself when no action is possible,
+              so the bar simply doesn't appear then. */}
+          <div
+            className={
+              stickyRegistrationCta
+                ? 'fixed inset-x-0 bottom-0 z-10 border-t border-border bg-bg p-4 shadow-overlay md:static md:inset-x-auto md:bottom-auto md:z-auto md:border-t-0 md:bg-transparent md:p-0 md:shadow-none'
+                : undefined
+            }
+          >
+            <RegistrationButton
+              rideId={rideId}
+              rideStatus={ride.status}
+              participantLimit={ride.participantLimit}
+              registrationsCount={registrationsCount}
+              viewerRegistration={viewerRegistration}
+              viewerWaitlistEntry={viewerWaitlistEntry}
+              onChange={(registration) => {
+                setViewerRegistration(registration);
+                if (registration) {
+                  setRegistrationsCount((count) => count + 1);
+                  return;
+                }
+                // CR-036 ("Waitlist"): cancelling may have silently promoted the
+                // oldest waiting entry into the freed spot server-side, so the
+                // count might not actually have gone down — refetch instead of
+                // guessing (`.claude/rules/database.md`: "live status, not stale
+                // coordination").
+                getRideDetail(rideId)
+                  .then((response) => {
+                    setRegistrationsCount(response.registrationsCount);
+                    setViewerWaitlistEntry(response.viewerWaitlistEntry);
+                  })
+                  .catch(() => {
+                    // Best-effort refresh only — the cancellation itself already
+                    // succeeded; a stale count here is not worth surfacing an
+                    // error for.
+                  });
+              }}
+              onWaitlistChange={setViewerWaitlistEntry}
+            />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-6">
-          {route ? <RouteSection rideId={rideId} route={route} /> : null}
-          <StopList stops={stops} />
-        </div>
+        {hasRouteOrStops && (
+          <div className="flex flex-col gap-6">
+            {route ? (
+              <RouteSection
+                rideId={rideId}
+                route={route}
+                routePoints={routePoints}
+                stops={stops}
+              />
+            ) : null}
+            <StopList stops={stops} />
+          </div>
+        )}
       </div>
 
       {ride.status === 'finished' && (

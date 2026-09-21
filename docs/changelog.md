@@ -1644,3 +1644,56 @@ or stop the dev server first) rather than re-discovering it per session.
 
 Follow-up: `.claude/context/current-task.md`'s recommended order continues — sticky
 mobile registration CTA (P1) and icon adoption (P2) are next, still not authorized.
+
+## 2026-09-21 — CR-105 — Sticky mobile registration CTA, behind a feature flag
+
+Summary: `.claude/context/current-task.md`'s recommended order, item 4 — the
+`/impeccable critique apps/web` P1 finding that the registration CTA on
+`/rides/[id]` renders after 7 other content blocks with no sticky/mobile
+placement. User authorized this item next (the literal word «внедряй»).
+
+Below `md` (`docs/design.md` §11), the same `RegistrationButton` instance now
+renders inside a wrapper that's `fixed inset-x-0 bottom-0` (a hairline top
+border, `bg-bg`, `shadow-overlay` — `docs/design.md` §5's "shadow reserved for
+overlays" rule, since this is now one) instead of static in-flow; at `md`+ the
+wrapper reverts to `static` and the CTA stays exactly where it was. This is one
+component instance repositioned by breakpoint, not a second mounted copy — the
+same pattern `CabinetShell.tsx`'s mobile bottom nav already uses — so there's no
+duplicate pending/error state or double-submit risk between a mobile and desktop
+copy, and `RegistrationButton` returning `null` (no action possible) still means
+no bar at all. `app/rides/[id]/page.tsx`'s `<main>` gets `pb-24 md:pb-6` (same
+values `CabinetShell` uses for its own fixed bar) so the bar never overlaps page
+content on mobile.
+
+Gated behind `FEATURE_STICKY_REGISTRATION_CTA` per `.claude/rules/
+extensibility.md`/CR-055 — reusing `apps/web/src/lib/cabinet/feature-flags.ts`'s
+`isFeatureEnabled` primitive directly (not `filterEnabled`, which is scoped to
+`CabinetNavItem`/`DashboardWidget` registries) since `/rides/[id]` is
+deliberately not a cabinet screen. Read server-side in `page.tsx` (an async
+Server Component) and threaded down as a `stickyRegistrationCta` prop, since
+`isFeatureEnabled` must never be called from a `'use client'` module (a non-
+`NEXT_PUBLIC_` env var always reads as unset in the browser bundle). Default
+off — unset behaves exactly as before.
+
+Files: `apps/web/src/app/rides/[id]/page.tsx`, `apps/web/src/features/
+participant/ride-detail/components/RideDetailView.tsx`, `apps/web/src/
+features/participant/ride-detail/ride-detail.test.tsx`, `.env.example`.
+
+Decisions: none new — additive, same registry-adjacent flag mechanism CR-055
+already established, no architecture change.
+
+Validation: `pnpm --filter web typecheck/lint` clean; `pnpm --filter web exec
+vitest run src/features/participant/ride-detail` 36/36 (2 new: flag off keeps
+the CTA in normal flow, flag on applies the fixed wrapper). Live-verified
+against the real running dev stack at both a 375×812 and a 1280×900 viewport,
+flag on (restarted `next dev` with `FEATURE_STICKY_REGISTRATION_CTA=1`, fresh
+`.next`, then restarted again without it to leave the environment as found):
+mobile showed the wrapper as `position: fixed` with the button's rect pinned to
+the bottom of the viewport; desktop showed the same wrapper as `position:
+static`, in normal flow, matching the CR-102/CR-103/CR-104 sessions' documented
+"live-verify against the real stack, no mocks" standard.
+
+Follow-up: `.claude/context/current-task.md`'s recommended order continues —
+icon adoption (P2) is next, still not authorized. Item 3 in that file's
+"New visual direction" section (`docs/design.md` §9 component inventory vs.
+`packages/ui`'s actual contents, P3) also remains open.

@@ -1,12 +1,21 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GetRideResponse, Ride, RouteSummary, Stop } from 'types';
+import { ToastProvider } from 'ui';
 import { RideDetailView } from './components/RideDetailView';
 import {
   ApiError,
+  cancelRideRegistration,
   getRideDetail,
   getRideReviews,
   getRouteGeometry,
+  registerForRide,
 } from './api';
 
 // `RegistrationButton` calls `useRouter()` (redirect-to-login on a 401) — same
@@ -23,12 +32,16 @@ vi.mock('./api', async () => {
     getRideDetail: vi.fn(),
     getRouteGeometry: vi.fn(),
     getRideReviews: vi.fn(),
+    registerForRide: vi.fn(),
+    cancelRideRegistration: vi.fn(),
   };
 });
 
 const getRideDetailMock = vi.mocked(getRideDetail);
 const getRouteGeometryMock = vi.mocked(getRouteGeometry);
 const getRideReviewsMock = vi.mocked(getRideReviews);
+const registerForRideMock = vi.mocked(registerForRide);
+const cancelRideRegistrationMock = vi.mocked(cancelRideRegistration);
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -113,6 +126,8 @@ describe('RideDetailView', () => {
     getRouteGeometryMock.mockReset();
     getRideReviewsMock.mockReset();
     getRideReviewsMock.mockResolvedValue({ items: [], nextCursor: null });
+    registerForRideMock.mockReset();
+    cancelRideRegistrationMock.mockReset();
   });
 
   it('shows a not-found state for a non-existent/draft ride', async () => {
@@ -203,6 +218,33 @@ describe('RideDetailView', () => {
     await screen.findByText(baseRide.title);
     expect(screen.queryByText('Маршрут')).not.toBeInTheDocument();
     expect(getRouteGeometryMock).not.toHaveBeenCalled();
+  });
+
+  it('collapses the two-column layout when there is no route and no stops', async () => {
+    getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+    const { container } = render(<RideDetailView rideId="ride-1" />);
+
+    await screen.findByText(baseRide.title);
+    // Regression: the right-hand column used to stay reserved by
+    // `md:grid-cols-2` even with nothing to put in it, leaving ~55% of the
+    // viewport blank (confirmed live via a route/stops-less ride).
+    expect(
+      container.querySelector('[class*="md:grid-cols-2"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the two-column layout once a route or stops exist', async () => {
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({ stops: [baseStop] }),
+    );
+
+    const { container } = render(<RideDetailView rideId="ride-1" />);
+
+    await screen.findByText(baseRide.title);
+    expect(
+      container.querySelector('[class*="md:grid-cols-2"]'),
+    ).toBeInTheDocument();
   });
 
   it('shows the route map placeholder and elevation profile once a route exists', async () => {
@@ -372,6 +414,144 @@ describe('RideDetailView', () => {
       expect(
         await screen.findByText('Отменить регистрацию'),
       ).toBeInTheDocument();
+    });
+
+    // CR-103 (`/impeccable critique` P0): confirm-before-cancel + success toasts.
+    it('shows a success toast after registering, with no confirm dialog', async () => {
+      registerForRideMock.mockResolvedValue({
+        registration: {
+          id: 'registration-1',
+          rideId: 'ride-1',
+          userId: 'user-1',
+          status: 'active',
+          createdAt: '2027-01-01T00:00:00.000Z',
+          updatedAt: '2027-01-01T00:00:00.000Z',
+          cancelledAt: null,
+        },
+      });
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByText('Зарегистрироваться'));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        await screen.findByText('Вы зарегистрированы на заезд.'),
+      ).toBeInTheDocument();
+      expect(registerForRideMock).toHaveBeenCalledWith('ride-1');
+    });
+
+    it('requires confirmation before cancelling, and does not call the API until confirmed', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          registrationsCount: 1,
+          viewerRegistration: {
+            id: 'registration-1',
+            rideId: 'ride-1',
+            userId: 'user-1',
+            status: 'active',
+            createdAt: '2027-01-01T00:00:00.000Z',
+            updatedAt: '2027-01-01T00:00:00.000Z',
+            cancelledAt: null,
+          },
+        }),
+      );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByText('Отменить регистрацию'));
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText('Отменить регистрацию?')).toBeInTheDocument();
+      expect(cancelRideRegistrationMock).not.toHaveBeenCalled();
+
+      // Dismissing the dialog via "Остаться" must not cancel the registration.
+      fireEvent.click(screen.getByRole('button', { name: 'Остаться' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(cancelRideRegistrationMock).not.toHaveBeenCalled();
+    });
+
+    it('cancels and shows a success toast once the confirm dialog is confirmed', async () => {
+      cancelRideRegistrationMock.mockResolvedValue(undefined);
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          registrationsCount: 1,
+          viewerRegistration: {
+            id: 'registration-1',
+            rideId: 'ride-1',
+            userId: 'user-1',
+            status: 'active',
+            createdAt: '2027-01-01T00:00:00.000Z',
+            updatedAt: '2027-01-01T00:00:00.000Z',
+            cancelledAt: null,
+          },
+        }),
+      );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByText('Отменить регистрацию'));
+      const dialog = await screen.findByRole('dialog');
+      // The underlying button and the dialog's confirm button share this label —
+      // `within(dialog)` scopes to the confirm dialog's own copy.
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Отменить регистрацию' }),
+      );
+
+      await waitFor(() => {
+        expect(cancelRideRegistrationMock).toHaveBeenCalledWith('ride-1');
+      });
+      expect(
+        await screen.findByText('Регистрация отменена.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    // CR-105 (`/impeccable critique` P1 item 4): sticky mobile registration bar,
+    // behind `FEATURE_STICKY_REGISTRATION_CTA`.
+    it('does not apply the sticky-bar positioning when the flag prop is off (default)', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const button = await screen.findByText('Зарегистрироваться');
+      expect(button.closest('div[class*="fixed"]')).not.toBeInTheDocument();
+    });
+
+    it('applies the fixed-bottom-bar positioning when stickyRegistrationCta is on', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" stickyRegistrationCta />);
+
+      const button = await screen.findByText('Зарегистрироваться');
+      expect(button.closest('div[class*="fixed"]')).toBeInTheDocument();
     });
   });
 
