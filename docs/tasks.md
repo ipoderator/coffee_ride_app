@@ -868,3 +868,17 @@ build` all clean (208/208, no new tests — same no-unit-test-for-the-SDK-
       instead of em-dashed when `null`) turned out to be CR-023's own
       deliberate decision, not a defect — left unchanged. See
       `docs/changelog.md`.
+- [x] CR-103 `Dialog`/`ConfirmDialog`/`Toast` primitives, wired into
+      `RegistrationButton` — the `/impeccable critique apps/web` P0, done
+      2026-09-21: `packages/ui` gained three new components
+      (`Dialog`/`ConfirmDialog`/`Toast`'s `ToastProvider`/`useToast`),
+      hand-vendored against existing tokens (`--shadow-overlay`, `bg-text/50`
+      backdrop — no new tokens), resolving `docs/design.md` §9's `Dialog`/
+      `Toast` half of KI-020. `RegistrationButton.tsx`: cancelling a
+      registration or leaving the waitlist now opens a `ConfirmDialog`
+      instead of firing on the first click; all four state-changing actions
+      (register/cancel/join-waitlist/leave-waitlist) show a success `Toast`.
+      `useToast()` fails soft (no-op) with no `ToastProvider` ancestor, so
+      the many existing tests that render a feature component directly
+      needed no changes. `ToastProvider` mounted once in `apps/web/src/app/
+layout.tsx`. See `docs/changelog.md`.

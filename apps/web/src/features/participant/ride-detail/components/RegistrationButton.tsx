@@ -3,7 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { Registration, RideStatus, WaitlistEntry } from 'types';
-import { Button, REGISTRATION_ACTION_TERMS, RIDE_DETAIL_TERMS } from 'ui';
+import {
+  Button,
+  ConfirmDialog,
+  REGISTRATION_ACTION_TERMS,
+  RIDE_DETAIL_TERMS,
+  useToast,
+} from 'ui';
 import {
   ApiError,
   cancelRideRegistration,
@@ -23,6 +29,12 @@ import {
  * server-side, never re-derived client-side; in particular, whether the ride is
  * "full" enough to offer joining the waitlist is re-checked by the server on submit,
  * not trusted from this client-side estimate.
+ *
+ * CR-103 (`/impeccable critique` P0): cancelling a registration/leaving the waitlist
+ * now goes through a `ConfirmDialog` instead of firing on the first click, and every
+ * successful action shows a `Toast` — the product's own stated context
+ * (`docs/product.md`: checking a ride pre-dawn, gloves on) is exactly where a mis-tap
+ * with no confirm/undo hurts most.
  */
 export function RegistrationButton({
   rideId,
@@ -44,8 +56,12 @@ export function RegistrationButton({
   onWaitlistChange: (waitlistEntry: WaitlistEntry | null) => void;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    'cancel' | 'leaveWaitlist' | null
+  >(null);
 
   if (
     rideStatus !== 'registration_open' &&
@@ -63,6 +79,7 @@ export function RegistrationButton({
     try {
       const response = await registerForRide(rideId);
       onChange(response.registration);
+      showToast(RIDE_DETAIL_TERMS.registerSuccess);
     } catch (err) {
       if (err instanceof ApiError && err.problem.code === 'unauthorized') {
         router.push('/login');
@@ -74,7 +91,7 @@ export function RegistrationButton({
     }
   }
 
-  async function handleCancel() {
+  async function handleConfirmCancel() {
     if (isPending) return;
     setError(null);
     setIsPending(true);
@@ -82,11 +99,14 @@ export function RegistrationButton({
     try {
       await cancelRideRegistration(rideId);
       onChange(null);
+      setConfirmAction(null);
+      showToast(RIDE_DETAIL_TERMS.cancelSuccess);
     } catch (err) {
       if (err instanceof ApiError && err.problem.code === 'unauthorized') {
         router.push('/login');
         return;
       }
+      setConfirmAction(null);
       setError(RIDE_DETAIL_TERMS.registrationActionError);
     } finally {
       setIsPending(false);
@@ -101,6 +121,7 @@ export function RegistrationButton({
     try {
       const response = await joinRideWaitlist(rideId);
       onWaitlistChange(response.waitlistEntry);
+      showToast(RIDE_DETAIL_TERMS.joinWaitlistSuccess);
     } catch (err) {
       if (err instanceof ApiError && err.problem.code === 'unauthorized') {
         router.push('/login');
@@ -112,7 +133,7 @@ export function RegistrationButton({
     }
   }
 
-  async function handleLeaveWaitlist() {
+  async function handleConfirmLeaveWaitlist() {
     if (isPending) return;
     setError(null);
     setIsPending(true);
@@ -120,11 +141,14 @@ export function RegistrationButton({
     try {
       await leaveRideWaitlist(rideId);
       onWaitlistChange(null);
+      setConfirmAction(null);
+      showToast(RIDE_DETAIL_TERMS.leaveWaitlistSuccess);
     } catch (err) {
       if (err instanceof ApiError && err.problem.code === 'unauthorized') {
         router.push('/login');
         return;
       }
+      setConfirmAction(null);
       setError(RIDE_DETAIL_TERMS.registrationActionError);
     } finally {
       setIsPending(false);
@@ -142,7 +166,7 @@ export function RegistrationButton({
         <Button
           variant="secondary"
           isLoading={isPending}
-          onClick={handleCancel}
+          onClick={() => setConfirmAction('cancel')}
         >
           {REGISTRATION_ACTION_TERMS.cancel}
         </Button>
@@ -154,7 +178,7 @@ export function RegistrationButton({
           <Button
             variant="secondary"
             isLoading={isPending}
-            onClick={handleLeaveWaitlist}
+            onClick={() => setConfirmAction('leaveWaitlist')}
           >
             {REGISTRATION_ACTION_TERMS.leaveWaitlist}
           </Button>
@@ -173,6 +197,26 @@ export function RegistrationButton({
           {error}
         </p>
       )}
+      <ConfirmDialog
+        open={confirmAction === 'cancel'}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={handleConfirmCancel}
+        title={RIDE_DETAIL_TERMS.cancelConfirmTitle}
+        description={RIDE_DETAIL_TERMS.cancelConfirmDescription}
+        confirmLabel={REGISTRATION_ACTION_TERMS.cancel}
+        cancelLabel={RIDE_DETAIL_TERMS.keepLabel}
+        isConfirming={isPending}
+      />
+      <ConfirmDialog
+        open={confirmAction === 'leaveWaitlist'}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={handleConfirmLeaveWaitlist}
+        title={RIDE_DETAIL_TERMS.leaveWaitlistConfirmTitle}
+        description={RIDE_DETAIL_TERMS.leaveWaitlistConfirmDescription}
+        confirmLabel={REGISTRATION_ACTION_TERMS.leaveWaitlist}
+        cancelLabel={RIDE_DETAIL_TERMS.keepLabel}
+        isConfirming={isPending}
+      />
     </div>
   );
 }

@@ -10,8 +10,9 @@
 // (`MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale`, CR-065, §6), the
 // shared state primitives (`Skeleton`/`EmptyState`/`ErrorState`, CR-066, §10), and
 // the form primitives (`Button`/`Input`/`Textarea`/`FormField`/`Card`, CR-011/CR-013,
-// §9) are this entry point's exports so far. Read `docs/design.md` before adding to
-// any of these.
+// §9), and the overlay primitives (`Dialog`/`ConfirmDialog`/`Toast`, CR-103, §9,
+// resolving KI-020's Dialog/Toast half) are this entry point's exports so far. Read
+// `docs/design.md` before adding to any of these.
 export * from './format';
 export * from './terminology';
 export * from './lib/cn';
@@ -28,3 +29,6 @@ export * from './components/Textarea';
 export * from './components/FormField';
 export * from './components/Card';
 export * from './components/Avatar';
+export * from './components/Dialog';
+export * from './components/ConfirmDialog';
+export * from './components/Toast';

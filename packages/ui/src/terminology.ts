@@ -539,6 +539,21 @@ export const RIDE_DETAIL_TERMS = {
   registrationActionError: 'Не удалось выполнить действие. Попробуйте ещё раз.',
   // CR-043 ("Organizer rating summary"): shown next to `organizedByLabel`.
   ratingReviewsCount: formatReviewsCount,
+  // CR-103 (`ConfirmDialog`/`Toast`, `/impeccable critique` P0): confirmation copy for
+  // the two destructive `RegistrationButton` actions, and success feedback for all
+  // four state-changing ones. `confirmLabel` on each dialog reuses
+  // `REGISTRATION_ACTION_TERMS.cancel`/`.leaveWaitlist` rather than duplicating the
+  // button label.
+  cancelConfirmTitle: 'Отменить регистрацию?',
+  cancelConfirmDescription:
+    'Вы потеряете место в заезде. Если места ещё останутся, можно будет зарегистрироваться повторно.',
+  leaveWaitlistConfirmTitle: 'Покинуть список ожидания?',
+  leaveWaitlistConfirmDescription: 'Вы потеряете место в очереди.',
+  keepLabel: 'Остаться',
+  registerSuccess: 'Вы зарегистрированы на заезд.',
+  cancelSuccess: 'Регистрация отменена.',
+  joinWaitlistSuccess: 'Вы в списке ожидания.',
+  leaveWaitlistSuccess: 'Вы покинули список ожидания.',
 } as const;
 
 /**

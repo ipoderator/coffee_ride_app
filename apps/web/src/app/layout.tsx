@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Golos_Text, IBM_Plex_Mono } from 'next/font/google';
 import Script from 'next/script';
+import { ToastProvider } from 'ui';
 import './globals.css';
 
 // `docs/design.md` "Dark theme": "not optional or later." `packages/ui/src/
@@ -63,7 +64,9 @@ export default function RootLayout({
             `.claude/context/current-task.md`'s CR-044 finding. Every page's own
             (narrower) container still applies inside it; this only bounds the
             widest screens/layouts (cabinet side nav, discovery split view). */}
-        <div className="mx-auto w-full xl:max-w-300">{children}</div>
+        <ToastProvider>
+          <div className="mx-auto w-full xl:max-w-300">{children}</div>
+        </ToastProvider>
       </body>
     </html>
   );

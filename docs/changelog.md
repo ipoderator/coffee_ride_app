@@ -1498,3 +1498,83 @@ fixtures, independent of the earlier-suspected engine-version mismatch, which tu
 out to be two intentionally-separate version numbers, not corruption) — an upstream
 tool issue, not a Coffee Ride defect, not tracked in `known-issues.md` since it's not
 project-internal.
+
+## 2026-09-21 — CR-103 — `Dialog`/`ConfirmDialog`/`Toast` primitives, wired into `RegistrationButton`
+
+Summary: the P0 finding from the same `/impeccable critique apps/web` session (both the
+original run and its independent re-run, `.claude/context/current-task.md`) —
+`RegistrationButton.tsx`'s `handleCancel` fired on the first click with no
+confirmation/undo, and `handleRegister` gave no success feedback. Root cause, per the
+critique's own P3: `docs/design.md` §9 has listed `Dialog`/`Toast` in `packages/ui`'s
+inventory since CR-063, but neither was ever built (KI-020). User reviewed the
+critique's recommended implementation order and authorized starting with this item
+(the literal word «внедряй», per that same session's explicit "wait for it" instruction).
+
+`packages/ui` gained three new components:
+
+- `Dialog` — generic modal (`role="dialog"`, `aria-modal`, `aria-labelledby`,
+  Escape-to-close, backdrop click to close, focus moves into the dialog on open),
+  rendered via `createPortal` into `document.body`. Backdrop reuses the existing
+  `--color-text` token at 50% opacity (`bg-text/50`) rather than a new `--scrim`
+  token — that's a separate, not-yet-authorized visual-direction item from the same
+  critique. Elevation uses `--shadow-overlay` (defined since CR-063, unused until now).
+- `ConfirmDialog` — a thin destructive-action wrapper around `Dialog`, two `Button`s
+  (`secondary` cancel / `danger` confirm by default) — no new `Button` variant needed.
+- `Toast`'s `ToastProvider`/`useToast()` — a context-based toast queue, auto-dismissing
+  after 4s, `role="status"`/`aria-live="polite"` (non-interrupting, same reasoning as
+  `ErrorState`'s degraded variant). `useToast()` fails soft to a no-op when no
+  `ToastProvider` ancestor exists, rather than throwing — most of this codebase's
+  existing tests render a feature component directly (`render(<RideDetailView .../>)`),
+  never through `apps/web/src/app/layout.tsx`'s one real provider, so this kept every
+  pre-existing test passing unchanged (same "a non-critical UI feature never breaks a
+  critical flow" precedent `.claude/rules/resilience.md` already establishes elsewhere).
+  `ToastProvider` mounted once, at the root, in `layout.tsx`.
+
+`RegistrationButton.tsx`: cancelling a registration or leaving the waitlist (the two
+existing destructive actions) now opens a `ConfirmDialog` instead of firing
+immediately; all four state-changing actions (register, cancel, join waitlist, leave
+waitlist) show a success `Toast`. Scope deliberately limited to what the critique's P0
+named — the other seven pre-existing `window.confirm()` call sites (avatar/cover/
+route/stop/route-point delete, ride cancel) are untouched, a real but out-of-scope
+inconsistency noted rather than fixed here.
+
+Files: `packages/ui/src/components/{Dialog,ConfirmDialog,Toast}.tsx` (+ tests),
+`packages/ui/src/index.ts`, `packages/ui/src/terminology.ts`, `apps/web/src/app/
+layout.tsx`, `apps/web/src/features/participant/ride-detail/components/
+RegistrationButton.tsx`, `apps/web/src/features/participant/ride-detail/
+ride-detail.test.tsx`.
+
+Decisions: none new — additive components filling an existing `docs/design.md` §9 gap,
+no architecture change.
+
+Validation: `pnpm --filter ui test` 106/106 (18 new); `pnpm --filter ui typecheck/lint`
+clean; `pnpm --filter web typecheck/lint` clean; `pnpm --filter web test` 213/213 (3
+new); `NODE_ENV=production pnpm --filter web build` clean (all 20 routes, including
+`/rides/[id]`, compile). Live-verified end to end against a real running stack (a real
+published, `registration_open` ride, two real participant accounts, no mocks): a fresh
+participant's register click showed "Вы зарегистрированы на заезд." with no dialog; an
+already-registered participant's cancel click opened the confirm dialog
+("Отменить регистрацию?" + the loss-of-place description); dismissing via "Остаться"
+closed the dialog with zero API calls; confirming called `DELETE .../register`,
+closed the dialog, and showed "Регистрация отменена." — zero console errors, zero
+failed requests across both flows. (One `net::ERR_ABORTED` on `.../register` logged
+during an earlier, throwaway run of the same check — an aborted request from a
+mid-navigation script restart, not from the flow described above.)
+
+Found and fixed one unrelated environment issue while validating: running
+`NODE_ENV=production pnpm --filter web build` against the same `.next` directory as an
+already-running `next dev` server corrupts the dev server's live module graph (every
+asset/route 404s afterward, including a real, previously-working route) — restarted
+the dev server with a fresh `.next` to recover. Not a Coffee Ride code issue; worth
+remembering not to run a production build against a live dev server's own directory
+again.
+
+Follow-up: `known-issues.md` KI-020 updated — `Dialog`/`ConfirmDialog`/`Toast` are the
+third consecutive structurally non-trivial primitive to choose the hand-vendor escape
+hatch over resolving `components.json`'s shadcn CLI-targeting question; flagged as
+worth resolving directly next time a non-trivial primitive is needed (`Select`/`Tabs`/
+`Sheet`/`DatePicker`/`Pagination`/`Checkbox`/`RadioGroup`, still all unbuilt). The rest
+of the critique's recommended order (organizer dashboard glanceability, sticky mobile
+registration CTA, icon adoption, "Quiet Instrument" visual direction) is still queued,
+not started — `.claude/context/current-task.md`/`project-state.md` updated to reflect
+this ticket's completion and the remaining open items.
