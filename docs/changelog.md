@@ -1447,3 +1447,54 @@ ticket left again. Two real, un-scheduled UI gaps remain from the last status re
 `MapProvider.geocode`/`reverseGeocode` still has zero UI consumers (KI-032, no
 address-search anywhere), and discovery's filters still cover only `bicycleType`
 (KI-030, no design-doc spec yet for distance/difficulty/price/date-range).
+
+## 2026-09-21 — CR-102 — Fix a dead-space layout bug found via `/impeccable critique`
+
+Summary: ran the `impeccable` skill's `critique` command against `apps/web` (dual
+sub-agent design review + live-browser evidence pass, at the user's request, ahead of a
+planned visual-direction pass). Two candidate "bugs" came out of it; only one was real.
+
+Real bug, fixed: `RideDetailView`'s two-column layout (`md:grid md:grid-cols-2`, CR-023)
+rendered unconditionally regardless of content — `RouteSection` only renders when
+`route` is non-null and `StopList` returns `null` for an empty `stops` array, both
+correct on their own, but together they meant a ride with neither a route nor stops
+(both optional per `docs/product.md`) left the entire right-hand grid column blank.
+Confirmed live during the critique's browser-evidence pass against a real seeded ride
+("QA Визуальный заезд") — ~55% of the viewport rendered as dead page background.
+Fixed by computing `hasRouteOrStops = route !== null || stops.length > 0` and
+collapsing to a single flex column (same shape the screen already uses below `md`)
+whenever it's false, instead of reserving a grid track for nothing.
+
+Not a bug, left unchanged: the same critique flagged `RideCard`/`RideDetailView`
+omitting a `MetricTile` entirely (rather than rendering it with an em dash) when its
+value is `null`, reading this as contradicting `docs/design.md` §6's "a missing value
+renders as `—`, never an empty box" rule. Checking `docs/changelog-archive/2026.md`'s
+CR-023 entry (2026-09-15) shows this was a deliberate, explicit decision at the time —
+"omitting rather than em-dashing anything still null" — not an oversight, and both
+components' code comments already say so correctly. The real (minor) gap is that
+`docs/design.md` §6 was never updated to note this carve-out from its general rule;
+left as a documentation note, not a code change, since reversing a recorded product
+decision needs its own explicit call, not an automatic "fix."
+
+Files: `apps/web/src/features/participant/ride-detail/components/RideDetailView.tsx`,
+`apps/web/src/features/participant/ride-detail/ride-detail.test.tsx`.
+
+Decisions: none new — a bug fix within CR-023's existing two-column layout, not a
+change to it.
+
+Validation: `pnpm --filter web test` 210/210 (2 new regression tests: the grid
+collapses to one column with no route/stops, and stays two-column once either
+exists); `pnpm --filter web typecheck` clean; `pnpm --filter web exec eslint` clean on
+both changed files.
+
+Follow-up: the `docs/design.md` §6 documentation gap noted above is unaddressed. The
+critique's separately-flagged priority issues (no confirmation on registration/
+cancellation, no confirm-before-cancel, inert cover photo/route map, a new visual
+direction synthesized from five user-supplied references) are queued for a later
+session — see `apps/web/.impeccable/critique/2026-09-21T15-54-48Z__apps-web.md` for
+the full report. The critique session also found `impeccable detect`'s mechanical
+scanner non-functional in this environment (returns `[]` even on deliberately-bad
+fixtures, independent of the earlier-suspected engine-version mismatch, which turned
+out to be two intentionally-separate version numbers, not corruption) — an upstream
+tool issue, not a Coffee Ride defect, not tracked in `known-issues.md` since it's not
+project-internal.

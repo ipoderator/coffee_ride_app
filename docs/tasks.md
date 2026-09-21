@@ -858,3 +858,13 @@ build` all clean (208/208, no new tests — same no-unit-test-for-the-SDK-
       pixels don't paint in this sandbox's headless/software-WebGL browser —
       same documented conclusion as CR-098/CR-099's identical finding, not a
       regression. See `docs/changelog.md`.
+- [x] CR-102 Fix a dead-space layout bug found via `/impeccable critique` —
+      done 2026-09-21: `RideDetailView`'s two-column grid used to render
+      unconditionally, leaving the whole right column blank for a ride with
+      neither a route nor stops (both optional) — confirmed live during the
+      critique's browser-evidence pass. Fixed by collapsing to one column
+      when there's nothing for the right column to hold. A second
+      candidate "bug" the same critique flagged (metric tiles omitted
+      instead of em-dashed when `null`) turned out to be CR-023's own
+      deliberate decision, not a defect — left unchanged. See
+      `docs/changelog.md`.
