@@ -1,152 +1,147 @@
 # Current task
 
-Task ID: CR-099 (fix QA findings — dark theme, public nav, verify-email link,
-forgot/reset-password + verify-email screens, cabinet route loading states).
+Task ID: none active — this file records a paused-and-awaiting-decision state
+from an `/impeccable critique apps/web` design review, so a fresh session can
+resume without re-deriving it.
 
-Status: **Done.**
+Status: **CR-103/CR-104/CR-105/CR-106 done and live-verified. Only the
+visual-direction phases (item 6) remain, not yet authorized.**
 
-## Goal
+## What happened this session (chronological, for a fresh session to skim)
 
-Fix the real bugs from a user-run QA pass against a live browser session:
+1. Prior session: full `/impeccable critique apps/web` (original run +
+   independent re-run), CR-102 (dead-space layout bug) fixed and
+   re-verified. That session ended with the backlog below identified but
+   NOT authorized — user explicitly withheld «внедряй» and asked only to
+   persist state.
+2. This session, first item: user said «внедряй» for **P0**
+   (`Dialog`/`ConfirmDialog`/`Toast` + `RegistrationButton` wiring). Built
+   as **CR-103** — full detail: `docs/changelog.md`'s CR-103 entry.
+   Live-verified end to end (register → toast; cancel → confirm dialog →
+   dismiss with no API call, or confirm → cancel + toast).
+3. This session, second item: user reconfirmed the plan is the critique's
+   recommended order, then said «внедряй» again for **P1 item 3**
+   (`RideSummaryWidget` for the organizer dashboard). Built as **CR-104**:
+   new `GET /v1/rides/mine/summary` (`apps/api`'s `rides` module — ride
+   counts by status + active-registration/waitlist counts across every
+   ride the caller organizes, 3 parallel indexed queries, not a multi-join
+   fan-out), new `RideSummaryWidget` (`apps/web/src/features/organizer/
+rides/components/`), registered into `ORGANIZER_WIDGETS` (ADR-009) at
+   order 20. Full detail: `docs/changelog.md`'s CR-104 entry.
+   Live-verified against the real running stack (`/organizer` showed the
+   correct real counts for the CR-103 QA organizer's one ride).
+4. Both items validated (typecheck/lint/tests/build all clean — see the
+   changelog entries for exact numbers) and live-verified in a real
+   browser against the real running dev stack, no mocks. Hit the same
+   environment issue twice: running a production `next build` against a
+   live `next dev` server's `.next` directory corrupts it — restarted the
+   dev server with a fresh `.next` both times. Worth avoiding next time
+   (stop the dev server before a production build, or build from a
+   separate checkout) rather than re-discovering it per session.
+5. `docs/tasks.md`/`docs/changelog.md`/`docs/api.md`/`project-state.md` all
+   updated for CR-103 and CR-104. This file rewritten to reflect both done
+   and the remaining backlog, at the user's standing preference from the
+   prior session (keep this file intact rather than clearing it, so a
+   fresh session/window can resume).
+6. This session, third item: user said «внедряй» again for **P1 item 4**
+   (sticky mobile registration CTA). Built as **CR-105**: below `md`, the
+   same `RegistrationButton` instance repositions into a fixed bottom bar
+   instead of a second mounted copy (`CabinetShell.tsx`'s mobile-nav
+   pattern), gated behind `FEATURE_STICKY_REGISTRATION_CTA` per CR-055's
+   mechanism (`isFeatureEnabled`, read server-side in `app/rides/[id]/
+page.tsx`, threaded down as a prop — `RideDetailView` is a Client
+   Component and can't read the env var itself). Full detail:
+   `docs/changelog.md`'s CR-105 entry. Live-verified against the real dev
+   stack at 375×812 (fixed, pinned to bottom) and 1280×900 (static, normal
+   flow) with the flag on; dev server restarted a second time without it
+   afterward to leave the environment exactly as found.
+7. This session, fourth item: user said «внедряй» again for **P2**
+   (icons). Built as **CR-106**: `CabinetNavItem` gained an optional
+   `icon` field (a name, resolved against a small `CABINET_ICONS` map in
+   `CabinetShell.tsx`); every current organizer/participant nav descriptor
+   sets one, `SiteHeader.tsx` got icons directly. Hit and fixed a real bug
+   mid-session: the first attempt put the actual `lucide-react` component
+   on the descriptor, which is built server-side and handed to the Client
+   Component `CabinetShell` as a prop — React Server Components can't
+   serialize a function/component value across that boundary, and
+   `/organizer`/`/me` both 500'd until fixed (name + lookup-map
+   indirection instead). Full detail: `docs/changelog.md`'s CR-106 entry.
+   Live-verified end to end: register → verify-email (dev-only link) →
+   login → `/me` at 375×812 and 1280×900 showing all 3 participant-nav
+   icons as real SVGs, zero console errors; `SiteHeader` verified on
+   `/register` (4 icons); `/organizer` confirmed via its own 200 status
+   post-fix (same code path, not separately walked with a real organizer
+   profile this session).
 
-1. Dark theme tokens exist (`packages/ui/src/tokens.css`) but nothing ever
-   activates them — no `prefers-color-scheme` detection, no toggle. `.dark`
-   is applied nowhere. `docs/design.md` §"Dark theme": "not optional or
-   later."
-2. No shared nav/header on `/`, `/register`, `/login` — no way to move
-   between them or into a cabinet without typing a URL.
-3. Register success screen's "verification link" is `/v1/auth/verify-email?
-token=...` — a relative path missing `/api`, and a POST-only endpoint, not
-   a GET page. Following it in a browser 404s. Mechanism itself works (KI-026
-   already documented the missing screen).
-4. `/forgot-password`, `/reset-password`, `/verify-email` all 404 — API
-   exists (KI-042, KI-026), no screens.
-5. Organizer cabinet screens (edit ride, route, cover) show only the static
-   `<h1>` for ~2-3.5s with no loading indicator before their skeleton mounts
-   — no Next.js `loading.tsx` boundary on the route segment, so the RSC
-   navigation itself shows nothing changing.
-6. 2GIS map shows no visible street geometry in a headless sandbox browser.
-7. Duplicate `GET /v1/organizers/me` observed on `/organizer` and
-   `/organizer/profile`.
+## Open backlog
 
-## Scope decisions (before implementing)
+Unchanged in substance from the critique — P0, P1-item-3, P1-item-4, and P2
+are now done (CR-103/CR-104/CR-105/CR-106, above). The user has NOT said
+«внедряй» for anything past those four; only the "New visual direction"
+phases below remain.
 
-- **#1 Dark theme**: implement OS-preference activation only (`prefers-
-color-scheme`, applied via an inline pre-hydration script setting `.dark`
-  on `<html>`, avoiding FOUC). No manual toggle UI — `docs/design.md` never
-  requires one, only that the theme exists and activates.
-- **#2 Nav**: new `SiteHeader` (client component, `packages/ui`-token
-  styled, Russian strings from `terminology.ts`), applied only to `/`,
-  `/register`, `/login` via a new `(public)` route group + layout — scoped
-  to exactly the three routes the finding named, not a wider restructure.
-  Shows Войти/Регистрация when logged out, Личный кабинет/Кабинет
-  организатора/Выйти when logged in (reuses `getCurrentUser()`).
-- **#3/#4**: build real `/verify-email`, `/forgot-password`, `/reset-
-password` pages (closes KI-026 and KI-042's screen gap) as new
-  `features/auth/*` modules, same pattern as `register`/`login`. Register's
-  dev-note now links to the real `/verify-email?token=...` web page instead
-  of the raw API path.
-- **#5**: add `apps/web/src/app/organizer/rides/[id]/loading.tsx` — one
-  shared Next.js loading boundary for `edit`/`route`/`cover` (and their
-  siblings `participants`/`updates`, same segment) so navigation shows
-  immediate skeleton feedback instead of nothing until the RSC payload
-  arrives.
-- **#6**: investigated, not fixed — this matches CR-098's already-documented
-  finding (`known-issues.md` KI-036 update / `project-state.md`): real key,
-  real tile/style requests, real correctly-positioned markers, confirmed via
-  network/DOM inspection; flat visual background is a headless/software-
-  WebGL rasterization limit of the sandbox, not an integration bug. No code
-  change. Recommend the user re-check in a normal (non-headless, GPU-backed)
-  browser.
-- **#7**: investigated, not a bug — both pages fetch `getOrganizerProfile()`
-  from exactly one `useEffect` each (`OrganizerProfileWidget`,
-  `OrganizerProfileForm`). The duplicate request is React 18 Strict Mode's
-  intentional dev-only double-invoke of effects (Next.js's default
-  `reactStrictMode: true`, `next.config.ts` has no override) — mount →
-  cleanup → remount, guarded correctly against a double `setState` by each
-  effect's own `cancelled` flag, but the underlying `fetch` still fires
-  twice. Universal to every `useEffect`-based fetch in this codebase, not
-  specific to these two files; does not happen in a production build; not
-  worth removing Strict Mode (a real safety net) to silence. No code change.
+Full reports: `apps/web/.impeccable/critique/2026-09-21T15-54-48Z__apps-web.md`
+(first run) and `apps/web/.impeccable/critique/2026-09-21T16-23-05Z__apps-web.md`
+(re-run).
 
-## Planned files
+**[P0] DONE (CR-103).** Confirm-before-cancel + success toasts on
+`RegistrationButton.tsx`, `Dialog`/`ConfirmDialog`/`Toast` built in
+`packages/ui`.
 
-- `apps/web/src/app/layout.tsx` (theme script)
-- `apps/web/src/app/(public)/layout.tsx` (new), `page.tsx`, `register/
-page.tsx`, `login/page.tsx` (moved from `app/`)
-- `apps/web/src/components/site/SiteHeader.tsx` (new)
-- `apps/web/src/features/auth/verify-email/{api.ts,components/
-VerifyEmailStatus.tsx,verify-email.test.tsx}` (new)
-- `apps/web/src/features/auth/forgot-password/{api.ts,components/
-ForgotPasswordForm.tsx,forgot-password.test.tsx}` (new)
-- `apps/web/src/features/auth/reset-password/{api.ts,components/
-ResetPasswordForm.tsx,reset-password.test.tsx}` (new)
-- `apps/web/src/app/verify-email/page.tsx`, `app/forgot-password/page.tsx`,
-  `app/reset-password/page.tsx` (new)
-- `apps/web/src/features/auth/register/components/RegisterForm.tsx` (link
-  fix)
-- `apps/web/src/app/organizer/rides/[id]/loading.tsx` (new)
-- `packages/ui/src/terminology.ts` (new terms: `SITE_HEADER_TERMS`, verify/
-  forgot/reset password screen copy)
-- Docs: `known-issues.md` (KI-026, KI-042 resolved), `docs/changelog.md`,
-  `docs/tasks.md`, `.claude/context/project-state.md`,
-  `.claude/context/architecture-map.md` if nav component changes structure.
+**[P1] DONE (CR-104).** `RideSummaryWidget` on the organizer dashboard —
+ride/registration/waitlist counts, via new `GET /v1/rides/mine/summary`.
 
-## Implementation progress
+**[P1] DONE (CR-105).** Registration CTA is the hardest element to reach
+on `/rides/[id]` — renders after 7 other content blocks, no sticky/mobile
+placement. Now a fixed bottom bar below `md`, behind
+`FEATURE_STICKY_REGISTRATION_CTA`.
 
-All planned files done, as scoped above. `RegisterForm`/`LoginForm` also
-gained direct cross-links (`/login`↔`/register`, `/forgot-password`) beyond
-the header, and the register dev-note now derives the real `/verify-email`
-web path from the API's raw `verificationUrl` instead of rendering it
-verbatim.
+**[P2] DONE (CR-106).** Zero icon usage anywhere in the app —
+`lucide-react` is installed, unused. Cabinet nav / site header / mobile
+bottom tab bar are plain text. Now: `CabinetNavItem.icon` (name-based,
+resolved client-side) + `SiteHeader`'s own icons, outline, always labeled.
 
-## Validation results
+**[P3]** `docs/design.md` §9's component inventory doesn't fully match
+`packages/ui`'s actual contents — `Dialog`/`Toast` now real (CR-103);
+`Tabs`, `Sheet`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`,
+`Pagination` are still listed but don't exist (`RideFilters.tsx` documents
+working around the missing `Select`, citing `KI-020`, which now also notes
+three consecutive non-trivial primitives choosing the hand-vendor escape
+hatch — worth resolving the shadcn CLI-targeting question directly next
+time one is needed).
 
-- `pnpm --filter ui typecheck` — clean.
-- `pnpm --filter web typecheck` — clean (after `rm -rf apps/web/.next`
-  cleared a stale `.next/types` artifact from the `(public)` route move,
-  same category of gotcha CR-093/CR-098 already hit).
-- `pnpm --filter web lint` — clean.
-- `pnpm --filter web test` — 208/208 passing (10 new: verify-email,
-  forgot-password, reset-password).
-- `NODE_ENV=production pnpm --filter web build` — clean, all 21 routes
-  compiled including the three new ones.
-- `npx prettier --write` run over every doc/code file this task touched;
-  `docs/tasks.md`'s remaining `prettier --check` warning confirmed
-  pre-existing (reproduces against `main` via `git stash`, unrelated to this
-  task).
-- Live-verified in a real browser (killed a stray leftover `next-server` on
-  :3000 first — an unrelated pre-existing process from before this session,
-  serving a stale build that was blocking the CSRF Origin check from
-  matching), against the real running stack (real Postgres, real API):
-  - `/login`, `/register`, `/` all render `SiteHeader` with all five links
-    resolving correctly; zero console errors, zero failed requests.
-  - Dark mode: emulated `prefers-color-scheme: dark` — `<html>` gains
-    `.dark`, `body`'s computed background flips from `rgb(250, 249, 247)`
-    (`#faf9f7`) to `rgb(23, 22, 20)` (`#171614`) — exact token match.
-  - Registered a real account through the UI, clicked the rendered
-    verification link exactly as a user would, landed on `/verify-email`,
-    got "Email подтверждён".
-  - `/forgot-password` showed the correct generic success state for a real
-    registered email. `/reset-password` with no token showed the correct
-    missing-token error.
-  - Test accounts created during verification deleted from the dev DB
-    afterward; dev server stopped; stray `next-server` process not
-    restarted (was unrelated leftover state, not this session's).
+## New visual direction ("Quiet Instrument") — synthesized, not yet built
 
-## Discovered issues
+Full detail in the two critique snapshot files above. Summary: keep
+`docs/design.md`'s calm/warm/low-saturation baseline and single-accent
+principle unchanged; add two new tokens (`--scrim`, `--glass-bg`/
+`--glass-border`) used only on two surfaces (a cover-photo title panel, a
+sticky mobile registration bar); keep Golos Text (no new UI typeface);
+adopt `lucide-react` icons (outline, always labeled); extend
+`MapPolylineInput` additively for route-line weight (no new ADR, same
+precedent as ADR-020); wordmark direction: Golos Text at two weights
+("coffee" 500 + ".ride" 400 in `--primary`) as the MVP default.
 
-None beyond the two findings that turned out not to be bugs (documented in
-the Scope decisions section above, not re-listed here).
+`Dialog`'s backdrop (CR-103) deliberately did NOT introduce `--scrim` —
+reused the existing `--color-text` token at reduced opacity instead, since
+`--scrim` is scoped to this visual-direction phase, not yet authorized.
 
-## Final result
+## Recommended order (offered to the user; items 1-3 done)
 
-All five real bugs fixed and live-verified; two findings investigated and
-correctly identified as non-bugs with no code change. Docs updated:
-`docs/changelog.md` (CR-099 entry), `docs/tasks.md` (checked off),
-`.claude/context/project-state.md` (overwritten), `.claude/context/
-architecture-map.md` (CR-099 entry), `.claude/context/known-issues.md`
-(KI-026/KI-042 narrowed with update paragraphs), `.claude/context/
-known-issues-archive.md` (KI-052/053/054, new — dark theme, public nav,
-loading boundary — added directly since fully resolved same session, per
-`CLAUDE.md`'s "move immediately, not as periodic batch cleanup").
+1. ~~`packages/ui`: build `Dialog`/`ConfirmDialog` + `Toast`~~ — done, CR-103.
+2. ~~Wire into `RegistrationButton.tsx`~~ — done, CR-103.
+3. ~~`RideSummaryWidget` for the organizer dashboard~~ — done, CR-104.
+4. ~~Sticky mobile registration CTA (P1, behind a feature flag per
+   `.claude/rules/extensibility.md`)~~ — done, CR-105.
+5. ~~Icons in `CabinetShell`/`SiteHeader` (P2)~~ — done, CR-106.
+6. Visual direction phases (tokens → cards → map polyline weight →
+   wordmark) — see the critique snapshot's "Implementation Plan" section.
+
+## Next logical task
+
+**Awaiting user decision + the literal word «внедряй»** before the visual-
+direction phases (item 6 — tokens → cards → map polyline weight →
+wordmark) are implemented. Everything else in the recommended order is now
+done. A fresh session should re-read this file, `.claude/context/
+project-state.md`, and the two critique snapshots, then confirm with the
+user before starting the visual-direction work rather than assuming.

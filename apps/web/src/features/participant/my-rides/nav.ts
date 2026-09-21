@@ -10,4 +10,5 @@ export const myRegistrationsNavItem: CabinetNavItem = {
   label: CABINET_TERMS.myRegistrationsNavLabel,
   href: '/me/rides',
   order: 15,
+  icon: 'Ticket',
 };

@@ -10,6 +10,7 @@ export const organizerProfileNavItem: CabinetNavItem = {
   label: CABINET_TERMS.organizerProfileNavLabel,
   href: '/organizer/profile',
   order: 10,
+  icon: 'CircleUser',
 };
 
 // CR-015: same registration into `@/lib/cabinet/organizer-widgets.ts`, for the

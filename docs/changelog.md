@@ -1697,3 +1697,72 @@ Follow-up: `.claude/context/current-task.md`'s recommended order continues —
 icon adoption (P2) is next, still not authorized. Item 3 in that file's
 "New visual direction" section (`docs/design.md` §9 component inventory vs.
 `packages/ui`'s actual contents, P3) also remains open.
+
+## 2026-09-21 — CR-106 — Icons in the cabinet nav and site header
+
+Summary: `.claude/context/current-task.md`'s recommended order, item 5 — the
+`/impeccable critique apps/web` P2 finding that `lucide-react` was installed
+but unused, leaving the cabinet nav / site header / mobile bottom tab bar all
+plain text. User authorized this item next (the literal word «внедряй»).
+
+`CabinetNavItem` (`apps/web/src/lib/cabinet/types.ts`) gained an optional
+`icon` field, and every current descriptor sets one: organizer profile/rides
+→ `CircleUser`/`Bike`, participant profile/my-registrations/notifications →
+`CircleUser`/`Ticket`/`Bell`. `SiteHeader.tsx` (public nav) got `Home`/
+`LogIn`/`UserPlus`/`LayoutDashboard` inline, next to each existing text
+label — outline icons, always paired with a label, never icon-only, per
+`.claude/context/current-task.md`'s "Quiet Instrument" direction. Every icon
+is `aria-hidden` (the adjacent text already carries the accessible name).
+`CabinetShell.tsx`'s mobile bottom tab bar now stacks icon above label
+(`flex-col`); its `md`+ side nav keeps them inline (`md:flex-row`).
+
+Real bug found and fixed mid-implementation, not just a style choice: the
+first attempt put the actual `lucide-react` icon component (a `forwardRef`
+value) directly on `CabinetNavItem.icon` and passed it straight through.
+`ORGANIZER_NAV_ITEMS`/`PARTICIPANT_NAV_ITEMS` are built in a Server Component
+(`app/organizer/layout.tsx`/`app/me/layout.tsx`) and handed to `CabinetShell`,
+a Client Component, as a prop — and React Server Components can only
+serialize plain data across that boundary, not a function/component value.
+Live-verified live: `/organizer` and `/me` both actually 500'd ("Only plain
+objects can be passed to Client Components from Server Components... Functions
+cannot be passed directly to Client Components") — would have shipped a
+broken cabinet for every organizer/participant if not caught. Fixed by adding
+`apps/web/src/lib/cabinet/icons.ts` (new): `CabinetNavItem.icon` is now a
+_name_ (`CabinetIconName`, e.g. `'CircleUser'`) resolved against a small
+`CABINET_ICONS` lookup map inside `CabinetShell.tsx` itself (already a Client
+Component, so importing the real `lucide-react` components there is fine).
+`SiteHeader.tsx` needed no such indirection — it's a Server Component
+rendering icons directly in its own JSX, never passing one as a prop across
+the boundary.
+
+Files: `apps/web/src/lib/cabinet/{types,icons}.ts` (`icons.ts` new),
+`apps/web/src/components/cabinet/{CabinetShell,CabinetShell.test}.tsx`,
+`apps/web/src/components/site/SiteHeader.tsx`, `apps/web/src/features/
+organizer/{profile,rides}/nav.ts`, `apps/web/src/features/participant/
+{profile,my-rides,notifications}/nav.ts`.
+
+Decisions: none new — additive, no architecture change. `lucide-react` was
+already a declared `apps/web` dependency (unused until now); not added to
+`packages/ui` since every icon consumer (`CabinetShell`, `SiteHeader`) lives
+in `apps/web`, matching the existing package boundary.
+
+Validation: `pnpm --filter web typecheck/lint` clean; `pnpm --filter web exec
+vitest run` 219/219 (1 new: `CabinetShell` renders an icon `<svg>` when a nav
+item's descriptor supplies one). Live-verified against the real running dev
+stack: caught the RSC-serialization 500 first (`GET /organizer`/`/me` both
+500, exact error above, from the dev server's own log), fixed it, then
+re-verified end to end — a full register → verify-email (dev-only link) →
+login flow, then `/me` at both 375×812 and 1280×900 showed the participant
+nav (`aria-label="Навигация личного кабинета"`) with all 3 icons rendered as
+real `<svg>` elements, correct labels, zero console errors/failed requests.
+`/organizer` shares the identical `CabinetShell` render path (confirmed via
+its own 200 status post-fix, same `CABINET_ICONS` map, not separately
+walked through a real organizer-profile-creation flow this session) and the
+public `SiteHeader` was verified live on `/register` (4 icons, correct
+`lucide-house` etc. SVGs, zero errors).
+
+Follow-up: `.claude/context/current-task.md`'s recommended order is now
+fully worked through except the synthesized "Quiet Instrument" visual
+direction phases (tokens → cards → map polyline weight → wordmark) — still
+not authorized. P3 (`docs/design.md` §9 component inventory vs.
+`packages/ui`'s actual contents) also remains open.

@@ -14,6 +14,7 @@ export const organizerRidesNavItem: CabinetNavItem = {
   label: 'Заезды',
   href: '/organizer/rides',
   order: 20,
+  icon: 'Bike',
 };
 
 // CR-103 (`/impeccable critique` P1): same registration into

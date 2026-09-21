@@ -8,4 +8,5 @@ export const profileNavItem: CabinetNavItem = {
   label: CABINET_TERMS.profileNavLabel,
   href: '/me/profile',
   order: 20,
+  icon: 'CircleUser',
 };

@@ -29,44 +29,97 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. CR-099 (fix findings from a user-run QA pass against a live
-browser) closed this session, on top of CR-098 from the prior session. The
-user ran manual QA against a real browser and reported seven findings; five
-were real bugs, fixed:
+None active. Four items from the `/impeccable critique apps/web` backlog
+closed this session, each individually authorized with the literal word
+«внедряй»: **CR-103** (`Dialog`/`ConfirmDialog`/`Toast` primitives, wired
+into `RegistrationButton` — the critique's P0), **CR-104**
+(`RideSummaryWidget` on the organizer dashboard, backed by a new
+`GET /v1/rides/mine/summary` — the critique's P1 item 3), **CR-105**
+(sticky mobile registration CTA on `/rides/[id]`, behind
+`FEATURE_STICKY_REGISTRATION_CTA` — the critique's P1 item 4), and
+**CR-106** (icons in the cabinet nav/site header via `lucide-react` — the
+critique's P2). Full detail on all four: `docs/changelog.md`'s
+CR-103/CR-104/CR-105/CR-106 entries. Full detail on what's _left_ (the
+synthesized "Quiet Instrument" visual direction phases): `.claude/context/
+current-task.md`, kept intact at the user's standing preference so a
+fresh session/window can resume without re-deriving it, plus the two
+persisted reports (`apps/web/.impeccable/critique/2026-09-21T15-54-48Z__
+apps-web.md` and `...T16-23-05Z__apps-web.md`). No further item is
+authorized yet — the next one needs its own «внедряй».
 
-1. Dark theme never activated (`.dark` tokens existed since CR-063, nothing
-   ever applied the class) — fixed via a `beforeInteractive` script reading
-   `prefers-color-scheme` in `app/layout.tsx`. No manual toggle.
-2. No shared nav on `/`, `/register`, `/login` — fixed via a new `SiteHeader`
-   in a new `(public)` route group wrapping exactly those three routes, plus
-   direct cross-links in `RegisterForm`/`LoginForm`.
-3. Register success screen's "verification link" was the raw, POST-only API
-   path (`/v1/auth/verify-email?token=...`, missing `/api`, 404s in a
-   browser) rendered as if clickable — fixed to link to the real web page.
-4. `/verify-email`, `/forgot-password`, `/reset-password` all 404'd (API
-   existed, no screens — KI-026/KI-042) — fixed: three new `features/auth/*`
-   modules + pages, live-verified end to end (register → click link → "Email
-   подтверждён"). Both KIs narrowed, not fully resolved: real production
-   usability still needs ADR-007's pending email delivery.
-5. No loading indicator on `/organizer/rides/[id]/{edit,route,cover}` during
-   navigation (~2-3.5s of only the static `<h1>`) — fixed with a new shared
-   `loading.tsx` for that route segment (covers `participants`/`updates`
-   too).
+CR-106: `CabinetNavItem` (`apps/web/src/lib/cabinet/types.ts`) gained an
+optional `icon` field — a _name_ (`CabinetIconName`) into a new
+`apps/web/src/lib/cabinet/icons.ts` registry, resolved to the real
+`lucide-react` component inside `CabinetShell.tsx` (already a Client
+Component). This indirection exists because the first attempt put the
+actual icon component on the descriptor and passed it straight through —
+`ORGANIZER_NAV_ITEMS`/`PARTICIPANT_NAV_ITEMS` are built in a Server
+Component and handed to `CabinetShell` as a prop, and RSC can't serialize
+a function/component value across that boundary. Confirmed live: `/organizer`
+and `/me` both 500'd ("Functions cannot be passed directly to Client
+Components...") before the fix. `SiteHeader.tsx` needed no such
+indirection (it's a Server Component rendering icons directly in its own
+JSX). Every icon is `aria-hidden`, always paired with the existing text
+label, never icon-only.
 
-Two findings investigated, found not to be bugs, no code change: the 2GIS
-map's flat visual in a headless sandbox browser (same conclusion CR-098
-already reached — real key/tiles/markers confirmed via network/DOM, a
-sandbox WebGL rasterization limit, not an integration bug); the duplicate
-`GET /v1/organizers/me` request (React 18 Strict Mode's intentional
-dev-only double-invoke of `useEffect`, universal to this codebase's
-fetch pattern, absent from production builds).
+CR-105: below `md`, `RegistrationButton` repositions into a fixed bottom
+bar (`fixed inset-x-0 bottom-0`, `shadow-overlay`) instead of the CTA
+sitting 7 content blocks down; `md`+ stays exactly as before. One
+component instance repositioned by breakpoint (same pattern
+`CabinetShell.tsx`'s mobile nav already uses), not a second mounted copy —
+no duplicate pending/error state between a mobile and desktop copy.
+`app/rides/[id]/page.tsx` reads the flag server-side (`isFeatureEnabled`,
+never callable from a `'use client'` module) and threads it down as a
+prop; default off, unchanged behavior. Live-verified at 375×812 (fixed,
+pinned to viewport bottom) and 1280×900 (static, in normal flow) against
+the real dev stack with the flag on, then the dev server was restarted a
+second time without it to leave the environment as found.
 
-`pnpm --filter ui typecheck` clean; `pnpm --filter web typecheck`/`lint`/
-`build` clean; `pnpm --filter web test` 208/208 passing (10 new). No
-unchecked ticket remains in `docs/tasks.md`. Next logical step: pick a new
-one — candidates are KI-036 (route-detail map), the one-line `turbo.json`
-fix for KI-050 (`test` task's `env` allowlist missing `TEST_DATABASE_URL`),
-or ADR-007 (real email delivery) to fully close KI-026/KI-042.
+CR-103: `packages/ui` gained `Dialog`/`ConfirmDialog`/`Toast`
+(`ToastProvider`/`useToast`, fails soft to a no-op with no provider
+ancestor — resolving `docs/design.md` §9's `Dialog`/`Toast` half of
+KI-020, now the third consecutive non-trivial primitive to hand-vendor
+rather than resolve the shadcn CLI-targeting question). `RegistrationButton.tsx`:
+cancel/leave-waitlist now open a confirm dialog instead of firing
+immediately; all four state-changing actions show a success toast.
+`ToastProvider` mounted once, at the root, in `apps/web/src/app/
+layout.tsx`. Scope deliberately limited to the critique's P0 — the seven
+pre-existing `window.confirm()` sites elsewhere (avatar/cover/route/stop/
+route-point delete, ride cancel) are untouched, a real but out-of-scope
+inconsistency, not fixed here.
+
+CR-104: new `GET /v1/rides/mine/summary` (`apps/api`'s `rides` module) —
+ride counts by status plus active-registration/waitlist counts across
+every ride the caller organizes, 3 small indexed queries run in parallel
+(not one multi-join query, which would fan out and double/triple-count
+rows) — same "batched, not N+1" precedent as `reviews.service.ts`'s
+`getOrganizerRatingSummary`. New `RideSummaryWidget`
+(`apps/web/src/features/organizer/rides/components/`), registered into
+`ORGANIZER_WIDGETS` (ADR-009) at order 20, right after the profile widget.
+Zero rides renders as a normal all-zero ready state, not a special empty
+state — `/organizer/rides` already owns "create your first ride".
+
+Validation (both tickets): `pnpm --filter ui test` 106/106; `pnpm --filter
+api test` 375/378 (3 pre-existing skips); `pnpm --filter web test`
+216/216; typecheck/lint clean across `types`/`api`/`ui`/`web`;
+`NODE_ENV=production pnpm --filter web build` clean both times.
+Live-verified end to end against a real running stack, no mocks: CR-103's
+register/cancel/dismiss/confirm flow all showed correct dialog/toast
+behavior with zero console errors/failed requests; CR-104's widget showed
+the real database counts (1 ride, 1 open for registration, 1 active
+registration, 0 waitlisted) for the same seeded organizer/ride CR-103 used.
+Hit the same unrelated environment issue twice: running a production
+`next build` against a live `next dev` server's `.next` directory corrupts
+it — restarted the dev server with a fresh `.next` both times; not a
+Coffee Ride code issue, worth avoiding next time (stop the dev server
+first, or build from a separate checkout) rather than re-discovering it.
+
+`docs/tasks.md` has no unchecked ticket left again. Two real, un-scheduled
+UI gaps remain (not tracked as open `known-issues.md` entries, just noted
+in prior sessions' own follow-ups): `MapProvider.geocode`/`reverseGeocode`
+still has zero UI consumers (KI-032), and discovery's filters still cover
+only `bicycleType` (KI-030, no design-doc spec yet for distance/difficulty/
+price/date-range).
 
 ## Implemented
 
@@ -118,8 +171,9 @@ script) — the `.dark` tokens had existed unused since CR-063. `/`, `/register`
 live in a `(public)` route group sharing a new `SiteHeader` (CR-099) — the only nav
 between them and into a cabinet previously required typing a URL. Screens:
 `/register`, `/login`, `/verify-email`, `/forgot-password`, `/reset-password` (last
-three new, CR-099 — narrows KI-026/KI-042, real usability still blocked on ADR-007's
-pending email delivery), `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
+three new, CR-099, now backed by real email delivery — CR-100, ADR-007 — though
+KI-026/KI-042 stay narrowed pending a configured sender + a live-network-verified
+send, see "Current task"), `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
 `/organizer` (dashboard) + `/organizer/profile` + `/organizer/rides`
 (list/new/[id]/edit/[id]/route/[id]/participants/[id]/updates), `/` (public
 discovery — list/map toggle, bicycleType filter, upcoming-only sort) and
@@ -269,7 +323,7 @@ cleanup running against `.env`'s real `DATABASE_URL`).
 
 - terminology (§6-7, §13), component set — `MetricTile`/`MetricRow`, `StatusBadge`,
   `DifficultyScale`, `Skeleton`, `EmptyState`, `ErrorState`, `Button`/`Input`/
-  `FormField`/`Card`/`Textarea`.
+  `FormField`/`Card`/`Textarea`, `Avatar`, `Dialog`/`ConfirmDialog`/`Toast` (CR-103).
 
 **packages/maps-core / packages/maps-2gis**: provider-neutral `MapProvider` interface
 (ADR-010) + a 2GIS REST adapter (geocode/reverseGeocode/getRoute, no SDK dependency). A
@@ -295,9 +349,17 @@ override). `DiscoveryMap` (new) replaces `RideMapPlaceholder` on `/`, plotting e
 published ride's `startLat`/`startLng`; falls back to the same placeholder on a missing
 key or failed render. Live-verified in a real headless browser: real key/style/tile
 requests all `200`, three markers at three distinct positions matching three seeded
-rides, zero console errors — KI-031's discovery half is resolved. The route-detail map
-(`RouteMapPlaceholder`, `Route.geometry` polyline, `RoutePoint`/`Stop` markers) is
-untouched, deliberately deferred to KI-036.
+rides, zero console errors — KI-031's discovery half is resolved.
+
+CR-101 (2026-09-20, resolves KI-036): the route-detail map (`RouteMapPlaceholder` →
+real render) is now done too — `MapMarkerInput` gained optional `color`/`label`,
+`MapHandle` gained `setPolyline`, both implemented in `packages/maps-2gis` (a
+`color`/`label` marker renders as an `HtmlMarker` colored dot + glyph instead of the
+plain SDK pin). Also fixed here: a per-container generation guard in
+`create2GisMapRenderer` that prevents React Strict Mode's dev-only double-effect-invoke
+from constructing two live `Map` instances on one container (the stale one's `destroy()`
+was wiping out the surviving instance's canvas) — this had been latently present in
+`DiscoveryMap` too since CR-098.
 
 **packages/resilience** (new, CR-049): shared `callWithResilience` (timeout via
 `AbortSignal` + bounded retry with jittered backoff) and `CircuitBreaker`
@@ -476,15 +538,17 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   geometry parsing) fixed (KI-016, resolved CR-093), but `MapProvider` still has zero
   real consumers — no geocode-by-address UI (KI-032). MapGL rendering is now real and
   live-verified on the discovery map (CR-098, ADR-020, KI-031's discovery half
-  resolved); the route-detail map (KI-036) stays an open follow-up, still showing its
-  degraded placeholder. A ride's finish point has no coordinates (KI-033); route points
-  have no participant-facing UI yet, API + organizer management only, pending real map
-  rendering (KI-036).
+  resolved); the route-detail map is now real too (CR-101, KI-036 resolved). A ride's
+  finish point has no coordinates (KI-033); route points now have a participant-facing
+  UI too (CR-101's `RouteMap`), no longer organizer-only.
 - `/verify-email`, `/forgot-password`, `/reset-password` screens now exist (CR-099,
-  narrows KI-026/KI-042) and are live-verified end to end in dev/QA. Real end-to-end
-  use by a production user still needs ADR-007's still-Pending email delivery — the
-  reset token still isn't exposed over HTTP in any environment, by design
-  (no-account-enumeration requirement) — a screen alone doesn't close that half.
+  narrows KI-026/KI-042) and are live-verified end to end in dev/QA. Real email
+  delivery now exists too (CR-100, ADR-007 Accepted — Unisender Go, behind
+  `apps/api/src/lib/email/`), but KI-026/KI-042 stay narrowed rather than resolved:
+  no sender is verified in the account yet (`EMAIL_FROM_ADDRESS` unset,
+  `app.emailProvider` is `null`), and this sandbox can't resolve `unisender.ru`
+  (KI-055) to exercise a real send either way. The reset token still isn't exposed
+  over HTTP in any environment, by design (no-account-enumeration requirement).
 - Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
   when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
   pre-CR-050 direct synchronous insert when it isn't. Live connection-level
@@ -656,8 +720,14 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   `eslint.config.mjs` override beyond that one `files` path;
 - `DiscoveryMap`'s fallback to `RideMapPlaceholder` on a missing key or a
   failed `render()`/`load()` call — never let a map surface show a blank
-  panel (`docs/design.md` §10).
+  panel (`docs/design.md` §10);
+- `packages/maps-2gis/src/render.ts`'s per-container `containerGeneration` guard in
+  `create2GisMapRenderer` — a `render()` call whose generation gets superseded while
+  the SDK is still loading must keep returning an inert no-op `MapHandle`, never
+  constructing a second live `mapglAPI.Map` on a container another call already claimed
+  (CR-101) — this is what keeps React Strict Mode's dev-only double-effect-invoke from
+  silently blanking the map.
 
 ## Last updated
 
-2026-09-20 (CR-098)
+2026-09-21 (CR-106)

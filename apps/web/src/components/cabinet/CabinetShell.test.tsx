@@ -62,6 +62,24 @@ describe('CabinetShell', () => {
     expect(links[1]).toHaveAttribute('href', '/fake/second');
   });
 
+  // CR-106 (`/impeccable critique` P2): `icon` is optional (`fakeNavItems`
+  // above omits it, still renders fine) — this covers the supplied case.
+  it('renders a nav item icon when the descriptor provides one', async () => {
+    getCurrentUserMock.mockResolvedValue({ user });
+    const itemsWithIcon: CabinetNavItem[] = [
+      { label: 'С иконкой', href: '/fake/icon', order: 10, icon: 'Bell' },
+    ];
+
+    const { container } = render(
+      <CabinetShell navItems={itemsWithIcon}>
+        <p>Содержимое кабинета</p>
+      </CabinetShell>,
+    );
+
+    await screen.findByText('Содержимое кабинета');
+    expect(container.querySelector('nav svg')).toBeInTheDocument();
+  });
+
   it('redirects to /login on an unauthenticated session, without rendering children', async () => {
     getCurrentUserMock.mockRejectedValue(
       new ApiError({

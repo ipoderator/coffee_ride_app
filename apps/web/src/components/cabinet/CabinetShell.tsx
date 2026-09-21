@@ -8,6 +8,7 @@ import { CABINET_TERMS, ErrorState, Skeleton } from 'ui';
 import { ApiError } from '@/lib/api/errors';
 import { getCurrentUser } from '@/lib/api/current-user';
 import { CurrentUserContext } from '@/lib/auth/current-user-context';
+import { CABINET_ICONS } from '@/lib/cabinet/icons';
 import type { CabinetNavItem } from '@/lib/cabinet/types';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -95,15 +96,19 @@ export function CabinetShell({
           aria-label={CABINET_TERMS.navLabel}
           className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around gap-1 border-t border-border bg-bg p-2 md:sticky md:top-6 md:inset-x-auto md:bottom-auto md:z-auto md:w-48 md:shrink-0 md:flex-col md:items-stretch md:justify-start md:gap-1 md:border-t-0 md:bg-transparent md:p-0"
         >
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-md px-3 py-2 text-center text-sm font-medium text-text-secondary hover:text-text md:text-left"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon ? CABINET_ICONS[item.icon] : null;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex flex-col items-center gap-1 rounded-md px-3 py-2 text-center text-sm font-medium text-text-secondary hover:text-text md:flex-row md:justify-start md:text-left"
+              >
+                {Icon && <Icon className="h-5 w-5" aria-hidden="true" />}
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         <main className="min-w-0 flex-1">{children}</main>
       </div>

@@ -10,4 +10,5 @@ export const notificationsNavItem: CabinetNavItem = {
   label: CABINET_TERMS.notificationsNavLabel,
   href: '/me/notifications',
   order: 30,
+  icon: 'Bell',
 };

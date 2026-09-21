@@ -1,3 +1,4 @@
+import { Home, LayoutDashboard, LogIn, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { SITE_HEADER_TERMS } from 'ui';
 
@@ -22,19 +23,32 @@ export function SiteHeader() {
           {SITE_HEADER_TERMS.brand}
         </Link>
         <div className="flex items-center gap-4 text-sm font-medium">
-          <Link href="/" className="text-text-secondary hover:text-text">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-text-secondary hover:text-text"
+          >
+            <Home className="h-4 w-4" aria-hidden="true" />
             {SITE_HEADER_TERMS.homeLink}
           </Link>
-          <Link href="/login" className="text-text-secondary hover:text-text">
+          <Link
+            href="/login"
+            className="flex items-center gap-1.5 text-text-secondary hover:text-text"
+          >
+            <LogIn className="h-4 w-4" aria-hidden="true" />
             {SITE_HEADER_TERMS.loginLink}
           </Link>
           <Link
             href="/register"
-            className="text-text-secondary hover:text-text"
+            className="flex items-center gap-1.5 text-text-secondary hover:text-text"
           >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
             {SITE_HEADER_TERMS.registerLink}
           </Link>
-          <Link href="/me" className="text-primary hover:underline">
+          <Link
+            href="/me"
+            className="flex items-center gap-1.5 text-primary hover:underline"
+          >
+            <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
             {SITE_HEADER_TERMS.cabinetLink}
           </Link>
         </div>

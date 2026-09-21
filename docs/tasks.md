@@ -905,3 +905,13 @@ layout.tsx`. See `docs/changelog.md`.
       of rendering 7 content blocks down; `md`+ is unchanged (in normal
       flow). Behind `FEATURE_STICKY_REGISTRATION_CTA` per
       `.claude/rules/extensibility.md`/CR-055. See `docs/changelog.md`.
+- [x] CR-106 Icons in the cabinet nav / site header — the `/impeccable
+    critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
+      nav/site header/mobile bottom tab bar all plain text"), done
+      2026-09-21: `CabinetNavItem` gained an optional icon (a name resolved
+      against a small lookup map in `CabinetShell.tsx`, not the
+      `lucide-react` component itself — passing the component directly
+      through a Server→Client Component prop 500'd, a real bug caught and
+      fixed live before shipping). `SiteHeader.tsx` got icons directly
+      (it's a Server Component, no such indirection needed). See
+      `docs/changelog.md`.
