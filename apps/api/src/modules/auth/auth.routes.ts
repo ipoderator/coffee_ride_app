@@ -10,6 +10,10 @@ import {
 import type { Env } from '../../env.js';
 import { isAccountRateLimited } from '../../lib/account-rate-limit.js';
 import { requireAuth, SESSION_COOKIE_NAME } from '../../plugins/auth.js';
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from '../notifications/notifications.service.js';
 import { userResponseSchema } from '../users/user-response.schema.js';
 import {
   AuthServiceError,
@@ -124,14 +128,25 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         request.body.password,
       );
 
-      // Dev-only convenience (this ticket's scope boundaries — real email
-      // delivery is ADR-007, still Pending): never populated in production,
-      // never logged. Not a clickable page — no verify-email web screen exists
-      // yet — but enough for the live-check/manual QA path via a direct POST.
+      // Dev-only convenience, unchanged by CR-100/ADR-007: never populated in
+      // production, never logged — the raw API path here, not the real
+      // `/verify-email` web page `apps/web`'s `RegisterForm` links to
+      // (CR-099); kept for the direct-POST live-check/manual QA path.
       const body: { user: typeof user; verificationUrl?: string } = { user };
       if (env.NODE_ENV !== 'production') {
         body.verificationUrl = `/v1/auth/verify-email?token=${verificationToken}`;
       }
+
+      // CR-100 (ADR-007): the real email, independent of the dev-only field
+      // above — sent (or enqueued) either way, in every environment. A no-op
+      // when Unisender isn't configured (`app.emailProvider === null`).
+      await sendVerificationEmail(
+        app.log,
+        app.notificationQueue,
+        app.emailProvider,
+        user.email,
+        `${env.WEB_ORIGIN}/verify-email?token=${verificationToken}`,
+      );
 
       return reply.status(201).send(body);
     },
@@ -198,13 +213,27 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         enforceAccountRateLimit('forgot-password', request.body.email),
     },
     async (request, reply) => {
-      // Result is deliberately discarded — `.claude/rules/security.md`: the
-      // response must be identical whether or not the email belongs to a
-      // real account. `204` carries no body, so there is nothing for the two
-      // cases to differ on. The new per-account 429 above doesn't weaken
-      // this: it fires purely from request *count* against that exact email
-      // string, identical whether or not it belongs to a real account.
-      await requestPasswordReset(app.db, request.body.email);
+      // The response stays identical whether or not the email belongs to a
+      // real account (`.claude/rules/security.md`: no account enumeration)
+      // — `204`, no body, always, regardless of the branch below. The new
+      // per-account 429 above doesn't weaken this: it fires purely from
+      // request *count* against that exact email string, identical whether
+      // or not it belongs to a real account.
+      const result = await requestPasswordReset(app.db, request.body.email);
+
+      // CR-100 (ADR-007): only reached, and only sends, when the account is
+      // real — the branch itself is invisible to the caller either way,
+      // since the response below never depends on it.
+      if (result.userFound) {
+        await sendPasswordResetEmail(
+          app.log,
+          app.notificationQueue,
+          app.emailProvider,
+          request.body.email,
+          `${env.WEB_ORIGIN}/reset-password?token=${result.resetToken}`,
+        );
+      }
+
       return reply.status(204).send();
     },
   );

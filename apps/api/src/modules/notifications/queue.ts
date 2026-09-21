@@ -119,7 +119,12 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
   const worker = new Worker<NotificationJobData, void, NotificationJobName>(
     QUEUE_NAME,
     async (job: Job<NotificationJobData, void, NotificationJobName>) => {
-      await processNotificationJob(app.db, job.name, job.data);
+      await processNotificationJob(
+        app.db,
+        app.emailProvider,
+        job.name,
+        job.data,
+      );
     },
     {
       connection: consumerConnection,

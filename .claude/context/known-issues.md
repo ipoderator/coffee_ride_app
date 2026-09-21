@@ -373,6 +373,21 @@ never returned (ADR-007's real email delivery is still Pending), so a real
 organizer still has no way to ever reach this screen with a valid token —
 the screen existing doesn't by itself close that half. Next action unchanged
 until ADR-007 lands.
+Update 2026-09-20 (CR-100, ADR-007 now Accepted): real email delivery now
+exists — `POST /v1/auth/register` sends (or enqueues) a verification email
+via Unisender Go alongside the unchanged dev-only `verificationUrl` field.
+Still not fully resolved, for two independent reasons: (1) the user hasn't
+yet configured `EMAIL_FROM_ADDRESS` (no sender is verified in their
+Unisender Go account) — until then `app.emailProvider` stays `null` and the
+producer silently no-ops, unchanged from before this session; (2)
+`unisender.ru`/`go1.unisender.ru` fail DNS resolution (`SERVFAIL`) from
+inside this sandbox specifically (confirmed via `nslookup` — not a blanket
+`.ru` block, `ya.ru` resolves fine) — a real send has never actually been
+exercised live, only against mocked `fetch` in `unisender-provider.test.ts`.
+Next action: user sets `EMAIL_FROM_ADDRESS` to a real verified sender, then
+the first session with real network access to `unisender.ru` should send
+one real email end to end (register → check inbox → click link) before
+this is trusted as more than "the adapter's request shape is correct."
 
 ### KI-034 — `routes.distanceKm`/`elevationGainMeters` (GPX-computed) and `rides.distanceKm`/`elevationGainMeters` (organizer-entered) are not reconciled
 
@@ -540,6 +555,15 @@ Still narrowed, not fully resolved: this closes the "no screens" half only
 — "the reset token is never exposed over HTTP, even in dev" is unchanged
 and deliberately so, and a real user still cannot discover their own token
 without ADR-007's real email delivery landing. Next action unchanged.
+Update 2026-09-20 (CR-100, ADR-007 now Accepted): `POST /v1/auth/
+forgot-password` now sends (or enqueues) a real reset email via Unisender
+Go when the account exists — the route's response stays byte-identical
+`204` either way, so this adds no enumeration surface. Same two open
+reasons as KI-026's identical update: no `EMAIL_FROM_ADDRESS` configured
+yet (`app.emailProvider` stays `null`, producer no-ops), and this sandbox
+can't resolve `unisender.ru` (`nslookup` confirms `SERVFAIL`) to exercise a
+real send. Next action: same as KI-026's — configure a verified sender,
+then verify one real send from an environment with real network access.
 
 ### KI-043 — CR-074's two Dockerfiles have never had a real `docker build` run against them
 
@@ -689,6 +713,34 @@ native database needs its own `pnpm --filter db db:migrate` run after any
 session that adds a migration but only validated/live-verified against
 `TEST_DATABASE_URL` — the same two-Postgres-instances setup KI-049 already
 flagged, one more concrete consequence of it.
+
+### KI-055 — `unisender.ru` (all subdomains) fails DNS resolution from this sandbox
+
+Status: open. Discovered: 2026-09-20 (CR-100, ADR-007 session).
+Problem: `nslookup go1.unisender.ru`/`go2.unisender.ru` both return
+`SERVFAIL` from this sandbox's resolver — not a blanket `.ru` TLD block
+(`nslookup ya.ru` resolves normally to real addresses), specific to this
+one vendor's domain. `WebFetch` against `godocs.unisender.ru` (API docs)
+failed identically (`ENOTFOUND`) earlier the same session, before any code
+existed to blame — confirming this is a standing environment/network
+constraint, not a bug in `lib/email/unisender-provider.ts`.
+Impact: medium — blocks live end-to-end verification of the real Unisender
+Go integration (CR-100) in this specific sandbox. Zero impact on
+correctness confidence otherwise: the adapter's request shape was verified
+against the real `django-anymail` Unisender Go backend source (not
+guessed), and `unisender-provider.test.ts` exercises its parsing/error-
+normalization logic against mocked `fetch` responses matching that verified
+shape.
+Workaround: none needed for development — the adapter degrades identically
+whether Unisender is unconfigured (`app.emailProvider === null`) or
+configured-but-unreachable-from-here; either way every producer no-ops
+without throwing (`.claude/rules/resilience.md`).
+Next action: the first session with real network access to `unisender.ru`
+(the user's own machine, CI, or production) should send one real
+verification/reset email end to end (register or forgot-password → check a
+real inbox → click the link) once `EMAIL_FROM_ADDRESS` is configured to a
+sender verified in the Unisender Go account — see KI-026/KI-042's matching
+"Next action."
 
 ## Resolved
 

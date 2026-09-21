@@ -13,6 +13,7 @@ import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerErrorReporting } from './plugins/error-reporting.js';
 import { registerOpenApi } from './plugins/openapi.js';
+import { registerEmail } from './plugins/email.js';
 import { registerS3 } from './plugins/s3.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
 import { registerNotificationQueue } from './modules/notifications/queue.js';
@@ -77,8 +78,9 @@ export async function buildApp(env: Env) {
   await registerOpenApi(app);
   registerDb(app, env);
   registerS3(app, env);
-  // Needs app.db (worker's job processor reads/writes notifications) — must come
-  // after registerDb.
+  registerEmail(app, env);
+  // Needs app.db/app.emailProvider (worker's job processor reads/writes
+  // notifications and sends email) — must come after registerDb/registerEmail.
   registerNotificationQueue(app, env);
 
   // CR-027: GPX file uploads. `fileSize` is the actual event-loop-protection

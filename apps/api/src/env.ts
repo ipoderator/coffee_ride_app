@@ -43,6 +43,31 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_BUCKET: z.string().optional(),
   MAPS_2GIS_API_KEY: z.string().optional(),
+  // CR-100 (ADR-007). Optional, same "not configured is a degraded mode"
+  // shape as MAPS_2GIS_API_KEY/S3_* above: unset means `app.emailProvider`
+  // is `null` and auth email-sending producers silently no-op (dev-only
+  // token stays available via the API response, same as before this
+  // ticket). `UNISENDER_API_KEY`/`EMAIL_FROM_ADDRESS` must both be set to
+  // activate — `plugins/email.ts` requires the pair together, same
+  // all-or-nothing gate `plugins/s3.ts` uses for its five S3_* vars.
+  UNISENDER_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  // Unisender Go is split across data centers (go1/go2) per account — this
+  // must match whichever one the account was created on (shown in its
+  // dashboard), not a single fixed vendor URL.
+  UNISENDER_API_URL: z
+    .string()
+    .url()
+    .default('https://go1.unisender.ru/ru/transactional/api/v1/'),
+  // Must be a sender address verified in the Unisender Go account — no safe
+  // universal default exists (account-specific), unlike EMAIL_FROM_NAME.
+  EMAIL_FROM_ADDRESS: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().email().optional(),
+  ),
+  EMAIL_FROM_NAME: z.string().default('Coffee Ride'),
   // CR-079/KI-006. Optional: no error-tracking vendor is decided yet (no ADR
   // names one) — unset means `app.reportError` (plugins/error-reporting.ts)
   // only logs structurally. Same empty-string-from-Compose preprocessing as

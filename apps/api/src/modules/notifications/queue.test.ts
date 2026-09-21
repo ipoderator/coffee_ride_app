@@ -98,6 +98,7 @@ function createFakeApp() {
     log: { error: vi.fn() },
     reportError: vi.fn(),
     db: { marker: 'fake-db' },
+    emailProvider: null,
     _closeHooks: closeHooks,
   };
   return app as unknown as FastifyInstance & {
@@ -175,6 +176,7 @@ describe('registerNotificationQueue', () => {
 
     expect(processNotificationJobMock).toHaveBeenCalledWith(
       app.db,
+      app.emailProvider,
       'ride_cancelled',
       { rideId: 'r1' },
     );

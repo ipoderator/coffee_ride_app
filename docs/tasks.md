@@ -799,3 +799,31 @@ loading.tsx` gives that segment's five leaves an immediate loading
 ui typecheck`/`pnpm --filter web typecheck,lint,build` clean; `pnpm
 --filter web test` 208/208 passing (10 new). Live-verified in a real
       browser against the real running stack. See `docs/changelog.md`.
+- [x] CR-100 Real email delivery via Unisender Go (ADR-007: Pending →
+      Accepted) — done 2026-09-20: closes the remaining blocker KI-026/
+      KI-042 both named. New `apps/api/src/lib/email/{email-provider,
+  unisender-provider}.ts` adapter (no new workspace package — single
+      consumer, same shape as `route-storage.ts`'s S3 wrapper), wrapped in
+      `callWithResilience` (timeout + circuit breaker, deliberately no
+      retry — email send isn't idempotency-safe). Reuses CR-050's existing
+      `notifications` BullMQ queue (two new job types,
+      `verification_email`/`password_reset_email`) rather than a parallel
+      mechanism. `POST /v1/auth/register`/`POST /v1/auth/forgot-password`
+      now send real email alongside their unchanged existing behavior
+      (dev-only `verificationUrl` field; identical `204` regardless of
+      account existence). New env vars (`UNISENDER_API_KEY`,
+      `UNISENDER_API_URL`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`), all
+      optional — unset means `app.emailProvider` is `null` and every
+      producer no-ops, same degraded-mode shape as `app.s3`/2GIS. User
+      supplied a real Unisender Go API key (stored in local `.env` only,
+      never committed/logged). `pnpm --filter api typecheck/lint/test/build`
+      all clean (374 passing, 5 new); live-verified register/forgot-password
+      boot and respond correctly against the real running stack with the
+      new plugin registered. Not fully resolved (KI-026/KI-042 stay
+      narrowed, new KI-055): no `EMAIL_FROM_ADDRESS` configured yet (no
+      verified sender in the user's Unisender Go account), and this sandbox
+      can't resolve `unisender.ru` at all (DNS `SERVFAIL`, confirmed not a
+      blanket `.ru` block) — a real send has never been exercised live, only
+      against mocked `fetch` matching the real Unisender Go request/response
+      shape (verified against the `django-anymail` backend source, not
+      guessed). See `docs/changelog.md`.

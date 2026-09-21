@@ -1271,3 +1271,108 @@ screens alone don't close that. A manual dark-theme toggle remains a reasonable 
 enhancement if a real user asks for one. The Strict-Mode double-fetch pattern is
 universal across this codebase's data-fetching components — worth an SWR/React Query
 adoption discussion someday, but out of scope for a QA-findings fix.
+
+## 2026-09-20 — CR-100 — Real email delivery via Unisender Go (ADR-007: Pending → Accepted)
+
+User supplied a real Unisender Go API key and asked to connect it. Closes the remaining
+blocker KI-026/KI-042 both named: CR-099's `/verify-email`/`/reset-password` screens
+existed and worked in dev/QA, but a real production user could never reach either
+without real email delivery.
+
+Adapter, not a new package: only `apps/api` ever sends email (unlike maps, which needed
+both `apps/web` rendering and `apps/api` geocoding, justifying ADR-010's two-package
+split) — `apps/api/src/lib/email/{email-provider,unisender-provider}.ts` is a single
+consumer's adapter module, same shape as `modules/rides/route-storage.ts`'s S3 wrapper,
+not a `packages/notifications-*` workspace member. `EmailProvider` interface + real
+`UnisenderEmailProvider` implementation, wrapped in `callWithResilience` (8s timeout, one
+shared `CircuitBreaker`, **deliberately no retry** — unlike S3's PUT/GET/DELETE-by-key,
+sending a transactional email is not idempotency-safe: a retry after a client-side
+timeout could double-send if the first attempt actually succeeded server-side;
+`.claude/rules/resilience.md`'s "don't retry a non-idempotent operation" applies
+directly). `ResilienceError` normalized into `EmailDeliveryError` at the adapter
+boundary, never crossing it.
+
+Unisender Go's REST contract was verified against the real `django-anymail` project's
+Unisender Go backend source on GitHub, not guessed (`godocs.unisender.ru`, the vendor's
+own docs domain, fails DNS resolution from this sandbox — see KI-055 below): `POST
+{apiUrl}email/send.json`, header `X-API-KEY: <key>`, body `{ message: { from_email,
+from_name, subject, body: { html, plaintext }, recipients: [{ email }] } }`; success is
+`{ status: "success", ... }`; a per-recipient rejection surfaces in `failed_emails`, not
+as a non-2xx status.
+
+Delivery reuses CR-050's existing `notifications` BullMQ queue rather than a parallel
+mechanism: `notifications.service.ts` gained two new job names
+(`verification_email`/`password_reset_email`), two new producer functions
+(`sendVerificationEmail`/`sendPasswordResetEmail` — same enqueue-or-direct-fallback shape
+every existing producer already uses), and `processNotificationJob` gained an
+`emailProvider` parameter (`queue.ts`'s worker call site updated to match). Neither
+producer ever logs the recipient's email address or the raw token embedded in the
+verify/reset URL (`.claude/rules/security.md`) — a failure logs only `{ err }`.
+
+`apps/api/src/plugins/email.ts` (new) decorates `app.emailProvider`, registered in
+`app.ts` right after `registerS3`/before `registerNotificationQueue` (the worker's job
+processor reads `app.emailProvider` at call time). Same all-or-nothing gate
+`registerS3` uses for its five `S3_*` vars: both new `UNISENDER_API_KEY` and
+`EMAIL_FROM_ADDRESS` env vars must be set together to activate a real provider — either
+alone, or neither, leaves `app.emailProvider = null`, and every producer silently no-ops
+(same degraded-mode shape as `app.s3`/2GIS, never a boot-time crash). `env.ts` gained
+these two plus `UNISENDER_API_URL` (defaulted to `go1`'s endpoint — Unisender Go splits
+accounts across `go1`/`go2` data centers) and `EMAIL_FROM_NAME` (defaulted to "Coffee
+Ride").
+
+`auth.routes.ts`: `POST /v1/auth/register` now calls `sendVerificationEmail` with
+`${WEB_ORIGIN}/verify-email?token=...` (the real web page CR-099 built) alongside its
+unchanged dev-only `verificationUrl` response field (still the raw, POST-only API path —
+kept for the direct-POST live-check/manual-QA workflow, not meant to be followed in a
+browser). `POST /v1/auth/forgot-password` now calls `sendPasswordResetEmail` only when
+`requestPasswordReset` reports `userFound: true` — the HTTP response stays the identical
+`204` regardless of that branch (`.claude/rules/security.md`: no account enumeration is
+enforced by the response never depending on it, not by anything in the email-sending
+call itself).
+
+The real API key was pasted directly into chat — treated as a secret throughout: written
+only to the local, gitignored `.env` (never `.env.example`, which got placeholder-only
+entries), never logged, never appears in this changelog entry or any commit.
+
+Not fully resolved, for two independent reasons, both now tracked (KI-026/KI-042 stay
+narrowed; new KI-055):
+
+1. No `EMAIL_FROM_ADDRESS` configured — no sender is verified in the user's Unisender Go
+   account yet, so `app.emailProvider` stays `null` today and every producer's real
+   branch has never actually executed outside a test.
+2. `unisender.ru` (`go1`/`go2` subdomains, and the docs domain `godocs.unisender.ru`)
+   fails DNS resolution from this sandbox specifically — confirmed via `nslookup`
+   (`SERVFAIL`) and not a blanket `.ru` TLD block (`ya.ru` resolves fine). A real send
+   has never been exercised live in this environment, only against mocked `fetch`
+   matching the verified real request/response shape.
+
+Files: `apps/api/src/env.ts`, `.env.example`, `apps/api/src/lib/email/{email-provider,
+unisender-provider,unisender-provider.test}.ts`, `apps/api/src/plugins/email.ts` (new),
+`apps/api/src/app.ts`, `apps/api/src/modules/notifications/{notifications.service,
+queue,queue.test}.ts`, `apps/api/src/modules/auth/auth.routes.ts`.
+
+Decisions: ADR-007 updated in place (`docs/decisions.md`) — `Status: Pending` →
+`Status: Accepted 2026-09-20 (CR-100)`, provider named (Unisender Go), adapter shape and
+queue-reuse rationale recorded. Same in-place-status-transition precedent ADR-003 already
+established in this doc (not a new ADR number — ADR-007's own text was the thing this
+ticket resolved, same as any other Pending→Accepted lifecycle step).
+
+Validation: `pnpm --filter api typecheck`/`lint` clean; `pnpm --filter api test`
+374/375 passing, 1 skipped (5 new: `unisender-provider.test.ts`'s request-shape/error-
+normalization/no-retry cases against mocked `fetch`); `pnpm --filter api build` clean.
+Live-verified against the real running stack (real Postgres): killed several stray
+leftover `tsx watch src/server.ts` processes from earlier sessions first (one was
+silently absorbing requests on :4000 under the pre-CR-100 code, which would have made an
+initial live check pass against the wrong build entirely — caught before it did), then
+booted a fresh server with the new env vars/plugin — `/health` `200`, `POST /v1/auth/
+register` `201` with the unchanged dev-only field, `POST /v1/auth/forgot-password`
+`204` identically for both a real and a nonexistent account, zero errors in the server
+log, no secret/token/email address logged anywhere. Test accounts deleted from the dev
+DB afterward; dev server stopped.
+
+Follow-up: user needs to configure `EMAIL_FROM_ADDRESS` (a sender verified in their
+Unisender Go account) before any real email can send; the first session with real
+network access to `unisender.ru` should then verify one real send end to end (KI-055's
+own "Next action"). `docker-compose.prod.yml`'s env passthrough (KI-046's pattern) will
+need these four new vars added when CR-075/ADR-018's production manifest is actually
+exercised end to end (KI-045) — not attempted this session, out of scope.

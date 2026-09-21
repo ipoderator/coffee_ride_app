@@ -21,6 +21,7 @@ import {
   decodeCursor,
   encodeCursor,
 } from '../../lib/cursor.js';
+import type { EmailProvider } from '../../lib/email/email-provider.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RegistrationServiceError`/`RideServiceError` (`.claude/rules/backend.md`).
@@ -78,7 +79,11 @@ export interface NotificationLogger {
 // dependency on the queue module — `queue.ts` imports these types plus
 // {@link processNotificationJob} from here, never the reverse.
 export type NotificationJobName =
-  'registration_confirmed' | 'ride_update' | 'ride_cancelled';
+  | 'registration_confirmed'
+  | 'ride_update'
+  | 'ride_cancelled'
+  | 'verification_email'
+  | 'password_reset_email';
 
 export interface RegistrationConfirmedJobData {
   userId: string;
@@ -94,8 +99,26 @@ export interface RideCancelledJobData {
   rideId: string;
 }
 
+// CR-100 (ADR-007): the raw, single-use token is embedded in the URL at
+// issuance time (the DB only ever stores its hash — `auth.service.ts`'s
+// `hashToken`) — there is no other point after this where it could be
+// recovered to build the link, so it must travel through the job payload.
+export interface VerificationEmailJobData {
+  email: string;
+  verifyUrl: string;
+}
+
+export interface PasswordResetEmailJobData {
+  email: string;
+  resetUrl: string;
+}
+
 export type NotificationJobData =
-  RegistrationConfirmedJobData | RideUpdateJobData | RideCancelledJobData;
+  | RegistrationConfirmedJobData
+  | RideUpdateJobData
+  | RideCancelledJobData
+  | VerificationEmailJobData
+  | PasswordResetEmailJobData;
 
 // Minimal handle every producer below needs — same "define the small interface
 // this module actually needs" pattern as {@link NotificationLogger}/`S3Handle`
@@ -294,6 +317,100 @@ export async function notifyRideCancelled(
   );
 }
 
+interface EmailContent {
+  subject: string;
+  html: string;
+  text: string;
+}
+
+function verificationEmailContent(verifyUrl: string): EmailContent {
+  return {
+    subject: 'Подтвердите email — Coffee Ride',
+    text: `Чтобы подтвердить email и активировать аккаунт, перейдите по ссылке:\n${verifyUrl}\n\nЕсли вы не регистрировались на Coffee Ride, просто проигнорируйте это письмо.`,
+    html: `<p>Чтобы подтвердить email и активировать аккаунт, перейдите по ссылке:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>Если вы не регистрировались на Coffee Ride, просто проигнорируйте это письмо.</p>`,
+  };
+}
+
+function passwordResetEmailContent(resetUrl: string): EmailContent {
+  return {
+    subject: 'Восстановление пароля — Coffee Ride',
+    text: `Чтобы задать новый пароль, перейдите по ссылке (действует 30 минут):\n${resetUrl}\n\nЕсли вы не запрашивали сброс пароля, просто проигнорируйте это письмо.`,
+    html: `<p>Чтобы задать новый пароль, перейдите по ссылке (действует 30 минут):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.</p>`,
+  };
+}
+
+// Raw send, no try/catch — same split as `insertRegistrationConfirmedNotification`:
+// shared by the worker's job processor and the no-queue-configured fallback path.
+// `emailProvider: null` (Unisender not configured, ADR-007/CR-100) is a silent
+// no-op, not an error — the dev-only token already reaches whoever needs it via
+// the API response (`auth.routes.ts`), same as before this ticket.
+async function sendEmail(
+  emailProvider: EmailProvider | null,
+  to: string,
+  content: EmailContent,
+): Promise<void> {
+  if (!emailProvider) return;
+  await emailProvider.send({ to, ...content });
+}
+
+/**
+ * CR-100 (ADR-007): fires after `registerUser`'s insert has already
+ * committed — never inside it, same "critical action must not depend on a
+ * non-critical side effect" split as {@link createRegistrationConfirmedNotification}.
+ * `.claude/rules/security.md`: never logs the token (embedded in `verifyUrl`)
+ * or the recipient's email address — the error log carries only `{ err }`.
+ */
+export async function sendVerificationEmail(
+  logger: NotificationLogger,
+  queue: NotificationQueue | null,
+  emailProvider: EmailProvider | null,
+  email: string,
+  verifyUrl: string,
+): Promise<void> {
+  try {
+    if (queue) {
+      await queue.add('verification_email', { email, verifyUrl });
+    } else {
+      await sendEmail(
+        emailProvider,
+        email,
+        verificationEmailContent(verifyUrl),
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to send verification email');
+  }
+}
+
+/**
+ * CR-100 (ADR-007): fires after `requestPasswordReset` has already
+ * committed the new token row. Called only when `requestPasswordReset`
+ * reports `userFound: true` — `.claude/rules/security.md`'s no-enumeration
+ * requirement is enforced by the route's response staying identical either
+ * way (always `204`), not by anything in this function.
+ */
+export async function sendPasswordResetEmail(
+  logger: NotificationLogger,
+  queue: NotificationQueue | null,
+  emailProvider: EmailProvider | null,
+  email: string,
+  resetUrl: string,
+): Promise<void> {
+  try {
+    if (queue) {
+      await queue.add('password_reset_email', { email, resetUrl });
+    } else {
+      await sendEmail(
+        emailProvider,
+        email,
+        passwordResetEmailContent(resetUrl),
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to send password reset email');
+  }
+}
+
 /**
  * CR-050: dispatches a job the worker in `./queue.ts` pulled off the
  * `notifications` BullMQ queue to the matching raw insert function. Throws on
@@ -305,6 +422,7 @@ export async function notifyRideCancelled(
  */
 export async function processNotificationJob(
   db: DbClient,
+  emailProvider: EmailProvider | null,
   name: NotificationJobName,
   data: NotificationJobData,
 ): Promise<void> {
@@ -331,6 +449,24 @@ export async function processNotificationJob(
         rideId,
         'ride_cancelled',
         null,
+      );
+      return;
+    }
+    case 'verification_email': {
+      const { email, verifyUrl } = data as VerificationEmailJobData;
+      await sendEmail(
+        emailProvider,
+        email,
+        verificationEmailContent(verifyUrl),
+      );
+      return;
+    }
+    case 'password_reset_email': {
+      const { email, resetUrl } = data as PasswordResetEmailJobData;
+      await sendEmail(
+        emailProvider,
+        email,
+        passwordResetEmailContent(resetUrl),
       );
       return;
     }

@@ -55,8 +55,22 @@ implementation details:
 
 ## ADR-007 — Notifications
 
-Status: Pending.
-Start with in-app notifications; external provider later behind an adapter.
+Status: Accepted 2026-09-20 (CR-100) for the external-provider half — the
+in-app half (CR-038/CR-039/CR-040/CR-041) was already built against this
+ADR's first sentence.
+Provider: Unisender Go (transactional email), for the verify-email/
+password-reset links CR-099's web screens need to actually be reachable by
+a real user. Behind an adapter (`apps/api/src/lib/email/{email-provider,
+unisender-provider}.ts`) — no separate `packages/notifications-*` workspace
+split like ADR-010's maps adapter, since only `apps/api` ever sends email
+(one consumer, not two); swapping providers later means a new
+`EmailProvider` implementation in that same directory, not a rewrite.
+Delivery reuses CR-050's existing `notifications` BullMQ queue (two new job
+types, `verification_email`/`password_reset_email`) rather than a parallel
+mechanism — same async-side-effect/resilience discipline already built for
+in-app notifications. `UNISENDER_API_KEY`/`EMAIL_FROM_ADDRESS` both optional
+in `env.ts`: unset means `app.emailProvider` is `null` and every producer
+no-ops, same degraded-mode shape as `app.s3`/2GIS — never a boot crash.
 
 ## ADR-008 — Modular monolith, not microservices (for MVP)
 

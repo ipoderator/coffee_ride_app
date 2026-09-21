@@ -700,6 +700,29 @@ already-defined `.dark` token set from `prefers-color-scheme` — no new
 dependency, no manual toggle, just the missing activation for tokens that
 had existed unused since CR-063.
 
+CR-100 (ADR-007, "Real email delivery via Unisender Go", 2026-09-20): `apps/api`
+gained its first email integration, `src/lib/email/{email-provider,unisender-
+provider}.ts` — an `EmailProvider` interface + real Unisender Go implementation,
+wrapped in `packages/resilience`'s `callWithResilience` (timeout + circuit
+breaker, no retry — email send isn't idempotency-safe). No new workspace
+package (unlike maps' `packages/maps-core`/`maps-2gis` split, ADR-010): only
+`apps/api` ever sends email, so this stays a module inside `apps/api`, same
+"single consumer, adapter-shaped, not a new package" precedent
+`route-storage.ts`'s S3 wrapper already set. New `src/plugins/email.ts`
+decorates `app.emailProvider` (`null` when unconfigured — same degraded-mode
+shape as `app.s3`). Delivery reuses `modules/notifications/queue.ts`'s
+existing CR-050 BullMQ queue rather than a parallel mechanism: two new job
+names (`verification_email`/`password_reset_email`), `processNotificationJob`
+gained an `emailProvider` parameter. `auth.routes.ts`'s register/
+forgot-password handlers call the new producers with a real
+`${WEB_ORIGIN}/verify-email?token=...`/`${WEB_ORIGIN}/reset-password?
+token=...` URL — the same web pages CR-099 built. Not fully resolved yet: no
+`EMAIL_FROM_ADDRESS` configured (`app.emailProvider` still `null` in this
+environment) and `unisender.ru` fails DNS resolution from this sandbox
+(KI-055) — a real send has never been exercised live, only against mocked
+`fetch` matching the real Unisender Go request shape (verified against the
+`django-anymail` backend source).
+
 ## Target structure
 
 apps/
