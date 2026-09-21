@@ -10,6 +10,18 @@ import type { LatLng } from './types.js';
 export interface MapMarkerInput {
   id: string;
   point: LatLng;
+  /** Optional fill color (any valid CSS color string) and short text/symbol
+   * shown inside the marker — lets a caller render a small set of visually
+   * distinct typed pins (e.g. route-point categories, ADR-020 KI-036) instead
+   * of the provider's default plain pin icon. Omit both for the default pin. */
+  color?: string;
+  label?: string;
+}
+
+export interface MapPolylineInput {
+  points: LatLng[];
+  /** Any valid CSS color string; the renderer picks its own default if omitted. */
+  color?: string;
 }
 
 export interface MapRenderOptions {
@@ -20,6 +32,8 @@ export interface MapRenderOptions {
 
 export interface MapHandle {
   setMarkers(markers: MapMarkerInput[]): void;
+  /** Draws one route line, replacing any previous one; `null` clears it. */
+  setPolyline(polyline: MapPolylineInput | null): void;
   destroy(): void;
 }
 

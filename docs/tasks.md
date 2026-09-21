@@ -827,3 +827,34 @@ ui typecheck`/`pnpm --filter web typecheck,lint,build` clean; `pnpm
       against mocked `fetch` matching the real Unisender Go request/response
       shape (verified against the `django-anymail` backend source, not
       guessed). See `docs/changelog.md`.
+- [x] CR-101 Route-detail map rendering (resolves KI-036) — done 2026-09-20:
+      `/rides/[id]`'s route map replaces the always-shown
+      `RouteMapPlaceholder` with a real 2GIS MapGL render, reusing the same
+      `MapRenderer`/`MapHandle` interface `DiscoveryMap` proved out (CR-098),
+      extended additively (no new ADR) — `MapMarkerInput` gains optional
+      `color`/`label`, `MapHandle` gains `setPolyline`. `RoutePoint`/`Stop`
+      render as small colored `HtmlMarker` dots (2GIS SDK, `packages/
+maps-2gis`) with a one-glyph text label per type — colors resolved from
+      `packages/ui` design tokens at call time (`getCssColorVar`, never a
+      raw hex literal per `docs/design.md` §14), labels satisfy "don't rely
+      on color alone" (`.claude/rules/frontend.md`); a text legend under the
+      map repeats both. `Route.geometry` renders as a polyline in the same
+      color as the design system's primary accent. Found and fixed a real,
+      pre-existing bug while live-verifying: React Strict Mode's dev-only
+      double-`useEffect`-invoke could construct two `mapglAPI.Map` instances
+      on the same container before either's async SDK load resolved, and the
+      stale instance's later `destroy()` call cleared the container's DOM
+      out from under the surviving one — same latent exposure in
+      `DiscoveryMap` since CR-098, just not previously hit. Fixed once, in
+      the shared adapter (`packages/maps-2gis/src/render.ts`'s new
+      per-container generation guard), benefiting both callers. `pnpm
+--filter maps-2gis test` 11/11; `pnpm --filter web typecheck/lint/test/
+build` all clean (208/208, no new tests — same no-unit-test-for-the-SDK-
+      boundary precedent as `DiscoveryMap`). Live-verified end to end
+      against a real seeded ride (GPX route, 4 typed route points, 1 stop,
+      published): real style/tile/font/icon requests all `200`, a real
+      `<canvas>` present in the map container across 3/3 fresh loads after
+      the fix (0/3 before it), legend renders correctly. The map's own
+      pixels don't paint in this sandbox's headless/software-WebGL browser —
+      same documented conclusion as CR-098/CR-099's identical finding, not a
+      regression. See `docs/changelog.md`.

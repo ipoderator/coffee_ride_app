@@ -9,6 +9,48 @@ from another doc still resolves to something.
 
 ---
 
+### KI-036 — Route points have no participant-facing UI yet (organizer management + API only)
+
+Status: resolved 2026-09-20 (CR-101). Discovered: 2026-09-15 (CR-031, "Route points"
+session).
+Problem: `docs/design.md` §8's ride-detail screen row names "route + profile,
+stops, services, requirements..." for the participant view — no route-points
+list is named there, unlike `Stop`, which explicitly got a `StopList`
+(CR-030). A `RoutePoint` is a typed map pin (start/finish/danger/water/food/
+technical/other), meant to render on a real map, not to be read as a text
+list — and the map itself is already a documented degraded placeholder
+pending a live 2GIS credential (KI-031/KI-016). Building a textual duplicate
+of pin data wasn't asked for by any doc, so this ticket shipped the DB
+table + API + organizer management UI (`RoutePointsSection`) only.
+Impact: low — organizers can fully manage route points; participants simply
+don't see them anywhere yet (`GET /v1/rides/:id`'s additive `routePoints`
+array is there, just unconsumed on the participant side).
+Workaround: none needed — nothing regresses; the data is preserved and
+available via the API the moment a consumer needs it.
+Next action: once KI-031 is resolved (a live 2GIS MapGL credential exists)
+and the real map render layer is built, plot each ride's `routePoints` as
+typed markers on `/rides/[id]`'s route map — that is the natural, asked-for
+participant surface for this data, not a new textual list component.
+Update 2026-09-20 (CR-098, ADR-020): KI-031's discovery half is resolved and
+the render layer now exists — `packages/maps-core`'s `MapRenderer`/
+`MapHandle` plus `packages/maps-2gis`'s real `@2gis/mapgl` implementation,
+proven working end to end on `/`. This ticket's own scope (route-detail map:
+`RouteMapPlaceholder` → real render, `Route.geometry` polyline +
+`routePoints` typed markers + `Stop` markers) is deliberately unstarted —
+reuse the existing `MapRenderer` interface, extending it additively
+(`.claude/rules/extensibility.md`) if a polyline layer or typed marker icons
+turn out to need capabilities the discovery-only MVP doesn't have, rather
+than building a second, parallel render abstraction.
+Resolution: CR-101 — `RouteMap.tsx` (new) plots `Route.geometry` as a
+polyline and `RoutePoint`/`Stop` as typed, colored+labeled markers on
+`/rides/[id]`, exactly as this entry's "Next action" specified — the
+`MapRenderer` interface was extended additively (`MapMarkerInput`
+`color`/`label`, new `setPolyline`), no second render abstraction, no new
+ADR. Live-verified against a real seeded ride; also surfaced and fixed a
+real, previously-latent React Strict Mode double-render race in the shared
+`packages/maps-2gis` adapter (see `docs/changelog.md`'s CR-101 entry) that
+`DiscoveryMap` carried since CR-098 too.
+
 ### KI-019 — `docker-compose.yml` had never been booted live in this environment
 
 Resolved: 2026-09-20 (this became true at least by CR-086's session, which

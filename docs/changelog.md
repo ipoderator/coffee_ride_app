@@ -1376,3 +1376,74 @@ network access to `unisender.ru` should then verify one real send end to end (KI
 own "Next action"). `docker-compose.prod.yml`'s env passthrough (KI-046's pattern) will
 need these four new vars added when CR-075/ADR-018's production manifest is actually
 exercised end to end (KI-045) — not attempted this session, out of scope.
+
+## 2026-09-20 — CR-101 — Route-detail map rendering (KI-036)
+
+Summary: `/rides/[id]`'s route map showed a static `RouteMapPlaceholder` since CR-028,
+even after CR-098/ADR-020 proved real 2GIS MapGL rendering on the discovery map. This
+closes KI-036's named remaining scope: `Route.geometry` as a polyline plus
+`RoutePoint`/`Stop` as typed markers, reusing `DiscoveryMap`'s `MapRenderer`/`MapHandle`
+interface rather than a second render abstraction (as KI-036 itself anticipated — no new
+ADR). `packages/maps-core/src/render.ts`: `MapMarkerInput` gains optional `color`/`label`;
+new `MapPolylineInput`; `MapHandle` gains `setPolyline(polyline: MapPolylineInput | null):
+void`. `packages/maps-2gis/src/render.ts` implements both: a marker with `color`/`label`
+renders as a small `HtmlMarker` (colored dot + one-glyph text) instead of the SDK's plain
+pin; `setPolyline` draws/clears one `Polyline`. New `apps/web/src/lib/maps/css-color.ts`
+(`getCssColorVar`) resolves a design-token CSS custom property to its current computed
+value at call time — the one sanctioned exception to "never a raw hex literal"
+(`docs/design.md` §14, ESLint-enforced in `apps/web`): a map SDK draws on canvas, not the
+DOM, so it can't consume a Tailwind class, but it can still read the same token via
+`getComputedStyle`, theme-aware. New feature-local `apps/web/src/features/participant/
+ride-detail/lib/route-point-colors.ts` maps each `RoutePointType`/`Stop` to a token CSS
+var + one-glyph Cyrillic label (danger→`--danger`+`!`, water→`--info`+`В`, etc.) — the
+glyph exists specifically so a colorblind viewer isn't relying on hue alone
+(`.claude/rules/frontend.md`). New `RouteMap.tsx` mirrors `DiscoveryMap`'s pattern (single
+mount-time effect, falls back to `RouteMapPlaceholder` on a missing key or failed render)
+plus a text legend under the map. `RideDetailView`'s `RouteSection` now threads
+`routePoints`/`stops` through (the `GetRideResponse.routePoints` array already existed,
+just unused by this view before) and renders `RouteMap` once geometry is `ready`.
+
+Found and fixed a real bug while live-verifying, not present in any prior CR's own
+verification because CR-098 apparently never re-loaded the discovery map enough times to
+hit it: React Strict Mode's dev-only double-`useEffect`-invoke starts two `render()` calls
+back-to-back on the _same_ container before either call's `await import('@2gis/mapgl')`
+resolves. Both then went on to construct a real `mapglAPI.Map` on that container; when the
+stale (cancelled) call's promise resolved later and correctly called `destroy()` on its own
+instance, that `destroy()` cleared the _container's_ DOM, wiping out the surviving
+instance's canvas too — reproduced consistently (0/3 canvases across three fresh page
+loads) before the fix, 3/3 after. `DiscoveryMap` carries the identical exposure since
+CR-098 (same effect shape); fixed once, in the shared adapter
+(`packages/maps-2gis/src/render.ts`'s new per-container `WeakMap<HTMLElement, number>`
+generation guard — a `render()` call whose generation gets superseded while the SDK is
+still loading returns an inert no-op handle instead of constructing a second live map), so
+both callers benefit without touching either's calling code. Production builds don't
+double-invoke effects, so this was always dev-only, but a broken dev-mode map is still a
+real bug, not acceptable to ship silently.
+
+Files: `packages/maps-core/src/render.ts`, `packages/maps-2gis/src/render.ts`,
+`.claude/rules/maps.md` (Render-layer contract snippet updated to match), `apps/web/src/
+lib/maps/css-color.ts` (new), `apps/web/src/features/participant/ride-detail/lib/
+route-point-colors.ts` (new), `apps/web/src/features/participant/ride-detail/components/
+{RouteMap.tsx (new), RouteMapPlaceholder.tsx, RideDetailView.tsx}`.
+
+Decisions: none (additive extension of ADR-020's existing render-layer contract, as
+KI-036 itself named this exact extension in advance — no new ADR needed).
+
+Live verification: seeded a real published ride via the running API (GPX route with 9
+track points, 4 typed route points — start/finish/danger/water — and 1 stop) and loaded
+`/rides/:id` in a real headless browser with the real `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`.
+Full network chain succeeded (style/tiles/fonts/POI icons all `200`); the legend rendered
+all five expected labels. The map's own pixels don't visibly paint in this sandbox's
+headless/software-WebGL (SwiftShader) browser — same conclusion CR-098/CR-099 already
+reached and documented, not a regression here. `pnpm --filter maps-2gis test` 11/11 (no
+new tests needed — the fix is behind the same interface, already covered);
+`pnpm --filter maps-core --filter maps-2gis typecheck/lint/build` clean; `pnpm --filter
+web typecheck/lint/test/build` all clean (208/208 passing, no new tests — same
+no-unit-test-for-the-SDK-boundary precedent `DiscoveryMap` already established, since a
+real render can't be meaningfully unit-tested without the vendor SDK).
+
+Follow-up: none required for this ticket's own scope. `docs/tasks.md` has no unchecked
+ticket left again. Two real, un-scheduled UI gaps remain from the last status review:
+`MapProvider.geocode`/`reverseGeocode` still has zero UI consumers (KI-032, no
+address-search anywhere), and discovery's filters still cover only `bicycleType`
+(KI-030, no design-doc spec yet for distance/difficulty/price/date-range).

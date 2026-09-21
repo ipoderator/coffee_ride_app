@@ -95,6 +95,15 @@ above since server code has no business seeing a render method at all.
 export interface MapMarkerInput {
   id: string;
   point: LatLng;
+  // Optional fill color (any valid CSS color string) + short text/symbol for a
+  // distinct typed pin instead of the provider's default plain icon.
+  color?: string;
+  label?: string;
+}
+
+export interface MapPolylineInput {
+  points: LatLng[];
+  color?: string;
 }
 
 export interface MapRenderOptions {
@@ -105,6 +114,7 @@ export interface MapRenderOptions {
 
 export interface MapHandle {
   setMarkers(markers: MapMarkerInput[]): void;
+  setPolyline(polyline: MapPolylineInput | null): void;
   destroy(): void;
 }
 
@@ -114,7 +124,14 @@ export interface MapRenderer {
 ```
 
 `packages/maps-2gis/src/render.ts` implements this against the real `@2gis/mapgl` SDK,
-converting to MapGL's own `[longitude, latitude]` coordinate order at this one boundary.
+converting to MapGL's own `[longitude, latitude]` coordinate order at this one boundary. A
+marker with `color`/`label` renders as a small `HtmlMarker` (a colored dot with a one-glyph
+label) instead of the SDK's plain default pin — added for KI-036's typed route-point/stop
+markers on `/rides/[id]`'s route map, no new ADR (an additive extension of the same
+interface, as ADR-020's own KI-036 note anticipated). Callers resolve the actual color from
+`packages/ui`'s design tokens at call time (`docs/design.md` §14 — never a raw hex literal
+in `apps/web` source); `packages/maps-2gis` itself stays token-agnostic and only supplies a
+generic fallback color when none is given.
 
 Every method must apply the resilience rules in `.claude/rules/resilience.md`
 (timeout, bounded retries for idempotent calls, circuit breaker, defined fallback) at the

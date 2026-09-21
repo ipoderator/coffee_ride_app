@@ -673,7 +673,7 @@ on `/`'s map view, plotting each published ride's `startLat`/`startLng`;
 `RideMapPlaceholder` itself is kept, now serving as the fallback for a missing
 key or a failed render (`docs/design.md` §10's degraded-state requirement).
 Route-detail map rendering (`RouteMapPlaceholder`) is unchanged — deliberately
-scoped out, stays KI-036's open follow-up. Also fixed, found live this
+scoped out this session, done in CR-101 below. Also fixed, found live this
 session: the native dev `DATABASE_URL` database had never had migration
 `0016_avatar_columns.sql` (CR-097) applied, causing `GET /v1/rides` to 500 —
 ran `pnpm --filter db db:migrate` against it (KI-051, resolved same session).
@@ -722,6 +722,37 @@ environment) and `unisender.ru` fails DNS resolution from this sandbox
 (KI-055) — a real send has never been exercised live, only against mocked
 `fetch` matching the real Unisender Go request shape (verified against the
 `django-anymail` backend source).
+
+CR-101 ("Route-detail map rendering", 2026-09-20, resolving KI-036): `packages/
+maps-core/src/render.ts`'s `MapMarkerInput` gained optional `color`/`label`;
+new `MapPolylineInput`; `MapHandle` gained `setPolyline(polyline:
+MapPolylineInput | null): void` — additive extension of ADR-020's render-layer
+contract, no new ADR (KI-036 itself named this exact extension in advance).
+`packages/maps-2gis/src/render.ts` implements both: a marker with `color`/
+`label` renders as an `HtmlMarker` (a small colored `<div>` with a one-glyph
+text label) instead of the SDK's plain `Marker` pin; `setPolyline` draws/
+clears one `Polyline`. New `apps/web/src/lib/maps/css-color.ts`
+(`getCssColorVar`) resolves a `packages/ui` design-token CSS custom property
+to its current computed value at call time — the one sanctioned exception to
+"never a raw hex literal" (a map SDK draws on canvas, not the DOM, so it can't
+consume a Tailwind class, but reading the same token via `getComputedStyle`
+keeps it theme-aware and ESLint-compliant). New feature-local `apps/web/src/
+features/participant/ride-detail/lib/route-point-colors.ts` maps each
+`RoutePointType`/`Stop` to a token CSS var + glyph. New `RouteMap.tsx`
+(same feature directory) mirrors `DiscoveryMap`'s pattern and replaces
+`RouteMapPlaceholder` as `/rides/[id]`'s default route-map state (the
+placeholder itself stays, now as the fallback for a missing key/failed
+render, same role `RideMapPlaceholder` plays for discovery).
+
+Also found and fixed here, in `create2GisMapRenderer` (shared by both
+`DiscoveryMap` and `RouteMap`): a `containerGeneration` `WeakMap<HTMLElement,
+number>` guard against React Strict Mode's dev-only double-`useEffect`-invoke
+constructing two live `mapglAPI.Map` instances on one container before either
+call's async SDK load resolves — previously, the stale instance's later
+`destroy()` call cleared the container's DOM out from under the surviving
+instance. `DiscoveryMap` carried this same exposure since CR-098 without ever
+hitting it in a prior live check; the fix lives once in the adapter, so both
+callers are covered without their own effect code changing.
 
 ## Target structure
 
