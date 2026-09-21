@@ -741,6 +741,150 @@ describe('/v1/rides', () => {
     });
   });
 
+  // CR-103 (`/impeccable critique` P1 — "organizer dashboard has no glanceable
+  // status"): ride/registration/waitlist counts across the caller's own rides.
+  describe('GET /v1/rides/mine/summary', () => {
+    it('rejects a request with no session cookie with 401', async () => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/rides/mine/summary',
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('returns an all-zero summary for a caller with no organizer profile', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: false,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/rides/mine/summary',
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        summary: {
+          totalRides: 0,
+          draftRides: 0,
+          openRegistrationRides: 0,
+          activeRegistrations: 0,
+          waitlisted: 0,
+        },
+      });
+
+      await app.close();
+    });
+
+    it("counts only the caller's own rides, by status, plus registration/waitlist pressure across them", async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+      const other = await registerAndLogin(app, { withOrganizerProfile: true });
+
+      // Someone else's ride/registration must never be counted here.
+      const otherRide = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: other.rawToken },
+        payload: { ...VALID_PAYLOAD, title: 'Чужой заезд' },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${otherRide.json().ride.id}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: other.rawToken },
+      });
+
+      // A draft ride of the caller's own — counted in totalRides/draftRides only.
+      await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { ...VALID_PAYLOAD, title: 'Черновик' },
+      });
+
+      // A published, registration_open, capacity-1 ride of the caller's own.
+      const openRide = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { ...VALID_PAYLOAD, title: 'Открытый заезд' },
+      });
+      const openRideId = openRide.json().ride.id;
+      await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${openRideId}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { participantLimit: 1 },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${openRideId}/publish`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${openRideId}/open-registration`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      // One participant fills the only slot (active registration)...
+      const participant1 = await registerAndLogin(app, {
+        withOrganizerProfile: false,
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${openRideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participant1.rawToken },
+      });
+      // ...a second joins the waitlist instead, since the ride is now full.
+      const participant2 = await registerAndLogin(app, {
+        withOrganizerProfile: false,
+      });
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${openRideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participant2.rawToken },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/rides/mine/summary',
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        summary: {
+          totalRides: 2,
+          draftRides: 1,
+          openRegistrationRides: 1,
+          activeRegistrations: 1,
+          waitlisted: 1,
+        },
+      });
+
+      await app.close();
+    });
+  });
+
   describe('GET /v1/rides/:id', () => {
     // CR-023 ("Ride detail"): extended from an owner-only endpoint to also serve any
     // other viewer (unauthenticated or a non-owner) once the ride has left `draft` —

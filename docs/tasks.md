@@ -882,3 +882,19 @@ build` all clean (208/208, no new tests — same no-unit-test-for-the-SDK-
       the many existing tests that render a feature component directly
       needed no changes. `ToastProvider` mounted once in `apps/web/src/app/
 layout.tsx`. See `docs/changelog.md`.
+- [x] CR-104 `RideSummaryWidget` for the organizer dashboard — the
+      `/impeccable critique apps/web` P1 ("no ride/registration/waitlist
+      counts anywhere in the organizer cabinet"), done 2026-09-21: new
+      `GET /v1/rides/mine/summary` (`apps/api`, `rides` module) — ride
+      counts by status (total/draft/registration_open) plus active-
+      registration/waitlist counts across every ride the caller organizes,
+      via three small indexed queries run in parallel rather than one
+      multi-join query (join fan-out would double/triple-count rows across
+      `registrations`/`waitlistEntries`), same "batched, not N+1" precedent
+      as `reviews.service.ts`'s `getOrganizerRatingSummary`. New
+      `RideSummaryWidget` (`apps/web`, `features/organizer/rides`) renders
+      it with `MetricTile`/`MetricRow`, registered into `ORGANIZER_WIDGETS`
+      (ADR-009) at order 20, right after the existing profile widget. Zero
+      rides renders as a normal all-zero ready state, not a special empty
+      state — `/organizer/rides` already owns the "create your first ride"
+      empty state. See `docs/changelog.md`.

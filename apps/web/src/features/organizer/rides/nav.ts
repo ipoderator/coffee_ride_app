@@ -1,4 +1,5 @@
-import type { CabinetNavItem } from '@/lib/cabinet/types';
+import type { CabinetNavItem, DashboardWidget } from '@/lib/cabinet/types';
+import { RideSummaryWidget } from './components/RideSummaryWidget';
 
 // ADR-009: this feature registers itself into the shared organizer nav list
 // (`@/lib/cabinet/organizer-nav.ts`), same pattern as
@@ -13,4 +14,14 @@ export const organizerRidesNavItem: CabinetNavItem = {
   label: 'Заезды',
   href: '/organizer/rides',
   order: 20,
+};
+
+// CR-103 (`/impeccable critique` P1): same registration into
+// `@/lib/cabinet/organizer-widgets.ts`, for the `/organizer` dashboard's widget grid —
+// sorts after `organizerProfileWidget` (order 10), the ride/registration/waitlist
+// glance being the second thing an organizer wants to see, after their own profile.
+export const organizerRideSummaryWidget: DashboardWidget = {
+  id: 'organizer-ride-summary',
+  order: 20,
+  Component: RideSummaryWidget,
 };

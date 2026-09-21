@@ -212,6 +212,15 @@ above; no `OrganizerProfile` yet is `200 { items: [], nextCursor: null }`, not a
 error. Cursor-paginated per ADR-011 (`apps/api/src/lib/cursor.ts`), sorted
 `(createdAt desc, id desc)`. A malformed `cursor` → `400 invalid_cursor`.
 
+GET `/v1/rides/mine/summary` — **implemented (CR-103, organizer dashboard
+glanceability)**. Requires a valid session cookie (`401` otherwise). A single-resource
+aggregate, not a page — no `nextCursor` (ADR-011 only requires pagination for
+collections). `200` → `{ summary: { totalRides, draftRides,
+openRegistrationRides, activeRegistrations, waitlisted } }`, counted across every
+ride the caller organizes (`activeRegistrations`/`waitlisted` sum across all of them,
+not per-ride). No `OrganizerProfile` yet is an all-zero summary, not an error, same
+precedent as `/mine` above.
+
 GET `/v1/rides/:id` — **implemented (CR-016/CR-018, extended CR-023 "Ride
 detail")**. No session cookie required — a session, if present and valid, is
 resolved but never rejected (`resolveOptionalUser`, distinct from every other

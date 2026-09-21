@@ -442,6 +442,22 @@ export const RIDE_LIST_TERMS = {
   summaryStartLabel: 'Старт',
 } as const;
 
+/**
+ * CR-103 (`/impeccable critique` P1 — "organizer dashboard has no glanceable
+ * status"): `/organizer` dashboard widget summarizing `GET /v1/rides/mine/summary`
+ * across every ride the caller organizes — `MetricTile`/`MetricRow` (§6), same
+ * primitive `docs/design.md`'s own metric system already establishes, applied to a
+ * ride/registration/waitlist count instead of one ride's own distance/elevation/pace.
+ */
+export const RIDE_SUMMARY_WIDGET_TERMS = {
+  title: 'Мои заезды',
+  loadError: 'Не удалось загрузить сводку по заездам.',
+  totalRidesLabel: 'Всего заездов',
+  openRegistrationLabel: 'Открыта регистрация',
+  activeRegistrationsLabel: 'Зарегистрировано',
+  waitlistedLabel: 'В листе ожидания',
+} as const;
+
 /** `/organizer/rides/[id]/edit` (CR-018, `docs/design.md` §8 "Edit draft"). Every
  * field CR-017 deliberately left `null` at creation — see
  * `.claude/context/current-task.md`. */

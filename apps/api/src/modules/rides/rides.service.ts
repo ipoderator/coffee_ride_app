@@ -23,6 +23,7 @@ import type {
   ListPublicRidesResponse,
   ListRidesQuery,
   ListRidesResponse,
+  OrganizerRideSummary,
   Ride,
   RouteGeometryPoint,
   RoutePoint,
@@ -511,6 +512,75 @@ export async function listOwnRides(
       : null;
 
   return { items: page.map(toPublicRide), nextCursor };
+}
+
+/**
+ * CR-103 (`/impeccable critique` P1 — "organizer dashboard has no glanceable
+ * status"): a single-resource aggregate sibling of {@link listOwnRides}, not a page
+ * of rides — `GET /v1/rides/mine/summary`. No `OrganizerProfile` yet returns an
+ * all-zero summary, same "empty page, not an error" reasoning as `listOwnRides`.
+ *
+ * Three small indexed queries run in parallel rather than one multi-join query —
+ * `registrations`/`waitlistEntries` fan out per ride, so joining all three tables at
+ * once would double/triple-count rows; this keeps each aggregate correct and legible,
+ * same "batched, not N+1" precedent as `reviews.service.ts`'s
+ * `getOrganizerRatingSummary` (O(1) round trips regardless of how many rides the
+ * organizer has, just 3 instead of 1).
+ */
+export async function getOwnRideSummary(
+  db: DbClient,
+  userId: string,
+): Promise<OrganizerRideSummary> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    return {
+      totalRides: 0,
+      draftRides: 0,
+      openRegistrationRides: 0,
+      activeRegistrations: 0,
+      waitlisted: 0,
+    };
+  }
+
+  const [[rideCounts], [registrationCounts], [waitlistCounts]] =
+    await Promise.all([
+      db
+        .select({
+          totalRides: sql<number>`count(*)::int`,
+          draftRides: sql<number>`count(*) filter (where ${rides.status} = 'draft')::int`,
+          openRegistrationRides: sql<number>`count(*) filter (where ${rides.status} = 'registration_open')::int`,
+        })
+        .from(rides)
+        .where(eq(rides.organizerId, organizerProfileId)),
+      db
+        .select({ activeRegistrations: sql<number>`count(*)::int` })
+        .from(registrations)
+        .innerJoin(rides, eq(registrations.rideId, rides.id))
+        .where(
+          and(
+            eq(rides.organizerId, organizerProfileId),
+            eq(registrations.status, 'active'),
+          ),
+        ),
+      db
+        .select({ waitlisted: sql<number>`count(*)::int` })
+        .from(waitlistEntries)
+        .innerJoin(rides, eq(waitlistEntries.rideId, rides.id))
+        .where(
+          and(
+            eq(rides.organizerId, organizerProfileId),
+            eq(waitlistEntries.status, 'waiting'),
+          ),
+        ),
+    ]);
+
+  return {
+    totalRides: rideCounts?.totalRides ?? 0,
+    draftRides: rideCounts?.draftRides ?? 0,
+    openRegistrationRides: rideCounts?.openRegistrationRides ?? 0,
+    activeRegistrations: registrationCounts?.activeRegistrations ?? 0,
+    waitlisted: waitlistCounts?.waitlisted ?? 0,
+  };
 }
 
 /**

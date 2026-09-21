@@ -1578,3 +1578,69 @@ of the critique's recommended order (organizer dashboard glanceability, sticky m
 registration CTA, icon adoption, "Quiet Instrument" visual direction) is still queued,
 not started — `.claude/context/current-task.md`/`project-state.md` updated to reflect
 this ticket's completion and the remaining open items.
+
+## 2026-09-21 — CR-104 — `RideSummaryWidget` for the organizer dashboard
+
+Summary: the P1 finding from the same `/impeccable critique apps/web` session —
+`ORGANIZER_WIDGETS` (`apps/web/src/lib/cabinet/organizer-widgets.ts`) contained
+exactly one widget (the organizer's own profile card), with no ride/registration/
+waitlist status anywhere in the organizer cabinet despite `MetricTile`/`MetricRow`
+already being the right primitive. User reviewed the recommended order and
+authorized this item next (the literal word «внедряй»).
+
+New `GET /v1/rides/mine/summary` (`apps/api/src/modules/rides/`) — a single-resource
+aggregate sibling of the existing paginated `/mine`, not a second collection (no
+`nextCursor`, ADR-011 only requires pagination for collections). Returns
+`totalRides`/`draftRides`/`openRegistrationRides`/`activeRegistrations`/`waitlisted`
+across every ride the calling organizer owns. `getOwnRideSummary` (`rides.service.ts`)
+runs three small indexed queries in parallel (`rides` grouped by status;
+`registrations` joined to `rides` filtered `status = 'active'`;
+`waitlistEntries` joined to `rides` filtered `status = 'waiting'`) rather than one
+multi-table join — joining all three at once would fan out and double/triple-count
+rows, since a ride can have many registrations and many waitlist entries. Same
+"batched, not N+1" precedent `reviews.service.ts`'s `getOrganizerRatingSummary`
+already established: O(1) round trips regardless of how many rides the organizer has
+(3 queries, not one per ride). No `OrganizerProfile` yet returns an all-zero summary,
+same "empty page, not an error" reasoning as `listOwnRides`.
+
+`apps/web`: new `RideSummaryWidget` (`features/organizer/rides/components/`) —
+loading/error/ready states (same shape as `OrganizerProfileWidget`), renders the four
+most actionable counts (total rides, open-for-registration rides, active
+registrations, waitlisted) as `MetricTile`s inside a `MetricRow`. Zero rides renders
+as a normal all-zero ready state, not a distinct empty state — `/organizer/rides`
+already owns the "create your first ride" empty state, so this widget doesn't
+duplicate it. Registered into `ORGANIZER_WIDGETS` (ADR-009 registry, no branching in
+`app/organizer/page.tsx`) via `organizerRideSummaryWidget` in
+`features/organizer/rides/nav.ts`, order 20 — sorts right after the existing profile
+widget (order 10).
+
+Files: `packages/types/src/api/rides.ts` (new `OrganizerRideSummary`/
+`GetOrganizerRideSummaryResponse`), `apps/api/src/modules/rides/{rides.service,
+rides.routes,rides.routes.test}.ts`, `apps/web/src/features/organizer/rides/{api,nav}.ts`,
+`apps/web/src/features/organizer/rides/components/RideSummaryWidget.tsx` (new),
+`apps/web/src/features/organizer/rides/ride-summary-widget.test.tsx` (new),
+`apps/web/src/lib/cabinet/organizer-widgets.ts`, `packages/ui/src/terminology.ts` (new
+`RIDE_SUMMARY_WIDGET_TERMS`).
+
+Decisions: none new — additive endpoint/widget, no architecture change.
+
+Validation: `pnpm --filter types typecheck` clean; `pnpm --filter api typecheck/lint`
+clean; `pnpm --filter api test` 375/378 (3 pre-existing skips, 3 new tests for the
+summary endpoint: no-session 401, no-organizer-profile all-zero, and a full scenario —
+own draft ride, own capacity-1 registration_open ride with one active registration and
+one waitlisted entry, a second organizer's published ride excluded from every count);
+`pnpm --filter web typecheck/lint` clean; `pnpm --filter web test` 216/216 (3 new);
+`NODE_ENV=production pnpm --filter web build` clean. Live-verified against the real
+running stack (the same CR-103 QA organizer/ride from the prior entry, one active
+registration by then): `/organizer` rendered "Всего заездов: 1", "Открыта
+регистрация: 1", "Зарегистрировано: 1", "В листе ожидания: 0" — exactly matching the
+ride's real database state.
+
+Found and hit the same environment issue CR-103 already documented: running
+`NODE_ENV=production pnpm --filter web build` against a live `next dev` server's
+`.next` directory corrupts it again — restarted the dev server with a fresh `.next` a
+second time. Worth actually avoiding next time (e.g. build from a separate checkout,
+or stop the dev server first) rather than re-discovering it per session.
+
+Follow-up: `.claude/context/current-task.md`'s recommended order continues — sticky
+mobile registration CTA (P1) and icon adoption (P2) are next, still not authorized.

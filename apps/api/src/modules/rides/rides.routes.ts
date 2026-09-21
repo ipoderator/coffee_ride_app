@@ -39,6 +39,7 @@ import {
   finishRide,
   getCoverImageDownload,
   getRideForViewer,
+  getOwnRideSummary,
   getRouteDownload,
   getRouteGeometry,
   listOwnRides,
@@ -168,6 +169,18 @@ const listRidesResponseSchema = z.object({
   items: z.array(rideResponseSchema),
   nextCursor: z.string().nullable(),
 });
+// CR-103 (`/impeccable critique` P1): `GET /v1/rides/mine/summary`'s response — a
+// single-resource aggregate, not a page, so no `nextCursor` (ADR-011 only requires
+// pagination for collections).
+const rideSummaryResponseSchema = z.object({
+  summary: z.object({
+    totalRides: z.number(),
+    draftRides: z.number(),
+    openRegistrationRides: z.number(),
+    activeRegistrations: z.number(),
+    waitlisted: z.number(),
+  }),
+});
 // CR-024 ("Ride list", public discovery): each item additionally carries `organizer`
 // — distinct from `listRidesResponseSchema` (`/mine`, no organizer needed since the
 // caller already knows it's their own).
@@ -239,6 +252,23 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const page = await listOwnRides(app.db, request.user!.id, request.query);
       return reply.status(200).send(page);
+    },
+  );
+
+  // CR-103 (`/impeccable critique` P1 — "organizer dashboard has no glanceable
+  // status"): a single-resource aggregate sibling of `/mine`, not a second
+  // collection endpoint — ride/registration/waitlist counts across every ride the
+  // caller organizes, for `RideSummaryWidget` on `/organizer`. Same auth/ownership
+  // shape as `/mine` (own userId only, never a client-supplied organizer id).
+  app.get(
+    '/mine/summary',
+    {
+      schema: { response: { 200: rideSummaryResponseSchema } },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const summary = await getOwnRideSummary(app.db, request.user!.id);
+      return reply.status(200).send({ summary });
     },
   );
 

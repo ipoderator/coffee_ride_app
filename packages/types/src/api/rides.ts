@@ -130,6 +130,20 @@ export type ListRidesQuery = z.infer<typeof listRidesQuerySchema>;
 
 export type ListRidesResponse = Paginated<Ride>;
 
+// CR-103 (`/impeccable critique` P1 — "organizer dashboard has no glanceable
+// status"): `GET /v1/rides/mine/summary`, a single-resource aggregate sibling of
+// `/mine`'s paginated list, not a collection itself — no pagination per ADR-011.
+export interface OrganizerRideSummary {
+  totalRides: number;
+  draftRides: number;
+  openRegistrationRides: number;
+  activeRegistrations: number;
+  waitlisted: number;
+}
+export interface GetOrganizerRideSummaryResponse {
+  summary: OrganizerRideSummary;
+}
+
 // CR-024 ("Ride list", public discovery): `GET /v1/rides` — unlike `/mine`, this
 // endpoint is fully public (no session ever consulted) and only ever returns
 // non-`draft` rides (`.claude/context/current-task.md`'s "published+" rule, same one

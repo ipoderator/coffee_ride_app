@@ -6,6 +6,7 @@ import {
   type CreateRideRequest,
   type CreateRideResponse,
   type FinishRideResponse,
+  type GetOrganizerRideSummaryResponse,
   type ListRidesResponse,
   type OpenRegistrationResponse,
   type ProblemDetails,
@@ -24,6 +25,7 @@ export type {
   CreateRideRequest,
   CreateRideResponse,
   FinishRideResponse,
+  GetOrganizerRideSummaryResponse,
   ListRidesResponse,
   OpenRegistrationResponse,
   PublishRideResponse,
@@ -83,6 +85,24 @@ export async function listMyRides(
   }
 
   return body as ListRidesResponse;
+}
+
+/**
+ * CR-103 (`/impeccable critique` P1): ride/registration/waitlist counts across every
+ * ride the caller organizes — `RideSummaryWidget`'s data source. No organizer profile
+ * yet is an all-zero summary (same shape the endpoint itself returns), not an error.
+ */
+export async function getOwnRideSummary(): Promise<GetOrganizerRideSummaryResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/mine/summary`);
+
+  const body = (await response.json()) as
+    GetOrganizerRideSummaryResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as GetOrganizerRideSummaryResponse;
 }
 
 /** CR-016/CR-018: 404s `ride_not_found` both for a non-existent id and one owned by a
