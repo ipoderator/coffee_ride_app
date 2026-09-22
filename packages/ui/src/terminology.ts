@@ -250,7 +250,6 @@ export const RESET_PASSWORD_TERMS = {
  * correct without adding a client-side auth check just for nav display.
  */
 export const SITE_HEADER_TERMS = {
-  brand: 'Coffee Ride',
   navLabel: 'Основная навигация',
   homeLink: 'Заезды',
   loginLink: 'Войти',

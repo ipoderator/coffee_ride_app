@@ -118,6 +118,29 @@ Contrast ratios below were computed against the theme background and meet WCAG 2
 Dark theme is not optional or "later": it is part of CR-063. An app used before dawn and
 after dusk needs it.
 
+### Glass and scrim tokens ("Quiet Instrument", CR-107)
+
+Reserved for exactly two surfaces — the title/status panel over a ride's cover photo,
+and the sticky mobile registration bar — never a general card treatment (that stays
+`Card`'s plain hairline-border/no-shadow default). Extends the palette above rather than
+replacing it; §1's "no gradients, no glow" rule still governs everywhere else.
+
+| Token          | Value                       | Use                                                                                                                                                          |
+| -------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scrim`        | `rgb(23 22 20 / 55%)`       | Warm-near-black wash under cover-photo text/badges — guarantees AA contrast regardless of the uploaded photo. Same in both themes (a photo, not app chrome). |
+| `glass-bg`     | `bg-raised` at ~72% opacity | The glass panel's translucent fill.                                                                                                                          |
+| `glass-border` | `border` at ~60% opacity    | The glass panel's hairline edge.                                                                                                                             |
+
+Implementation is pure Tailwind utility composition (`bg-glass-bg border border-glass-border
+backdrop-blur-lg`, `packages/ui`'s `GLASS_PANEL_CLASSNAME`), deliberately not a custom
+unlayered CSS class — Tailwind's own utilities live inside `@layer utilities`, and any
+unlayered rule unconditionally outranks every layer regardless of source order, which would
+have made a hand-written `.glass-panel` class always beat a caller's own
+`md:bg-transparent`-style responsive reset. `backdrop-blur-lg` degrades to a plain
+translucent fill — still AA-safe under `--scrim` — wherever `backdrop-filter` is unsupported
+(the browser simply ignores the property) or the viewer prefers reduced motion/transparency
+(`motion-reduce:`/`prefers-reduced-transparency` variants reset it to none).
+
 ### Data visualization colors
 
 Charts (elevation profile, future statistics) use a **single muted fill** derived from
@@ -143,6 +166,9 @@ status are encoded by **label + position on a scale**, not by hue.
 - **Weights:** 400 body, 500 labels/UI, 600 headings and metric values. No 700+ and no
   all-caps except small metric labels (12px, letter-spacing 0.04em).
 - **Line height:** 1.5 body, 1.2 headings and metric values.
+- **Wordmark (CR-107):** `packages/ui`'s `Wordmark` component — Golos Text, lowercase,
+  "coffee" at weight 500 + ".ride" at weight 400, both in `--primary`. No new typeface or
+  dependency; resolves §15's prior placeholder note.
 
 ---
 
@@ -271,9 +297,9 @@ Both cabinets share a shell (nav + header) that renders from the feature registr
 
 **`packages/ui` (shared, both cabinets — must stay generic):**
 `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`,
-`FormField`, `Card`, `Badge`, `Tabs`, `Dialog`, `Sheet`, `Toast`, `Skeleton`,
-`EmptyState`, `ErrorState`, `Avatar`, `Pagination`, `MetricTile`, `MetricRow`,
-`StatusBadge`, `DifficultyScale`.
+`FormField`, `Card`, `Badge`, `Tabs`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toast`,
+`Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `Pagination`, `MetricTile`,
+`MetricRow`, `StatusBadge`, `DifficultyScale`, `Wordmark`.
 
 Per `.claude/rules/extensibility.md`: new props on these are **optional with defaults**;
 removing or repurposing a prop requires checking both cabinets first.
@@ -395,4 +421,8 @@ user.
 
 - Cover-image aspect ratio and crop behavior (needs a real photo sample).
 - Whether the discovery map is clustered at city zoom (depends on real ride density).
-- Logo/wordmark: none exists; a text wordmark in the base typeface is the MVP placeholder.
+- ~~Logo/wordmark: none exists...~~ Resolved (CR-107): `packages/ui`'s `Wordmark`
+  component — see §4.
+- "Quiet Instrument" visual direction (CR-107) Phase 5 — any "athletic weight"
+  cover-photo/route treatment beyond the glass panel in §3 — stays blocked on real,
+  non-placeholder ride photography.

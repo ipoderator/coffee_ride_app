@@ -29,23 +29,44 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. Four items from the `/impeccable critique apps/web` backlog
-closed this session, each individually authorized with the literal word
-«внедряй»: **CR-103** (`Dialog`/`ConfirmDialog`/`Toast` primitives, wired
-into `RegistrationButton` — the critique's P0), **CR-104**
-(`RideSummaryWidget` on the organizer dashboard, backed by a new
+None active. The entire `/impeccable critique apps/web` backlog is now
+closed, each item individually authorized with the literal word «внедряй»
+across two sessions: **CR-103** (`Dialog`/`ConfirmDialog`/`Toast`
+primitives, wired into `RegistrationButton` — the critique's P0),
+**CR-104** (`RideSummaryWidget` on the organizer dashboard, backed by a new
 `GET /v1/rides/mine/summary` — the critique's P1 item 3), **CR-105**
 (sticky mobile registration CTA on `/rides/[id]`, behind
-`FEATURE_STICKY_REGISTRATION_CTA` — the critique's P1 item 4), and
-**CR-106** (icons in the cabinet nav/site header via `lucide-react` — the
-critique's P2). Full detail on all four: `docs/changelog.md`'s
-CR-103/CR-104/CR-105/CR-106 entries. Full detail on what's _left_ (the
-synthesized "Quiet Instrument" visual direction phases): `.claude/context/
-current-task.md`, kept intact at the user's standing preference so a
-fresh session/window can resume without re-deriving it, plus the two
-persisted reports (`apps/web/.impeccable/critique/2026-09-21T15-54-48Z__
-apps-web.md` and `...T16-23-05Z__apps-web.md`). No further item is
-authorized yet — the next one needs its own «внедряй».
+`FEATURE_STICKY_REGISTRATION_CTA` — the critique's P1 item 4), **CR-106**
+(icons in the cabinet nav/site header via `lucide-react` — the critique's
+P2), and now **CR-107** (the synthesized "Quiet Instrument" visual
+direction — tokens/wordmark/glass surfaces/route-line weight, the
+critique's item 6 and last remaining item). Full detail on all five:
+`docs/changelog.md`'s CR-103 through CR-107 entries. `.claude/context/
+current-task.md` is reset to idle (kept, not deleted, at the user's
+standing preference) — no item from this critique is outstanding anymore.
+Only P3 (design.md §9's component inventory vs. `packages/ui`'s actual
+contents) remains open from the original critique, unscheduled.
+
+CR-107: `--scrim`/`--glass-bg`/`--glass-border` tokens (`packages/ui/src/
+tokens.css`) plus a pure-Tailwind-utility glass treatment
+(`GLASS_PANEL_CLASSNAME`, `packages/ui/src/lib/glass.ts`) applied to
+exactly two surfaces — the cover-photo title/status panel (`RideCard`/
+`RideDetailView`, behind new `FEATURE_COVER_GLASS_PANEL`) and the CR-105
+sticky bar. New `Wordmark` component ("coffee.ride", two Golos Text
+weights) replaces the old plain-text brand in `SiteHeader`. `MapPolylineInput`
+gained additive `width`/`opacity`; `RouteMap.tsx` now renders at `width: 6`.
+Real design decision made mid-implementation: the glass treatment is pure
+Tailwind utility composition, not a custom CSS class — an unlayered
+hand-written `.glass-panel` class was drafted first and would have
+unconditionally beaten every Tailwind utility in the cascade (including the
+sticky bar's `md:` responsive reset) regardless of source order, since
+Tailwind v4's own utilities live inside `@layer utilities` and unlayered
+CSS always outranks any layer. Caught before shipping, not live. Full
+detail: `docs/changelog.md`'s CR-107 entry, including a documented
+verification gap (S3/MinIO down and no 2GIS CDN egress in this sandbox, so
+the glass-over-a-real-photo look and the route line's visual weight bump
+were confirmed via computed styles/unit tests rather than pixel inspection
+of the intended final look).
 
 CR-106: `CabinetNavItem` (`apps/web/src/lib/cabinet/types.ts`) gained an
 optional `icon` field — a _name_ (`CabinetIconName`) into a new
@@ -323,7 +344,10 @@ cleanup running against `.env`'s real `DATABASE_URL`).
 
 - terminology (§6-7, §13), component set — `MetricTile`/`MetricRow`, `StatusBadge`,
   `DifficultyScale`, `Skeleton`, `EmptyState`, `ErrorState`, `Button`/`Input`/
-  `FormField`/`Card`/`Textarea`, `Avatar`, `Dialog`/`ConfirmDialog`/`Toast` (CR-103).
+  `FormField`/`Card`/`Textarea`, `Avatar`, `Dialog`/`ConfirmDialog`/`Toast` (CR-103),
+  `Wordmark` (CR-107). `--scrim`/`--glass-bg`/`--glass-border` tokens + a shared
+  `GLASS_PANEL_CLASSNAME` (CR-107, `lib/glass.ts`) — pure Tailwind utility
+  composition, reserved for exactly two `apps/web` surfaces (see below).
 
 **packages/maps-core / packages/maps-2gis**: provider-neutral `MapProvider` interface
 (ADR-010) + a 2GIS REST adapter (geocode/reverseGeocode/getRoute, no SDK dependency). A
@@ -360,6 +384,15 @@ plain SDK pin). Also fixed here: a per-container generation guard in
 from constructing two live `Map` instances on one container (the stale one's `destroy()`
 was wiping out the surviving instance's canvas) — this had been latently present in
 `DiscoveryMap` too since CR-098.
+
+CR-107 (2026-09-22): `MapPolylineInput` gained optional `width`/`opacity` (additive, no
+new ADR — same precedent as CR-101's marker `color`/`label`). `packages/maps-2gis`'s
+`setPolyline` passes `width` straight through and encodes `opacity` as an alpha suffix on
+a 6-digit hex `color` (MapGL's own RGBA hex support). `RouteMap.tsx` now renders at
+`width: 6` instead of the renderer's own 4px default. First test file for
+`packages/maps-2gis/src/render.ts` (`render.test.ts`, new) — mocks `@2gis/mapgl` to
+assert `Polyline`'s constructor args directly, since this environment has no outbound
+network access to actually load the real SDK.
 
 **packages/resilience** (new, CR-049): shared `callWithResilience` (timeout via
 `AbortSignal` + bounded retry with jittered backoff) and `CircuitBreaker`
@@ -727,7 +760,15 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   constructing a second live `mapglAPI.Map` on a container another call already claimed
   (CR-101) — this is what keeps React Strict Mode's dev-only double-effect-invoke from
   silently blanking the map.
+- the glass surface treatment (`GLASS_PANEL_CLASSNAME`, `packages/ui/src/lib/glass.ts`)
+  staying pure Tailwind utility composition, never a hand-written unlayered CSS class —
+  an unlayered rule unconditionally outranks every `@layer utilities` rule regardless of
+  source order, which would silently break a caller's own `md:`-style responsive reset
+  on the same element (found and fixed before shipping, CR-107);
+- the glass treatment staying reserved for exactly two surfaces (cover-photo title/
+  status panel, sticky mobile registration bar) — `docs/design.md` §3's "Quiet
+  Instrument" scoping, not a general card/`MetricTile`/form treatment.
 
 ## Last updated
 
-2026-09-21 (CR-106)
+2026-09-22 (CR-107)

@@ -553,6 +553,57 @@ describe('RideDetailView', () => {
       const button = await screen.findByText('Зарегистрироваться');
       expect(button.closest('div[class*="fixed"]')).toBeInTheDocument();
     });
+
+    // CR-107 ("Quiet Instrument"): glass status panel over the cover photo,
+    // behind `FEATURE_COVER_GLASS_PANEL`.
+    it('shows the status badge below the title (not over the photo) when the flag prop is off (default)', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: {
+            ...baseRide,
+            coverImageUrl: '/v1/rides/ride-1/cover',
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const badge = await screen.findByText('Опубликован');
+      expect(
+        badge.closest('div[class*="bg-glass-bg"]'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('moves the status badge onto a glass panel over the cover photo when coverGlassPanel is on', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: {
+            ...baseRide,
+            coverImageUrl: '/v1/rides/ride-1/cover',
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" coverGlassPanel />);
+
+      const badge = await screen.findByText('Опубликован');
+      expect(badge.closest('div[class*="bg-glass-bg"]')).toBeInTheDocument();
+      // The title stays a real, non-duplicated `<h1>` below the photo either way.
+      expect(
+        screen.getByRole('heading', { level: 1, name: baseRide.title }),
+      ).toBeInTheDocument();
+    });
+
+    it('does not apply the glass panel when there is no cover photo, even with the flag on', async () => {
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(<RideDetailView rideId="ride-1" coverGlassPanel />);
+
+      const badge = await screen.findByText('Опубликован');
+      expect(
+        badge.closest('div[class*="bg-glass-bg"]'),
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe('reviews (CR-042/CR-043)', () => {

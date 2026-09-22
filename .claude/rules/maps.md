@@ -104,6 +104,10 @@ export interface MapMarkerInput {
 export interface MapPolylineInput {
   points: LatLng[];
   color?: string;
+  // CR-107 ("Quiet Instrument"): additive, same precedent as the marker
+  // color/label addition below — no new ADR.
+  width?: number;
+  opacity?: number;
 }
 
 export interface MapRenderOptions {
@@ -132,6 +136,13 @@ interface, as ADR-020's own KI-036 note anticipated). Callers resolve the actual
 `packages/ui`'s design tokens at call time (`docs/design.md` §14 — never a raw hex literal
 in `apps/web` source); `packages/maps-2gis` itself stays token-agnostic and only supplies a
 generic fallback color when none is given.
+
+`setPolyline`'s optional `width`/`opacity` (CR-107, "Quiet Instrument") follow the same
+additive-extension precedent — `RouteMap.tsx` now renders the route line at `width: 6`
+instead of the renderer's own 4px default, "more visual weight" without a neon glow (`docs/
+design.md` §3). `opacity` is applied by appending an alpha suffix to a 6-digit hex `color`
+(2GIS's own RGBA hex support) since MapGL's `PolylineOptions` has no separate opacity
+field; a non-hex color renders at full opacity rather than risk an invalid color string.
 
 Every method must apply the resilience rules in `.claude/rules/resilience.md`
 (timeout, bounded retries for idempotent calls, circuit breaker, defined fallback) at the

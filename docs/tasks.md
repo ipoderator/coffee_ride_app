@@ -802,7 +802,7 @@ ui typecheck`/`pnpm --filter web typecheck,lint,build` clean; `pnpm
 - [x] CR-100 Real email delivery via Unisender Go (ADR-007: Pending →
       Accepted) — done 2026-09-20: closes the remaining blocker KI-026/
       KI-042 both named. New `apps/api/src/lib/email/{email-provider,
-  unisender-provider}.ts` adapter (no new workspace package — single
+unisender-provider}.ts` adapter (no new workspace package — single
       consumer, same shape as `route-storage.ts`'s S3 wrapper), wrapped in
       `callWithResilience` (timeout + circuit breaker, deliberately no
       retry — email send isn't idempotency-safe). Reuses CR-050's existing
@@ -899,14 +899,14 @@ layout.tsx`. See `docs/changelog.md`.
       state — `/organizer/rides` already owns the "create your first ride"
       empty state. See `docs/changelog.md`.
 - [x] CR-105 Sticky mobile registration CTA — the `/impeccable critique
-    apps/web` P1 ("registration CTA is the hardest element to reach on
+  apps/web` P1 ("registration CTA is the hardest element to reach on
       `/rides/[id]`, no sticky/mobile placement"), done 2026-09-21: below
       `md`, `RegistrationButton` repositions into a fixed bottom bar instead
       of rendering 7 content blocks down; `md`+ is unchanged (in normal
       flow). Behind `FEATURE_STICKY_REGISTRATION_CTA` per
       `.claude/rules/extensibility.md`/CR-055. See `docs/changelog.md`.
 - [x] CR-106 Icons in the cabinet nav / site header — the `/impeccable
-    critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
+  critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
       nav/site header/mobile bottom tab bar all plain text"), done
       2026-09-21: `CabinetNavItem` gained an optional icon (a name resolved
       against a small lookup map in `CabinetShell.tsx`, not the
@@ -915,3 +915,12 @@ layout.tsx`. See `docs/changelog.md`.
       fixed live before shipping). `SiteHeader.tsx` got icons directly
       (it's a Server Component, no such indirection needed). See
       `docs/changelog.md`.
+- [x] CR-107 "Quiet Instrument" visual direction (item 6, the last of the
+      `/impeccable critique apps/web` backlog) — done 2026-09-22:
+      `--scrim`/`--glass-bg`/`--glass-border` tokens; `packages/ui`'s
+      `Wordmark` component ("coffee.ride", two Golos Text weights, resolves
+      `docs/design.md` §15's placeholder); glass title/status panel over a
+      ride's cover photo (`RideCard`/`RideDetailView`, behind
+      `FEATURE_COVER_GLASS_PANEL`) and on the CR-105 sticky bar; bolder
+      route-line weight via an additive `MapPolylineInput.width`/`opacity`.
+      See `docs/changelog.md`.

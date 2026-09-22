@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicRide } from 'types';
 import { DiscoveryList } from './components/DiscoveryList';
 import { listPublicRides } from './api';
@@ -214,5 +214,53 @@ describe('DiscoveryList', () => {
     await screen.findByText(baseRide.title);
 
     expect(screen.getByRole('tablist').className).toContain('lg:hidden');
+  });
+});
+
+// CR-107 ("Quiet Instrument"): `RideCard`'s glass title/status panel over the
+// cover photo, behind `FEATURE_COVER_GLASS_PANEL`. `RideCard` is a Server
+// Component that reads the flag directly (`vi.stubEnv`, same pattern as
+// `feature-flags.test.ts`), not threaded as a prop like `RideDetailView`'s.
+describe('RideCard cover glass panel (CR-107)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('keeps the title/status block below the photo when the flag is off (default)', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [{ ...baseRide, coverImageUrl: '/v1/rides/ride-1/cover' }],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    const title = await screen.findByText(baseRide.title);
+    expect(title.closest('div[class*="bg-glass-bg"]')).not.toBeInTheDocument();
+  });
+
+  it('moves the title/status block onto a glass panel over the photo when the flag is on', async () => {
+    vi.stubEnv('FEATURE_COVER_GLASS_PANEL', 'true');
+    listPublicRidesMock.mockResolvedValue({
+      items: [{ ...baseRide, coverImageUrl: '/v1/rides/ride-1/cover' }],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    const title = await screen.findByText(baseRide.title);
+    expect(title.closest('div[class*="bg-glass-bg"]')).toBeInTheDocument();
+  });
+
+  it('does not apply the glass panel when there is no cover photo, even with the flag on', async () => {
+    vi.stubEnv('FEATURE_COVER_GLASS_PANEL', 'true');
+    listPublicRidesMock.mockResolvedValue({
+      items: [baseRide],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    const title = await screen.findByText(baseRide.title);
+    expect(title.closest('div[class*="bg-glass-bg"]')).not.toBeInTheDocument();
   });
 });

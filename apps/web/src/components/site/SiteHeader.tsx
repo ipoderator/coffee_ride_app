@@ -1,6 +1,6 @@
 import { Home, LayoutDashboard, LogIn, UserPlus } from 'lucide-react';
 import Link from 'next/link';
-import { SITE_HEADER_TERMS } from 'ui';
+import { SITE_HEADER_TERMS, Wordmark } from 'ui';
 
 /**
  * Shared header for the public, pre-cabinet screens (`/`, `/register`,
@@ -19,8 +19,8 @@ export function SiteHeader() {
         aria-label={SITE_HEADER_TERMS.navLabel}
         className="mx-auto flex max-w-5xl items-center justify-between gap-4 p-4"
       >
-        <Link href="/" className="text-lg font-semibold text-text">
-          {SITE_HEADER_TERMS.brand}
+        <Link href="/">
+          <Wordmark />
         </Link>
         <div className="flex items-center gap-4 text-sm font-medium">
           <Link

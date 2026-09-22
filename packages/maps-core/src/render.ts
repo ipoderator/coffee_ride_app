@@ -22,6 +22,12 @@ export interface MapPolylineInput {
   points: LatLng[];
   /** Any valid CSS color string; the renderer picks its own default if omitted. */
   color?: string;
+  /** Line width in pixels; the renderer picks its own default if omitted
+   * (CR-107, "Quiet Instrument" — a bolder route line, still primary-only). */
+  width?: number;
+  /** 0-1; fully opaque if omitted. Only honored together with a hex `color`
+   * (see `packages/maps-2gis`) — a non-hex `color` renders at full opacity. */
+  opacity?: number;
 }
 
 export interface MapRenderOptions {

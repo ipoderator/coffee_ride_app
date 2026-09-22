@@ -15,6 +15,7 @@ import type {
 import {
   BICYCLE_TYPE_TERMS,
   Card,
+  cn,
   DifficultyScale,
   ErrorState,
   formatDate,
@@ -26,6 +27,7 @@ import {
   formatRating,
   formatSpeedParts,
   formatTime,
+  GLASS_PANEL_CLASSNAME,
   MetricRow,
   MetricTile,
   METRIC_TERMS,
@@ -191,9 +193,11 @@ function ReviewsSection({
 export function RideDetailView({
   rideId,
   stickyRegistrationCta = false,
+  coverGlassPanel = false,
 }: {
   rideId: string;
   stickyRegistrationCta?: boolean;
+  coverGlassPanel?: boolean;
 }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [ride, setRide] = useState<Ride | null>(null);
@@ -297,6 +301,18 @@ export function RideDetailView({
             fill
             className="object-cover"
           />
+          {coverGlassPanel && (
+            // CR-107 ("Quiet Instrument"): status-only glass panel over the
+            // photo — the full title stays the page's `<h1>` below rather
+            // than duplicating it, unlike the more compact `RideCard`.
+            <div className="absolute top-3 left-3 rounded-md bg-scrim p-1">
+              <div
+                className={cn(GLASS_PANEL_CLASSNAME, 'rounded-md px-3 py-1.5')}
+              >
+                <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -318,9 +334,11 @@ export function RideDetailView({
       >
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-            </div>
+            {!(coverGlassPanel && ride.coverImageUrl) && (
+              <div className="flex items-center gap-3">
+                <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
+              </div>
+            )}
             <h1 className="text-2xl font-semibold text-text">{ride.title}</h1>
             <p className="text-sm text-text-secondary">
               {RIDE_DETAIL_TERMS.organizedByLabel}: {organizerName}
@@ -412,7 +430,15 @@ export function RideDetailView({
           <div
             className={
               stickyRegistrationCta
-                ? 'fixed inset-x-0 bottom-0 z-10 border-t border-border bg-bg p-4 shadow-overlay md:static md:inset-x-auto md:bottom-auto md:z-auto md:border-t-0 md:bg-transparent md:p-0 md:shadow-none'
+                ? // CR-107 ("Quiet Instrument"): glass treatment on this
+                  // surface too (the two the visual direction names) —
+                  // `GLASS_PANEL_CLASSNAME` supplies the border on every
+                  // side, so the old `border-t border-border` is dropped
+                  // rather than fighting it for the same property.
+                  cn(
+                    GLASS_PANEL_CLASSNAME,
+                    'fixed inset-x-0 bottom-0 z-10 p-4 shadow-overlay md:static md:inset-x-auto md:bottom-auto md:z-auto md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none',
+                  )
                 : undefined
             }
           >

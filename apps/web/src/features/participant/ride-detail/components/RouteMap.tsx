@@ -71,6 +71,9 @@ export function RouteMap({
             ? {
                 points: geometry,
                 color: getCssColorVar('--primary'),
+                // CR-107 ("Quiet Instrument"): a bolder route line than the
+                // renderer's own 4px default — still primary-only, no glow.
+                width: 6,
               }
             : null,
         );

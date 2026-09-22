@@ -21,6 +21,9 @@ export default async function RideDetailPage({
   // which is a Client Component. `pb-24 md:pb-6` mirrors `CabinetShell`'s own
   // fixed-bottom-bar spacer so the bar never overlaps page content.
   const stickyRegistrationCta = isFeatureEnabled('STICKY_REGISTRATION_CTA');
+  // CR-107 ("Quiet Instrument"): glass status panel over the cover photo,
+  // same server-side-read/thread-as-prop reasoning as the flag above.
+  const coverGlassPanel = isFeatureEnabled('COVER_GLASS_PANEL');
   return (
     <main
       className={
@@ -32,6 +35,7 @@ export default async function RideDetailPage({
       <RideDetailView
         rideId={id}
         stickyRegistrationCta={stickyRegistrationCta}
+        coverGlassPanel={coverGlassPanel}
       />
     </main>
   );

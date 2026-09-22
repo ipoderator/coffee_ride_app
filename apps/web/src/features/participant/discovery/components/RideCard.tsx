@@ -2,8 +2,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { PublicRide } from 'types';
 import { apiAssetUrl } from '@/lib/api/asset-url';
+import { isFeatureEnabled } from '@/lib/cabinet/feature-flags';
 import {
   Card,
+  GLASS_PANEL_CLASSNAME,
   MetricRow,
   MetricTile,
   METRIC_TERMS,
@@ -11,6 +13,7 @@ import {
   RIDE_DISCOVERY_TERMS,
   RIDE_STATUS_TERMS,
   StatusBadge,
+  cn,
   formatDate,
   formatDistanceParts,
   formatElevationParts,
@@ -30,6 +33,11 @@ import {
 export function RideCard({ ride }: { ride: PublicRide }) {
   const statusTerm = RIDE_STATUS_TERMS[ride.status];
   const startDate = new Date(ride.startsAt);
+  // CR-107 ("Quiet Instrument"): glass title/status panel over the cover
+  // photo instead of the plain block below it — `RideCard` is a Server
+  // Component, so the flag reads directly rather than threading a prop.
+  const coverGlassPanel =
+    isFeatureEnabled('COVER_GLASS_PANEL') && ride.coverImageUrl !== null;
 
   return (
     <Link href={`/rides/${ride.id}`}>
@@ -47,13 +55,35 @@ export function RideCard({ ride }: { ride: PublicRide }) {
               fill
               className="object-cover"
             />
+            {coverGlassPanel && (
+              // `--scrim` guarantees the panel reads against any uploaded
+              // photo (docs/design.md §3); `GLASS_PANEL_CLASSNAME` is the
+              // shared `--glass-bg`/`--glass-border` treatment, reserved for
+              // exactly this surface and the sticky registration bar.
+              <div className="absolute inset-x-0 bottom-0 bg-scrim p-2 pt-6">
+                <div
+                  className={cn(
+                    GLASS_PANEL_CLASSNAME,
+                    'flex items-center gap-2 rounded-md px-3 py-1.5',
+                  )}
+                >
+                  <p className="text-sm font-medium text-text">{ride.title}</p>
+                  <StatusBadge
+                    label={statusTerm.label}
+                    tone={statusTerm.tone}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
 
-        <div className="flex items-center gap-3">
-          <p className="text-sm font-medium text-text">{ride.title}</p>
-          <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-        </div>
+        {!coverGlassPanel && (
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-medium text-text">{ride.title}</p>
+            <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
+          </div>
+        )}
 
         <p className="text-sm text-text-secondary">
           {RIDE_DISCOVERY_TERMS.organizedByLabel}: {ride.organizer.name}

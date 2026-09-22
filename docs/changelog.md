@@ -1766,3 +1766,115 @@ fully worked through except the synthesized "Quiet Instrument" visual
 direction phases (tokens → cards → map polyline weight → wordmark) — still
 not authorized. P3 (`docs/design.md` §9 component inventory vs.
 `packages/ui`'s actual contents) also remains open.
+
+## 2026-09-22 — CR-107 — "Quiet Instrument" visual direction (Phases 0/2/3)
+
+Summary: `.claude/context/current-task.md`'s recommended order, item 6 — the
+last item of the `/impeccable critique apps/web` backlog, synthesized as the
+"Quiet Instrument" visual direction. User authorized it («внедряй»). Phase 5
+("athletic weight" cover-photo/route treatment) stays explicitly blocked on
+real, non-placeholder photography per the critique — not built.
+
+**Tokens (Phase 0):** `packages/ui/src/tokens.css` gained `--scrim` (a
+warm-near-black wash, same value in both themes since it sits on a photo,
+not app chrome) and `--glass-bg`/`--glass-border` (this theme's own
+`bg-raised`/`border` at ~72%/60% opacity, so the two glass surfaces in
+`docs/design.md` §3 still read as a translucent view of the app's own
+surface). The glass _treatment_ itself (`GLASS_PANEL_CLASSNAME`, new
+`packages/ui/src/lib/glass.ts`) is deliberately pure Tailwind utility
+composition (`bg-glass-bg border border-glass-border backdrop-blur-lg
+motion-reduce:backdrop-blur-none [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none`),
+not a hand-written CSS class — a real bug caught before shipping: an
+unlayered custom `.glass-panel` class (the first draft) unconditionally
+outranks every Tailwind utility in the cascade regardless of source order,
+since Tailwind v4's own utilities live inside `@layer utilities` and
+unlayered rules always beat any layer. That would have made the sticky
+bar's `md:bg-transparent` desktop reset silently never apply. Pure utility
+composition sidesteps the whole problem and gets graceful `backdrop-filter`
+degradation for free (the browser simply ignores the unsupported property).
+
+**Wordmark (Phase 0):** new `packages/ui`'s `Wordmark` component — Golos
+Text, lowercase, "coffee" (weight 500) + ".ride" (weight 400), both
+`text-primary`. Resolves `docs/design.md` §15's placeholder note. Wired
+into `SiteHeader.tsx` in place of the old plain-text `SITE_HEADER_TERMS.brand`
+("Coffee Ride"), which is now unused and removed from `packages/ui/src/
+terminology.ts`.
+
+**Glass surfaces (Phase 2, behind `FEATURE_COVER_GLASS_PANEL`, CR-055
+mechanism):** exactly the two surfaces the critique named. (1) A glass
+title/status panel over a ride's cover photo — `RideCard.tsx` (a Server
+Component, reads the flag directly) moves its title+`StatusBadge` onto the
+panel over the photo when both the flag is on and a cover photo exists,
+under a `--scrim` wash for AA contrast against an arbitrary photo;
+`RideDetailView.tsx` (a Client Component, flag threaded as a prop from
+`app/rides/[id]/page.tsx`, same pattern as CR-105's `stickyRegistrationCta`)
+shows only the status badge on the panel — the full title stays the page's
+own `<h1>` below rather than duplicating it, since the detail page already
+has room for a proper heading unlike the compact card. (2) The CR-105
+sticky mobile registration bar now uses the same glass treatment instead of
+a flat `bg-bg` fill — already flag-gated by `FEATURE_STICKY_REGISTRATION_CTA`,
+so no second flag needed there.
+
+**Route line weight (Phase 3, changelog note per the critique, not a new
+ADR — same precedent as ADR-020's marker color/label addition):**
+`MapPolylineInput` (`packages/maps-core/src/render.ts`) gained optional
+`width`/`opacity`. `packages/maps-2gis/src/render.ts`'s `setPolyline` passes
+`width` straight through to MapGL's `Polyline` (default unchanged at 4px)
+and encodes `opacity` as an alpha suffix on a 6-digit hex `color` (MapGL's
+own RGBA hex support — it has no separate opacity field); a non-hex color
+ignores `opacity` rather than risk an invalid color string. `RouteMap.tsx`
+now renders at `width: 6` — "more visual weight", still primary-only, no
+glow.
+
+Files: `packages/ui/src/{tokens.css,index.ts,terminology.ts,lib/glass.ts,
+components/{Wordmark.tsx,Wordmark.test.tsx}}`, `packages/maps-core/src/
+render.ts`, `packages/maps-2gis/src/{render.ts,render.test.ts}` (`render.test.ts`
+new — no prior test file existed for this module), `apps/web/src/{components/
+site/SiteHeader.tsx,app/rides/[id]/page.tsx,features/participant/discovery/
+components/RideCard.tsx,features/participant/discovery/discovery.test.tsx,
+features/participant/ride-detail/components/{RideDetailView,RouteMap}.tsx,
+features/participant/ride-detail/ride-detail.test.tsx}`, `.env.example`,
+`docs/design.md` (§3, §4, §9, §15), `.claude/rules/maps.md`.
+
+Decisions: none new — every change here is additive per the critique's own
+framing (new tokens/component/flag/interface field), consistent with
+ADR-020's precedent for extending `packages/maps-core`'s render contracts
+without a new ADR.
+
+Validation: `pnpm --filter ui --filter maps-core --filter maps-2gis --filter
+web typecheck/lint` clean. Tests: `ui` 109/109 (6 new: `Wordmark.test.tsx`),
+`maps-2gis` 15/15 (4 new: `render.test.ts`, first test file for that
+module — width/opacity/color-alpha/non-hex-color cases against a mocked
+`@2gis/mapgl`), `web` 225/225 (6 new: 3 `RideDetailView` cases for
+`coverGlassPanel`, 3 `RideCard`/`DiscoveryList` cases for the same flag via
+`vi.stubEnv`). Live-verified against the real dev stack: restarted `next
+dev` with both `FEATURE_STICKY_REGISTRATION_CTA=1 FEATURE_COVER_GLASS_PANEL=1`
+and a fresh `.next` (same procedure as CR-105); confirmed via computed
+styles in a real (headless) browser that the glass panels render
+`background: rgba(255,255,255,0.72)` / `backdrop-filter: blur(16px)` at
+mobile width (390px) and correctly reset to `background: transparent` /
+`backdrop-filter: none` for the sticky bar at desktop width (≥768px) — the
+exact cascade behavior the custom-class rewrite above was fixing. Wordmark
+verified live on `/` (zero console errors). Restored a temporary
+`cover_image_key` on a QA ride (`CR-103 QA Ride`) to exercise the cover-panel
+branch, then cleared it back to `NULL` afterward. Restarted `next dev` a
+second time without the flags, with a fresh `.next`, to leave the
+environment exactly as found.
+
+Known limitation: the actual photo-behind-glass look and the route line's
+visual weight bump could not be confirmed pixel-by-pixel in this
+environment — S3/MinIO is down here (no real cover photo can be uploaded or
+served, so the glass panel was only verified over a broken-image
+placeholder) and the 2GIS MapGL SDK could not be reached from this sandbox
+(no outbound network access to its CDN, so the route map never left its
+loading state). Both are pre-existing environment constraints, not
+regressions from this change — logged as a follow-up to re-verify visually
+once a real environment (or a working local S3 + real network egress) is
+available.
+
+Next logical task: none currently authorized — the `/impeccable critique
+apps/web` backlog (P0/P1/P2 and now the visual direction) is fully worked
+through. Remaining open items: P3 (`docs/design.md` §9 component inventory
+vs. `packages/ui`'s actual contents — `Tabs`/`Sheet`/`Select`/`Checkbox`/
+`RadioGroup`/`DatePicker`/`Pagination` still listed but not built) and the
+pixel-verification follow-up above.
