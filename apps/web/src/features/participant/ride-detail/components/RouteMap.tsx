@@ -111,13 +111,13 @@ export function RouteMap({
           geometry.length >= 2
             ? {
                 points: geometry,
-                color: getCssColorVar('--primary'),
-                // CR-107 ("Quiet Instrument"): a bolder route line than the
-                // renderer's own 4px default — still primary-only, no glow.
+                // ADR-021 («Топокарта»): the route is the overprint ink,
+                // 6px over the renderer's 4px default, no glow.
+                color: getCssColorVar('--route'),
                 width: 6,
-                // Casing in the page's own surface color so the line stays
+                // Casing (paper in light, graphite in dark) keeps the line
                 // legible over any basemap detail (roads, water, parks).
-                outlineColor: getCssColorVar('--bg-raised'),
+                outlineColor: getCssColorVar('--route-casing'),
               }
             : null,
         );

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   organizerProfiles,
   registrations,
+  rideGroups,
   rides,
   users,
   waitlistEntries,
@@ -10,10 +11,12 @@ import type { DbClient } from 'db';
 import type {
   ListMyRegistrationsResponse,
   ListRideParticipantsResponse,
+  ListRideRidersResponse,
   ListRideWaitlistResponse,
   ListRidesQuery,
   MyRegistrationsQuery,
   Registration,
+  RideGroupRef,
   RideParticipantSummary,
   WaitlistEntry,
 } from 'types';
@@ -125,6 +128,78 @@ const INVALID_CURSOR = () =>
     'The cursor parameter is not a valid pagination cursor.',
   );
 
+// CR-117 ("Pace groups"). Input errors about the chosen group, not conflicts with the
+// ride's state — hence `422`, not `409`. `group_not_found` covers "no such group",
+// "a group of a different ride", and "this ride has no groups at all" alike.
+const GROUP_REQUIRED = () =>
+  new RegistrationServiceError(
+    'group_required',
+    422,
+    'Group required',
+    'This ride has pace groups — choose one (groupId).',
+  );
+
+const GROUP_NOT_FOUND = () =>
+  new RegistrationServiceError(
+    'group_not_found',
+    422,
+    'Group not found',
+    'No group with that id exists for this ride.',
+  );
+
+// Same frozen set as `ride-groups.service.ts`'s organizer-side rule: once a ride is
+// finished or cancelled, nobody's group changes any more.
+const GROUP_CHANGE_NOT_ALLOWED = () =>
+  new RegistrationServiceError(
+    'group_change_not_allowed',
+    409,
+    'Group change not allowed',
+    'Groups cannot be changed once a ride is finished or cancelled.',
+  );
+
+type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+
+/**
+ * CR-117: resolves the group a register/waitlist call asked for, inside the caller's
+ * locked transaction (the `rides` row lock also serializes group deletes —
+ * `ride-groups.service.ts`'s `deleteRideGroup` takes the same lock). Returns the
+ * group id to store, or `null` for a ride without groups. The composite FK
+ * `registrations_group_ride_fk` is the DB-level backstop for "same ride".
+ */
+async function resolveGroupChoice(
+  tx: DbTransaction,
+  rideId: string,
+  groupId: string | undefined,
+): Promise<string | null> {
+  const groups = await tx
+    .select({ id: rideGroups.id })
+    .from(rideGroups)
+    .where(eq(rideGroups.rideId, rideId));
+  if (groupId === undefined) {
+    if (groups.length > 0) throw GROUP_REQUIRED();
+    return null;
+  }
+  if (!groups.some((group) => group.id === groupId)) {
+    throw GROUP_NOT_FOUND();
+  }
+  return groupId;
+}
+
+function toGroupRef(row: {
+  groupId: string | null;
+  groupName: string | null;
+  groupPaceKmh: number | null;
+}): RideGroupRef | null {
+  if (
+    row.groupId === null ||
+    row.groupName === null ||
+    row.groupPaceKmh === null
+  ) {
+    return null;
+  }
+  return { id: row.groupId, name: row.groupName, paceKmh: row.groupPaceKmh };
+}
+
 export function toRegistration(
   row: typeof registrations.$inferSelect,
 ): Registration {
@@ -133,6 +208,7 @@ export function toRegistration(
     rideId: row.rideId,
     userId: row.userId,
     status: row.status,
+    groupId: row.groupId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
@@ -147,6 +223,7 @@ export function toWaitlistEntry(
     rideId: row.rideId,
     userId: row.userId,
     status: row.status,
+    groupId: row.groupId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
@@ -214,12 +291,16 @@ function toRideParticipantSummary(row: {
   userId: string;
   displayName: string | null;
   createdAt: Date;
+  groupId: string | null;
+  groupName: string | null;
+  groupPaceKmh: number | null;
 }): RideParticipantSummary {
   return {
     id: row.id,
     userId: row.userId,
     displayName: row.displayName,
     createdAt: row.createdAt.toISOString(),
+    group: toGroupRef(row),
   };
 }
 
@@ -265,15 +346,20 @@ export async function listParticipants(
     );
   }
 
+  // CR-117: `leftJoin` on the group — a registration without one still lists.
   const rows = await db
     .select({
       id: registrations.id,
       userId: registrations.userId,
       displayName: users.displayName,
       createdAt: registrations.createdAt,
+      groupId: registrations.groupId,
+      groupName: rideGroups.name,
+      groupPaceKmh: rideGroups.paceKmh,
     })
     .from(registrations)
     .innerJoin(users, eq(registrations.userId, users.id))
+    .leftJoin(rideGroups, eq(registrations.groupId, rideGroups.id))
     .where(and(...conditions))
     .orderBy(asc(registrations.createdAt), asc(registrations.id))
     .limit(limit + 1);
@@ -328,9 +414,13 @@ export async function listWaitlist(
       userId: waitlistEntries.userId,
       displayName: users.displayName,
       createdAt: waitlistEntries.createdAt,
+      groupId: waitlistEntries.groupId,
+      groupName: rideGroups.name,
+      groupPaceKmh: rideGroups.paceKmh,
     })
     .from(waitlistEntries)
     .innerJoin(users, eq(waitlistEntries.userId, users.id))
+    .leftJoin(rideGroups, eq(waitlistEntries.groupId, rideGroups.id))
     .where(and(...conditions))
     .orderBy(asc(waitlistEntries.createdAt), asc(waitlistEntries.id))
     .limit(limit + 1);
@@ -344,6 +434,79 @@ export async function listWaitlist(
       : null;
 
   return { items: page.map(toRideParticipantSummary), nextCursor };
+}
+
+/**
+ * CR-117: `GET /v1/rides/:id/riders` — who is riding, for any *signed-in* viewer
+ * (the route requires a session; anonymous visitors only see
+ * `GetRideResponse.registrationsCount`). Same visibility as `GET /v1/rides/:id`:
+ * `404 ride_not_found` for a non-existent ride or someone else's `draft`.
+ *
+ * Deliberately narrower than the organizer's {@link listParticipants}: display name
+ * and group only — no user id, registration id, email, phone or emergency data
+ * (`.claude/rules/security.md`: "return unnecessary participant data" is a never).
+ * Same active-only filter, `createdAt asc` order and cursor mechanics as
+ * {@link listParticipants}; the opaque cursor is the only place a registration id
+ * travels, and it grants nothing on its own.
+ */
+export async function listRiders(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  query: ListRidesQuery,
+): Promise<ListRideRidersResponse> {
+  await resolveVisibleRideStatus(db, userId, rideId);
+
+  const limit = clampLimit(query.limit);
+  const conditions = [
+    eq(registrations.rideId, rideId),
+    eq(registrations.status, 'active'),
+  ];
+  if (query.cursor) {
+    let cursorKey;
+    try {
+      cursorKey = decodeCursor(query.cursor);
+    } catch (error) {
+      if (error instanceof CursorError) throw INVALID_CURSOR();
+      throw error;
+    }
+    // Same `date_trunc` fix as {@link listParticipants} — see its comment.
+    conditions.push(
+      sql`(date_trunc('milliseconds', ${registrations.createdAt}), ${registrations.id}) > (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: registrations.id,
+      createdAt: registrations.createdAt,
+      displayName: users.displayName,
+      groupId: registrations.groupId,
+      groupName: rideGroups.name,
+      groupPaceKmh: rideGroups.paceKmh,
+    })
+    .from(registrations)
+    .innerJoin(users, eq(registrations.userId, users.id))
+    .leftJoin(rideGroups, eq(registrations.groupId, rideGroups.id))
+    .where(and(...conditions))
+    .orderBy(asc(registrations.createdAt), asc(registrations.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({ sortValue: last.createdAt.toISOString(), id: last.id })
+      : null;
+
+  return {
+    items: page.map((row) => ({
+      displayName: row.displayName,
+      group: toGroupRef(row),
+    })),
+    nextCursor,
+  };
 }
 
 /**
@@ -499,6 +662,7 @@ export async function createRegistration(
   queue: NotificationQueue | null,
   userId: string,
   rideId: string,
+  groupId?: string,
 ): Promise<{ registration: Registration; created: boolean }> {
   // Resolves 404 vs. a later 409 correctly (visibility) before the lock.
   await resolveVisibleRideStatus(db, userId, rideId);
@@ -534,6 +698,12 @@ export async function createRegistration(
       return { row: existingActive, created: false };
     }
 
+    // CR-117: after the idempotent-replay return above (a retry returns the
+    // existing registration as-is, whatever group it carries — `PATCH .../register`
+    // changes groups), before capacity: an invalid choice is the caller's input
+    // error whether or not the ride is full. Capacity itself stays ride-level.
+    const chosenGroupId = await resolveGroupChoice(tx, rideId, groupId);
+
     if (rideRow.participantLimit !== null) {
       const [countRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -551,7 +721,7 @@ export async function createRegistration(
 
     const [row] = await tx
       .insert(registrations)
-      .values({ rideId, userId, status: 'active' })
+      .values({ rideId, userId, status: 'active', groupId: chosenGroupId })
       .returning();
     if (!row) {
       throw new Error('Registration insert returned no row.');
@@ -570,6 +740,61 @@ export async function createRegistration(
   }
 
   return { registration: toRegistration(row), created };
+}
+
+/**
+ * CR-117: `PATCH /v1/rides/:id/register` — the caller moves their own active
+ * registration to another group of the same ride. Under the same `rides` row lock as
+ * every other registration write, so it can't race a group delete. `404
+ * registration_not_found` without an active registration (covers a non-existent
+ * ride the same way `cancelRegistration` does), `409 group_change_not_allowed` once
+ * the ride is finished/cancelled, `422 group_not_found` for a group that isn't this
+ * ride's.
+ */
+export async function updateRegistrationGroup(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  groupId: string,
+): Promise<Registration> {
+  const row = await db.transaction(async (tx) => {
+    const [rideRow] = await tx
+      .select({ status: rides.status })
+      .from(rides)
+      .where(eq(rides.id, rideId))
+      .for('update')
+      .limit(1);
+
+    const [existing] = await tx
+      .select({ id: registrations.id })
+      .from(registrations)
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.userId, userId),
+          eq(registrations.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (!rideRow || !existing) {
+      throw REGISTRATION_NOT_FOUND();
+    }
+    if (rideRow.status === 'finished' || rideRow.status === 'cancelled') {
+      throw GROUP_CHANGE_NOT_ALLOWED();
+    }
+
+    const chosenGroupId = await resolveGroupChoice(tx, rideId, groupId);
+    const [updated] = await tx
+      .update(registrations)
+      .set({ groupId: chosenGroupId, updatedAt: new Date() })
+      .where(eq(registrations.id, existing.id))
+      .returning();
+    if (!updated) {
+      throw new Error('Registration update returned no row.');
+    }
+    return updated;
+  });
+  return toRegistration(row);
 }
 
 /**
@@ -632,7 +857,11 @@ export async function cancelRegistration(
       .where(eq(registrations.id, existing.id));
 
     const [oldestWaiting] = await tx
-      .select({ id: waitlistEntries.id, userId: waitlistEntries.userId })
+      .select({
+        id: waitlistEntries.id,
+        userId: waitlistEntries.userId,
+        groupId: waitlistEntries.groupId,
+      })
       .from(waitlistEntries)
       .where(
         and(
@@ -651,10 +880,13 @@ export async function cancelRegistration(
           updatedAt: new Date(),
         })
         .where(eq(waitlistEntries.id, oldestWaiting.id));
+      // CR-117: the group chosen when joining the queue carries over. It still
+      // exists — `deleteRideGroup` refuses while a `waiting` entry references it.
       await tx.insert(registrations).values({
         rideId,
         userId: oldestWaiting.userId,
         status: 'active',
+        groupId: oldestWaiting.groupId,
       });
     }
     return oldestWaiting?.userId ?? null;
@@ -690,6 +922,7 @@ export async function joinWaitlist(
   db: DbClient,
   userId: string,
   rideId: string,
+  groupId?: string,
 ): Promise<{ waitlistEntry: WaitlistEntry; created: boolean }> {
   await resolveVisibleRideStatus(db, userId, rideId);
 
@@ -737,6 +970,11 @@ export async function joinWaitlist(
       return { row: existingWaiting, created: false };
     }
 
+    // CR-117: same group rules as `createRegistration` — the choice is made when
+    // joining, so a promotion never produces a group-less registration on a ride
+    // that has groups.
+    const chosenGroupId = await resolveGroupChoice(tx, rideId, groupId);
+
     if (rideRow.participantLimit !== null) {
       const [countRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -757,7 +995,7 @@ export async function joinWaitlist(
 
     const [row] = await tx
       .insert(waitlistEntries)
-      .values({ rideId, userId, status: 'waiting' })
+      .values({ rideId, userId, status: 'waiting', groupId: chosenGroupId })
       .returning();
     if (!row) {
       throw new Error('Waitlist entry insert returned no row.');

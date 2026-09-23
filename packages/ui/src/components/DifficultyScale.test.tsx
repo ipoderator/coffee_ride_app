@@ -20,7 +20,7 @@ describe('DifficultyScale', () => {
     const segments = segmentContainer?.querySelectorAll('span') ?? [];
     expect(segments).toHaveLength(5);
     const filled = Array.from(segments).filter((segment) =>
-      segment.className.includes('bg-primary'),
+      segment.className.includes('bg-frame'),
     );
     expect(filled).toHaveLength(3);
   });

@@ -70,4 +70,25 @@ describe('ConfirmDialog', () => {
       screen.getByRole('button', { name: 'Отменить регистрацию' }),
     ).toBeDisabled();
   });
+
+  // ADR-021: the confirmation step is the one place a destructive action is
+  // filled red; everywhere else `danger` is an outline.
+  it('fills the destructive confirm button, while the cancel stays an outline', () => {
+    render(
+      <ConfirmDialog
+        open
+        onClose={() => {}}
+        onConfirm={() => {}}
+        title="Отменить регистрацию?"
+        confirmLabel="Отменить регистрацию"
+        cancelLabel="Остаться"
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Отменить регистрацию' }).className,
+    ).toMatch(/(^|\s)bg-danger(\s|$)/);
+    expect(
+      screen.getByRole('button', { name: 'Остаться' }).className,
+    ).not.toMatch(/(^|\s)bg-danger(\s|$)/);
+  });
 });

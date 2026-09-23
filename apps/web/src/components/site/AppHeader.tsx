@@ -308,7 +308,7 @@ function MenuLink({
       href={href}
       role="menuitem"
       aria-current={active ? 'page' : undefined}
-      className={cn(NAV_MENU_ITEM_CLASSNAME, active && 'bg-bg text-text')}
+      className={cn(NAV_MENU_ITEM_CLASSNAME, active && 'bg-surface text-text')}
     >
       {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
       {label}

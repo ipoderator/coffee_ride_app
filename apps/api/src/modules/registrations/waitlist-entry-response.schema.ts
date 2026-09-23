@@ -9,6 +9,8 @@ export const waitlistEntryResponseSchema = z.object({
   rideId: z.string(),
   userId: z.string(),
   status: z.enum(WAITLIST_ENTRY_STATUSES),
+  // CR-117 ("Pace groups"): additive.
+  groupId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   cancelledAt: z.string().nullable(),

@@ -22,6 +22,9 @@ export interface WaitlistEntry {
   rideId: string;
   userId: string;
   status: WaitlistEntryStatus;
+  // CR-117: the group chosen when joining the queue; carried into the
+  // `Registration` a promotion creates.
+  groupId: string | null;
   createdAt: string;
   updatedAt: string;
   cancelledAt: string | null;

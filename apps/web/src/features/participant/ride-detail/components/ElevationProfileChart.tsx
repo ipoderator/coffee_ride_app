@@ -13,8 +13,8 @@ const PADDING_Y = 12;
 
 /**
  * `/rides/[id]`'s elevation profile (CR-028, `docs/design.md` §6 "Elevation
- * profile"): area chart, x = distance, y = elevation, muted `primary` fill at ~15%
- * opacity with a 1.5px stroke; the y axis floors at the data's own minimum (not
+ * profile"): area chart, x = distance, y = elevation, `contour` brown fill at ~15%
+ * opacity with a 1.5px stroke (ADR-021: the map's own elevation ink); the y axis floors at the data's own minimum (not
  * forced to zero) so a small elevation spread over a long distance doesn't render
  * flat. Hover/touch shows distance + elevation at the nearest point; the numeric
  * "keyboard-accessible alternative" the spec calls for is the `MetricTile`
@@ -98,10 +98,10 @@ export function ElevationProfileChart({
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
-        <path d={areaPath} className="fill-primary/15" />
+        <path d={areaPath} className="fill-contour/15" />
         <path
           d={linePath}
-          className="fill-none stroke-primary"
+          className="fill-none stroke-contour"
           strokeWidth={1.5}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -119,7 +119,7 @@ export function ElevationProfileChart({
         ) : null}
       </svg>
       {hovered ? (
-        <div className="pointer-events-none absolute top-0 rounded-md border border-border bg-bg-raised px-2 py-1 text-xs text-text shadow-sm">
+        <div className="pointer-events-none absolute top-0 rounded-md border border-border bg-bg-raised px-2 py-1 text-xs text-text shadow-overlay">
           {formatDistance(hovered.distanceKm)} ·{' '}
           {hovered.elevationMeters !== null
             ? formatElevation(hovered.elevationMeters)

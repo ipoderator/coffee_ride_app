@@ -35,8 +35,8 @@ export function StatusBadge({ label, tone, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        // full radius for pills/badges (docs/design.md §5)
-        'inline-flex items-center rounded-full px-3 py-1 text-sm leading-none font-medium',
+        // 4px "printed stamp" chip, not a pill (docs/design.md §5, ADR-021)
+        'inline-flex items-center rounded-md px-3 py-1 text-sm leading-none font-medium',
         TONE_STYLES[tone],
         className,
       )}

@@ -27,10 +27,12 @@ export function MetricTile({ label, value, unit, className }: MetricTileProps) {
     // No background/border here on purpose (docs/design.md §6: "tiles never carry
     // their own background color; separation comes from spacing").
     <dl className={cn('flex flex-col gap-1', className)}>
-      <dt className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
+      {/* ADR-021: label and value in the display face (Sofia Sans
+          Condensed), tabular figures kept (docs/design.md §4/§6). */}
+      <dt className="font-display text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">
         {label}
       </dt>
-      <dd className="flex items-baseline gap-1 whitespace-nowrap text-2xl leading-tight font-semibold tabular-nums text-text md:text-3xl">
+      <dd className="flex items-baseline gap-1 whitespace-nowrap font-display text-2xl leading-tight font-semibold tabular-nums text-text md:text-3xl">
         <span>{value}</span>
         {unit ? (
           <span className="text-[0.6em] font-normal text-text-secondary">

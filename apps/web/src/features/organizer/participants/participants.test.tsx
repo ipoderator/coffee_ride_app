@@ -26,12 +26,14 @@ const first: RideParticipantSummary = {
   userId: 'user-1',
   displayName: 'Анна Смирнова',
   createdAt: '2027-01-01T10:00:00.000Z',
+  group: null,
 };
 const second: RideParticipantSummary = {
   id: 'reg-2',
   userId: 'user-2',
   displayName: null,
   createdAt: '2027-01-02T10:00:00.000Z',
+  group: null,
 };
 
 describe('ParticipantTable', () => {

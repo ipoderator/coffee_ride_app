@@ -1,5 +1,9 @@
 import type { Metadata } from 'next';
-import { Golos_Text, IBM_Plex_Mono } from 'next/font/google';
+import {
+  Golos_Text,
+  IBM_Plex_Mono,
+  Sofia_Sans_Condensed,
+} from 'next/font/google';
 import Script from 'next/script';
 import { ToastProvider } from 'ui';
 import { AppHeader } from '@/components/site/AppHeader';
@@ -23,6 +27,19 @@ const golosText = Golos_Text({
   display: 'swap',
 });
 
+// ADR-021 («Топокарта»): the display face — headings, labels, metric
+// numerals, the wordmark (`font-display`). Variable font, so no `weight` list.
+// Sofia Sans' default Cyrillic is the Bulgarian form set (в/д/и/т drawn
+// like b/g/u/m); the Russian forms come from its `locl` OpenType feature,
+// which browsers apply only when the text's language is Russian. That is
+// what `<html lang="ru">` below guarantees — do not remove it, and do not set
+// a different `lang` on any element rendered in this face.
+const sofiaSansCondensed = Sofia_Sans_Condensed({
+  subsets: ['cyrillic', 'latin'],
+  variable: '--font-sofia-condensed',
+  display: 'swap',
+});
+
 const ibmPlexMono = IBM_Plex_Mono({
   subsets: ['cyrillic', 'latin'],
   weight: ['400', '500'],
@@ -42,7 +59,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className={`${golosText.variable} ${ibmPlexMono.variable}`}>
+    // `suppressHydrationWarning`: THEME_INIT_SCRIPT adds `.dark` to this
+    // element before hydration on purpose, so its `class` legitimately
+    // differs from the server HTML (one level deep only — children are
+    // still checked).
+    <html
+      lang="ru"
+      suppressHydrationWarning
+      className={`${golosText.variable} ${sofiaSansCondensed.variable} ${ibmPlexMono.variable}`}
+    >
       <head>
         <Script
           id="theme-init"

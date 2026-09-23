@@ -101,6 +101,17 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   `(rideId, position)`), `createdAt`/`updatedAt`/`updatedBy` (audit trail). No
   separate read endpoint — exposed as an additive `stops` array on `GET
 /v1/rides/:id`.
+- RideGroup — a pace group inside one ride (CR-117, ADR-022): `id`, `rideId` (FK →
+  Ride, `ON DELETE CASCADE`), `name` (not null, CHECK 1–60 chars, unique per ride
+  case-insensitively — `ride_groups_ride_id_name_unique` on `(ride_id, lower(name))`),
+  `paceKmh` (not null, numeric(4,1), CHECK 5–60), `description` (nullable, ≤500 —
+  Zod-layer limit only), `position` (not null, CHECK `>= 0`, unique per
+  `(rideId, position)`, kept dense `0..n-1` by the service — appended on create,
+  movable via `PATCH`, renumbered on delete), `createdAt`/`updatedAt`/`updatedBy`.
+  A unique constraint on `(id, rideId)` is the target of the composite FKs from
+  `Registration`/`WaitlistEntry`. At most 6 per ride — service-enforced under the
+  `rides` row lock (a CHECK on `position` would leave no free slot for the two-phase
+  renumbering a reorder needs). Capacity stays ride-level; no per-group limit.
 - RideRequirement — participation rules.
 - RideService — included logistics/services.
 - Registration — User ↔ Ride (CR-032, "Register"): `id`, `rideId` (FK → Ride,
@@ -116,13 +127,21 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   transaction as the insert, not a separate constraint — see
   `apps/api/src/modules/registrations/registrations.service.ts`. No separate read
   endpoint — exposed as additive `registrationsCount`/`viewerRegistration` fields on
-  `GET /v1/rides/:id`.
+  `GET /v1/rides/:id`. CR-117 added `groupId` (nullable uuid): composite FK
+  `registrations_group_ride_fk` `(group_id, ride_id) → ride_groups(id, ride_id)`
+  (`ON DELETE NO ACTION`, `MATCH SIMPLE` — `null` skips the check) guarantees the
+  group belongs to the same ride; indexed (`registrations_group_id_idx`) for the
+  per-group counts and the delete-group reference check. Required by the service once
+  the ride has groups; `null` for rides without groups or registrations made before
+  groups existed.
 - WaitlistEntry — user waiting for a place (CR-036, "Waitlist"): `id`, `rideId` (FK →
   Ride, `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`), `status` (not
   null, pg enum `waiting`/`promoted`/`cancelled`, default `waiting`), `createdAt`/
   `updatedAt` (`timestamptz`), `cancelledAt` (nullable, set only when `status` becomes
   `cancelled` — enforced by a CHECK), `promotedAt` (nullable, set only when `status`
-  becomes `promoted` — enforced by a CHECK). Queue order is `createdAt` ascending, no
+  becomes `promoted` — enforced by a CHECK), `groupId` (CR-117, nullable — same
+  composite FK as `Registration.groupId`, `waitlist_entries_group_ride_fk`; copied into
+  the registration a promotion creates). Queue order is `createdAt` ascending, no
   separate `position` column — a waitlist has no reordering use case, unlike
   `Stop.position`. A partial unique index on `(rideId, userId) WHERE status =
 'waiting'` mirrors `Registration`'s duplicate-protection pattern: only one waiting

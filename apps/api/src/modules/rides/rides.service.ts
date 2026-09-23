@@ -1,5 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, gte, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  ne,
+  sql,
+} from 'drizzle-orm';
 import {
   organizerProfiles,
   registrations,
@@ -12,26 +23,27 @@ import {
   waitlistEntries,
 } from 'db/schema';
 import type { DbClient } from 'db';
-import type {
-  CoverImageResponse,
-  CreateRideRequest,
-  CreateRoutePointRequest,
-  CreateStopRequest,
-  GetRideResponse,
-  GetRouteGeometryResponse,
-  ListPublicRidesQuery,
-  ListPublicRidesResponse,
-  ListRidesQuery,
-  ListRidesResponse,
-  OrganizerRideSummary,
-  Ride,
-  RouteGeometryPoint,
-  RoutePoint,
-  RouteSummary,
-  Stop,
-  UpdateRideRequest,
-  UpdateRoutePointRequest,
-  UpdateStopRequest,
+import {
+  ROUTE_PREVIEW_MAX_POINTS,
+  type CoverImageResponse,
+  type CreateRideRequest,
+  type CreateRoutePointRequest,
+  type CreateStopRequest,
+  type GetRideResponse,
+  type GetRouteGeometryResponse,
+  type ListPublicRidesQuery,
+  type ListPublicRidesResponse,
+  type ListRidesQuery,
+  type ListRidesResponse,
+  type OrganizerRideSummary,
+  type Ride,
+  type RouteGeometryPoint,
+  type RoutePoint,
+  type RouteSummary,
+  type Stop,
+  type UpdateRideRequest,
+  type UpdateRoutePointRequest,
+  type UpdateStopRequest,
 } from 'types';
 import {
   toRegistration,
@@ -59,6 +71,14 @@ import {
   encodeCursor,
 } from '../../lib/cursor.js';
 import { GpxParseError, parseGpx, serializeGpx } from './gpx.js';
+import {
+  listRideGroupNamesByRideIds,
+  listRideGroupSummaries,
+} from './ride-groups.service.js';
+import {
+  ROUTE_PREVIEW_SAMPLE_POINTS,
+  simplifyRoutePreview,
+} from './route-preview.js';
 import {
   RouteStorageError,
   deleteGpxObject,
@@ -466,9 +486,9 @@ export async function createRide(
 /**
  * The caller's own `OrganizerProfile.id`, or `null` if they don't have one yet —
  * shared by every "mine"/ownership-scoped query below so each one doesn't repeat the
- * same lookup.
+ * same lookup. Exported for `ride-groups.service.ts` (CR-117), same module.
  */
-async function resolveOwnOrganizerProfileId(
+export async function resolveOwnOrganizerProfileId(
   db: DbClient,
   userId: string,
 ): Promise<string | null> {
@@ -706,10 +726,16 @@ export async function listPublicRides(
   // CR-043 ("Organizer rating summary"): one batched aggregate query for every
   // organizer on this page, not one per row — avoids N+1 on this endpoint's hot,
   // unauthenticated discovery path.
-  const ratingByOrganizerId = await getOrganizerRatingSummaries(
-    db,
-    page.map((row) => row.organizerId),
-  );
+  const [ratingByOrganizerId, extras] = await Promise.all([
+    getOrganizerRatingSummaries(
+      db,
+      page.map((row) => row.organizerId),
+    ),
+    getRideListExtras(
+      db,
+      page.map((row) => row.ride.id),
+    ),
+  ]);
 
   return {
     items: page.map((row) => {
@@ -728,10 +754,105 @@ export async function listPublicRides(
           rating: summary.rating,
           reviewCount: summary.reviewCount,
         },
+        registrationsCount: extras.registrationsCount.get(row.ride.id) ?? 0,
+        startLabel: extras.startLabel.get(row.ride.id) ?? null,
+        routePreview: extras.routePreview.get(row.ride.id) ?? null,
+        groups: extras.groups.get(row.ride.id) ?? [],
       };
     }),
     nextCursor,
   };
+}
+
+/**
+ * CR-116 (discovery cards): the additive `PublicRideListItem` fields for one page of
+ * rides — four batched queries per page (keyed by `ride_id IN (...)`), never one per
+ * row, same precedent as `getOrganizerRatingSummaries`.
+ *
+ * `routePreview` never pulls a full geometry out of Postgres: the stored `jsonb`
+ * point array (`routes.geometry`, CR-027/CR-114) is sampled at an even stride down to
+ * at most {@link ROUTE_PREVIEW_SAMPLE_POINTS} (+ the last point) in SQL, then
+ * {@link simplifyRoutePreview} keeps the ≤ `ROUTE_PREVIEW_MAX_POINTS` points that
+ * best preserve the shape.
+ */
+async function getRideListExtras(db: DbClient, rideIds: string[]) {
+  const registrationsCount = new Map<string, number>();
+  const startLabel = new Map<string, string | null>();
+  const routePreview = new Map<string, Array<[number, number]> | null>();
+  if (rideIds.length === 0) {
+    return {
+      registrationsCount,
+      startLabel,
+      routePreview,
+      groups: new Map<string, Array<{ name: string; paceKmh: number }>>(),
+    };
+  }
+
+  const [countRows, startRows, previewRows, groups] = await Promise.all([
+    db
+      .select({
+        rideId: registrations.rideId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(registrations)
+      .where(
+        and(
+          inArray(registrations.rideId, rideIds),
+          eq(registrations.status, 'active'),
+        ),
+      )
+      .groupBy(registrations.rideId),
+    // The oldest `start` point wins if an organizer placed more than one — same
+    // `createdAt` order `GET /v1/rides/:id`'s `routePoints` uses.
+    db
+      .selectDistinctOn([routePoints.rideId], {
+        rideId: routePoints.rideId,
+        label: routePoints.label,
+      })
+      .from(routePoints)
+      .where(
+        and(
+          inArray(routePoints.rideId, rideIds),
+          eq(routePoints.type, 'start'),
+        ),
+      )
+      .orderBy(asc(routePoints.rideId), asc(routePoints.createdAt)),
+    db
+      .select({
+        rideId: routes.rideId,
+        points: sql<Array<[number, number]>>`(
+          select coalesce(
+            jsonb_agg(
+              jsonb_build_array(p.value->'lat', p.value->'lng') order by p.ord
+            ),
+            '[]'::jsonb
+          )
+          from jsonb_array_elements(${routes.geometry}) with ordinality as p(value, ord)
+          where (p.ord - 1) % greatest(
+              1,
+              ceil(jsonb_array_length(${routes.geometry})::numeric / ${ROUTE_PREVIEW_SAMPLE_POINTS})::int
+            ) = 0
+            or p.ord = jsonb_array_length(${routes.geometry})
+        )`,
+      })
+      .from(routes)
+      .where(inArray(routes.rideId, rideIds)),
+    listRideGroupNamesByRideIds(db, rideIds),
+  ]);
+
+  for (const row of countRows) {
+    registrationsCount.set(row.rideId, row.count);
+  }
+  for (const row of startRows) {
+    startLabel.set(row.rideId, row.label);
+  }
+  for (const row of previewRows) {
+    routePreview.set(
+      row.rideId,
+      simplifyRoutePreview(row.points, ROUTE_PREVIEW_MAX_POINTS),
+    );
+  }
+  return { registrationsCount, startLabel, routePreview, groups };
 }
 
 /**
@@ -872,6 +993,10 @@ export async function getRideForViewer(
         .limit(1)
     : [];
 
+  // CR-117 ("Pace groups"): additive `groups`, `position` order, each with its live
+  // active-registration count — same embedding precedent as `stops` above.
+  const groups = await listRideGroupSummaries(db, rideId);
+
   return {
     ride: toPublicRide(row.ride),
     organizer: {
@@ -894,6 +1019,7 @@ export async function getRideForViewer(
       ? toWaitlistEntry(viewerWaitlistEntryRows[0])
       : null,
     viewerReview: viewerReviewRows[0] ? toReview(viewerReviewRows[0]) : null,
+    groups,
   };
 }
 

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
@@ -9,6 +10,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { rides } from './ride.js';
+import { rideGroups } from './ride-group.js';
 import { users } from './user.js';
 
 // Ninth domain table (CR-036, `.claude/rules/database.md`/`docs/database.md`).
@@ -37,6 +39,10 @@ export const waitlistEntries = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     status: waitlistEntryStatusEnum('status').notNull().default('waiting'),
+    // CR-117 ("Pace groups", ADR-022): the group chosen when joining the queue,
+    // carried into the `Registration` a promotion creates (`cancelRegistration`).
+    // Same nullability and composite-FK reasoning as `registrations.groupId`.
+    groupId: uuid('group_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -58,6 +64,12 @@ export const waitlistEntries = pgTable(
     // status = 'waiting'`) and the future CR-037 organizer waitlist view.
     index('waitlist_entries_ride_id_idx').on(table.rideId),
     index('waitlist_entries_user_id_idx').on(table.userId),
+    // CR-117: same same-ride guarantee as `registrations_group_ride_fk`.
+    foreignKey({
+      name: 'waitlist_entries_group_ride_fk',
+      columns: [table.groupId, table.rideId],
+      foreignColumns: [rideGroups.id, rideGroups.rideId],
+    }).onDelete('no action'),
     check(
       'waitlist_entries_cancelled_at_consistent',
       sql`(${table.status} = 'cancelled') = (${table.cancelledAt} is not null)`,

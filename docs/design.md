@@ -14,36 +14,52 @@ Implementation tasks: CR-063…CR-066 in `docs/tasks.md`.
 
 ## 1. Visual direction
 
-**Calm, low-saturation, content-first.** The interface is a planning tool people read
-outdoors, often on a phone, sometimes in bright sunlight or at 6 a.m. before a ride.
-Legibility and quiet hierarchy beat personality.
+**«Топокарта» — a printed orienteering-map sheet** (ADR-021, 2026-09-23; replaces the
+earlier "calm, muted teal" direction and CR-107's "Quiet Instrument"). The interface is a
+planning tool people read outdoors, often on a phone, sometimes in bright sunlight or at
+6 a.m. before a ride. A printed map is exactly that kind of artefact: white paper, black
+ink, one overprint colour for the course, and a small, fixed set of map inks that each
+mean one thing.
 
 Rules:
 
-- **No neon and no vivid saturated accents.** Red is semantic only, never decorative —
-  see the destructive-state exception below. Keep accent saturation moderate (roughly
-  ≤ 45% HSL saturation); nothing should glow or vibrate against the background.
-- **Warm neutral base**, not clinical blue-gray. Surfaces are off-white/warm stone in
-  light theme, warm near-black in dark theme.
-- **One accent color** (muted teal-green) for interactive elements. Do not introduce a
-  second brand accent per feature — that is how a dashboard turns into a fruit salad.
+- **Paper and ink.** The page is white paper (`bg`), text and rules are black ink
+  (`text`, `frame`). Dark theme is the same sheet "under a head torch": neutral graphite,
+  never violet- or warm-tinted.
+- **One overprint colour — plum.** `primary`/`route` is used for exactly two things: the
+  ride's route line on a map and the primary action (filled button, focus ring, the
+  wordmark ring, links). It is never decoration, never a second "brand" fill on cards,
+  badges or backgrounds. If a screen seems to need a second accent, it needs hierarchy
+  instead.
+- **The other inks carry meaning only**, as on a real map: brown `contour` = elevation
+  (elevation profile, gain), blue `info` = information, green `success` = confirmed/
+  published, yellow `warning-fill`/`warning` = caution (waitlist, closing registration,
+  degraded service). They are never used for ornament.
+- **Cards have no fill.** Content sits on the paper as hairline-separated rows/outlines
+  (`border`), the way a map legend does. `surface` (the sheet margin) is the one raised
+  plane — dialogs, the sticky mobile bar, hover/selected rows.
 - **Color never carries meaning alone** (`.claude/rules/frontend.md`): status, difficulty
   and errors always carry a text label and/or icon as well.
-- No gradients on data surfaces, no glow/neon shadows, no full-bleed saturated hero
-  blocks. Photography (ride cover images) provides the color; the chrome stays quiet.
+- **Banned:** gradients, glow/neon, glass/blur/translucent panels, khaki/cream/"vintage
+  paper" tints, serif display faces, full-bleed saturated hero blocks. Photography (ride
+  cover images) provides the only other colour; the chrome stays printed.
 
 ### The one exception: destructive semantics
 
-The calm direction governs the interface's ordinary surfaces. Destructive and failed states
-are the deliberate exception, settled by the product owner on 2026-09-10 after reviewing a
-muted-brick first draft: **cancellation uses a genuinely bright red.** A cancelled ride is
-the one thing a participant must not scroll past, and a whisper-quiet cancellation badge is
-a missed-ride support ticket waiting to happen.
+The printed direction governs the interface's ordinary surfaces. Destructive and failed
+states are the deliberate exception, settled by the product owner on 2026-09-10 after
+reviewing a muted-brick first draft and kept unchanged by ADR-021: **cancellation uses a
+genuinely bright red.** A cancelled ride is the one thing a participant must not scroll
+past, and a whisper-quiet cancellation badge is a missed-ride support ticket waiting to
+happen.
 
 - `danger` is a saturated red — `#D42B20` light / `#FF5A4F` dark, both AA against their
-  ground (4.79:1 and 5.88:1);
+  ground (5.04:1 on `#FFFFFF`, 6.05:1 on `#111315`);
+- it is used for cancellation, destructive actions **and validation errors**;
 - it may be used as text, icon, border **or a filled badge** — a filled "Отменён" badge is
-  the intended treatment, not a violation of the calm direction;
+  the intended treatment, not a violation of the direction. An in-page destructive
+  button is a danger **outline** (danger border + danger text); the solid red fill is
+  reserved for the confirming button inside `ConfirmDialog` (ADR-021);
 - it still never appears without an accompanying word ("Отменён", "Ошибка") or icon —
   color alone is never the signal (§12);
 - it stays reserved for destructive and failed states. Red is the loudest thing in this
@@ -52,6 +68,11 @@ a missed-ride support ticket waiting to happen.
 ---
 
 ## 2. Reference products
+
+> Since ADR-021 the visual direction is «Топокарта» (§1), not the calm/muted one this
+> table was first written against. The table still stands for **information design**
+> (metric rows, route-first layout, legible numbers); read its "what to avoid" column
+> as "vivid decorative accents", which the new direction bans just the same.
 
 Take **information design** from endurance-sport tools, not their branding. All five have
 solved "show a route and its numbers to an athlete on a phone."
@@ -72,48 +93,79 @@ the page**, and the interface chrome disappears. Coffee Ride should read the sam
 ## 3. Color tokens
 
 Semantic names only. Feature code never hard-codes a hex value — it uses these tokens
-via the Tailwind theme.
+via the Tailwind theme (`bg-surface`, `text-text-secondary`, `border-frame`, ...). Map
+SDK colours (route line, markers) are read from the same custom properties at call time
+(`getCssColorVar`, §14).
 
-Contrast ratios below were computed against the theme background and meet WCAG 2.1 AA
-(4.5:1 for text, 3:1 for UI component boundaries).
+Token names from CR-063 are kept (ADR-021 changed values, not names —
+`.claude/rules/extensibility.md`); `surface`, `frame`, `primary-hover`, `primary-tint`,
+`route`, `route-casing`, `contour`, `warning-fill`, `on-warning-fill` and `info-tint` are
+additive. Contrast ratios below were computed (WCAG 2.1 relative luminance) against the
+theme's `bg`, with the value against `surface` in brackets where it matters; they meet AA
+(4.5:1 for text, 3:1 for UI component boundaries and graphics).
+
+**Page vs card.** `bg` is the paper. `bg-raised` is deliberately the _same_ paper, not a
+tint: cards and form controls have no fill of their own and are separated by hairlines.
+`surface` (the sheet margin) is the one raised plane — dialogs, the sticky mobile bar,
+hover and selected rows, segmented-control tracks.
 
 ### Light theme
 
-| Token            | Hex       | Contrast            | Use                                                |
-| ---------------- | --------- | ------------------- | -------------------------------------------------- |
-| `bg`             | `#FAF9F7` | —                   | Page background (warm off-white)                   |
-| `bg-raised`      | `#FFFFFF` | —                   | Cards, sheets, popovers                            |
-| `text`           | `#23211E` | 15.26:1             | Primary text                                       |
-| `text-secondary` | `#5F5952` | 6.57:1              | Labels, captions, metric labels                    |
-| `text-muted`     | `#767068` | 4.65:1              | Least-important text; still AA                     |
-| `primary`        | `#35635A` | 6.47:1              | Links, primary buttons, focus ring, active nav     |
-| `on-primary`     | `#FFFFFF` | 6.81:1 on `primary` | Text on primary fill                               |
-| `success`        | `#3F6B4E` | 5.83:1              | Registration confirmed, published                  |
-| `warning`        | `#8A6520` | 5.04:1              | Waitlist, registration closing, degraded service   |
-| `danger`         | `#D42B20` | 4.79:1              | Cancellation, destructive action, validation error |
-| `on-danger`      | `#FFFFFF` | 5.04:1 on `danger`  | Text on a filled danger badge                      |
-| `info`           | `#3D5F85` | 6.29:1              | Neutral informational notes, ride updates          |
-| `border`         | `#E4E0D9` | decorative          | Dividers, card outlines                            |
-| `border-input`   | `#8C857D` | 3.46:1              | Form control boundaries (AA for UI components)     |
+| Token             | Hex       | Contrast                  | Use                                                            |
+| ----------------- | --------- | ------------------------- | -------------------------------------------------------------- |
+| `bg`              | `#FFFFFF` | —                         | Page background — the paper                                    |
+| `bg-raised`       | `#FFFFFF` | —                         | Cards, inputs, menus — same paper, no fill of their own        |
+| `surface`         | `#F3F4F1` | —                         | Sheet margin: dialogs, sticky bar, hover/selected rows         |
+| `text`            | `#15171A` | 17.96:1 (16.27)           | Primary text — the ink                                         |
+| `text-secondary`  | `#4B5157` | 8.03:1 (7.28)             | Labels, captions, metric labels                                |
+| `text-muted`      | `#676D74` | 5.23:1 (4.74)             | Least-important text; still AA                                 |
+| `frame`           | `#15171A` | 17.96:1                   | Ink rule: map frame, secondary-button outline, strong dividers |
+| `border`          | `#D3D6D9` | decorative                | Hairlines between rows, card outlines                          |
+| `border-input`    | `#858B92` | 3.44:1 (3.12)             | Form control boundaries (AA for UI components)                 |
+| `primary`         | `#7A2482` | 8.74:1 (7.92)             | Overprint: primary button, links, focus ring, wordmark ring    |
+| `primary-hover`   | `#651D6C` | 10.79:1                   | Primary button hover                                           |
+| `on-primary`      | `#FFFFFF` | 8.74:1 on `primary`       | Text on primary fill                                           |
+| `primary-tint`    | `#F5EAF6` | `primary` on it 7.49:1    | Selected state behind overprint content (sparingly)            |
+| `route`           | `#9C2AA6` | 6.37:1                    | The ride's route line on a map (6px)                           |
+| `route-casing`    | `#FFFFFF` | route on it 6.37:1        | Casing under the route line                                    |
+| `contour`         | `#8C5419` | 6.18:1 (5.60)             | Elevation: profile chart, gain                                 |
+| `success`         | `#1D6F38` | 6.21:1 (5.62)             | Registration confirmed, published                              |
+| `warning`         | `#7A5300` | 6.85:1 (6.21)             | Warning **text**: waitlist, closing registration, degraded     |
+| `warning-fill`    | `#FFC94D` | —                         | Warning fill (badge/notice background)                         |
+| `on-warning-fill` | `#15171A` | 11.73:1 on `warning-fill` | Ink text on the warning fill                                   |
+| `info`            | `#0B65A6` | 6.13:1 (5.55)             | Neutral informational notes, ride updates                      |
+| `info-tint`       | `#E3F0FA` | `info` on it 5.29:1       | Info notice background                                         |
+| `danger`          | `#D42B20` | 5.04:1 (4.57)             | Cancellation, destructive action, validation error (unchanged) |
+| `on-danger`       | `#FFFFFF` | 5.04:1 on `danger`        | Text on a filled danger badge/button                           |
 
-### Dark theme
+### Dark theme — «sheet under a head torch»
 
-| Token            | Hex       | Contrast            | Use                                |
-| ---------------- | --------- | ------------------- | ---------------------------------- |
-| `bg`             | `#171614` | —                   | Page background (warm near-black)  |
-| `bg-raised`      | `#201F1C` | —                   | Cards, sheets, popovers            |
-| `text`           | `#EDEAE4` | 15.06:1             | Primary text                       |
-| `text-secondary` | `#ABA49B` | 7.33:1              | Labels, captions                   |
-| `text-muted`     | `#8C857C` | 4.96:1              | Least-important text               |
-| `primary`        | `#7FB3A6` | 7.66:1              | Links, primary actions, focus ring |
-| `on-primary`     | `#171614` | 7.66:1 on `primary` | Text on primary fill               |
-| `success`        | `#84AE8F` | 7.26:1              | —                                  |
-| `warning`        | `#C6A063` | 7.41:1              | —                                  |
-| `danger`         | `#FF5A4F` | 5.88:1              | —                                  |
-| `on-danger`      | `#171614` | 5.88:1 on `danger`  | Text on a filled danger badge      |
-| `info`           | `#8CACCE` | 7.67:1              | —                                  |
-| `border`         | `#302D29` | decorative          | —                                  |
-| `border-input`   | `#736E66` | 3.57:1              | Form control boundaries            |
+| Token             | Hex       | Contrast                  | Use                                    |
+| ----------------- | --------- | ------------------------- | -------------------------------------- |
+| `bg`              | `#111315` | —                         | Page background — graphite, not violet |
+| `bg-raised`       | `#111315` | —                         | Same as `bg` (no card fill)            |
+| `surface`         | `#1A1D20` | —                         | Sheet margin                           |
+| `text`            | `#ECEDEA` | 15.84:1 (14.40)           | Primary text                           |
+| `text-secondary`  | `#B4B9BE` | 9.42:1 (8.56)             | Labels, captions                       |
+| `text-muted`      | `#8E959C` | 6.14:1 (5.59)             | Least-important text                   |
+| `frame`           | `#ECEDEA` | 15.84:1                   | Ink rule                               |
+| `border`          | `#343A40` | decorative                | Hairlines                              |
+| `border-input`    | `#6E767E` | 4.04:1 (3.67)             | Form control boundaries                |
+| `primary`         | `#D79BE0` | 8.56:1 (7.78)             | Overprint                              |
+| `primary-hover`   | `#E4B6EB` | 10.81:1                   | Primary button hover                   |
+| `on-primary`      | `#1C0F1E` | 8.50:1 on `primary`       | Text on primary fill                   |
+| `primary-tint`    | `#2C1F2F` | `primary` on it 7.18:1    | Selected state (sparingly)             |
+| `route`           | `#DA8FE4` | 8.01:1                    | Route line                             |
+| `route-casing`    | `#111315` | route on it 8.01:1        | Casing under the route line            |
+| `contour`         | `#D39B5F` | 7.65:1 (6.95)             | Elevation                              |
+| `success`         | `#62C483` | 8.64:1 (7.85)             | —                                      |
+| `warning`         | `#F0C04E` | 10.95:1 (9.96)            | Warning text                           |
+| `warning-fill`    | `#F0C04E` | —                         | Warning fill                           |
+| `on-warning-fill` | `#111315` | 10.95:1 on `warning-fill` | Text on the warning fill               |
+| `info`            | `#6DB4EE` | 8.35:1 (7.59)             | —                                      |
+| `info-tint`       | `#15293A` | `info` on it 6.68:1       | Info notice background                 |
+| `danger`          | `#FF5A4F` | 6.05:1 (5.50)             | Unchanged                              |
+| `on-danger`       | `#171614` | 5.88:1 on `danger`        | Text on a filled danger badge          |
 
 Dark theme is not optional or "later": it is part of CR-063. An app used before dawn and
 after dusk needs it.
@@ -125,68 +177,88 @@ permanently discard the "follow the OS" default. The choice is stored per browse
 `app/layout.tsx`, so there is no flash of the wrong theme on first paint; every storage
 access is guarded, since it throws outright in a private window with site data blocked.
 
-### Glass and scrim tokens ("Quiet Instrument", CR-107)
+### Retired: glass tokens (CR-107 → ADR-021)
 
-Reserved for exactly two surfaces — the title/status panel over a ride's cover photo,
-and the sticky mobile registration bar — never a general card treatment (that stays
-`Card`'s plain hairline-border/no-shadow default). Extends the palette above rather than
-replacing it; §1's "no gradients, no glow" rule still governs everywhere else.
+`glass-bg`/`glass-border` and `packages/ui`'s `GLASS_PANEL_CLASSNAME` belonged to the
+"Quiet Instrument" direction, which ADR-021 replaced; «Топокарта» bans glass and blur.
+The names still exist only because two flag-gated consumers reference them
+(`FEATURE_COVER_GLASS_PANEL`, `FEATURE_STICKY_REGISTRATION_CTA`, both off by default):
+they now resolve to the opaque `surface`/`border`, and the class list no longer carries
+`backdrop-blur`, so a flag switched on renders a flat printed panel. Do not use them in
+new code; delete them when the discovery/ride-detail rebuilds drop those call sites.
 
-| Token          | Value                       | Use                                                                                                                                                          |
-| -------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scrim`        | `rgb(23 22 20 / 55%)`       | Warm-near-black wash under cover-photo text/badges — guarantees AA contrast regardless of the uploaded photo. Same in both themes (a photo, not app chrome). |
-| `glass-bg`     | `bg-raised` at ~72% opacity | The glass panel's translucent fill.                                                                                                                          |
-| `glass-border` | `border` at ~60% opacity    | The glass panel's hairline edge.                                                                                                                             |
-
-Implementation is pure Tailwind utility composition (`bg-glass-bg border border-glass-border
-backdrop-blur-lg`, `packages/ui`'s `GLASS_PANEL_CLASSNAME`), deliberately not a custom
-unlayered CSS class — Tailwind's own utilities live inside `@layer utilities`, and any
-unlayered rule unconditionally outranks every layer regardless of source order, which would
-have made a hand-written `.glass-panel` class always beat a caller's own
-`md:bg-transparent`-style responsive reset. `backdrop-blur-lg` degrades to a plain
-translucent fill — still AA-safe under `--scrim` — wherever `backdrop-filter` is unsupported
-(the browser simply ignores the property) or the viewer prefers reduced motion/transparency
-(`motion-reduce:`/`prefers-reduced-transparency` variants reset it to none).
+`scrim` (`rgb(21 23 26 / 55%)`, ink at 55%, same in both themes) stays: it is a wash
+under text placed on a user-uploaded photo, needed for contrast whatever the photo is —
+a legibility device, not glass.
 
 ### Data visualization colors
 
-Charts (elevation profile, future statistics) use a **single muted fill** derived from
-`primary` at low opacity, not a categorical rainbow. If a second series is ever needed,
-add a muted clay tone (`#A8705A` light / `#C29580` dark) and stop there. Difficulty and
-status are encoded by **label + position on a scale**, not by hue.
+Charts use the map's own inks, never a categorical rainbow. The **elevation profile is
+`contour` brown** (≈15% fill + 1.5px stroke), the colour elevation has on every
+topographic map. `chart-secondary` survives as a name (also the `food` route-point
+marker) and aliases `contour`. Difficulty and status are encoded by **label + position
+on a scale**, not by hue. The route line itself is `route` over `route-casing`, 6px.
 
 ---
 
 ## 4. Typography
 
-- **Family:** Golos Text (Paratype) — a grotesque drawn for Russian text, with Cyrillic as
-  a first-class script rather than an afterthought — over the system stack
-  (`-apple-system, "Segoe UI", Roboto, sans-serif`) as fallback. No decorative or display
-  face. Cyrillic coverage is a hard requirement: verify any added face renders Russian
-  text before adopting it. IBM Plex Mono is the utility face for hex values, IDs and other
-  data that is scanned in columns.
-- **Numerals: `font-variant-numeric: tabular-nums` on every metric.** Non-tabular figures
-  make numbers jitter between states and misalign in tables; this is the single most
-  visible difference between an amateur and a professional metrics UI.
+- **Body/UI: Golos Text** (Paratype) — a grotesque drawn for Russian text, with Cyrillic
+  as a first-class script — over the system stack (`-apple-system, "Segoe UI", Roboto,
+sans-serif`). Utility class `font-sans` (the default).
+- **Display/labels/numerals: Sofia Sans Condensed** — headings (`h1`–`h3` by default,
+  `globals.css`), small uppercase labels, metric values and the wordmark. Utility class
+  `font-display`, token `--font-display`; fallback `"Arial Narrow"` then the body stack.
+  Loaded as a variable font via `next/font/google` with `subsets: ['cyrillic', 'latin']`.
+- **Russian letterforms depend on `lang="ru"`.** Sofia Sans' default Cyrillic is drawn in
+  the Bulgarian style (в/д/и/т look like b/g/u/m); the Russian forms come from its
+  `locl` OpenType feature, which browsers apply only when the text's language is Russian.
+  `<html lang="ru">` in `app/layout.tsx` guarantees that — never remove it and never set
+  another `lang` on an element rendered in `font-display` (verified in the browser for
+  CR-115: the same string renders Russian forms under `ru`, Bulgarian under `bg`).
+- **IBM Plex Mono** stays the utility face for hex values, IDs and other data scanned in
+  columns (`font-mono`).
+- Cyrillic coverage is a hard requirement: verify any added face renders Russian text
+  (including `locl`-dependent forms) before adopting it.
+- **Numerals: `font-variant-numeric: tabular-nums` on every metric**, in `font-display`
+  as well. Non-tabular figures make numbers jitter between states and misalign in
+  tables.
 - **Scale** (mobile → desktop): 12 / 14 / 16 / 18 / 20 / 24 / 30 / 36 px. Body is 16px
-  minimum — never 14px for reading text on mobile.
-- **Weights:** 400 body, 500 labels/UI, 600 headings and metric values. No 700+ and no
-  all-caps except small metric labels (12px, letter-spacing 0.04em).
+  minimum — never 14px for reading text on mobile. A condensed display face reads
+  smaller than Golos at the same size; prefer the next step up for headings rather than a
+  heavier weight.
+- **Weights:** Golos 400 body, 500 labels/UI, 600 emphasis. Sofia Sans Condensed 600 for
+  headings and metric values, 700 only for the wordmark. All-caps only for small labels
+  (12px, letter-spacing ≈0.06em) in `font-display`.
 - **Line height:** 1.5 body, 1.2 headings and metric values.
-- **Wordmark (CR-107):** `packages/ui`'s `Wordmark` component — Golos Text, lowercase,
-  "coffee" at weight 500 + ".ride" at weight 400, both in `--primary`. No new typeface or
-  dependency; resolves §15's prior placeholder note.
+- **Wordmark (ADR-021):** `packages/ui`'s `Wordmark` — «coffee◦ride», lowercase Sofia
+  Sans Condensed 700 in ink (`text`), the dot replaced by an SVG ring in `primary`
+  (diameter ≈ x-height 0.5em, stroke ≈0.14em, bottom on the baseline). Accessible name
+  «Coffee Ride» (the stylised glyphs are `aria-hidden`). The favicon (`app/icon.svg`) is
+  the ring alone, plum, 2.5px stroke on 16px, with a dark-scheme variant.
 
 ---
 
 ## 5. Spacing, radius, elevation
 
 - **Spacing scale:** 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 px. Nothing off-scale.
-- **Radius:** 8px default (cards, inputs, buttons), 12px for large surfaces/sheets, full
-  for pills/badges.
-- **Elevation:** at most two levels — a hairline border for resting cards, a soft low
-  shadow for overlays (popover/modal/sheet). No layered drop shadows.
-- **Touch targets:** minimum 44×44 px. Cyclists tap this with cold hands and gloves on.
+- **Radius — a printed stamp, not a pill:** 4px on buttons, inputs, chips/badges and menu
+  items (`rounded-md`/`rounded-lg` both resolve to 4px); 6px (`rounded-xl`) for cards,
+  dialogs and sheets; 2px (`rounded-sm`) for small inset marks. `rounded-full` only for
+  avatars and circular map marks.
+- **Rules instead of fills:** resting content is separated by `border` hairlines; a
+  1.5px `frame` (ink) rule is the strong line — map frame, secondary-button outline.
+- **Elevation:** no shadow on cards, ever. Overlays (menu popover, dialog, toast, sticky
+  bar) get the one small, tight `shadow-overlay`; nothing layered, nothing glowing.
+- **Buttons:** primary = filled `primary`/`on-primary` (hover `primary-hover`);
+  secondary = 1.5px `frame` outline, no fill (hover `surface`); `danger` = danger
+  outline + danger text; `danger-filled` = solid red, used by `ConfirmDialog`'s confirm
+  button only.
+- **Touch targets:** minimum 48px tall on mobile and 44px from `md` for buttons/primary
+  actions; 44×44 px minimum for every other target. Cyclists tap this with cold hands
+  and gloves on.
+- **Focus:** a 2px `primary` outline with 2px offset on every interactive element
+  (§12) — unchanged.
 
 ---
 
@@ -224,8 +296,8 @@ Rules:
 
 ### Elevation profile
 
-- Area chart: x = distance, y = elevation; single muted `primary` fill at ~15% opacity
-  with a 1.5px stroke.
+- Area chart: x = distance, y = elevation; single `contour` fill at ~15% opacity with a
+  1.5px `contour` stroke (ADR-021 — elevation is brown on every topographic map).
 - Y axis starts at a sensible floor, not forced to zero — a 40 m spread over 60 km should
   not render as a flat line.
 - Always paired with the numeric набор высоты; the chart is an illustration, the number is
@@ -446,7 +518,7 @@ user.
 - Cover-image aspect ratio and crop behavior (needs a real photo sample).
 - Whether the discovery map is clustered at city zoom (depends on real ride density).
 - ~~Logo/wordmark: none exists...~~ Resolved (CR-107): `packages/ui`'s `Wordmark`
-  component — see §4.
-- "Quiet Instrument" visual direction (CR-107) Phase 5 — any "athletic weight"
+  component — see §4. Redrawn for «Топокарта» by ADR-021 (CR-115).
+- (Superseded by ADR-021 — kept for history.) "Quiet Instrument" visual direction (CR-107) Phase 5 — any "athletic weight"
   cover-photo/route treatment beyond the glass panel in §3 — stays blocked on real,
   non-placeholder ride photography.

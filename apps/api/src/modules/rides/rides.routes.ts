@@ -23,7 +23,8 @@ import {
   routeGeometryResponseSchema,
   routePointResponseSchema,
   routeSummaryResponseSchema,
-  rideWithOrganizerResponseSchema,
+  publicRideListItemResponseSchema,
+  rideGroupSummaryResponseSchema,
   stopResponseSchema,
 } from './ride-response.schema.js';
 import {
@@ -153,6 +154,8 @@ const rideDetailResponseSchema = z.object({
   // CR-042 ("Review"): additive `viewerReview`, same "caller's own state" precedent
   // as `viewerRegistration`/`viewerWaitlistEntry` above.
   viewerReview: reviewResponseSchema.nullable(),
+  // CR-117 ("Pace groups"): additive, `position` order.
+  groups: z.array(rideGroupSummaryResponseSchema),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 
@@ -189,9 +192,10 @@ const rideSummaryResponseSchema = z.object({
 });
 // CR-024 ("Ride list", public discovery): each item additionally carries `organizer`
 // — distinct from `listRidesResponseSchema` (`/mine`, no organizer needed since the
-// caller already knows it's their own).
+// caller already knows it's their own). CR-116 added the card fields
+// (`publicRideListItemResponseSchema`).
 const listPublicRidesResponseSchema = z.object({
-  items: z.array(rideWithOrganizerResponseSchema),
+  items: z.array(publicRideListItemResponseSchema),
   nextCursor: z.string().nullable(),
 });
 const rideIdParamsSchema = z.object({

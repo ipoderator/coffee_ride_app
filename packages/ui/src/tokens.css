@@ -14,88 +14,132 @@
  */
 
 :root {
-  /* Light theme (docs/design.md §3) */
-  --bg: #faf9f7;
+  /* Light theme — «Топокарта» (ADR-021, docs/design.md §3): a printed
+     orienteering-map sheet. White paper, black ink, ONE plum overprint
+     colour (`primary`/`route`) for the ride's route and the primary action.
+     The other map inks carry meaning only: `contour` brown = elevation,
+     `info` blue, `success` green, `warning` yellow. `danger` is unchanged
+     from CR-063 (§1's "one exception").
+
+     Page vs card: `bg` is the paper. `bg-raised` is deliberately the SAME
+     paper, not a tint — cards and form controls have no fill on the page,
+     they are hairline-separated rows/outlines (`border`). `surface` is the
+     sheet margin: the one raised plane, for overlays (dialog, menu popover,
+     sticky bar) and hover/selected rows. */
+  --bg: #ffffff;
   --bg-raised: #ffffff;
-  --text: #23211e;
-  --text-secondary: #5f5952;
-  --text-muted: #767068;
-  --primary: #35635a;
+  --surface: #f3f4f1;
+  --text: #15171a;
+  --text-secondary: #4b5157;
+  --text-muted: #676d74;
+  /* The ink rule: map frame, secondary-button outline, strong dividers. */
+  --frame: #15171a;
+  --primary: #7a2482;
+  --primary-hover: #651d6c;
   --on-primary: #ffffff;
-  --success: #3f6b4e;
-  --warning: #8a6520;
+  --primary-tint: #f5eaf6;
+  /* The route line on a map, drawn over a casing so it stays legible on
+     any basemap detail (read at call time by `getCssColorVar`). */
+  --route: #9c2aa6;
+  --route-casing: #ffffff;
+  --contour: #8c5419;
+  --success: #1d6f38;
+  --warning: #7a5300;
+  --warning-fill: #ffc94d;
+  --on-warning-fill: #15171a;
   --danger: #d42b20;
   --on-danger: #ffffff;
-  --info: #3d5f85;
-  --border: #e4e0d9;
-  --border-input: #8c857d;
+  --info: #0b65a6;
+  --info-tint: #e3f0fa;
+  --border: #d3d6d9;
+  --border-input: #858b92;
 
-  /* Data visualization (§3) — the primary series reuses `primary` at low
-     opacity in the component itself; this is only the second-series tone. */
-  --chart-secondary: #a8705a;
+  /* Data visualization (§3): the elevation profile is drawn in `contour`
+     brown, the map's own elevation ink. `chart-secondary` (also the `food`
+     route-point marker, `route-point-colors.ts`) is kept as a name and now
+     aliases the same ink rather than introducing another hue. */
+  --chart-secondary: var(--contour);
 
-  /* "Quiet Instrument" visual direction (CR-107, docs/design.md §3). Scoped
-     to exactly two surfaces (cover-photo title panel, sticky mobile
-     registration bar) — never a general card treatment. `--scrim` is a
-     warm-near-black wash the app applies itself under cover-photo text, so
-     AA contrast holds regardless of what a user uploads; it does not vary
-     by theme since it sits on a photo, not app chrome. `--glass-bg`/
-     `--glass-border` derive from this theme's own `bg-raised`/`border` at
-     ~72%/60% opacity, so the glass panel still reads as "this app's surface,
-     seen through" rather than a generic frosted rectangle. */
-  --scrim: rgb(23 22 20 / 55%);
-  --glass-bg: rgb(255 255 255 / 72%);
-  --glass-border: rgb(228 224 217 / 60%);
+  /* CR-107's "Quiet Instrument" glass tokens, retired by ADR-021 (the
+     direction bans glass/blur). Names kept because `GLASS_PANEL_CLASSNAME`
+     and its flag-gated consumers (`FEATURE_COVER_GLASS_PANEL`,
+     `FEATURE_STICKY_REGISTRATION_CTA`, both off by default) still reference
+     them — they now resolve to the plain opaque `surface`/`border`, so a
+     flag switched on renders a flat printed panel, not a translucent one.
+     `--scrim` stays a wash under cover-photo text (legibility, not glass),
+     re-toned to ink; same in both themes, since it sits on a photo. */
+  --scrim: rgb(21 23 26 / 55%);
+  --glass-bg: var(--surface);
+  --glass-border: var(--border);
 
-  /* Radius (§5): 8px default, 12px large surfaces/sheets, full for pills
-     (Tailwind's built-in `rounded-full` already covers the pill case). */
-  --radius: 0.5rem;
+  /* Radius (§5): 4px — a printed stamp, not a pill — on buttons, inputs and
+     chips; 6px only for dialogs/sheets. */
+  --radius: 0.25rem;
 
-  /* Typography (§4). Golos Text / IBM Plex Mono are loaded via
-     `next/font/google` in apps/web's layout.tsx, which binds the actual
-     webfont to the `--font-golos`/`--font-plex-mono` custom properties below.
-     The nested `var(..., fallback)` keeps this stylesheet safe to use
-     wherever that wiring is absent (e.g. a future non-Next consumer, or a
-     test environment that doesn't render layout.tsx). */
+  /* Typography (§4). Golos Text / Sofia Sans Condensed / IBM Plex Mono are
+     loaded via `next/font/google` in apps/web's layout.tsx, which binds the
+     actual webfont to the `--font-golos`/`--font-sofia-condensed`/
+     `--font-plex-mono` custom properties below. The nested
+     `var(..., fallback)` keeps this stylesheet safe to use wherever that
+     wiring is absent (e.g. a future non-Next consumer, or a test environment
+     that doesn't render layout.tsx). */
   --font-golos-fallback: -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display-fallback: 'Arial Narrow', var(--font-golos-fallback);
   --font-plex-mono-fallback: ui-monospace, 'SFMono-Regular', monospace;
 }
 
+/* Dark — «sheet under a head torch»: neutral graphite, never violet-tinted.
+   Only the overprint and the meaning inks are lifted for the dark ground. */
 .dark {
-  --bg: #171614;
-  --bg-raised: #201f1c;
-  --text: #edeae4;
-  --text-secondary: #aba49b;
-  --text-muted: #8c857c;
-  --primary: #7fb3a6;
-  --on-primary: #171614;
-  --success: #84ae8f;
-  --warning: #c6a063;
+  --bg: #111315;
+  --bg-raised: #111315;
+  --surface: #1a1d20;
+  --text: #ecedea;
+  --text-secondary: #b4b9be;
+  --text-muted: #8e959c;
+  --frame: #ecedea;
+  --primary: #d79be0;
+  --primary-hover: #e4b6eb;
+  --on-primary: #1c0f1e;
+  --primary-tint: #2c1f2f;
+  --route: #da8fe4;
+  --route-casing: #111315;
+  --contour: #d39b5f;
+  --success: #62c483;
+  --warning: #f0c04e;
+  --warning-fill: #f0c04e;
+  --on-warning-fill: #111315;
   --danger: #ff5a4f;
   --on-danger: #171614;
-  --info: #8cacce;
-  --border: #302d29;
-  --border-input: #736e66;
-
-  --chart-secondary: #c29580;
-
-  --glass-bg: rgb(32 31 28 / 72%);
-  --glass-border: rgb(48 45 41 / 60%);
+  --info: #6db4ee;
+  --info-tint: #15293a;
+  --border: #343a40;
+  --border-input: #6e767e;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-bg-raised: var(--bg-raised);
+  --color-surface: var(--surface);
   --color-text: var(--text);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
+  --color-frame: var(--frame);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-on-primary: var(--on-primary);
+  --color-primary-tint: var(--primary-tint);
+  --color-route: var(--route);
+  --color-route-casing: var(--route-casing);
+  --color-contour: var(--contour);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+  --color-on-warning-fill: var(--on-warning-fill);
   --color-danger: var(--danger);
   --color-on-danger: var(--on-danger);
   --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
   --color-border: var(--border);
   --color-border-input: var(--border-input);
   --color-chart-secondary: var(--chart-secondary);
@@ -106,16 +150,27 @@
 
 @theme {
   --font-sans: var(--font-golos, 'Golos Text'), var(--font-golos-fallback);
+  /* `font-display`: headings, labels, metric numerals and the wordmark
+     (§4). Sofia Sans' default Cyrillic draws Bulgarian letterforms; the
+     Russian ones come from its `locl` feature, which the browser only
+     applies because `<html lang="ru">` (apps/web's layout.tsx). Never
+     override `lang` on an element set in this face. */
+  --font-display:
+    var(--font-sofia-condensed, 'Sofia Sans Condensed'),
+    var(--font-display-fallback);
   --font-mono:
     var(--font-plex-mono, 'IBM Plex Mono'), var(--font-plex-mono-fallback);
 
-  /* 8px default / 12px large surfaces, matching docs/design.md §5. */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* «Топокарта» (§5): everything is a 4px printed stamp. `md`/`lg` (menu
+     items, buttons, inputs, chips) are both 4px; `xl` (cards, dialogs) is
+     6px; `sm` 2px for small inset marks. `rounded-full` stays for avatars
+     and the wordmark ring only. */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
 
   /* Elevation (§5): resting cards use a hairline border, no shadow — only
-     overlays (popover/modal/sheet) get this one soft, low shadow. */
-  --shadow-overlay: 0 8px 24px -8px rgb(0 0 0 / 0.18);
+     overlays (popover/modal/sheet) get this one small, tight shadow. */
+  --shadow-overlay: 0 4px 12px -4px rgb(0 0 0 / 0.16);
 }

@@ -54,7 +54,7 @@ export function RegisterForm() {
           {AUTH_TERMS.registerSuccessBody}
         </p>
         {verifyEmailPath && (
-          <p className="mt-4 rounded-lg border border-border bg-bg p-3 text-sm text-text-secondary">
+          <p className="mt-4 rounded-lg border border-border bg-surface p-3 text-sm text-text-secondary">
             {AUTH_TERMS.registerSuccessDevNote}{' '}
             <Link
               href={verifyEmailPath}

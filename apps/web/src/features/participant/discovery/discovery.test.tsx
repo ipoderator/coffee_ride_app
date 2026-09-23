@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PublicRide } from 'types';
+import type { PublicRideListItem } from 'types';
 import { DiscoveryList } from './components/DiscoveryList';
 import { listPublicRides } from './api';
 
@@ -14,7 +14,7 @@ vi.mock('./api', async () => {
 
 const listPublicRidesMock = vi.mocked(listPublicRides);
 
-const baseRide: PublicRide = {
+const baseRide: PublicRideListItem = {
   id: 'ride-1',
   organizerId: 'org-1',
   title: 'Утренний гравийный заезд',
@@ -43,6 +43,10 @@ const baseRide: PublicRide = {
     rating: null,
     reviewCount: 0,
   },
+  registrationsCount: 0,
+  startLabel: null,
+  routePreview: null,
+  groups: [],
 };
 
 describe('DiscoveryList', () => {

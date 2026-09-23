@@ -51,6 +51,7 @@ const baseItem: MyRegistrationSummary = {
     rideId: 'ride-1',
     userId: 'user-1',
     status: 'active',
+    groupId: null,
     createdAt: '2027-01-02T00:00:00.000Z',
     updatedAt: '2027-01-02T00:00:00.000Z',
     cancelledAt: null,

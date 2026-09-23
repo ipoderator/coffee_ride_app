@@ -35,7 +35,7 @@ export function DiscoveryViewToggle({
   return (
     <div
       role="tablist"
-      className={cn('flex w-fit gap-1 rounded-lg bg-bg p-1', className)}
+      className={cn('flex w-fit gap-1 rounded-lg bg-surface p-1', className)}
     >
       <button
         type="button"

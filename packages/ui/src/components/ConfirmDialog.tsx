@@ -49,7 +49,9 @@ export function ConfirmDialog({
             {cancelLabel}
           </Button>
           <Button
-            variant={confirmVariant}
+            // ADR-021: `danger` is an outline everywhere else; the moment of
+            // confirmation is the one place the destructive action is filled.
+            variant={confirmVariant === 'danger' ? 'danger-filled' : 'primary'}
             isLoading={isConfirming}
             onClick={onConfirm}
           >

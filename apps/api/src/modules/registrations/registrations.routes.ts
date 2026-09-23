@@ -1,8 +1,17 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
-import { listRidesQuerySchema, myRegistrationsQuerySchema } from 'types';
+import {
+  createRegistrationRequestSchema,
+  joinWaitlistRequestSchema,
+  listRidesQuerySchema,
+  myRegistrationsQuerySchema,
+  updateRegistrationGroupRequestSchema,
+} from 'types';
 import { requireAuth } from '../../plugins/auth.js';
-import { rideWithOrganizerResponseSchema } from '../rides/ride-response.schema.js';
+import {
+  rideGroupRefResponseSchema,
+  rideWithOrganizerResponseSchema,
+} from '../rides/ride-response.schema.js';
 import { registrationResponseSchema } from './registration-response.schema.js';
 import { waitlistEntryResponseSchema } from './waitlist-entry-response.schema.js';
 import {
@@ -12,7 +21,9 @@ import {
   leaveWaitlist,
   listMyRegistrations,
   listParticipants,
+  listRiders,
   listWaitlist,
+  updateRegistrationGroup,
 } from './registrations.service.js';
 
 const registrationResponseWrapper = z.object({
@@ -33,9 +44,24 @@ const rideParticipantSummaryResponseSchema = z.object({
   userId: z.string(),
   displayName: z.string().nullable(),
   createdAt: z.string(),
+  // CR-117 ("Pace groups"): additive.
+  group: rideGroupRefResponseSchema.nullable(),
 });
 const listParticipantsResponseSchema = z.object({
   items: z.array(rideParticipantSummaryResponseSchema),
+  nextCursor: z.string().nullable(),
+});
+
+// CR-117: `GET /:id/riders` — deliberately no id fields at all; Fastify's Zod
+// serializer strips anything not listed here, so even a future service-layer slip
+// can't leak more than display name + group.
+const listRidersResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      displayName: z.string().nullable(),
+      group: rideGroupRefResponseSchema.nullable(),
+    }),
+  ),
   nextCursor: z.string().nullable(),
 });
 
@@ -67,11 +93,15 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
   // `participantLimit` is reached. CR-083 ("Idempotency"): a repeat call while already
   // actively registered is not an error — replies `200` with the existing
   // registration instead of `201`/a `409`.
+  // CR-117 ("Pace groups"): optional body `{ groupId }` — required (`422
+  // group_required`) once the ride has groups, `422 group_not_found` for a group
+  // that isn't this ride's (or any id on a ride without groups).
   app.post(
     '/:id/register',
     {
       schema: {
         params: rideIdParamsSchema,
+        body: createRegistrationRequestSchema,
         response: {
           201: registrationResponseWrapper,
           200: registrationResponseWrapper,
@@ -86,8 +116,34 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         app.notificationQueue,
         request.user!.id,
         request.params.id,
+        request.body?.groupId,
       );
       return reply.status(created ? 201 : 200).send({ registration });
+    },
+  );
+
+  // CR-117: the caller moves their own active registration to another group of the
+  // same ride. `404 registration_not_found` without an active registration, `409
+  // group_change_not_allowed` once the ride is finished/cancelled, `422
+  // group_not_found` for a group that isn't this ride's.
+  app.patch(
+    '/:id/register',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: updateRegistrationGroupRequestSchema,
+        response: { 200: registrationResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const registration = await updateRegistrationGroup(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.body.groupId,
+      );
+      return reply.status(200).send({ registration });
     },
   );
 
@@ -122,11 +178,14 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
   // ("Idempotency"): a repeat call while already on the waitlist is not an error —
   // replies `200` with the existing entry instead of `201`/`409
   // waitlist_entry_already_exists`.
+  // CR-117: same optional `{ groupId }` body and group rules as `POST .../register`;
+  // the choice is carried into the registration a promotion creates.
   app.post(
     '/:id/waitlist',
     {
       schema: {
         params: rideIdParamsSchema,
+        body: joinWaitlistRequestSchema,
         response: {
           201: waitlistEntryResponseWrapper,
           200: waitlistEntryResponseWrapper,
@@ -139,6 +198,7 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         app.db,
         request.user!.id,
         request.params.id,
+        request.body?.groupId,
       );
       return reply.status(created ? 201 : 200).send({ waitlistEntry });
     },
@@ -199,6 +259,31 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const page = await listWaitlist(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.query,
+      );
+      return reply.status(200).send(page);
+    },
+  );
+
+  // CR-117: who is riding — any *signed-in* user (`401` otherwise; anonymous
+  // visitors get only `GET /v1/rides/:id`'s `registrationsCount`), same visibility as
+  // `GET /v1/rides/:id` (`404 ride_not_found` for someone else's `draft`). Display
+  // name + group only. Active registrations, `createdAt asc`, paginated per ADR-011.
+  app.get(
+    '/:id/riders',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        querystring: listRidesQuerySchema,
+        response: { 200: listRidersResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const page = await listRiders(
         app.db,
         request.user!.id,
         request.params.id,

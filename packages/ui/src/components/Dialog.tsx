@@ -16,6 +16,9 @@ import { cn } from '../lib/cn';
 // item. `shadow-overlay` (`tokens.css`, defined since CR-063, unused until now) is
 // exactly the "elevation for overlays" token this is for.
 //
+// ADR-021 («Топокарта»): the dialog sits on `surface` (the sheet margin), the one
+// raised plane — `bg-raised` is the same paper as the page since that ADR.
+//
 // `createPortal`: renders outside `RideDetailView`'s own DOM position so the overlay
 // isn't clipped by an ancestor's `overflow`/stacking context — same reasoning any
 // modal implementation needs. Guarded by the `!open` early return above it, so this
@@ -75,7 +78,7 @@ export function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'relative w-full max-w-sm rounded-xl border border-border bg-bg-raised p-6',
+          'relative w-full max-w-sm rounded-xl border border-border bg-surface p-6',
           'shadow-overlay focus-visible:outline focus-visible:outline-2',
           'focus-visible:outline-offset-2 focus-visible:outline-primary',
         )}

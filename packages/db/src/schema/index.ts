@@ -19,6 +19,7 @@ export * from './ride.js';
 export * from './route.js';
 export * from './stop.js';
 export * from './route-point.js';
+export * from './ride-group.js';
 export * from './registration.js';
 export * from './waitlist-entry.js';
 export * from './ride-update.js';

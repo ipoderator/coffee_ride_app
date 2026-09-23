@@ -139,9 +139,10 @@ export function RouteBuilder({
       geometry.length >= 2
         ? {
             points: geometry,
-            color: getCssColorVar('--primary'),
-            width: 5,
-            outlineColor: getCssColorVar('--bg-raised'),
+            // ADR-021: same overprint route line + casing as `RouteMap`.
+            color: getCssColorVar('--route'),
+            width: 6,
+            outlineColor: getCssColorVar('--route-casing'),
           }
         : null,
     );
@@ -266,7 +267,7 @@ export function RouteBuilder({
                   }
                   disabled={isPending}
                   aria-label={RIDE_ROUTE_BUILDER_TERMS.removePoint(index + 1)}
-                  className="rounded-md px-2 py-1 text-text-secondary hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60"
+                  className="rounded-md px-2 py-1 text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60"
                 >
                   ×
                 </button>

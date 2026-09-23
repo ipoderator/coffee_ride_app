@@ -7,6 +7,7 @@ import type { Registration } from '../domain/registration.js';
 import type { WaitlistEntry } from '../domain/waitlist-entry.js';
 import type { Review } from '../domain/review.js';
 import type { Paginated } from './pagination.js';
+import type { RideGroupSummary } from './ride-groups.js';
 
 // `Intl.DateTimeFormat` throws `RangeError` for a `timeZone` it doesn't recognize —
 // the standard way to validate an IANA identifier without a timezone-database
@@ -116,6 +117,9 @@ export interface GetRideResponse {
   viewerRegistration: Registration | null;
   viewerWaitlistEntry: WaitlistEntry | null;
   viewerReview: Review | null;
+  // CR-117 ("Pace groups"): additive, ordered by `position`; `[]` when the ride has
+  // none. `viewerRegistration.groupId` says which one the caller is in.
+  groups: RideGroupSummary[];
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real
@@ -153,7 +157,26 @@ export interface GetOrganizerRideSummaryResponse {
 // name and there is still no separate public organizer-read endpoint.
 export type PublicRide = Ride & { organizer: RideOrganizerSummary };
 
-export type ListPublicRidesResponse = Paginated<PublicRide>;
+// CR-116 (discovery «Топокарта» cards): `GET /v1/rides` items only — additive on
+// top of `PublicRide`, which `GET /v1/registrations/mine` keeps reusing unchanged.
+// Computed in batch per page, never per row (`rides.service.ts`'s
+// `getRideListExtras`).
+// - `registrationsCount`: active registrations, same count `GetRideResponse` has.
+// - `startLabel`: label of the ride's `start` route point, `null` if none/unlabelled.
+// - `routePreview`: the stored route geometry simplified to at most
+//   `ROUTE_PREVIEW_MAX_POINTS` `[lat, lng]` pairs (for a small inline sketch, not
+//   for navigation), `null` without a route.
+// - `groups`: pace groups in `position` order, name + pace only (for
+//   «25–35 км/ч · 2 группы»).
+export const ROUTE_PREVIEW_MAX_POINTS = 40;
+export interface PublicRideListItem extends PublicRide {
+  registrationsCount: number;
+  startLabel: string | null;
+  routePreview: Array<[number, number]> | null;
+  groups: Array<{ name: string; paceKmh: number }>;
+}
+
+export type ListPublicRidesResponse = Paginated<PublicRideListItem>;
 
 // CR-025 ("Filters"): `bicycleType` is the one filter dimension this ticket ships —
 // the only `Ride` field that's both always-set and a small closed enum

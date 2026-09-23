@@ -850,3 +850,145 @@ rather than inventing a second one — if it turns out to need capabilities this
 interface doesn't have (a polyline layer, typed marker icons), extend
 `packages/maps-core/src/render.ts` additively, the same discipline
 `.claude/rules/extensibility.md` already applies to shared contracts.
+
+## ADR-021 — Visual direction: «Топокарта» replaces Calm/Quiet Instrument
+
+Status: Accepted (2026-09-23).
+
+### Context
+
+The visual direction until now was never an ADR of its own: `docs/design.md` §1's
+"calm, low-saturation" palette with one muted teal accent (CR-063), extended by CR-107's
+"Quiet Instrument" pass (glass panel over cover photos, a Golos wordmark). The
+`/impeccable critique apps/web` run of 2026-09-21 (`apps/web/.impeccable/critique/`)
+scored the interface 21/40: legible and accessible, but generic — nothing in it said
+"group rides on a route". The product owner reviewed alternatives in a shape brief and
+chose «Топокарта»: the interface as a printed orienteering-map sheet. Recorded as an ADR
+because the palette, type and shape rules are a cross-cutting contract every screen and
+the map adapter's colour wiring now assume.
+
+### Decision
+
+1. **Paper, ink, one overprint.** White paper (`bg`), black ink (`text`, the new `frame`
+   rule) and a single plum overprint colour (`primary`/`route`) used only for the ride's
+   route line and the primary action. The other map inks carry meaning only: brown
+   `contour` = elevation, blue `info`, green `success`, yellow `warning`/`warning-fill`.
+   Dark theme is the same sheet "under a head torch" — neutral graphite, not violet.
+   Exact values and verified WCAG ratios: `docs/design.md` §3.
+2. **`danger` is unchanged** (`#D42B20`/`#FF5A4F`) and keeps §1's exception: cancellation,
+   destructive actions and validation errors. In-page destructive buttons become a
+   danger outline; the red fill is kept for `ConfirmDialog`'s confirm button
+   (`Button`'s new additive `danger-filled` variant).
+3. **Cards have no fill.** `bg-raised` now equals `bg` (the paper); the new `surface`
+   token (sheet margin) is the one raised plane — dialogs, sticky bar, hover/selected
+   rows. No shadows on cards; one small overlay shadow.
+4. **Type:** Golos Text stays the body/UI face; Sofia Sans Condensed (`font-display`) is
+   added for headings, labels, metric numerals and the wordmark. Its Russian Cyrillic
+   forms come from `locl` and require `<html lang="ru">`, which is now a documented
+   invariant of `app/layout.tsx`.
+5. **Shape:** 4px "printed stamp" radius on buttons/inputs/chips (not pills), 6px on
+   cards/dialogs; 2px `primary` focus ring with 2px offset unchanged; primary actions
+   48px tall on mobile, 44px from `md`.
+6. **Wordmark** «coffee◦ride» (Sofia Sans Condensed 700, ink, the dot replaced by a plum
+   ring) and a ring-only SVG favicon.
+7. **Token names are kept** (`.claude/rules/extensibility.md`: contracts change
+   additively); new tokens are `surface`, `frame`, `primary-hover`, `primary-tint`,
+   `route`, `route-casing`, `contour`, `warning-fill`, `on-warning-fill`, `info-tint`.
+
+### Consequences
+
+- Every screen changes appearance at once (tokens are app-wide), before the screen
+  rebuilds (CR-118…CR-120) land; until then some screens keep layout patterns written for
+  the old direction (e.g. a filled plum segmented-toggle state) and are fixed there.
+- CR-107's glass tokens are retired: `glass-bg`/`glass-border` resolve to the opaque
+  `surface`/`border` and `GLASS_PANEL_CLASSNAME` lost its `backdrop-blur`. The names stay
+  only while the two flag-gated consumers (`FEATURE_COVER_GLASS_PANEL`,
+  `FEATURE_STICKY_REGISTRATION_CTA`, both off by default) reference them; delete them
+  with those call sites. `scrim` stays as a legibility wash over photos.
+- Map colours: `RouteMap`/`RouteBuilder` draw the route as `route` over `route-casing`,
+  6px, still resolved from tokens at call time (`docs/design.md` §14,
+  `.claude/rules/maps.md`); the elevation profile is drawn in `contour`.
+- One more webfont (Sofia Sans Condensed, variable, Cyrillic + Latin subsets).
+- The favicon repeats the two `primary` hex values (a static SVG cannot read CSS
+  tokens); it must be kept in step with `tokens.css` by hand.
+
+### What this does NOT mean
+
+- It does not introduce a second accent: `route` is the same overprint ink as `primary`,
+  tuned for a line on a basemap.
+- It does not relax "color never carries meaning alone" (§12) or any AA requirement.
+- It is not a licence for map-themed decoration (contour-line backgrounds, paper
+  textures, khaki/cream tints, serif faces) — the direction is the discipline of a
+  printed map, not its costume.
+
+### Rollback
+
+Purely presentational, no data or API impact: revert `packages/ui/src/tokens.css`,
+`apps/web/src/app/layout.tsx` (font), `packages/ui`'s `Button`/`ConfirmDialog`/
+`StatusBadge`/`Wordmark`/`glass.ts` and `app/icon.svg` to their pre-CR-115 versions. The
+token names are unchanged, so no consumer needs touching on the way back; the few
+additive tokens (`surface`, `route`, ...) would need a fallback mapping if their new
+consumers stay.
+
+## ADR-022 — Pace groups: `RideGroup` as a new domain entity
+
+Status: Accepted (2026-09-23).
+
+### Context
+
+The product owner added pace groups to the «Топокарта» scope (CR-117): a group ride
+often splits by speed — e.g. three groups averaging 25, 30 and 35 km/h — and each
+participant rides with exactly one of them. `.claude/CLAUDE.md` fixes the domain entity
+list and forbids "duplicate concepts under different names", so a new entity needs a
+recorded reason, not just a migration.
+
+### Decision
+
+1. **`RideGroup` is a new domain entity** (table `ride_groups`, added to the fixed list
+   in `.claude/CLAUDE.md`): `rideId` (cascade), `name` (1–60, unique per ride
+   case-insensitively), `paceKmh` (5–60, CHECK), `description` (≤500, nullable),
+   `position` (dense `0..n-1`, unique per ride), timestamps + `updatedBy`. At most 6
+   per ride, enforced in the service under the `rides` row lock.
+2. **`Registration.groupId` / `WaitlistEntry.groupId`** (nullable) reference it through
+   a **composite FK `(group_id, ride_id) → ride_groups(id, ride_id)`**, so the database
+   itself guarantees a participant's group belongs to the same ride. On delete it is
+   `NO ACTION` rather than `RESTRICT`: both refuse deleting a referenced group, but
+   `NO ACTION` is checked at end of statement, so deleting a whole ride (which cascades
+   to both tables) works regardless of cascade order.
+3. **Rules live in the existing atomic registration transaction**: once a ride has any
+   group, register/waitlist require `groupId` (`422 group_required`); it must be one of
+   that ride's groups (`422 group_not_found`); capacity stays ride-level. A waitlist
+   entry's group is carried into the registration a promotion creates. Deleting a group
+   is refused (`409 group_has_registrations`) while an active registration or waiting
+   entry points at it; historical rows lose their `groupId` instead.
+4. **Groups stay editable after publishing** (any status but `finished`/`cancelled`),
+   unlike stops/route points (draft-only) — organizers split or rename groups once they
+   see who signed up.
+
+### Rationale — why not an existing entity
+
+- **Not a `Stop` / `RoutePoint`**: those are places on the route; a group has no
+  location and is chosen by people, not placed on a map.
+- **Not a `RideRequirement`**: a requirement is a rule every participant must meet
+  ("helmet", "≥ 28 km/h"). A group is one of several mutually exclusive options that a
+  registration points _at_ — it needs its own identity (id), a per-ride order, and a
+  foreign key from `Registration`. Modelling it as a requirement would either lose the
+  choice or overload one concept with two meanings, which is exactly the duplicate-
+  concept problem the entity list exists to prevent.
+- **Not a field on `Ride`** (e.g. a pace array): registrations must reference a group
+  durably (rename/reorder must not change who is in which group) and the DB must be
+  able to enforce "same ride" — both need a row with an id.
+
+### What this does NOT mean
+
+- No per-group capacity, leaders, or start times in this iteration — capacity stays
+  `Ride.participantLimit`. Adding a nullable per-group limit later is additive.
+- `Ride.paceKmh` is not removed or derived from groups; it stays the organizer's
+  single headline pace for rides without groups.
+- The public rider list (`GET /v1/rides/:id/riders`) exposes display name + group only,
+  to signed-in users — not a general participant directory.
+
+### When to revisit
+
+If organizers ask for per-group limits/waitlists or per-group start times, or if more
+than 6 groups per ride turns out to be a real need.

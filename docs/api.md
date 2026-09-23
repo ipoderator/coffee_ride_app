@@ -204,7 +204,14 @@ plain, unfiltered list — `.claude/rules/resilience.md`). Each item carries
 `organizer: { id, name }` (same embed as the single-ride response).
 Cursor-paginated per ADR-011, sorted `(startsAt asc, id asc)` — soonest-first,
 distinct from `/mine`'s `(createdAt desc, id desc)`. A malformed `cursor` →
-`400 invalid_cursor`.
+`400 invalid_cursor`. **CR-116** (discovery cards) — additive item fields
+(`PublicRideListItem`, this endpoint only; `GET /v1/registrations/mine` keeps plain
+`PublicRide`): `registrationsCount` (active registrations), `startLabel` (label of the
+ride's oldest `start` route point, `null` if none/unlabelled), `routePreview` (the
+stored route geometry as at most 40 `[lat, lng]` pairs, 5 decimals — stride-sampled to
+≤200 points in SQL, then Douglas–Peucker by point budget; `null` without a route; for a
+card sketch, never navigation), `groups` (`[{ name, paceKmh }]` in `position` order,
+`[]` without groups). Computed with four batched queries per page, never per row.
 
 GET `/v1/rides/mine` — **implemented (CR-088)**. Requires a valid session cookie
 (`401` otherwise). Every ride owned by the caller, any status — distinct from the
@@ -292,6 +299,42 @@ ride_not_finishable` for any other status. `200` → `{ ride }` with
 `status: 'finished'` — the terminal, non-cancelled end of the lifecycle. No
 request body.
 
+### Pace groups (CR-117, ADR-022)
+
+A ride can have up to 6 pace groups (`RideGroup`: `id`/`rideId`/`name`/`paceKmh`/
+`description`/`position`/`createdAt`/`updatedAt`/`updatedBy`). All four endpoints
+require a session (`401`) and ownership — `404 ride_not_found` for a non-existent ride
+or someone else's, same resource-enumeration-safe rule as every organizer endpoint.
+Unlike stops/route points (draft-only), groups are editable in every status except
+`finished`/`cancelled` → `409 ride_groups_not_editable` (organizers adjust groups after
+publishing). Mutations lock the `rides` row, the same lock registration uses.
+
+GET `/v1/rides/:id/groups` — organizer-only, any status. `200` → `{ items: (RideGroup &
+{ registrationsCount })[], nextCursor }`, `position` order, paginated per ADR-011
+(`400 invalid_cursor`).
+
+POST `/v1/rides/:id/groups` — body `{ name, paceKmh, description? }`: `name` trimmed,
+1–60 chars (the client suggests «Группа N»; the API never invents one), `paceKmh` 5–60,
+`description` ≤500 or `null`. Appended at the end (`position` server-assigned). `201` →
+`{ group }`. `409 group_limit_reached` past 6, `409 group_name_taken` for a
+case-insensitive duplicate name within the ride, `400 validation_error`.
+
+PATCH `/v1/rides/:id/groups/:groupId` — any subset of `name`/`paceKmh`/`description`/
+`position` (0–5). `position` moves the group to that slot and shifts the others; a
+value past the last slot is clamped to the end (reordering is deliberately this one
+field, no separate reorder endpoint). `200` → `{ group }`. `404 group_not_found` for an
+unknown group or another ride's, `409 group_name_taken`.
+
+DELETE `/v1/rides/:id/groups/:groupId` — `204`. `409 group_has_registrations` while an
+active registration or a waiting waitlist entry points at the group (move them first —
+`PATCH .../register`); cancelled/promoted history rows lose their `groupId` instead.
+Remaining groups are renumbered.
+
+`GET /v1/rides/:id` gains `groups: [{ id, name, paceKmh, description, position,
+registrationsCount }]` (public, `position` order, `[]` without groups);
+`viewerRegistration.groupId`/`viewerWaitlistEntry.groupId` say which one the caller
+chose.
+
 ## Registration
 
 POST `/v1/rides/:id/register` — **implemented (CR-032, "Register")**. Requires a valid
@@ -314,6 +357,22 @@ a repeat call while the caller already has an active registration for this ride 
 most commonly a network retry of a call that actually succeeded — returns `200` with
 that same existing `registration` instead of an error or a second row; no duplicate
 `registration_confirmed` notification fires either.
+
+**CR-117 (pace groups)**: optional body `{ groupId }` (no body at all stays valid).
+Once the ride has any group, `groupId` is required — `422 group_required`; it must be
+one of _this_ ride's groups — `422 group_not_found` (also for any `groupId` on a ride
+without groups; the composite FK is the DB backstop). Checked inside the same locked
+transaction, after the idempotent-replay return and before capacity; capacity stays
+ride-level. An idempotent replay returns the existing registration unchanged even with
+a different `groupId`. `Registration` gained `groupId` (nullable).
+
+PATCH `/v1/rides/:id/register` — **implemented (CR-117)**. The caller moves their own
+active registration to another group of the same ride: body `{ groupId }` (required
+uuid). `200` → `{ registration }`. `401` without a session, `404
+registration_not_found` without an active registration (non-existent ride included),
+`409 group_change_not_allowed` once the ride is `finished`/`cancelled`, `422
+group_not_found` for a group that isn't this ride's. Same `rides` row lock as register/
+cancel, so it cannot race a group delete.
 
 DELETE `/v1/rides/:id/register` — **implemented (CR-033, "Cancel registration")**.
 Same auth requirement as `POST`. `404 registration_not_found` if the caller has no
@@ -344,7 +403,10 @@ might be reacting to. **Idempotent (CR-083)**: a repeat call while the caller al
 has a `waiting` entry for this ride returns `200` with that same existing
 `waitlistEntry` instead of `409 waitlist_entry_already_exists`.
 `201` → `{ waitlistEntry }` (`WaitlistEntry`: `id`/`rideId`/`userId`/`status`/
-`createdAt`/`updatedAt`/`cancelledAt`/`promotedAt`). No request body.
+`createdAt`/`updatedAt`/`cancelledAt`/`promotedAt`). No request body — **CR-117**: the
+same optional `{ groupId }` body and group rules as `POST .../register`
+(`WaitlistEntry.groupId`); a promotion carries the entry's group into the new
+registration.
 
 DELETE `/v1/rides/:id/waitlist` — **implemented (CR-036, "Waitlist")**. Same auth
 requirement as `POST`. `404 waitlist_entry_not_found` if the caller has no `waiting`
@@ -371,6 +433,25 @@ RideParticipantSummary[], nextCursor }`, each item `{ id, userId, displayName,
 createdAt }` — no phone/email. Collection, paginated per ADR-011 (`?limit=`/
 `?cursor=`, `400 invalid_cursor` for a malformed one) — no "load more" UI consumes it
 yet, same precedent `GET /v1/rides/mine`'s screen already set.
+
+**CR-117**: each item gains `group: { id, name, paceKmh } | null` (additive; also on
+`GET .../waitlist` below, which shares the item shape).
+
+GET `/v1/rides/:id/riders` — **implemented (CR-117)**. Who is riding, for any
+**signed-in** user: `401` without a session (anonymous visitors see only `GET
+/v1/rides/:id`'s `registrationsCount`). Same visibility as `GET /v1/rides/:id` — `404
+ride_not_found` for a non-existent ride or someone else's `draft`. Active registrations,
+`createdAt asc`, paginated per ADR-011 (`400 invalid_cursor`). `200` → `{ items: [{
+displayName, group: { id, name, paceKmh } | null }], nextCursor }` — deliberately no
+user/registration id, email, phone or emergency data (`.claude/rules/security.md`),
+and the response schema itself strips anything else. Rationale for "signed-in only":
+seeing who else rides is part of deciding to join, but a name list of people attending
+a dated, located event should not be scrapeable anonymously; a signed-in account is the
+minimum accountability for viewing it (product owner decision, CR-115…120 brief).
+`displayName` is `null` when the participant never set one. No avatar yet — user
+avatars are only served at `/v1/users/me/avatar`; adding a public per-user avatar URL
+here later is additive. (The opaque cursor encodes a registration id; it grants nothing
+on its own.)
 
 GET `/v1/rides/:id/waitlist` — **implemented (CR-037)**. Adds a `GET` to the existing
 `POST`/`DELETE /v1/rides/:id/waitlist` path — the organizer's collection view of the

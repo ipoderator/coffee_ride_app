@@ -11,16 +11,23 @@ import { cn } from '../lib/cn';
 // beyond) passes one from a Client Component — same reasoning `ErrorState` documented
 // (CR-066) for the same shape of component.
 const VARIANT_STYLES = {
+  // ADR-021 («Топокарта»): the one filled plum action — the overprint colour.
   primary:
-    'bg-primary text-on-primary hover:opacity-90 disabled:hover:opacity-100',
+    'bg-primary text-on-primary hover:bg-primary-hover disabled:hover:bg-primary',
+  // A 1.5px ink rule, no fill of its own (the paper shows through).
   secondary:
-    'border border-border-input bg-bg-raised text-text hover:bg-bg disabled:hover:bg-bg-raised',
-  // CR-021 ("Cancel ride"): `docs/design.md`'s one exception to the calm palette —
-  // `danger` (`#D42B20`/`#FF5A4F`) is the only token allowed as a solid fill outside
-  // `StatusBadge`'s own single solid-fill case (CR-065). Additive variant —
-  // `.claude/rules/extensibility.md`: `variant` still defaults to `primary`, no
-  // existing call site changes.
+    'border-[1.5px] border-frame bg-transparent text-text hover:bg-surface disabled:hover:bg-transparent',
+  // CR-021 ("Cancel ride"): `docs/design.md` §1's one exception — `danger`
+  // (`#D42B20`/`#FF5A4F`). Since ADR-021 an in-page destructive action is an
+  // outline in danger red (text + border), not a fill: the fill is reserved
+  // for the moment of confirmation (`danger-filled`, `ConfirmDialog`), so the
+  // page never carries a solid red block before the user has chosen to act.
   danger:
+    'border-[1.5px] border-danger bg-transparent text-danger hover:bg-danger/10 disabled:hover:bg-transparent',
+  // ADR-021: additive — the filled red confirm button inside `ConfirmDialog`.
+  // `.claude/rules/extensibility.md`: no existing variant renamed, so no call
+  // site in either cabinet changes.
+  'danger-filled':
     'bg-danger text-on-danger hover:opacity-90 disabled:hover:opacity-100',
 } as const;
 
@@ -49,9 +56,10 @@ export function Button({
       disabled={disabled || isLoading}
       aria-busy={isLoading || undefined}
       className={cn(
-        // 44px min touch target (docs/design.md §5); 8px radius (§5); visible
-        // 2px focus ring offset 2 (§12).
-        'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium transition-opacity',
+        // Touch target 48px on mobile, 44px from `md` (docs/design.md §5);
+        // 4px "printed stamp" radius (§5); visible 2px focus ring offset 2
+        // (§12).
+        'inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-4 text-base font-medium transition-colors md:min-h-11',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         'disabled:cursor-not-allowed disabled:opacity-60',
         VARIANT_STYLES[variant],

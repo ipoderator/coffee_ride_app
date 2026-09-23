@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Registration } from '../domain/registration.js';
 import type { WaitlistEntry } from '../domain/waitlist-entry.js';
 import type { PublicRide } from './rides.js';
+import type { RideGroupRef } from './ride-groups.js';
 import type { Paginated } from './pagination.js';
 
 // CR-032 ("Register"). `POST /v1/rides/:id/register` takes no request body — identity
@@ -9,6 +10,36 @@ import type { Paginated } from './pagination.js';
 // `publish`/`open-registration`/etc. `DELETE /v1/rides/:id/register` (cancel) returns
 // `204` with no body, so it has no response type here.
 export interface CreateRegistrationResponse {
+  registration: Registration;
+}
+
+// CR-117 ("Pace groups"): `POST .../register` and `POST .../waitlist` gain an
+// optional body. No body at all stays valid (a ride without groups). When the ride
+// has groups, `groupId` is required (`422 group_required`) and must be one of *this*
+// ride's groups (`422 group_not_found`); a `groupId` for a ride without groups is
+// `422 group_not_found` too.
+export const createRegistrationRequestSchema = z
+  .object({
+    groupId: z.uuid('groupId must be a valid group id.').optional(),
+  })
+  // `nullish`, not `optional`: Fastify hands a request with no body at all to the
+  // validator as `null`, and "no body" must stay valid for a ride without groups.
+  .nullish();
+export type CreateRegistrationRequest = z.infer<
+  typeof createRegistrationRequestSchema
+>;
+export const joinWaitlistRequestSchema = createRegistrationRequestSchema;
+export type JoinWaitlistRequest = CreateRegistrationRequest;
+
+// CR-117: `PATCH /v1/rides/:id/register` — a participant moves their own active
+// registration to another group of the same ride.
+export const updateRegistrationGroupRequestSchema = z.object({
+  groupId: z.uuid('groupId must be a valid group id.'),
+});
+export type UpdateRegistrationGroupRequest = z.infer<
+  typeof updateRegistrationGroupRequestSchema
+>;
+export interface UpdateRegistrationGroupResponse {
   registration: Registration;
 }
 
@@ -28,11 +59,14 @@ export interface CreateWaitlistEntryResponse {
 // the constraint to preserve). One shape reused for both the participants and the
 // waitlist collection — same fields either way, only the underlying filter differs
 // server-side.
+// CR-117 ("Pace groups"): additive `group` — the registration's (or waitlist
+// entry's) chosen group, `null` if none.
 export interface RideParticipantSummary {
   id: string;
   userId: string;
   displayName: string | null;
   createdAt: string;
+  group: RideGroupRef | null;
 }
 
 export type ListRideParticipantsResponse = Paginated<RideParticipantSummary>;

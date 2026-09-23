@@ -66,7 +66,7 @@ export function ThemeToggle() {
           onClick={() => choose(option)}
           className={cn(
             NAV_MENU_ITEM_CLASSNAME,
-            option === preference && 'bg-bg text-text',
+            option === preference && 'bg-surface text-text',
           )}
         >
           {ICONS[option]}

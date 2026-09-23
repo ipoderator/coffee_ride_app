@@ -17,6 +17,10 @@ export interface Registration {
   rideId: string;
   userId: string;
   status: RegistrationStatus;
+  // CR-117 ("Pace groups", ADR-022): the `RideGroup` the participant rides with —
+  // `null` when the ride has no groups, or for a registration made before the
+  // organizer added them.
+  groupId: string | null;
   createdAt: string;
   updatedAt: string;
   cancelledAt: string | null;

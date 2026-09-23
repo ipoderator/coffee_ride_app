@@ -4,6 +4,7 @@ import { authRoutes } from '../modules/auth/auth.routes.js';
 import { usersRoutes } from '../modules/users/users.routes.js';
 import { organizersRoutes } from '../modules/organizers/organizers.routes.js';
 import { ridesRoutes } from '../modules/rides/rides.routes.js';
+import { rideGroupsRoutes } from '../modules/rides/ride-groups.routes.js';
 import {
   myRegistrationsRoutes,
   registrationsRoutes,
@@ -38,6 +39,8 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   await app.register(usersRoutes, { prefix: '/users' });
   await app.register(organizersRoutes, { prefix: '/organizers' });
   await app.register(ridesRoutes, { prefix: '/rides' });
+  // CR-117 ("Pace groups"): same `rides` capability module, own plugin file.
+  await app.register(rideGroupsRoutes, { prefix: '/rides' });
   await app.register(registrationsRoutes, { prefix: '/rides' });
   // CR-091 ("My registrations"): a second plugin from the same `registrations`
   // capability module, mounted at its own prefix — see `myRegistrationsRoutes`'s own

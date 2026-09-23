@@ -43,10 +43,13 @@ describe('StatusBadge', () => {
     expect(neutralClass).toContain('bg-bg-raised');
   });
 
-  it('renders a pill (full radius)', () => {
+  it('renders a 4px printed-stamp chip, not a pill (ADR-021)', () => {
     const { container } = render(
       <StatusBadge label="Опубликован" tone="success" />,
     );
-    expect(container.firstElementChild?.className).toContain('rounded-full');
+    expect(container.firstElementChild?.className).toContain('rounded-md');
+    expect(container.firstElementChild?.className).not.toContain(
+      'rounded-full',
+    );
   });
 });

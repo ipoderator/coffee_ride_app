@@ -1,38 +1,52 @@
 # Current task
 
-## CR-114 — Route builder on 2GIS roads (organizer)
+## CR-115…CR-120 — «Топокарта» redesign + pace groups + participant list
 
-Goal: an organizer builds a ride's route by placing waypoints on the map; the
-API routes them through 2GIS Routing (bicycle) so the line only follows roads
-2GIS knows — never a straight segment across a river/relief. User chose this
-over GPX map-matching (2026-09-23). GPX upload stays as an alternative.
+Started 2026-09-23. Direction chosen by the product owner after `/impeccable critique
+apps/web` (21/40): «Топокарта» (orienteering-map world). Scope agreed in the shape brief:
+discovery + ride detail first, tokens rolled out app-wide at once, additive API fields
+for the list. Added by the owner the same day: pace groups (a ride has N groups, each
+with its own average speed, e.g. 25 / 30 / 35 km/h) and a list of everyone who is
+riding.
 
-Requirements:
+Previous pending work (CR-108…CR-114) committed as `f095715` before starting.
 
-- `POST /v1/rides/:id/route/build` `{ points: LatLng[] (2..25) }`, owner +
-  draft only, creates or replaces the ride's route.
-- Adapter never falls back to straight lines between waypoints: no geometry
-  from 2GIS → a "no route" error, not the waypoints.
-- Degraded: no key / 2GIS down → 503 `route_builder_unavailable`; 2GIS found
-  no route → 422 `route_not_buildable`.
-- The built route is stored like an uploaded one (GPX generated from the 2GIS
-  geometry, same metrics computation, same ride auto-fill rule).
-- Web: map on `/organizer/rides/[id]/route`, click to add points, remove /
-  clear, build, see the result.
+### Sub-tasks
 
-Acceptance: API + adapter + web tests; typecheck/lint/build; live-verified
-against real 2GIS once the VPN is off (KI-056).
+| CR     | What                                                                                                                                                                                                        | Owner               | Wave |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ---- |
+| CR-115 | «Топокарта» tokens (light/dark), fonts (Golos Text + Sofia Sans Condensed, `lang="ru"`), design.md §1/§3/§4 rewrite, ADR-021                                                                                | sub-agent           | 1    |
+| CR-116 | `GET /v1/rides` additive fields: `registrationsCount`, `startLabel`, `routePreview` (simplified geometry)                                                                                                   | sub-agent (backend) | 1    |
+| CR-117 | Pace groups: `RideGroup` entity (ADR-022), migration, organizer CRUD, `groupId` on registration, groups in ride detail/list, participant list public read, dev seed: test ride with 2 groups (25 / 35 km/h) | sub-agent (backend) | 1    |
+| CR-118 | Discovery: legend-row card, map pins with start time, markers follow filters, list↔map sync                                                                                                                 | sub-agent (web)     | 2    |
+| CR-119 | Ride detail: map-first layout, groups + group choice at registration, «Участники» list                                                                                                                      | sub-agent (web)     | 2    |
+| CR-120 | Organizer: groups editor, group column on the participants page                                                                                                                                             | sub-agent (web)     | 2    |
 
-Planned files: packages/maps-core (types, render onClick), packages/maps-2gis
-(route.ts, errors.ts, render.ts), apps/api (plugins/maps.ts, service,
-routes, eslint, build.mjs, package.json), packages/types (request schema),
-apps/web features/organizer/route (RouteBuilder, api.ts), packages/ui terms,
-docs (api.md, changelog, tasks, maps.md, architecture-map).
+Rules for every sub-agent: no `next build` / `turbo build` for web while the dev server
+runs on :3000 (it shares `apps/web/.next`); docs/changelog.md, docs/tasks.md,
+.claude/context/* are updated centrally by the main session, not by sub-agents.
 
-Progress: implemented — adapter, API endpoint, web builder, docs.
-Validation: typecheck + lint clean (maps-core, maps-2gis, types, ui, web, api);
-tests maps-2gis 24, ui 121, web 242, api 384 (+3 skipped); web + api builds
-pass. Browser: clicks add points, build shows the degraded 503 message.
-Blocker: live 2GIS verification — REST APIs unreachable via VPN (KI-056).
-Discovered: `getRoute` silently returned the raw waypoints when 2GIS geometry
-failed to parse — i.e. straight lines. Fixed as part of this task.
+### Decisions
+
+- Participant list visibility: signed-in users see display names + group of active
+  participants; anonymous visitors see the count only. Never email/phone/emergency data.
+- Registration into a ride that has groups requires choosing a group; capacity stays
+  ride-level (no per-group limits in this iteration).
+
+### Acceptance
+
+- typecheck + lint + tests green (api with `TEST_DATABASE_URL`), web tests for new UI.
+- Main session reviews every sub-agent diff and re-runs checks; browser check at 1440
+  and 390 px, light + dark, on the running dev server.
+
+### Progress
+
+- [ ] wave 1 - [ ] wave 1 review - [ ] wave 2 - [ ] wave 2 review - [ ] docs/context
+
+### Validation results
+
+(pending)
+
+### Discovered issues
+
+- Critique P2: discovery markers never update after the first render (filter change).

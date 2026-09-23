@@ -24,6 +24,14 @@
   body {
     @apply bg-bg text-text;
   }
+  /* ADR-021 («Топокарта», docs/design.md §4): headings are set in the
+     display face (Sofia Sans Condensed); body text stays Golos Text. Russian
+     letterforms depend on `<html lang="ru">` (see layout.tsx). */
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
   :focus-visible {
     /* docs/design.md §12: visible focus ring on every interactive element. */
     @apply outline-2 outline-offset-2 outline-primary;

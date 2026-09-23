@@ -47,7 +47,7 @@ Do not replace the stack without an explicit architectural decision.
 
 ## Domain entities
 
-User, OrganizerProfile, Ride, Route, RoutePoint, Stop, RideRequirement, RideService, Registration, WaitlistEntry, RideUpdate, Notification, Review.
+User, OrganizerProfile, Ride, Route, RoutePoint, Stop, RideGroup (ADR-022), RideRequirement, RideService, Registration, WaitlistEntry, RideUpdate, Notification, Review.
 
 Do not create duplicate concepts under different names.
 

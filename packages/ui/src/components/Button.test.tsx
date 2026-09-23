@@ -31,4 +31,28 @@ describe('Button', () => {
       'button',
     );
   });
+
+  // ADR-021 («Топокарта»): an in-page destructive action is an outline; the
+  // red fill belongs to the confirmation step only.
+  it('renders `danger` as a danger outline with danger text, not a fill', () => {
+    render(<Button variant="danger">Удалить</Button>);
+    const button = screen.getByRole('button', { name: 'Удалить' });
+    expect(button.className).toContain('border-danger');
+    expect(button.className).toContain('text-danger');
+    expect(button.className).not.toMatch(/(^|\s)bg-danger(\s|$)/);
+  });
+
+  it('renders `danger-filled` as a solid danger fill', () => {
+    render(<Button variant="danger-filled">Отменить регистрацию</Button>);
+    const button = screen.getByRole('button', { name: 'Отменить регистрацию' });
+    expect(button.className).toMatch(/(^|\s)bg-danger(\s|$)/);
+    expect(button.className).toContain('text-on-danger');
+  });
+
+  it('renders `secondary` as an ink outline with no fill of its own', () => {
+    render(<Button variant="secondary">Отмена</Button>);
+    const button = screen.getByRole('button', { name: 'Отмена' });
+    expect(button.className).toContain('border-frame');
+    expect(button.className).toContain('bg-transparent');
+  });
 });

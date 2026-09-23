@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
@@ -9,6 +10,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { rides } from './ride.js';
+import { rideGroups } from './ride-group.js';
 import { users } from './user.js';
 
 // Eighth domain table (CR-032, `.claude/rules/database.md`/`docs/database.md`).
@@ -37,6 +39,11 @@ export const registrations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     status: registrationStatusEnum('status').notNull().default('active'),
+    // CR-117 ("Pace groups", ADR-022): the pace group the participant rides with.
+    // Nullable — a ride without groups has none, and a registration made before the
+    // organizer added groups keeps `null` until the participant picks one. Its FK is
+    // the composite `registrations_group_ride_fk` below, not a plain `.references()`.
+    groupId: uuid('group_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -59,6 +66,23 @@ export const registrations = pgTable(
     index('registrations_ride_id_idx').on(table.rideId),
     // Backs the future CR-091 ("My registrations") per-user lookup.
     index('registrations_user_id_idx').on(table.userId),
+    // CR-117: `(group_id, ride_id)` → `ride_groups(id, ride_id)`, so a registration
+    // can only ever point at a group of its *own* ride — enforced by the DB, not just
+    // `registrations.service.ts`'s lookup. `MATCH SIMPLE` (Postgres default): a `null`
+    // `group_id` skips the check entirely. `no action` rather than `restrict`: both
+    // block deleting a group that is still referenced, but `no action` is checked at
+    // end of statement, so deleting a whole ride (which cascades to *both*
+    // `ride_groups` and `registrations`) still works regardless of cascade order.
+    // `ride-groups.service.ts`'s `deleteRideGroup` 409s `group_has_registrations`
+    // before this backstop is ever reached for an active registration.
+    foreignKey({
+      name: 'registrations_group_ride_fk',
+      columns: [table.groupId, table.rideId],
+      foreignColumns: [rideGroups.id, rideGroups.rideId],
+    }).onDelete('no action'),
+    // Backs the per-group active-count query (`GET /v1/rides/:id`'s
+    // `groups[].registrationsCount`) and the delete-group reference check.
+    index('registrations_group_id_idx').on(table.groupId),
     check(
       'registrations_cancelled_at_consistent',
       sql`(${table.status} = 'cancelled') = (${table.cancelledAt} is not null)`,

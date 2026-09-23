@@ -29,7 +29,7 @@ import { cn } from '../lib/cn';
  * CR-107's `GLASS_PANEL_CLASSNAME`).
  */
 export const NAV_MENU_ITEM_CLASSNAME =
-  'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-text-secondary hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
+  'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
 
 export interface NavMenuProps {
   /** The trigger's visible text, and its accessible name. */

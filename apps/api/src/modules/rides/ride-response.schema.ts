@@ -51,6 +51,48 @@ export const rideWithOrganizerResponseSchema = rideResponseSchema.extend({
   organizer: rideOrganizerSummarySchema,
 });
 
+// CR-116 (discovery cards): `GET /v1/rides` items only — `PublicRideListItem`'s
+// additive fields on top of the shared ride+organizer shape, which
+// `GET /v1/registrations/mine` keeps using unchanged.
+export const publicRideListItemResponseSchema =
+  rideWithOrganizerResponseSchema.extend({
+    registrationsCount: z.number(),
+    startLabel: z.string().nullable(),
+    routePreview: z.array(z.tuple([z.number(), z.number()])).nullable(),
+    groups: z.array(z.object({ name: z.string(), paceKmh: z.number() })),
+  });
+
+// CR-117 ("Pace groups"): the one "group over the wire" shape, returned by
+// `POST`/`PATCH .../groups`.
+export const rideGroupResponseSchema = z.object({
+  id: z.string(),
+  rideId: z.string(),
+  name: z.string(),
+  paceKmh: z.number(),
+  description: z.string().nullable(),
+  position: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  updatedBy: z.string().nullable(),
+});
+
+// CR-117: `GET /v1/rides/:id`'s public `groups[]` items (`RideGroupSummary`).
+export const rideGroupSummaryResponseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  paceKmh: z.number(),
+  description: z.string().nullable(),
+  position: z.number(),
+  registrationsCount: z.number(),
+});
+
+// CR-117: the minimal group reference embedded in participant/rider lists.
+export const rideGroupRefResponseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  paceKmh: z.number(),
+});
+
 // CR-027 ("GPX upload"): a route summary — no `geometry` array (see
 // `.claude/context/current-task.md`'s "Full geometry exposure" scoping note).
 export const routeSummaryResponseSchema = z.object({
