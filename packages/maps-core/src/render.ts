@@ -16,6 +16,16 @@ export interface MapMarkerInput {
    * of the provider's default plain pin icon. Omit both for the default pin. */
   color?: string;
   label?: string;
+  /** CR-118: `'dot'` (default) is the small filled pin above; `'ring'` is an
+   * orienteering control circle — a hollow ring in `color` with `label`
+   * set as a caption beside it (discovery's start pins, «07:30»). */
+  shape?: 'dot' | 'ring';
+  /** CR-118: emphasised state (the ring fills with `color`, its caption
+   * becomes a filled tag) and drawn above unselected markers. */
+  selected?: boolean;
+  /** CR-118: contrasting "paper" color for a `'ring'` marker's halo and
+   * its selected caption's text. The renderer picks a default if omitted. */
+  haloColor?: string;
 }
 
 export interface MapPolylineInput {
@@ -48,6 +58,9 @@ export interface MapRenderOptions {
   /** Called with the map coordinate under a click/tap on the map surface
    * (CR-114's route builder places waypoints this way). */
   onClick?: (point: LatLng) => void;
+  /** CR-118: called with a marker's `id` when that marker is clicked/tapped
+   * (discovery selects the matching list row). */
+  onMarkerClick?: (id: string) => void;
 }
 
 export interface MapHandle {

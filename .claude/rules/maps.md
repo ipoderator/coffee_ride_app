@@ -119,6 +119,12 @@ export interface MapMarkerInput {
   // distinct typed pin instead of the provider's default plain icon.
   color?: string;
   label?: string;
+  // CR-118: 'ring' = orienteering control circle with `label` as a caption
+  // beside it (discovery's start-time pins; 44×44 px hit box); `selected`
+  // fills it and draws it on top; `haloColor` is its paper knock-out.
+  shape?: 'dot' | 'ring';
+  selected?: boolean;
+  haloColor?: string;
 }
 
 export interface MapPolylineInput {
@@ -143,6 +149,8 @@ export interface MapRenderOptions {
   zoom?: number;
   // CR-114: map click/tap coordinate (the route builder places waypoints).
   onClick?: (point: LatLng) => void;
+  // CR-118: a marker click/tap, reported by the marker's `id`.
+  onMarkerClick?: (id: string) => void;
 }
 
 export interface MapHandle {
@@ -175,6 +183,12 @@ instead of the renderer's own 4px default, "more visual weight" without a neon g
 design.md` §3). `opacity` is applied by appending an alpha suffix to a 6-digit hex `color`
 (2GIS's own RGBA hex support) since MapGL's `PolylineOptions` has no separate opacity
 field; a non-hex color renders at full opacity rather than risk an invalid color string.
+
+CR-118 extended markers the same additive way, no new ADR: `shape: 'ring'` draws an
+orienteering control circle (hollow ring in `color`, `haloColor` knock-out, `label` as
+a caption beside it) inside a 44×44 px hit box anchored at its centre; `selected` fills
+it and raises its `zIndex`; `MapRenderOptions.onMarkerClick` reports clicks by marker
+`id`. Markers that never set these render exactly as before.
 
 Every method must apply the resilience rules in `.claude/rules/resilience.md`
 (timeout, bounded retries for idempotent calls, circuit breaker, defined fallback) at the

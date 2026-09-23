@@ -17,12 +17,15 @@ import { expect, test } from '@playwright/test';
 test('home page loads the discovery screen end to end', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Заезды' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Заезды' }),
+  ).toBeVisible();
 
   const listPanel = page.getByTestId('discovery-list-panel');
   await expect(listPanel).toBeVisible();
 
-  const emptyState = listPanel.getByText('Пока нет заездов');
+  // CR-118: the unfiltered empty state's copy («Топокарта» sheet wording).
+  const emptyState = listPanel.getByText('Заездов на этом листе нет');
   const rideLink = listPanel.locator('a[href^="/rides/"]').first();
   await expect(emptyState.or(rideLink)).toBeVisible();
 });

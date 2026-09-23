@@ -860,8 +860,8 @@ Status: Accepted (2026-09-23).
 The visual direction until now was never an ADR of its own: `docs/design.md` §1's
 "calm, low-saturation" palette with one muted teal accent (CR-063), extended by CR-107's
 "Quiet Instrument" pass (glass panel over cover photos, a Golos wordmark). The
-`/impeccable critique apps/web` run of 2026-09-21 (`apps/web/.impeccable/critique/`)
-scored the interface 21/40: legible and accessible, but generic — nothing in it said
+`/impeccable critique apps/web` run of 2026-09-23 (no snapshot stored — the owner
+asked for a read-only review) scored the interface 21/40: legible and accessible, but generic — nothing in it said
 "group rides on a route". The product owner reviewed alternatives in a shape brief and
 chose «Топокарта»: the interface as a printed orienteering-map sheet. Recorded as an ADR
 because the palette, type and shape rules are a cross-cutting contract every screen and

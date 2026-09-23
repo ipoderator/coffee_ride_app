@@ -5,12 +5,18 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  PARTICIPANTS_GROUP_TERMS,
   PARTICIPANTS_TERMS,
   Skeleton,
   formatDate,
   formatTime,
 } from 'ui';
-import { getRideWaitlist, type RideParticipantSummary } from '../api';
+import {
+  getRideGroups,
+  getRideWaitlist,
+  type RideParticipantSummary,
+} from '../api';
+import { formatGroupRef } from '../group-sections';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -21,20 +27,29 @@ type LoadStatus = 'loading' | 'ready' | 'error';
  * CR-036 established for `WaitlistEntry` itself. Same states/layout discipline as
  * `ParticipantTable`, deliberately not shared as one generic component — two named
  * components per `docs/design.md`'s own inventory.
+ *
+ * CR-120: stays one FIFO list (the queue order *is* the information here), with
+ * a «Группа» field per entry — «Группа 1 · 25 км/ч», or «—» for an entry without
+ * one — shown whenever the ride has groups.
  */
 export function WaitlistTable({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<RideParticipantSummary[]>([]);
+  const [rideHasGroups, setRideHasGroups] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setStatus('loading');
 
-    getRideWaitlist(rideId)
-      .then((response) => {
+    Promise.all([
+      getRideWaitlist(rideId),
+      getRideGroups(rideId).catch(() => null),
+    ])
+      .then(([response, groups]) => {
         if (cancelled) return;
         setItems(response.items);
+        setRideHasGroups((groups?.length ?? 0) > 0);
         setStatus('ready');
       })
       .catch(() => {
@@ -46,6 +61,8 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
       cancelled = true;
     };
   }, [rideId, attempt]);
+
+  const showGroup = rideHasGroups || items.some((item) => item.group !== null);
 
   return (
     <Card className="flex flex-col gap-4">
@@ -83,10 +100,20 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
                 key={item.id}
                 className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 last:border-none last:pb-0"
               >
-                <p className="text-sm font-medium text-text">
-                  {index + 1}.{' '}
-                  {item.displayName ?? PARTICIPANTS_TERMS.noNameFallback}
-                </p>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p className="break-words text-sm font-medium text-text">
+                    {index + 1}.{' '}
+                    {item.displayName ?? PARTICIPANTS_TERMS.noNameFallback}
+                  </p>
+                  {showGroup && (
+                    <p className="text-sm text-text-secondary">
+                      {PARTICIPANTS_GROUP_TERMS.groupLabel}:{' '}
+                      <span className="text-text">
+                        {formatGroupRef(item.group)}
+                      </span>
+                    </p>
+                  )}
+                </div>
                 <p className="text-sm text-text-secondary">
                   {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt)}{' '}
                   {formatTime(joinedAt)}

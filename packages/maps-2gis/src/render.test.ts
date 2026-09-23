@@ -7,14 +7,23 @@ import { create2GisMapRenderer } from './render.js';
 // `vi.hoisted` (not a plain top-level `const`) so `polylineCtor` is safe to
 // reference inside the `vi.mock` factory below, which Vitest hoists above
 // every import in this file.
-const { polylineCtor, mapFitBounds, mapSetCenter, mapSetZoom, mapOn } =
-  vi.hoisted(() => ({
-    polylineCtor: vi.fn(),
-    mapFitBounds: vi.fn(),
-    mapSetCenter: vi.fn(),
-    mapSetZoom: vi.fn(),
-    mapOn: vi.fn(),
-  }));
+const {
+  polylineCtor,
+  mapFitBounds,
+  mapSetCenter,
+  mapSetZoom,
+  mapOn,
+  htmlMarkerCtor,
+  markerOn,
+} = vi.hoisted(() => ({
+  polylineCtor: vi.fn(),
+  mapFitBounds: vi.fn(),
+  mapSetCenter: vi.fn(),
+  mapSetZoom: vi.fn(),
+  mapOn: vi.fn(),
+  htmlMarkerCtor: vi.fn(),
+  markerOn: vi.fn(),
+}));
 
 vi.mock('@2gis/mapgl', () => ({
   load: vi.fn().mockResolvedValue({
@@ -33,8 +42,20 @@ vi.mock('@2gis/mapgl', () => ({
       polylineCtor(options);
       this.destroy = vi.fn();
     }),
-    Marker: vi.fn(),
-    HtmlMarker: vi.fn(),
+    Marker: vi.fn().mockImplementation(function (
+      this: Record<string, unknown>,
+    ) {
+      this.on = markerOn;
+      this.destroy = vi.fn();
+    }),
+    HtmlMarker: vi.fn().mockImplementation(function (
+      this: Record<string, unknown>,
+      _map: unknown,
+      options: unknown,
+    ) {
+      htmlMarkerCtor(options);
+      this.destroy = vi.fn();
+    }),
   }),
 }));
 
@@ -173,5 +194,170 @@ describe('onClick', () => {
   it('subscribes to nothing when no handler is given', async () => {
     await renderHandle();
     expect(mapOn).not.toHaveBeenCalled();
+  });
+});
+
+// CR-118: ring markers build a small DOM tree. The package's tests run in
+// plain Node (no jsdom dependency here), so a minimal stand-in for the few
+// `document`/element members `createRingElement` touches is enough.
+interface FakeElement {
+  tagName: string;
+  textContent: string;
+  style: { cssText: string };
+  dataset: Record<string, string>;
+  children: FakeElement[];
+  listeners: Record<string, (event: { stopPropagation(): void }) => void>;
+  appendChild(child: FakeElement): void;
+  addEventListener(
+    type: string,
+    listener: (event: { stopPropagation(): void }) => void,
+  ): void;
+}
+
+function fakeDocument() {
+  return {
+    createElement(tagName: string): FakeElement {
+      return {
+        tagName,
+        textContent: '',
+        style: { cssText: '' },
+        dataset: {},
+        children: [],
+        listeners: {},
+        appendChild(child) {
+          this.children.push(child);
+        },
+        addEventListener(type, listener) {
+          this.listeners[type] = listener;
+        },
+      };
+    },
+  };
+}
+
+function lastHtmlMarker(): {
+  html: FakeElement;
+  anchor: number[];
+  zIndex?: number;
+  interactive?: boolean;
+} {
+  return htmlMarkerCtor.mock.calls.at(-1)![0] as never;
+}
+
+describe('ring markers (CR-118)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders a 44px hit box anchored at its centre, with the label as a caption', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([
+      {
+        id: 'ride-1',
+        point: { lat: 55.75, lng: 37.61 },
+        shape: 'ring',
+        label: '07:30',
+        color: '#9c2aa6',
+        haloColor: '#ffffff',
+      },
+    ]);
+
+    const { html, anchor } = lastHtmlMarker();
+    expect(anchor).toEqual([22, 22]);
+    expect(html.style.cssText).toContain('width:44px');
+    expect(html.style.cssText).toContain('height:44px');
+    const [ring, caption] = html.children;
+    expect(ring!.style.cssText).toContain('border:3px solid #9c2aa6');
+    expect(ring!.style.cssText).toContain('background:transparent');
+    expect(caption!.textContent).toBe('07:30');
+    expect(caption!.style.cssText).toContain('color:#9c2aa6');
+  });
+
+  it('fills a selected ring and draws it above unselected ones', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([
+      {
+        id: 'ride-1',
+        point: { lat: 55.75, lng: 37.61 },
+        shape: 'ring',
+        label: '07:30',
+        color: '#7a2482',
+        haloColor: '#ffffff',
+        selected: true,
+      },
+    ]);
+
+    const { html, zIndex } = lastHtmlMarker();
+    expect(zIndex).toBe(2);
+    expect(html.dataset.selected).toBe('true');
+    expect(html.children[0]!.style.cssText).toContain('background:#7a2482');
+    expect(html.children[1]!.style.cssText).toContain(
+      'background:#7a2482;color:#ffffff',
+    );
+  });
+
+  it('keeps MapGL default ordering for markers that never set `selected`', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([
+      { id: 'stop-1', point: { lat: 1, lng: 1 }, color: '#123456', label: 'К' },
+    ]);
+    expect(lastHtmlMarker()).not.toHaveProperty('zIndex');
+    expect(lastHtmlMarker()).not.toHaveProperty('interactive');
+  });
+});
+
+describe('onMarkerClick (CR-118)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reports a click on an HTML marker by its id', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const onMarkerClick = vi.fn();
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    const handle = await renderer.render({
+      container: {} as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+      onMarkerClick,
+    });
+    handle.setMarkers([
+      {
+        id: 'ride-7',
+        point: { lat: 1, lng: 1 },
+        shape: 'ring',
+        label: '09:00',
+      },
+    ]);
+
+    const { html, interactive } = lastHtmlMarker();
+    expect(interactive).toBe(true);
+    const stopPropagation = vi.fn();
+    html.listeners.click!({ stopPropagation });
+    expect(onMarkerClick).toHaveBeenCalledWith('ride-7');
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+
+  it('reports a click on a default marker through the SDK event', async () => {
+    const onMarkerClick = vi.fn();
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    const handle = await renderer.render({
+      container: {} as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+      onMarkerClick,
+    });
+    handle.setMarkers([{ id: 'plain', point: { lat: 1, lng: 1 } }]);
+
+    expect(markerOn).toHaveBeenCalledWith('click', expect.any(Function));
+    (markerOn.mock.calls[0]![1] as () => void)();
+    expect(onMarkerClick).toHaveBeenCalledWith('plain');
+  });
+
+  it('subscribes to no marker events without a handler', async () => {
+    const handle = await renderHandle();
+    handle.setMarkers([{ id: 'plain', point: { lat: 1, lng: 1 } }]);
+    expect(markerOn).not.toHaveBeenCalled();
   });
 });

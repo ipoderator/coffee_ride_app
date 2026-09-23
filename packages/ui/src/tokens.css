@@ -60,17 +60,13 @@
      aliases the same ink rather than introducing another hue. */
   --chart-secondary: var(--contour);
 
-  /* CR-107's "Quiet Instrument" glass tokens, retired by ADR-021 (the
-     direction bans glass/blur). Names kept because `GLASS_PANEL_CLASSNAME`
-     and its flag-gated consumers (`FEATURE_COVER_GLASS_PANEL`,
-     `FEATURE_STICKY_REGISTRATION_CTA`, both off by default) still reference
-     them — they now resolve to the plain opaque `surface`/`border`, so a
-     flag switched on renders a flat printed panel, not a translucent one.
-     `--scrim` stays a wash under cover-photo text (legibility, not glass),
-     re-toned to ink; same in both themes, since it sits on a photo. */
+  /* CR-107's "Quiet Instrument" glass tokens (`--glass-bg`/`--glass-border`,
+     `GLASS_PANEL_CLASSNAME`) were retired by ADR-021 (the direction bans
+     glass/blur) and deleted by CR-119 once the discovery/ride-detail rebuilds
+     dropped their last call sites. `--scrim` stays a wash under cover-photo
+     text (legibility, not glass), re-toned to ink; same in both themes, since
+     it sits on a photo. */
   --scrim: rgb(21 23 26 / 55%);
-  --glass-bg: var(--surface);
-  --glass-border: var(--border);
 
   /* Radius (§5): 4px — a printed stamp, not a pill — on buttons, inputs and
      chips; 6px only for dialogs/sheets. */
@@ -144,8 +140,6 @@
   --color-border-input: var(--border-input);
   --color-chart-secondary: var(--chart-secondary);
   --color-scrim: var(--scrim);
-  --color-glass-bg: var(--glass-bg);
-  --color-glass-border: var(--glass-border);
 }
 
 @theme {

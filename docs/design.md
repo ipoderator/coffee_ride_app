@@ -181,11 +181,10 @@ access is guarded, since it throws outright in a private window with site data b
 
 `glass-bg`/`glass-border` and `packages/ui`'s `GLASS_PANEL_CLASSNAME` belonged to the
 "Quiet Instrument" direction, which ADR-021 replaced; «Топокарта» bans glass and blur.
-The names still exist only because two flag-gated consumers reference them
-(`FEATURE_COVER_GLASS_PANEL`, `FEATURE_STICKY_REGISTRATION_CTA`, both off by default):
-they now resolve to the opaque `surface`/`border`, and the class list no longer carries
-`backdrop-blur`, so a flag switched on renders a flat printed panel. Do not use them in
-new code; delete them when the discovery/ride-detail rebuilds drop those call sites.
+Deleted by CR-119, together with both flags that gated their consumers
+(`FEATURE_COVER_GLASS_PANEL`, `FEATURE_STICKY_REGISTRATION_CTA`), once the discovery
+and ride-detail rebuilds dropped the last call sites. The sticky mobile registration bar
+on `/rides/[id]` stays — it is the default now, a `surface` sheet with an ink rule.
 
 `scrim` (`rgb(21 23 26 / 55%)`, ink at 55%, same in both themes) stays: it is a wash
 under text placed on a user-uploaded photo, needed for contrast whatever the photo is —

@@ -20,20 +20,29 @@ import type {
 export type { BicycleType, DifficultyLevel, RideStatus, RoutePointType };
 
 /**
- * CR-043 ("Organizer rating summary"): correct Russian plural for a review count —
- * `1 отзыв`, `2 отзыва`, `5 отзывов` (standard `n % 10`/`n % 100` cardinal rule,
- * `docs/design.md` §7: "wrong formatting here reads as broken software").
+ * Russian cardinal plural — `one` (1, 21), `few` (2–4, 22–24), `many` (0, 5–20,
+ * 11–14…): the standard `n % 10`/`n % 100` rule (`docs/design.md` §7: "wrong
+ * formatting here reads as broken software"). The one copy every count label in
+ * this module uses.
  */
-function formatReviewsCount(count: number): string {
+function pluralRu(
+  count: number,
+  one: string,
+  few: string,
+  many: string,
+): string {
   const mod10 = count % 10;
   const mod100 = count % 100;
-  const word =
-    mod10 === 1 && mod100 !== 11
-      ? 'отзыв'
-      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
-        ? 'отзыва'
-        : 'отзывов';
-  return `${count} ${word}`;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/**
+ * CR-043 ("Organizer rating summary"): `1 отзыв`, `2 отзыва`, `5 отзывов`.
+ */
+function formatReviewsCount(count: number): string {
+  return `${count} ${pluralRu(count, 'отзыв', 'отзыва', 'отзывов')}`;
 }
 
 export type StatusTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger';
@@ -856,6 +865,87 @@ export const PARTICIPANTS_TERMS = {
   joinedAtLabel: 'Дата регистрации',
 } as const;
 
+// ---------------------------------------------------------------------------
+// CR-120 (organizer: pace-groups editor + group on the participants page).
+// Kept in one block so concurrent CR-118/CR-119 edits elsewhere in this file
+// don't collide with it.
+// ---------------------------------------------------------------------------
+
+/** `7 участников`, `1 участник`, `3 участника`. */
+function formatGroupParticipantsCount(count: number): string {
+  return `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`;
+}
+
+/**
+ * `/organizer/rides/[id]/groups` (CR-120, ADR-022). Error copy is keyed by the
+ * API's stable `code` (`docs/api.md` → "Pace groups"), never by `detail`.
+ */
+export const ORGANIZER_GROUPS_TERMS = {
+  pageTitle: 'Группы по темпу',
+  // Link from the ride edit screen's sub-page list (next to «Маршрут →»).
+  rideEditLink: 'Группы →',
+  backToEdit: 'К редактированию заезда',
+  hint: 'Если в заезде есть группы, участник при регистрации обязательно выбирает одну из них.',
+  loadError: 'Не удалось загрузить группы. Попробуйте ещё раз.',
+  emptyTitle: 'Групп нет — все участники едут вместе.',
+  emptyDescription: 'Добавьте группы, если заезд делится по темпу.',
+  addButton: 'Добавить группу',
+  addTitle: 'Новая группа',
+  editTitle: 'Изменение группы',
+  defaultName: (index: number) => `Группа ${index}`,
+  nameLabel: 'Название',
+  paceLabel: 'Средняя скорость, км/ч',
+  paceHint: 'От 5 до 60 км/ч, шаг 0,5. Например, 27,5.',
+  descriptionLabel: 'Описание (необязательно)',
+  descriptionHint:
+    'Например: без остановок, темп держим ровно. До 500 символов.',
+  save: 'Сохранить',
+  create: 'Добавить',
+  pending: 'Сохранение…',
+  cancel: 'Отмена',
+  edit: 'Изменить',
+  delete: 'Удалить',
+  editAria: (name: string) => `Изменить группу «${name}»`,
+  deleteAria: (name: string) => `Удалить группу «${name}»`,
+  moveUpAria: (name: string) => `Переместить группу «${name}» выше`,
+  moveDownAria: (name: string) => `Переместить группу «${name}» ниже`,
+  participantsCount: formatGroupParticipantsCount,
+  createSuccess: 'Группа добавлена.',
+  updateSuccess: 'Изменения сохранены.',
+  deleteSuccess: 'Группа удалена.',
+  reorderSuccess: 'Порядок групп изменён.',
+  deleteConfirmTitle: (name: string) => `Удалить группу «${name}»?`,
+  deleteConfirmDescription:
+    'Группа исчезнет из заезда. Удалить можно только группу без участников.',
+  deleteConfirmAction: 'Удалить группу',
+  limitNotice: 'Добавлено максимальное число групп — 6.',
+  notEditable: 'Заезд завершён или отменён — группы больше нельзя менять.',
+  // Client validation (mirrors `createRideGroupRequestSchema`).
+  nameRequired: 'Укажите название группы.',
+  nameTooLong: 'Название — не длиннее 60 символов.',
+  paceRequired: 'Укажите среднюю скорость.',
+  paceNotNumber: 'Введите число, например 27,5.',
+  paceOutOfRange: 'Скорость — от 5 до 60 км/ч.',
+  paceStep: 'Скорость указывается с шагом 0,5 км/ч.',
+  descriptionTooLong: 'Описание — не длиннее 500 символов.',
+  // Server error `code` → message.
+  groupNameTaken: 'Группа с таким названием уже есть',
+  groupLimitReached: 'Не больше 6 групп',
+  groupHasRegistrations:
+    'В группе есть участники — сначала переведите их или отмените регистрации',
+  genericError: 'Не удалось сохранить изменения. Попробуйте ещё раз.',
+} as const;
+
+/** `/organizer/rides/[id]/participants`'s group field/headings (CR-120). */
+export const PARTICIPANTS_GROUP_TERMS = {
+  groupLabel: 'Группа',
+  noGroup: '—',
+  ungroupedHeading: 'Без группы',
+  participantsCount: formatGroupParticipantsCount,
+} as const;
+
+// --------------------------- end CR-120 block ------------------------------
+
 /**
  * `/me/rides` (CR-091, `docs/design.md` §8 "My registrations — Upcoming / past
  * tabs"). Read-only, links out to each ride's own `/rides/[id]` page for cancellation
@@ -933,3 +1023,97 @@ export const NOTIFICATIONS_TERMS = {
   rideCancelledLabel: 'Заезд отменён',
   unreadLabel: 'Новое',
 } as const;
+
+// ---------------------------------------------------------------------------
+// CR-119 (ride detail «Топокарта»: pace groups, registered state, «Участники»).
+// Kept in one block so concurrent CR-118/CR-120 edits elsewhere in this file
+// don't collide with it.
+// ---------------------------------------------------------------------------
+
+function rideDetailRidersCount(count: number): string {
+  return `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`;
+}
+
+/** `/rides/[id]`'s «Группы» block and group choice at registration (CR-119). */
+export const RIDE_DETAIL_GROUP_TERMS = {
+  sectionTitle: 'Группы',
+  pickLegend: 'Выберите группу',
+  pickHint: 'Выберите группу, чтобы записаться',
+  ridersCount: rideDetailRidersCount,
+  yourGroup: 'Ваша группа',
+  ridingIn: (name: string, pace: string) =>
+    `Вы едете в группе «${name}» · ${pace}`,
+  changeGroup: 'Сменить группу',
+  saveGroup: 'Сохранить',
+  cancelChange: 'Отмена',
+  changeSuccess: 'Группа изменена.',
+  // Registered before the organizer added groups (`groupId === null`).
+  noGroupTitle: 'Выберите группу',
+  noGroupDescription:
+    'Организатор разделил заезд на группы по темпу. Выберите, с какой группой вы поедете.',
+  // API `code` → message (`docs/api.md` → Registration, CR-117).
+  groupRequired: 'Чтобы записаться, выберите группу.',
+  groupNotFound:
+    'Этой группы больше нет в заезде. Обновите страницу и выберите другую.',
+  groupChangeNotAllowed:
+    'Заезд завершён или отменён — группу больше нельзя сменить.',
+} as const;
+
+/** `/rides/[id]`'s registration slot, registered state and route panel (CR-119). */
+export const RIDE_DETAIL_REGISTRATION_TERMS = {
+  seatsLeft: (count: number) =>
+    `Осталось ${count} ${pluralRu(count, 'место', 'места', 'мест')}`,
+  registeredTitle: 'Вы зарегистрированы',
+  whenLabel: 'Когда',
+  startLabel: 'Старт',
+  groupLabel: 'Группа',
+  downloadGpx: 'Скачать GPX',
+  aboutTitle: 'О заезде',
+  legendTitle: 'Условные знаки',
+  stopDuration: 'Стоянка',
+} as const;
+
+/** `/rides/[id]`'s «Участники» section — `GET /v1/rides/:id/riders` (CR-119). */
+export const RIDE_DETAIL_RIDERS_TERMS = {
+  sectionTitle: 'Участники',
+  noName: 'Участник без имени',
+  noGroup: 'Без группы',
+  ridersCount: rideDetailRidersCount,
+  groupHeading: (name: string, pace: string, count: number) =>
+    `${name} · ${pace} — ${count}`,
+  signInPrompt: 'Войдите, чтобы увидеть список',
+  showMore: 'Показать ещё',
+  loadError: 'Не удалось загрузить список участников. Попробуйте ещё раз.',
+  emptyTitle: 'Пока никто не записался',
+  emptyDescription:
+    'Здесь появятся участники, когда кто-нибудь зарегистрируется.',
+} as const;
+
+// --------------------------- end CR-119 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-118 (discovery «Топокарта»: legend rows, start-time pins, list↔map sync).
+// Kept in one block so concurrent CR-119/CR-120 edits elsewhere in this file
+// don't collide with it.
+// ---------------------------------------------------------------------------
+
+/** `/`'s legend-row ride list and discovery map (CR-118, `docs/design.md` §8). */
+export const RIDE_DISCOVERY_ROW_TERMS = {
+  // «Старт: Парк Горького» — the ride's `start` route-point label.
+  startPrefix: 'Старт',
+  seatsLeft: (count: number) =>
+    `Осталось ${count} ${pluralRu(count, 'место', 'места', 'мест')}`,
+  noSeats: 'Мест нет',
+  groupsCount: (count: number) =>
+    `${count} ${pluralRu(count, 'группа', 'группы', 'групп')}`,
+  // The unfiltered empty list — the map «sheet» has no rides on it.
+  emptyTitle: 'Заездов на этом листе нет',
+  // The map region's accessible name (it is `role="img"`; the list is its
+  // keyboard/screen-reader equivalent, `docs/design.md` §12).
+  mapLabel: 'Карта стартов заездов',
+  listLabel: 'Список заездов',
+  // Mobile: the ride card raised over the map after a pin tap.
+  closeSelected: 'Скрыть карточку заезда',
+} as const;
+
+// --------------------------- end CR-118 block ------------------------------

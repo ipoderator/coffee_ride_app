@@ -287,6 +287,16 @@ describe('EditRideForm', () => {
     expect(screen.getByDisplayValue('2027-05-01T08:00')).toBeInTheDocument();
   });
 
+  it('links to the pace-groups editor next to the other ride sub-pages (CR-120)', async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Группы →' }),
+    ).toHaveAttribute('href', '/organizer/rides/ride-1/groups');
+  });
+
   it('saves changes and shows a success message', async () => {
     getRideMock.mockResolvedValue({ ride: baseRide });
     updateRideMock.mockResolvedValue({

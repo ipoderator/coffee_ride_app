@@ -28,6 +28,81 @@ const DEFAULT_FIT_PADDING = 40;
 const DEFAULT_FIT_MAX_ZOOM = 15;
 // Extra width (px, total) of the optional casing line drawn under the route.
 const OUTLINE_EXTRA_WIDTH = 4;
+const DEFAULT_MARKER_COLOR = '#57534e';
+const DEFAULT_HALO_COLOR = '#ffffff';
+// CR-118 ring marker geometry: a 44×44 px hit box (the project's minimum
+// touch target) with the 20 px control ring centred in it, so the anchor —
+// the ring's centre — sits exactly on the coordinate.
+const RING_HIT_SIZE = 44;
+const RING_DIAMETER = 20;
+const RING_STROKE = 3;
+
+/**
+ * CR-118: an orienteering control ring — hollow circle in `color`, a thin
+ * `haloColor` knock-out on both sides of the stroke so it reads over any
+ * basemap, and the `label` (discovery's start time) as a small caption to
+ * its right on a paper knock-out. `selected` fills the ring and turns the
+ * caption into a filled tag. Plain DOM + inline styles: no stylesheet or
+ * image asset to ship, and no vendor type leaves this module.
+ */
+function createRingElement(input: MapMarkerInput): HTMLElement {
+  const color = input.color ?? DEFAULT_MARKER_COLOR;
+  const halo = input.haloColor ?? DEFAULT_HALO_COLOR;
+  const selected = input.selected === true;
+  const offset = (RING_HIT_SIZE - RING_DIAMETER) / 2;
+
+  const root = document.createElement('div');
+  root.dataset.markerId = input.id;
+  root.dataset.selected = String(selected);
+  root.style.cssText = [
+    'position:relative',
+    `width:${RING_HIT_SIZE}px`,
+    `height:${RING_HIT_SIZE}px`,
+    'cursor:pointer',
+  ].join(';');
+
+  const ring = document.createElement('div');
+  ring.style.cssText = [
+    'position:absolute',
+    `left:${offset}px`,
+    `top:${offset}px`,
+    `width:${RING_DIAMETER}px`,
+    `height:${RING_DIAMETER}px`,
+    'box-sizing:border-box',
+    'border-radius:9999px',
+    `border:${RING_STROKE}px solid ${color}`,
+    `background:${selected ? color : 'transparent'}`,
+    selected
+      ? `box-shadow:0 0 0 2px ${halo}`
+      : `box-shadow:0 0 0 1.5px ${halo},inset 0 0 0 1.5px ${halo}`,
+  ].join(';');
+  root.appendChild(ring);
+
+  if (input.label) {
+    const caption = document.createElement('span');
+    caption.textContent = input.label;
+    caption.style.cssText = [
+      'position:absolute',
+      `left:${offset + RING_DIAMETER + 2}px`,
+      'top:50%',
+      'transform:translateY(-50%)',
+      'padding:2px 4px',
+      'border-radius:2px',
+      'white-space:nowrap',
+      'font-family:inherit',
+      'font-size:13px',
+      'font-weight:600',
+      'line-height:1.1',
+      'font-variant-numeric:tabular-nums',
+      selected
+        ? `background:${color};color:${halo}`
+        : `background:${halo};color:${color}`,
+    ].join(';');
+    root.appendChild(caption);
+  }
+
+  return root;
+}
 
 // 2GIS's own `color` option accepts 8-digit RGBA hex (`#ff0000ff`), so an
 // `opacity` is applied by appending an alpha suffix rather than as a
@@ -167,34 +242,61 @@ export function create2GisMapRenderer(
       // A marker with a `color`/`label` renders as a small HTML pin (KI-036's
       // typed route-point/stop markers) instead of the SDK's plain default
       // icon — `HtmlMarker` accepts an arbitrary element, so no custom icon
-      // image asset is needed for a handful of solid-color dots.
+      // image asset is needed for a handful of solid-color dots. CR-118 adds
+      // the `'ring'` shape (discovery's start pins) the same way.
+      const onMarkerClick = options.onMarkerClick;
+
       function createMarker(input: MapMarkerInput) {
-        if (!input.color && !input.label) {
-          return new mapglAPI.Marker(map, {
+        if (input.shape !== 'ring' && !input.color && !input.label) {
+          const marker = new mapglAPI.Marker(map, {
             coordinates: toLngLat(input.point),
           });
+          if (onMarkerClick) {
+            marker.on('click', () => onMarkerClick(input.id));
+          }
+          return marker;
         }
-        const el = document.createElement('div');
-        el.textContent = input.label ?? '';
-        el.style.cssText = [
-          'display:flex',
-          'align-items:center',
-          'justify-content:center',
-          'width:26px',
-          'height:26px',
-          'border-radius:9999px',
-          'color:#fff',
-          'font-size:13px',
-          'font-weight:600',
-          'line-height:1',
-          'border:2px solid #fff',
-          'box-shadow:0 1px 4px rgba(0,0,0,0.35)',
-          `background:${input.color ?? '#57534e'}`,
-        ].join(';');
+        let el: HTMLElement;
+        let anchor: [number, number];
+        if (input.shape === 'ring') {
+          el = createRingElement(input);
+          anchor = [RING_HIT_SIZE / 2, RING_HIT_SIZE / 2];
+        } else {
+          el = document.createElement('div');
+          el.textContent = input.label ?? '';
+          el.style.cssText = [
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+            'width:26px',
+            'height:26px',
+            'border-radius:9999px',
+            'color:#fff',
+            'font-size:13px',
+            'font-weight:600',
+            'line-height:1',
+            'border:2px solid #fff',
+            'box-shadow:0 1px 4px rgba(0,0,0,0.35)',
+            `background:${input.color ?? DEFAULT_MARKER_COLOR}`,
+          ].join(';');
+          anchor = [13, 13];
+        }
+        if (onMarkerClick) {
+          el.addEventListener('click', (event) => {
+            event.stopPropagation();
+            onMarkerClick(input.id);
+          });
+        }
         return new mapglAPI.HtmlMarker(map, {
           coordinates: toLngLat(input.point),
           html: el,
-          anchor: [13, 13],
+          anchor,
+          // A selected marker draws above its neighbours; markers that never
+          // set `selected` keep MapGL's default order (pre-CR-118 behaviour).
+          ...(input.selected !== undefined
+            ? { zIndex: input.selected ? 2 : 1 }
+            : {}),
+          ...(onMarkerClick ? { interactive: true } : {}),
         });
       }
 

@@ -958,3 +958,39 @@ critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
       page; adapter no longer falls back to straight lines). Open item: live
       verification against real 2GIS, blocked by KI-056 (VPN). See
       `docs/changelog.md`.
+- [x] CR-115 «Топокарта» visual foundation (ADR-021) — done 2026-09-23: the UI
+      as a printed orienteering-map sheet — white paper, black ink, one plum
+      overprint for the route and the primary action only, meaning inks
+      (`contour`, `info`, `success`, `warning`), graphite dark theme; Sofia Sans
+      Condensed display face (`<html lang="ru">` now load-bearing), 4px radius,
+      no card shadows, outline `danger` + additive `danger-filled`; «coffee◦ride»
+      wordmark and ring favicon. CR-107's glass layer and
+      `FEATURE_COVER_GLASS_PANEL` removed. See `docs/changelog.md`.
+- [x] CR-116 Discovery list fields — done 2026-09-23: `GET /v1/rides` items are
+      now `PublicRideListItem` (additive): `registrationsCount`, `startLabel`,
+      `routePreview` (≤ 40 points, SQL sampling + Douglas–Peucker, batched per
+      page) and `groups`. See `docs/changelog.md`.
+- [x] CR-117 Pace groups — backend (ADR-022) — done 2026-09-23: new `RideGroup`
+      entity, migration `0017_ride_groups` (composite FK keeps a registration's
+      group on the same ride), owner-only group CRUD (max 6), `groupId` on
+      register/waitlist join (`group_required` inside the locked transaction,
+      capacity stays ride-level), `PATCH /v1/rides/:id/register` to change
+      group, groups on ride detail and participant lists, signed-in-only
+      `GET /v1/rides/:id/riders` (display name + group). See `docs/changelog.md`.
+- [x] CR-118 Discovery rebuilt map-first — done 2026-09-23: map is the page
+      (desktop map + 440px list column, phone map strip over the list, the list/
+      map toggle removed); legend rows with a route glyph, local date, start
+      place, pace range and small chips replace ride cards; markers now follow
+      filter changes; start-time ring pins, row hover draws the route, pin click
+      selects the row. Additive maps-core marker fields. See `docs/changelog.md`.
+- [x] CR-119 Ride detail map-first + group choice + rider list — done
+      2026-09-23: sticky map on desktop, group picker (registration blocked
+      until a group is chosen), «Вы зарегистрированы» with «Сменить группу»,
+      «Участники» grouped by group for signed-in viewers, «Условные знаки»
+      legend, «Скачать GPX». Sticky mobile registration bar is now default —
+      `FEATURE_STICKY_REGISTRATION_CTA` removed. See `docs/changelog.md`.
+- [x] CR-120 Organizer pace groups — done 2026-09-23: «Группы по темпу» page
+      (`/organizer/rides/[id]/groups` — add, edit, delete with confirm,
+      reorder), participants page grouped by group with counts, waitlist shows
+      the chosen group; RouteBuilder's last waypoint no longer uses danger red.
+      See `docs/changelog.md`.

@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LatLng, MapHandle } from 'maps-core';
 import type { RouteGeometryPoint, RoutePoint, Stop } from 'types';
-import {
-  cn,
-  ROUTE_POINT_TYPE_TERMS,
-  ROUTE_RENDERING_TERMS,
-  STOPS_TERMS,
-} from 'ui';
+import { cn, ROUTE_RENDERING_TERMS } from 'ui';
 import { createMapRenderer } from '@/lib/maps/create-map-renderer';
 import { getCssColorVar } from '@/lib/maps/css-color';
 import {
@@ -23,21 +18,6 @@ import { RouteMapPlaceholder } from './RouteMapPlaceholder';
 // (duplicated, not imported: `.claude/rules/extensibility.md` forbids one
 // feature module reaching into another's internals).
 const DEFAULT_CENTER = { lat: 55.7558, lng: 37.6173 };
-
-// Same colored-dot-plus-glyph look as the map's own HTML markers, so the
-// legend reads as a key to what's actually drawn. The color comes from a
-// design-token custom property, not a literal (`docs/design.md` §14).
-function LegendDot({ colorVar, label }: { colorVar: string; label: string }) {
-  return (
-    <span
-      aria-hidden
-      className="inline-flex size-4 items-center justify-center rounded-full text-[0.625rem] leading-none font-semibold text-on-primary"
-      style={{ background: `var(${colorVar})` }}
-    >
-      {label}
-    </span>
-  );
-}
 
 /**
  * `/rides/[id]`'s route map (KI-036, ADR-020): replaces the always-shown
@@ -63,7 +43,9 @@ export function RouteMap({
   /** The ride's own start point (`Ride.startLat`/`startLng`) — pinned as a
    * start marker unless a `start` route point already marks it. */
   start?: LatLng | null;
-  /** Sizing for the map surface itself (height/rounding); defaults to `h-80`. */
+  /** Sizing/framing for the map surface itself (height, rounding, border);
+   * defaults to `h-80`. Also applied to the degraded placeholder, so a failed
+   * render keeps the map's footprint instead of collapsing the layout. */
   className?: string;
 }) {
   const hasStartRoutePoint = routePoints.some(
@@ -163,46 +145,17 @@ export function RouteMap({
   }, []);
 
   if (renderFailed) {
-    return <RouteMapPlaceholder />;
+    return <RouteMapPlaceholder className={className} />;
   }
 
-  const legendTypes = [
-    ...new Set([
-      ...(showStartMarker ? (['start'] as const) : []),
-      ...routePoints.map((point) => point.type),
-    ]),
-  ];
-
+  // CR-119: the key to these pins is `RouteLegend` («Условные знаки»), a
+  // separate section of the page — not a chip row glued under the map.
   return (
-    <div className="flex flex-col gap-2">
-      <div
-        ref={containerRef}
-        role="img"
-        aria-label={ROUTE_RENDERING_TERMS.sectionTitle}
-        className={cn('h-80 w-full overflow-hidden rounded-lg', className)}
-      />
-      {(legendTypes.length > 0 || stops.length > 0) && (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-text-secondary">
-          {legendTypes.map((type) => (
-            <li key={type} className="flex items-center gap-1.5">
-              <LegendDot
-                colorVar={ROUTE_POINT_MARKER_COLOR_VAR[type]}
-                label={ROUTE_POINT_MARKER_LABEL[type]}
-              />
-              {ROUTE_POINT_TYPE_TERMS[type]}
-            </li>
-          ))}
-          {stops.length > 0 && (
-            <li className="flex items-center gap-1.5">
-              <LegendDot
-                colorVar={STOP_MARKER_COLOR_VAR}
-                label={STOP_MARKER_LABEL}
-              />
-              {STOPS_TERMS.sectionTitle}
-            </li>
-          )}
-        </ul>
-      )}
-    </div>
+    <div
+      ref={containerRef}
+      role="img"
+      aria-label={ROUTE_RENDERING_TERMS.sectionTitle}
+      className={cn('h-80 w-full overflow-hidden rounded-lg', className)}
+    />
   );
 }

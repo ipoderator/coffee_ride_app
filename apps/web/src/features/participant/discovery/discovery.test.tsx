@@ -1,8 +1,50 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MapHandle, MapMarkerInput, MapRenderOptions } from 'maps-core';
 import type { PublicRideListItem } from 'types';
 import { DiscoveryList } from './components/DiscoveryList';
 import { listPublicRides } from './api';
+import { projectRoutePreview } from './lib/route-preview';
+
+// CR-118: the map renderer is a fake that records what discovery draws — no
+// MapGL/WebGL in jsdom (same approach as route-builder.test.tsx). Off by
+// default, i.e. "no MapGL key", so the degraded placeholder path is the
+// baseline; map-sync tests switch it on.
+const renderState = vi.hoisted(() => ({
+  options: null as MapRenderOptions | null,
+  handle: null as {
+    setMarkers: ReturnType<typeof vi.fn>;
+    setPolyline: ReturnType<typeof vi.fn>;
+    fitBounds: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  } | null,
+  available: false,
+}));
+
+vi.mock('@/lib/maps/create-map-renderer', () => ({
+  createMapRenderer: () =>
+    renderState.available
+      ? {
+          render: async (options: MapRenderOptions): Promise<MapHandle> => {
+            renderState.options = options;
+            renderState.handle = {
+              setMarkers: vi.fn(),
+              setPolyline: vi.fn(),
+              fitBounds: vi.fn(),
+              destroy: vi.fn(),
+            };
+            return renderState.handle as unknown as MapHandle;
+          },
+        }
+      : null,
+}));
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -49,11 +91,14 @@ const baseRide: PublicRideListItem = {
   groups: [],
 };
 
-describe('DiscoveryList', () => {
-  beforeEach(() => {
-    listPublicRidesMock.mockReset();
-  });
+beforeEach(() => {
+  listPublicRidesMock.mockReset();
+  renderState.available = false;
+  renderState.options = null;
+  renderState.handle = null;
+});
 
+describe('DiscoveryList', () => {
   it('shows an error state on a network/server failure', async () => {
     listPublicRidesMock.mockRejectedValue(new Error('network error'));
 
@@ -66,43 +111,172 @@ describe('DiscoveryList', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows an empty state when there are no rides', async () => {
+  it('shows the empty-sheet state when there are no rides', async () => {
     listPublicRidesMock.mockResolvedValue({ items: [], nextCursor: null });
 
     render(<DiscoveryList />);
 
-    expect(await screen.findByText('Пока нет заездов')).toBeInTheDocument();
+    // CR-118: «Топокарта» copy, with its contour illustration.
+    const title = await screen.findByText('Заездов на этом листе нет');
+    const empty = title.closest('[role="status"]')!;
+    expect(empty.querySelector('svg')).toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
-  it('renders a card per ride with the organizer name, status, and first-three metrics', async () => {
+  it('renders a legend row: start line, title link, start, metrics and chips', async () => {
     listPublicRidesMock.mockResolvedValue({
-      items: [baseRide],
+      items: [
+        {
+          ...baseRide,
+          startLabel: 'Парк Горького',
+          registrationsCount: 14,
+        },
+      ],
       nextCursor: null,
     });
 
     render(<DiscoveryList />);
 
-    expect(await screen.findByText(baseRide.title)).toBeInTheDocument();
-    expect(screen.getByText('Опубликован')).toBeInTheDocument();
-    expect(screen.getByText(/Гравийный клуб/)).toBeInTheDocument();
-    expect(screen.getByText('42,3')).toBeInTheDocument();
-    expect(screen.getByText('350')).toBeInTheDocument();
-    expect(screen.getByText('24,5')).toBeInTheDocument();
+    const link = await screen.findByRole('link', { name: baseRide.title });
+    expect(link).toHaveAttribute('href', '/rides/ride-1');
+    const row = link.closest('li')!;
+    // Local start in the ride's own zone (ADR-012): 05:00Z is 08:00 in Moscow.
+    expect(
+      within(row).getByText(/^сб 1 мая 2027 · 08:00 · МСК$/),
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByText('Старт: Парк Горького · Гравийный клуб'),
+    ).toBeInTheDocument();
+    expect(within(row).getByText('42,3')).toBeInTheDocument();
+    expect(within(row).getByText('350')).toBeInTheDocument();
+    expect(within(row).getByText('24,5')).toBeInTheDocument();
+    expect(within(row).getByText('Осталось 6 мест')).toBeInTheDocument();
+    expect(within(row).getByText('Средний')).toBeInTheDocument();
+    expect(within(row).getByText('500 ₽')).toBeInTheDocument();
+    expect(within(row).getByText('Опубликован')).toBeInTheDocument();
     // The card's "first three" (distance/elevation/pace) never includes duration.
-    expect(screen.queryByText('Длительность')).not.toBeInTheDocument();
-    expect(screen.getByText('500')).toBeInTheDocument();
+    expect(within(row).queryByText(/2 ч 30/)).not.toBeInTheDocument();
   });
 
-  it('omits a metric tile for a field that is still null', async () => {
+  it('shows the pace range and group count when the ride has two or more groups', async () => {
     listPublicRidesMock.mockResolvedValue({
-      items: [{ ...baseRide, elevationGainMeters: null }],
+      items: [
+        {
+          ...baseRide,
+          groups: [
+            { name: 'Группа 1', paceKmh: 25 },
+            { name: 'Группа 2', paceKmh: 35 },
+          ],
+        },
+      ],
       nextCursor: null,
     });
 
     render(<DiscoveryList />);
 
     await screen.findByText(baseRide.title);
-    expect(screen.queryByText('Набор высоты')).not.toBeInTheDocument();
+    expect(screen.getByText('25–35')).toBeInTheDocument();
+    expect(screen.getByText('· 2 группы')).toBeInTheDocument();
+    // Group paces replace the ride's own average pace.
+    expect(screen.queryByText('24,5')).not.toBeInTheDocument();
+  });
+
+  it("shows a single group's pace instead of the ride pace", async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [{ ...baseRide, groups: [{ name: 'Все', paceKmh: 28 }] }],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    await screen.findByText(baseRide.title);
+    expect(screen.getByText('28')).toBeInTheDocument();
+    expect(screen.queryByText(/группы/)).not.toBeInTheDocument();
+  });
+
+  it('says «Мест нет» for a full ride and shows no seats chip without a limit', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [
+        { ...baseRide, registrationsCount: 20 },
+        {
+          ...baseRide,
+          id: 'ride-2',
+          title: 'Без лимита',
+          participantLimit: null,
+        },
+      ],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    const fullRow = (await screen.findByText(baseRide.title)).closest('li')!;
+    expect(within(fullRow).getByText('Мест нет')).toBeInTheDocument();
+    const openRow = screen.getByText('Без лимита').closest('li')!;
+    expect(
+      within(openRow).queryByText(/Осталось|Мест нет/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('omits a metric for a field that is still null, never showing 0', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [{ ...baseRide, elevationGainMeters: null, paceKmh: null }],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    const row = (await screen.findByText(baseRide.title)).closest('li')!;
+    expect(within(row).getByText('42,3')).toBeInTheDocument();
+    expect(within(row).queryByText('0')).not.toBeInTheDocument();
+    expect(within(row).queryByText('—')).not.toBeInTheDocument();
+    expect(within(row).queryByText('м')).not.toBeInTheDocument();
+  });
+
+  it('keeps «Бесплатно» a small chip, never a heading-sized metric', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [{ ...baseRide, priceRub: null }],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    await screen.findByText(baseRide.title);
+    const price = screen.getByText('Бесплатно');
+    expect(price.closest('h1, h2, h3')).toBeNull();
+    expect(price.className).toContain('text-xs');
+    // Not part of the metric line either (distance/elevation/pace only).
+    expect(
+      screen.getByText('42,3').parentElement!.parentElement,
+    ).not.toContainElement(price);
+  });
+
+  it("draws the ride's routePreview as its legend glyph, or the start triangle without one", async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [
+        {
+          ...baseRide,
+          routePreview: [
+            [55.7, 37.5],
+            [55.8, 37.6],
+            [55.75, 37.7],
+          ],
+        },
+        { ...baseRide, id: 'ride-2', title: 'Без маршрута' },
+      ],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+
+    const withRoute = (await screen.findByText(baseRide.title)).closest('li')!;
+    expect(
+      withRoute.querySelector('[data-testid="route-preview-glyph"] polyline'),
+    ).toBeInTheDocument();
+    const withoutRoute = screen.getByText('Без маршрута').closest('li')!;
+    expect(
+      withoutRoute.querySelector('[data-testid="start-glyph"]'),
+    ).toBeInTheDocument();
   });
 
   it('refetches with the selected bicycleType when the filter changes', async () => {
@@ -152,45 +326,25 @@ describe('DiscoveryList', () => {
     });
   });
 
-  it('switches to the map view and shows the degraded notice instead of a blank pane (CR-026)', async () => {
+  it('keeps the list fully usable with the degraded notice when the map is unavailable', async () => {
     listPublicRidesMock.mockResolvedValue({
       items: [baseRide],
       nextCursor: null,
     });
 
     render(<DiscoveryList />);
-    await screen.findByText(baseRide.title);
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
 
     expect(
       await screen.findByText(
         'Карта временно недоступна. Используйте список заездов.',
       ),
     ).toBeInTheDocument();
-    // CR-044 (`docs/design.md` §11 split view at `lg`): the list panel stays
-    // mounted — only CSS-hidden below `lg` — so it's still in the DOM, just
-    // flagged `hidden` below the split-view breakpoint. The active panel (map)
-    // carries no such class.
-    expect(screen.getByTestId('discovery-list-panel').className).toContain(
-      'hidden',
-    );
     expect(
-      screen.getByTestId('discovery-map-panel').className ?? '',
-    ).not.toContain('hidden');
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Список' }));
-
-    expect(await screen.findByText(baseRide.title)).toBeInTheDocument();
-    expect(
-      screen.getByTestId('discovery-list-panel').className ?? '',
-    ).not.toContain('hidden');
-    expect(screen.getByTestId('discovery-map-panel').className).toContain(
-      'hidden',
-    );
+      screen.getByRole('link', { name: baseRide.title }),
+    ).toBeInTheDocument();
   });
 
-  it('shows both panels unhidden at once above the lg split-view breakpoint, regardless of the toggle (CR-044)', async () => {
+  it('shows the map and the list together, with no list/map toggle (CR-118)', async () => {
     listPublicRidesMock.mockResolvedValue({
       items: [baseRide],
       nextCursor: null,
@@ -199,76 +353,217 @@ describe('DiscoveryList', () => {
     render(<DiscoveryList />);
     await screen.findByText(baseRide.title);
 
-    // Neither panel is unconditionally hidden — the `hidden` class is always
-    // paired with an `lg:block` override, so a real `lg`+ viewport shows both
-    // simultaneously even while `view` still says "list".
-    // Asserts the hide/override pair specifically, not the panel's whole class
-    // list — CR-111 added `lg:sticky lg:top-6` alongside it, which is layout,
-    // not visibility, and should not have to be restated here.
-    const listPanel = screen.getByTestId('discovery-list-panel');
-    const mapPanel = screen.getByTestId('discovery-map-panel');
-    expect(listPanel.className ?? '').not.toContain('hidden');
-    expect(mapPanel.className).toContain('hidden');
-    expect(mapPanel.className).toContain('lg:block');
-  });
-
-  it('hides the list/map toggle above the lg split-view breakpoint (CR-044)', async () => {
-    listPublicRidesMock.mockResolvedValue({
-      items: [baseRide],
-      nextCursor: null,
-    });
-
-    render(<DiscoveryList />);
-    await screen.findByText(baseRide.title);
-
-    expect(screen.getByRole('tablist').className).toContain('lg:hidden');
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.getByTestId('discovery-list-panel').className).not.toContain(
+      'hidden',
+    );
+    expect(screen.getByTestId('discovery-map-panel').className).not.toContain(
+      'hidden',
+    );
   });
 });
 
-// CR-107 ("Quiet Instrument"): `RideCard`'s glass title/status panel over the
-// cover photo, behind `FEATURE_COVER_GLASS_PANEL`. `RideCard` is a Server
-// Component that reads the flag directly (`vi.stubEnv`, same pattern as
-// `feature-flags.test.ts`), not threaded as a prop like `RideDetailView`'s.
-describe('RideCard cover glass panel (CR-107)', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
+const plottableA: PublicRideListItem = {
+  ...baseRide,
+  id: 'ride-a',
+  title: 'Заезд А',
+  startLat: 55.7,
+  startLng: 37.5,
+  routePreview: [
+    [55.7, 37.5],
+    [55.72, 37.55],
+  ],
+};
+const plottableB: PublicRideListItem = {
+  ...baseRide,
+  id: 'ride-b',
+  title: 'Заезд Б',
+  bicycleType: 'road',
+  startsAt: '2027-05-02T04:30:00.000Z',
+  startLat: 55.9,
+  startLng: 37.8,
+};
+
+function lastMarkers(): MapMarkerInput[] {
+  const calls = renderState.handle!.setMarkers.mock.calls;
+  return calls[calls.length - 1]![0] as MapMarkerInput[];
+}
+
+describe('DiscoveryMap ↔ list sync (CR-118)', () => {
+  beforeEach(() => {
+    renderState.available = true;
   });
 
-  it('keeps the title/status block below the photo when the flag is off (default)', async () => {
+  it('pins every plottable ride as a start-time ring and frames them', async () => {
     listPublicRidesMock.mockResolvedValue({
-      items: [{ ...baseRide, coverImageUrl: '/v1/rides/ride-1/cover' }],
+      items: [plottableA, plottableB, baseRide],
       nextCursor: null,
     });
 
     render(<DiscoveryList />);
 
-    const title = await screen.findByText(baseRide.title);
-    expect(title.closest('div[class*="bg-glass-bg"]')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(lastMarkers().map((marker) => marker.id)).toEqual([
+        'ride-a',
+        'ride-b',
+      ]),
+    );
+    expect(lastMarkers()[0]).toMatchObject({
+      shape: 'ring',
+      label: '08:00',
+      point: { lat: 55.7, lng: 37.5 },
+      selected: false,
+    });
+    expect(lastMarkers()[1]).toMatchObject({ label: '07:30' });
+    expect(renderState.handle!.fitBounds).toHaveBeenLastCalledWith(
+      [
+        { lat: 55.7, lng: 37.5 },
+        { lat: 55.9, lng: 37.8 },
+      ],
+      expect.objectContaining({ maxZoom: 12 }),
+    );
   });
 
-  it('moves the title/status block onto a glass panel over the photo when the flag is on', async () => {
-    vi.stubEnv('FEATURE_COVER_GLASS_PANEL', 'true');
+  it('updates the markers and re-frames when the filtered rides change', async () => {
+    listPublicRidesMock
+      .mockResolvedValueOnce({
+        items: [plottableA, plottableB],
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({ items: [plottableB], nextCursor: null });
+
+    render(<DiscoveryList />);
+    await waitFor(() => expect(lastMarkers()).toHaveLength(2));
+
+    fireEvent.change(screen.getByLabelText('Тип велосипеда'), {
+      target: { value: 'road' },
+    });
+
+    await waitFor(() =>
+      expect(lastMarkers().map((marker) => marker.id)).toEqual(['ride-b']),
+    );
+    expect(renderState.handle!.fitBounds).toHaveBeenLastCalledWith(
+      [{ lat: 55.9, lng: 37.8 }],
+      expect.anything(),
+    );
+  });
+
+  it("hovering a row draws that ride's route and highlights its pin", async () => {
     listPublicRidesMock.mockResolvedValue({
-      items: [{ ...baseRide, coverImageUrl: '/v1/rides/ride-1/cover' }],
+      items: [plottableA, plottableB],
       nextCursor: null,
     });
 
     render(<DiscoveryList />);
+    const row = (await screen.findByText('Заезд А')).closest('li')!;
+    await waitFor(() => expect(renderState.handle).not.toBeNull());
 
-    const title = await screen.findByText(baseRide.title);
-    expect(title.closest('div[class*="bg-glass-bg"]')).toBeInTheDocument();
+    fireEvent.mouseEnter(row);
+
+    await waitFor(() =>
+      expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          points: [
+            { lat: 55.7, lng: 37.5 },
+            { lat: 55.72, lng: 37.55 },
+          ],
+          width: 6,
+        }),
+      ),
+    );
+    expect(row).toHaveAttribute('data-active', 'true');
+    expect(lastMarkers().find((m) => m.id === 'ride-a')?.selected).toBe(true);
+
+    fireEvent.mouseLeave(row);
+
+    await waitFor(() =>
+      expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(null),
+    );
+    expect(row).toHaveAttribute('data-active', 'false');
   });
 
-  it('does not apply the glass panel when there is no cover photo, even with the flag on', async () => {
-    vi.stubEnv('FEATURE_COVER_GLASS_PANEL', 'true');
+  it('selects a ride from the keyboard: focusing its link draws the route', async () => {
     listPublicRidesMock.mockResolvedValue({
-      items: [baseRide],
+      items: [plottableA, plottableB],
       nextCursor: null,
     });
 
     render(<DiscoveryList />);
+    const link = await screen.findByRole('link', { name: 'Заезд А' });
+    await waitFor(() => expect(renderState.handle).not.toBeNull());
 
-    const title = await screen.findByText(baseRide.title);
-    expect(title.closest('div[class*="bg-glass-bg"]')).not.toBeInTheDocument();
+    act(() => {
+      link.focus();
+    });
+
+    await waitFor(() =>
+      expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(
+        expect.objectContaining({ width: 6 }),
+      ),
+    );
+    expect(link.closest('li')).toHaveAttribute('data-active', 'true');
+  });
+
+  it('clicking a pin selects its row and, on a phone, raises it over the map', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [plottableA, plottableB],
+      nextCursor: null,
+    });
+
+    render(<DiscoveryList />);
+    await screen.findByText('Заезд Б');
+    await waitFor(() => expect(renderState.options).not.toBeNull());
+
+    act(() => {
+      renderState.options!.onMarkerClick!('ride-b');
+    });
+
+    const rows = screen
+      .getAllByRole('link', { name: 'Заезд Б' })
+      .map((link) => link.closest('li')!);
+    // The list row plus the raised copy (jsdom's matchMedia reports "not lg").
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row).toHaveAttribute('data-active', 'true');
+    }
+    expect(lastMarkers().find((m) => m.id === 'ride-b')?.selected).toBe(true);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Скрыть карточку заезда' }),
+    );
+    expect(screen.getAllByRole('link', { name: 'Заезд Б' })).toHaveLength(1);
+  });
+});
+
+describe('projectRoutePreview', () => {
+  it('fits the route into the box with north up and longitude scaled by latitude', () => {
+    // Equal degree spans at ~60°N: the east-west side is half as long (cos 60°).
+    const points = projectRoutePreview(
+      [
+        [60, 30],
+        [61, 31],
+      ],
+      32,
+      2,
+    )!;
+    const [start, end] = points.split(' ').map((p) => p.split(',').map(Number));
+    // North (higher latitude) is up: the end point is above the start.
+    expect(end![1]).toBeLessThan(start![1]!);
+    // Latitude spans the full inner box (28px) ...
+    expect(start![1]! - end![1]!).toBeCloseTo(28, 0);
+    // ... longitude about half of it, centred.
+    expect(end![0]! - start![0]!).toBeCloseTo(14, 0);
+    expect(start![0]).toBeCloseTo(9, 0);
+  });
+
+  it('returns null for nothing drawable', () => {
+    expect(projectRoutePreview(null)).toBeNull();
+    expect(projectRoutePreview([[55, 37]])).toBeNull();
+    expect(
+      projectRoutePreview([
+        [55, 37],
+        [55, 37],
+      ]),
+    ).toBeNull();
   });
 });

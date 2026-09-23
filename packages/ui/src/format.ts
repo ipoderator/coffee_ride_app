@@ -272,3 +272,168 @@ export function formatRating(
 ): string {
   return joinParts(formatRatingParts(rating, reviewCount));
 }
+
+// ---------------------------------------------------------------------------
+// CR-119 (ride detail «Топокарта»: date line, pace groups). Additive only.
+// ---------------------------------------------------------------------------
+
+// Short Russian weekday names, Sunday-first to match `Date#getUTCDay`-style
+// indexing of the `weekday` part read below.
+const SHORT_WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'] as const;
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+// Russia's zones (no DST since 2014), named relative to Moscow the way Russian
+// timetables do — «МСК», «МСК+4». Any other zone falls back to «UTC+2».
+const RUSSIAN_TIME_ZONES = new Set([
+  'Europe/Kaliningrad',
+  'Europe/Moscow',
+  'Europe/Simferopol',
+  'Europe/Volgograd',
+  'Europe/Kirov',
+  'Europe/Samara',
+  'Europe/Saratov',
+  'Europe/Ulyanovsk',
+  'Europe/Astrakhan',
+  'Asia/Yekaterinburg',
+  'Asia/Omsk',
+  'Asia/Novosibirsk',
+  'Asia/Barnaul',
+  'Asia/Tomsk',
+  'Asia/Novokuznetsk',
+  'Asia/Krasnoyarsk',
+  'Asia/Irkutsk',
+  'Asia/Chita',
+  'Asia/Yakutsk',
+  'Asia/Khandyga',
+  'Asia/Vladivostok',
+  'Asia/Ust-Nera',
+  'Asia/Magadan',
+  'Asia/Sakhalin',
+  'Asia/Srednekolymsk',
+  'Asia/Kamchatka',
+  'Asia/Anadyr',
+]);
+const MOSCOW_OFFSET_MINUTES = 180;
+
+/** UTC offset of `timeZone` at `date`, in minutes (e.g. `180` for Moscow). */
+function offsetMinutes(date: Date, timeZone: string): number {
+  const name =
+    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+      .formatToParts(date)
+      .find((part) => part.type === 'timeZoneName')?.value ?? 'GMT';
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  if (!match) return 0;
+  const sign = match[1] === '-' ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+function signedHours(minutes: number): string {
+  if (minutes === 0) return '';
+  const sign = minutes > 0 ? '+' : '−';
+  const abs = Math.abs(minutes);
+  const hours = Math.floor(abs / 60);
+  const rest = abs % 60;
+  return rest === 0
+    ? `${sign}${hours}`
+    : `${sign}${hours}:${String(rest).padStart(2, '0')}`;
+}
+
+/**
+ * Short zone hint for a ride's local start time (`docs/design.md` §7: a start
+ * time is always shown with its zone) — `МСК`, `МСК+4` for Russian zones,
+ * `UTC+2`/`UTC` otherwise.
+ */
+export function formatTimeZoneHint(date: Date, timeZone: string): string {
+  const offset = offsetMinutes(date, timeZone);
+  if (RUSSIAN_TIME_ZONES.has(timeZone)) {
+    return `МСК${signedHours(offset - MOSCOW_OFFSET_MINUTES)}`;
+  }
+  return `UTC${signedHours(offset)}`;
+}
+
+/**
+ * A ride's start as one line — `сб 14 июня · 07:30 · МСК` (year added when it
+ * isn't the current one, same rule as {@link formatDate}). Lower-case on
+ * purpose: callers set it in `font-display uppercase` via CSS, so a screen
+ * reader still reads words, not letter-by-letter abbreviations.
+ */
+export function formatRideStartLine(
+  date: Maybe<Date>,
+  options: FormatDateOptions = {},
+): string {
+  if (date === undefined || date === null) return EM_DASH;
+  const timeZone = options.timeZone ?? 'UTC';
+  const weekdayName = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+  }).format(date);
+  const weekday = SHORT_WEEKDAYS[WEEKDAY_INDEX[weekdayName] ?? 0];
+  return [
+    `${weekday} ${formatDate(date, options)}`,
+    formatTime(date, { timeZone }),
+    formatTimeZoneHint(date, timeZone),
+  ].join(' · ');
+}
+
+/** Whole km/h without a trailing `,0` (`25`), one decimal otherwise (`27,5`). */
+function compactSpeed(kmh: number): string {
+  const rounded = Math.round(kmh * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : toFixedComma(rounded, 1);
+}
+
+/**
+ * A pace group's speed, split — `{ value: "25", unit: "км/ч" }`. Group paces are
+ * set by the organizer as round targets, so a whole value drops the `,0` the
+ * measured-average {@link formatSpeedParts} keeps.
+ */
+export function formatGroupPaceParts(kmh: Maybe<number>): MetricParts {
+  if (isMissing(kmh)) return MISSING_PARTS;
+  return { value: compactSpeed(kmh), unit: 'км/ч' };
+}
+
+/**
+ * Where the ride starts, for «Старт: …» lines. Organizers often label the `start`
+ * route point just «Старт» and put the actual place in its description, which
+ * rendered as «Старт: Старт». A label that only repeats the point type falls back
+ * to the description (trailing period dropped); `null` when neither says where.
+ */
+export function formatStartPlace(
+  label: Maybe<string>,
+  description?: Maybe<string>,
+): string | null {
+  const trimmedLabel = label?.trim() ?? '';
+  if (trimmedLabel && trimmedLabel.toLowerCase() !== 'старт') {
+    return trimmedLabel;
+  }
+  const place = description?.trim().replace(/\.$/, '') ?? '';
+  return place || null;
+}
+
+/** A pace group's speed — `25 км/ч`. */
+export function formatGroupPace(kmh: Maybe<number>): string {
+  return joinParts(formatGroupPaceParts(kmh));
+}
+
+/**
+ * The span of a ride's group paces, split — `{ value: "25–35", unit: "км/ч" }`;
+ * one distinct pace collapses to `25`; an empty list is the missing-value dash.
+ */
+export function formatPaceRangeParts(paces: readonly number[]): MetricParts {
+  const valid = paces.filter((pace) => !isMissing(pace));
+  if (valid.length === 0) return MISSING_PARTS;
+  const min = Math.min(...valid);
+  const max = Math.max(...valid);
+  const value =
+    compactSpeed(min) === compactSpeed(max)
+      ? compactSpeed(min)
+      : `${compactSpeed(min)}–${compactSpeed(max)}`;
+  return { value, unit: 'км/ч' };
+}

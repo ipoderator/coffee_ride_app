@@ -41,6 +41,12 @@ vi.mock('@/lib/maps/create-map-renderer', () => ({
       : null,
 }));
 
+// CR-120: token names instead of computed colours (jsdom has no stylesheet),
+// so a test can assert *which* design token each marker is drawn in.
+vi.mock('@/lib/maps/css-color', () => ({
+  getCssColorVar: (name: string) => `token(${name})`,
+}));
+
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
   return { ...actual, buildRoute: vi.fn(), getRouteGeometry: vi.fn() };
@@ -98,6 +104,25 @@ describe('RouteBuilder', () => {
     expect(screen.getByText('Точка 2')).toBeInTheDocument();
     const markers = renderState.handle!.setMarkers.mock.calls.at(-1)![0];
     expect(markers.map((m: { label: string }) => m.label)).toEqual(['1', '2']);
+  });
+
+  it('draws the finish waypoint in overprint, never the danger red', async () => {
+    await renderBuilder();
+
+    clickMap({ lat: 55.75, lng: 37.6 });
+    clickMap({ lat: 55.755, lng: 37.61 });
+    clickMap({ lat: 55.76, lng: 37.6 });
+
+    const markers = renderState.handle!.setMarkers.mock.calls.at(-1)![0] as {
+      color: string;
+    }[];
+    // `docs/design.md` §1: red is reserved for destructive/failed states.
+    expect(markers.map((m) => m.color)).toEqual([
+      'token(--success)',
+      'token(--info)',
+      'token(--primary)',
+    ]);
+    expect(markers.some((m) => m.color.includes('--danger'))).toBe(false);
   });
 
   it('keeps "build" disabled until there are two points', async () => {

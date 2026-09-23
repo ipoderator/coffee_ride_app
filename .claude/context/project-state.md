@@ -25,173 +25,113 @@ utilities), CR-050 (async notification delivery via Redis queue), CR-051
 (health check endpoint), and CR-052 (frontend degraded-state handling — closed
 2026-09-17 on reactive per-call handling that was already real, plus one missing
 test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
-`/health`-banner scoping decision) are all done.
+`/health`-banner scoping decision) are all done. Post-MVP product work on top:
+the «Топокарта» visual direction (ADR-021), pace groups (`RideGroup`, ADR-022) and
+a rider list (CR-115…CR-120, 2026-09-23).
 
 ## Current task
 
-None active.
+None active. CR-115…CR-120 (the «Топокарта» redesign, pace groups and the
+rider list) are implemented and reviewed: CR-115…CR-117 committed as
+`3fe806b`, CR-118…CR-120 in the working tree, not yet committed. Full detail:
+`docs/changelog.md`'s «2026-09-23 — CR-115…CR-120» entry, ADR-021, ADR-022.
 
-**CR-112 (2026-09-23)** — `/rides/[id]` redesigned after a Strava-style
-reference: one split summary panel (identity left; headline `MetricTile`s,
-compact fact rows and the registration action right) and one map panel (map as
-the dominant surface, stops rail at `md`, elevation profile underneath).
-`MapHandle` gained `fitBounds` (the route map now frames the whole ride instead
-of zooming on its first point) and the 2GIS adapter re-fits on container
-resize; `MapPolylineInput` gained `outlineColor`. A ride's own start point is
-pinned, so the map panel appears for a start-only or stops-only ride too.
+**Visual direction: «Топокарта» (ADR-021).** The UI is a printed
+orienteering-map sheet: white paper / black ink, one plum overprint
+(`primary`/`route`, #7A2482 light / #D79BE0 dark) used only for the route line
+and the primary action; meaning inks `contour` (elevation), `info`, `success`,
+`warning`; graphite dark theme. `bg-raised` equals `bg`; `surface` is the one
+raised plane. Sofia Sans Condensed is `font-display` (headings, labels,
+metrics, wordmark) next to Golos Text — its Russian forms come from `locl`, so
+`<html lang="ru">` is load-bearing. 4px radius, no card shadows. `Button`
+`danger` is an outline; `danger-filled` (additive) is `ConfirmDialog`'s
+confirm. Wordmark «coffee◦ride» (control-point ring) + `app/icon.svg`. The
+CR-107 "Quiet Instrument" glass treatment is **retired**: `lib/glass.ts`,
+`--glass-*` tokens and `FEATURE_COVER_GLASS_PANEL` are deleted. The sticky
+mobile registration bar is now the **default** — `FEATURE_STICKY_REGISTRATION_CTA`
+is deleted too; no feature flag is currently in use.
 
-**CR-113 (2026-09-23)** — every upload form's native file picker was
-invisible (Tailwind preflight); new `packages/ui` `FileInput` fixes all four.
-`OrganizerProfileForm` now toasts each save and drops its stale "saved" line
-on edit.
+**Pace groups (ADR-022).** New domain entity `RideGroup` (table `ride_groups`,
+migration `0017_ride_groups`; the dev DB is at 18 migrations, `0000`–`0017`):
+name 1–60 (unique per ride, case-insensitive), `paceKmh` 5–60, optional
+description, dense `position`, at most 6 per ride. `registrations.group_id` and
+`waitlist_entries.group_id` (nullable) reference it through a composite FK
+`(group_id, ride_id) → ride_groups(id, ride_id)`. Once a ride has groups,
+register / waitlist join require `groupId` (`422 group_required`,
+`group_not_found`), checked inside the existing locked registration
+transaction; capacity stays ride-level; a promoted waitlist entry keeps its
+group. Groups stay editable until the ride is `finished`/`cancelled`.
 
-**CR-114 (2026-09-23)** — route builder: organizer clicks waypoints on
-`/organizer/rides/[id]/route`, `POST /v1/rides/:id/route/build` routes them
-along 2GIS roads (bicycle) and stores the line like an uploaded GPX. The
-adapter no longer returns straight lines between waypoints when 2GIS has no
-geometry (`no_route` → 422). apps/api now has a maps composition point
-(`plugins/maps.ts`, `app.mapProvider`). **Not yet live-verified against 2GIS**
-— the 2GIS REST APIs are unreachable through this machine's VPN (KI-056).
+**API changes (all additive).**
 
-**CR-108…CR-111 (2026-09-22)** — four user-reported gaps in `apps/web`,
-worked as four tickets. Navigation is now one global header
-(`components/site/AppHeader.tsx`) on every route, replacing both the old
-`SiteHeader` (which existed only on `/`, `/login`, `/register`) and the
-cabinets' side column: wordmark, discovery, a dropdown per cabinet rendered
-from the same ADR-009 registries, a theme control, and an account menu with
-sign-out; below `md` the sections collapse into one disclosure panel.
-`CabinetShell` is narrowed to the `/me/*`/`/organizer/*` session gate, and
-that session is resolved once by a new `SessionProvider` that both it and the
-header read. `packages/ui` gained `NavMenu`, the accessible dropdown
-primitive all of the above is built from (it draws its own chevron inline
-rather than taking on `lucide-react` as a dependency, and stays
-router-agnostic). Every nested screen now carries a `BackLink` naming its
-parent. The theme is switchable системная/светлая/тёмная, stored per browser
-and applied pre-hydration.
+- `GET /v1/rides` items are `PublicRideListItem`: `registrationsCount`,
+  `startLabel`, `routePreview` (≤ 40 `[lat, lng]`, sampled in SQL then
+  Douglas–Peucker, `modules/rides/route-preview.ts`), `groups`.
+- `GET/POST /v1/rides/:id/groups`, `PATCH/DELETE /v1/rides/:id/groups/:groupId`
+  — owner-only (`modules/rides/ride-groups.routes.ts`/`.service.ts`);
+  `409 group_has_registrations` on delete while an active registration or
+  waiting entry points at the group.
+- `POST /v1/rides/:id/register` and `POST /v1/rides/:id/waitlist` take optional
+  `groupId`; new `PATCH /v1/rides/:id/register` changes one's own group.
+- `GET /v1/rides/:id` gains `groups[]` with counts; organizer
+  participants/waitlist items gain `group`.
+- `GET /v1/rides/:id/riders` — signed-in only, display name + group of active
+  participants, no ids/contacts.
 
-The map fix is the one worth remembering: `apps/web` never received the
-repo-root `.env` at all. `apps/api` loads it explicitly
-(`src/server.ts`'s `process.loadEnvFile`), but Next only auto-loads `.env`
-from its own project directory and `apps/web/.env` does not exist — so every
-`NEXT_PUBLIC_*` var was undefined in the browser bundle,
-`createMapRenderer()` returned `null` on every call, and both maps had been
-showing their degraded state permanently in local dev. `apps/web/
-next.config.ts` now loads it the same explicit way. This is also why
-`FEATURE_STICKY_REGISTRATION_CTA`/`FEATURE_COVER_GLASS_PANEL` appear to do
-nothing locally: they are simply absent from this checkout's `.env`.
+**Web.** Discovery (`/`) is map-first: desktop map left + 440px list column
+right, phone 45vh map strip over the list (the «Список / Карта» toggle,
+`DiscoveryViewToggle` and `RideCard` are gone). Rides render as legend rows
+(`RideLegendRow`: route glyph from `routePreview`, date in the ride's timezone,
+«Старт: …», pace range from groups, small chips). Markers follow filter
+changes (old bug fixed), pins are control rings with the start time, row
+hover/focus draws that ride's route, a pin click selects its row. Ride detail
+(`/rides/[id]`) is map-first (sticky 7/12 map on desktop) with a group picker
+(registration blocked until a group is chosen), «Вы зарегистрированы» + «Сменить
+группу», «Участники» grouped by group (anonymous viewers see the count and a
+sign-in link), «Условные знаки» legend and «Скачать GPX»; `StopList` is gone.
+Organizer: `/organizer/rides/[id]/groups` («Группы по темпу»: add, edit,
+delete with confirm, reorder), participants page grouped by group, waitlist
+shows the chosen group. `packages/ui`: `formatStartPlace` (a start point
+labelled just «Старт» falls back to its description on detail, hidden on the
+list) and one module-local `pluralRu` in `terminology.ts`.
 
-Earlier: the entire `/impeccable critique apps/web` backlog is
-closed, each item individually authorized with the literal word «внедряй»
-across two sessions: **CR-103** (`Dialog`/`ConfirmDialog`/`Toast`
-primitives, wired into `RegistrationButton` — the critique's P0),
-**CR-104** (`RideSummaryWidget` on the organizer dashboard, backed by a new
-`GET /v1/rides/mine/summary` — the critique's P1 item 3), **CR-105**
-(sticky mobile registration CTA on `/rides/[id]`, behind
-`FEATURE_STICKY_REGISTRATION_CTA` — the critique's P1 item 4), **CR-106**
-(icons in the cabinet nav/site header via `lucide-react` — the critique's
-P2), and now **CR-107** (the synthesized "Quiet Instrument" visual
-direction — tokens/wordmark/glass surfaces/route-line weight, the
-critique's item 6 and last remaining item). Full detail on all five:
-`docs/changelog.md`'s CR-103 through CR-107 entries. `.claude/context/
-current-task.md` is reset to idle (kept, not deleted, at the user's
-standing preference) — no item from this critique is outstanding anymore.
-Only P3 (design.md §9's component inventory vs. `packages/ui`'s actual
-contents) remains open from the original critique, unscheduled.
+**Validation (CR-120 state):** typecheck + lint clean (17/17 turbo tasks);
+tests: api 417 passed + 3 skipped (with `TEST_DATABASE_URL`), web 292, ui 132,
+maps-2gis 30. Screenshots reviewed at 1440 and 390 px, light and dark.
 
-CR-107: `--scrim`/`--glass-bg`/`--glass-border` tokens (`packages/ui/src/
-tokens.css`) plus a pure-Tailwind-utility glass treatment
-(`GLASS_PANEL_CLASSNAME`, `packages/ui/src/lib/glass.ts`) applied to
-exactly two surfaces — the cover-photo title/status panel (`RideCard`/
-`RideDetailView`, behind new `FEATURE_COVER_GLASS_PANEL`) and the CR-105
-sticky bar. New `Wordmark` component ("coffee.ride", two Golos Text
-weights) replaces the old plain-text brand in `SiteHeader`. `MapPolylineInput`
-gained additive `width`/`opacity`; `RouteMap.tsx` now renders at `width: 6`.
-Real design decision made mid-implementation: the glass treatment is pure
-Tailwind utility composition, not a custom CSS class — an unlayered
-hand-written `.glass-panel` class was drafted first and would have
-unconditionally beaten every Tailwind utility in the cascade (including the
-sticky bar's `md:` responsive reset) regardless of source order, since
-Tailwind v4's own utilities live inside `@layer utilities` and unlayered
-CSS always outranks any layer. Caught before shipping, not live. Full
-detail: `docs/changelog.md`'s CR-107 entry, including a documented
-verification gap (S3/MinIO down and no 2GIS CDN egress in this sandbox, so
-the glass-over-a-real-photo look and the route line's visual weight bump
-were confirmed via computed styles/unit tests rather than pixel inspection
-of the intended final look).
+**Dev data.** Dev DB backed up to
+`packages/db/backups/coffee_ride_20260923T103231Z.dump` before 0017.
+«Тестовый заезд на выходные» has «Группа 1» 25 km/h and «Группа 2» 35 km/h
+(inserted by SQL; its organizer's password is unknown), 13 of its 14 riders
+assigned. Test accounts, all with password `CoffeeRide-test-2026`:
+`test.uchastnik1.cr117@example.com`, `test.uchastnik2.cr117@example.com`,
+`test.uchastnik3.cr117@example.com` (participants) and
+`test.organizer.cr120@example.com` (organizer of «CR-120 · Проверка групп по
+темпу», 3 groups, 4 riders). Local MinIO is stopped (`/health` shows
+`s3: error`, KI-063).
 
-CR-106: `CabinetNavItem` (`apps/web/src/lib/cabinet/types.ts`) gained an
-optional `icon` field — a _name_ (`CabinetIconName`) into a new
-`apps/web/src/lib/cabinet/icons.ts` registry, resolved to the real
-`lucide-react` component inside `CabinetShell.tsx` (already a Client
-Component). This indirection exists because the first attempt put the
-actual icon component on the descriptor and passed it straight through —
-`ORGANIZER_NAV_ITEMS`/`PARTICIPANT_NAV_ITEMS` are built in a Server
-Component and handed to `CabinetShell` as a prop, and RSC can't serialize
-a function/component value across that boundary. Confirmed live: `/organizer`
-and `/me` both 500'd ("Functions cannot be passed directly to Client
-Components...") before the fix. `SiteHeader.tsx` needed no such
-indirection (it's a Server Component rendering icons directly in its own
-JSX). Every icon is `aria-hidden`, always paired with the existing text
-label, never icon-only.
+**Earlier, still-current state (2026-09-22/23).** CR-114: organizer route
+builder — waypoints clicked on `/organizer/rides/[id]/route`, `POST
+/v1/rides/:id/route/build` routes them along 2GIS roads (bicycle); no
+straight-line fallback (`no_route` → 422); apps/api maps composition point
+`plugins/maps.ts` (`app.mapProvider`). **Not yet live-verified against 2GIS**
+— the 2GIS REST APIs are unreachable through this machine's VPN (KI-056), so
+CR-114 stays unchecked in `docs/tasks.md`. CR-113: `packages/ui` `FileInput`
+in all four upload forms. CR-112: `MapHandle.fitBounds` + re-fit on resize,
+`MapPolylineInput.outlineColor`. CR-108…CR-111: one global header
+(`components/site/AppHeader.tsx`, cabinet dropdowns from the ADR-009
+registries, `packages/ui` `NavMenu`, shared `SessionProvider`, `CabinetShell`
+narrowed to the session gate), `BackLink` on every nested screen, a
+системная/светлая/тёмная theme switch applied pre-hydration, and
+`apps/web/next.config.ts` explicitly loading the repo-root `.env` (Next never
+auto-loaded it, so every `NEXT_PUBLIC_*` var — including the MapGL key — had
+been undefined in the browser). CR-103…CR-106 (dialogs/toasts, organizer
+`RideSummaryWidget` + `GET /v1/rides/mine/summary`, sticky CTA, `lucide-react`
+icons in the nav) remain in place; CR-107's glass layer was superseded by
+ADR-021 (above).
 
-CR-105: below `md`, `RegistrationButton` repositions into a fixed bottom
-bar (`fixed inset-x-0 bottom-0`, `shadow-overlay`) instead of the CTA
-sitting 7 content blocks down; `md`+ stays exactly as before. One
-component instance repositioned by breakpoint (same pattern
-`CabinetShell.tsx`'s mobile nav already uses), not a second mounted copy —
-no duplicate pending/error state between a mobile and desktop copy.
-`app/rides/[id]/page.tsx` reads the flag server-side (`isFeatureEnabled`,
-never callable from a `'use client'` module) and threads it down as a
-prop; default off, unchanged behavior. Live-verified at 375×812 (fixed,
-pinned to viewport bottom) and 1280×900 (static, in normal flow) against
-the real dev stack with the flag on, then the dev server was restarted a
-second time without it to leave the environment as found.
-
-CR-103: `packages/ui` gained `Dialog`/`ConfirmDialog`/`Toast`
-(`ToastProvider`/`useToast`, fails soft to a no-op with no provider
-ancestor — resolving `docs/design.md` §9's `Dialog`/`Toast` half of
-KI-020, now the third consecutive non-trivial primitive to hand-vendor
-rather than resolve the shadcn CLI-targeting question). `RegistrationButton.tsx`:
-cancel/leave-waitlist now open a confirm dialog instead of firing
-immediately; all four state-changing actions show a success toast.
-`ToastProvider` mounted once, at the root, in `apps/web/src/app/
-layout.tsx`. Scope deliberately limited to the critique's P0 — the seven
-pre-existing `window.confirm()` sites elsewhere (avatar/cover/route/stop/
-route-point delete, ride cancel) are untouched, a real but out-of-scope
-inconsistency, not fixed here.
-
-CR-104: new `GET /v1/rides/mine/summary` (`apps/api`'s `rides` module) —
-ride counts by status plus active-registration/waitlist counts across
-every ride the caller organizes, 3 small indexed queries run in parallel
-(not one multi-join query, which would fan out and double/triple-count
-rows) — same "batched, not N+1" precedent as `reviews.service.ts`'s
-`getOrganizerRatingSummary`. New `RideSummaryWidget`
-(`apps/web/src/features/organizer/rides/components/`), registered into
-`ORGANIZER_WIDGETS` (ADR-009) at order 20, right after the profile widget.
-Zero rides renders as a normal all-zero ready state, not a special empty
-state — `/organizer/rides` already owns "create your first ride".
-
-Validation (both tickets): `pnpm --filter ui test` 106/106; `pnpm --filter
-api test` 375/378 (3 pre-existing skips); `pnpm --filter web test`
-216/216; typecheck/lint clean across `types`/`api`/`ui`/`web`;
-`NODE_ENV=production pnpm --filter web build` clean both times.
-Live-verified end to end against a real running stack, no mocks: CR-103's
-register/cancel/dismiss/confirm flow all showed correct dialog/toast
-behavior with zero console errors/failed requests; CR-104's widget showed
-the real database counts (1 ride, 1 open for registration, 1 active
-registration, 0 waitlisted) for the same seeded organizer/ride CR-103 used.
-Hit the same unrelated environment issue twice: running a production
-`next build` against a live `next dev` server's `.next` directory corrupts
-it — restarted the dev server with a fresh `.next` both times; not a
-Coffee Ride code issue, worth avoiding next time (stop the dev server
-first, or build from a separate checkout) rather than re-discovering it.
-
-`docs/tasks.md` has no unchecked ticket left again. Two real, un-scheduled
-UI gaps remain (not tracked as open `known-issues.md` entries, just noted
-in prior sessions' own follow-ups): `MapProvider.geocode`/`reverseGeocode`
-still has zero UI consumers (KI-032), and discovery's filters still cover
-only `bicycleType` (KI-030, no design-doc spec yet for distance/difficulty/
-price/date-range).
+`MapProvider.geocode`/`reverseGeocode` still has zero UI consumers (KI-032), and
+discovery's filters still cover only `bicycleType` (KI-030).
 
 ## Implemented
 
@@ -237,22 +177,24 @@ needs real public DNS, unverifiable in any sandbox) — the migration fix itself
 was still live-verified, just on the host directly rather than in a container.
 
 **apps/web**: Next.js 15 + React 19 + TS 6.0.3, Tailwind v4 + shadcn/ui, real design
-tokens/typography/Russian formatting from `docs/design.md` via `packages/ui`. Dark theme
-now activates from `prefers-color-scheme` (CR-099, `app/layout.tsx`'s pre-hydration
-script) — the `.dark` tokens had existed unused since CR-063. `/`, `/register`, `/login`
-live in a `(public)` route group sharing a new `SiteHeader` (CR-099) — the only nav
-between them and into a cabinet previously required typing a URL. Screens:
+tokens/typography/Russian formatting from `docs/design.md` via `packages/ui` — the
+«Топокарта» direction (ADR-021). Theme: system/light/dark switch (CR-110), applied by
+`app/layout.tsx`'s pre-hydration script. One global `AppHeader` on every route (CR-108).
+Screens:
 `/register`, `/login`, `/verify-email`, `/forgot-password`, `/reset-password` (last
 three new, CR-099, now backed by real email delivery — CR-100, ADR-007 — though
 KI-026/KI-042 stay narrowed pending a configured sender + a live-network-verified
 send, see "Current task"), `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
 `/organizer` (dashboard) + `/organizer/profile` + `/organizer/rides`
-(list/new/[id]/edit/[id]/route/[id]/participants/[id]/updates), `/` (public
-discovery — list/map toggle, bicycleType filter, upcoming-only sort) and
-`/rides/[id]` (public ride detail, incl. elevation profile, stops, and a
-`RegistrationButton` — register/cancel/join-or-leave-waitlist states, redirects to
-`/login` on 401). `/organizer/rides/[id]/participants` (CR-037):
-`ParticipantTable`/`WaitlistTable`, linked from `EditRideForm`. `/me/rides`
+(list/new/[id]/edit/[id]/route/[id]/cover/[id]/groups/[id]/participants/[id]/updates),
+`/` (public discovery — map-first with a legend-row list, bicycleType filter,
+upcoming-only sort, CR-118) and `/rides/[id]` (public ride detail — map-first, elevation
+profile, «Условные знаки» legend, group picker, «Участники», and a
+`RegistrationButton` — register/cancel/join-or-leave-waitlist/change-group states,
+sticky bottom bar below `md`, redirects to `/login` on 401, CR-119).
+`/organizer/rides/[id]/participants` (CR-037, grouped by pace group since CR-120):
+`ParticipantTable`/`WaitlistTable`, linked from `EditRideForm`.
+`/organizer/rides/[id]/groups` (CR-120): `GroupsEditor`, linked from `EditRideForm`. `/me/rides`
 (CR-091): `MyRidesView`, Upcoming/Past tabs, read-only (links out to `/rides/[id]`
 for cancellation). `/organizer/rides/[id]/updates` (CR-039): `UpdateComposer` —
 compose form + read-only history, linked from `EditRideForm`. `/me/notifications`
@@ -275,14 +217,12 @@ server-only `FEATURE_<NAME>` env var, filtered in at each cabinet's
 capability field exists (nothing currently needs one — both cabinets are
 already separate route trees). CR-044/045/046/048 (Quality) landed on top
 of all of the
-above: `CabinetShell` now renders a real `<main>` landmark with a responsive
-nav (bottom tab bar at `base`, sticky side column at `md`+); `RideDetailView`
-is two-column at `md`+; `DiscoveryList`/`DiscoveryViewToggle` show a combined
-list+map split view at `lg`+ (both panels always mounted, the inactive one
-CSS-gated `hidden lg:block`); a shared `xl` max-width-1200px-centered container
+above: `CabinetShell` renders a real `<main>` landmark (its own nav moved into
+`AppHeader`, CR-108); `RideDetailView` is two-column at `md`+; discovery shows map
+and list side by side from `lg` and stacked (map strip over list) below it, with no
+toggle (CR-118); a shared `xl` max-width-1200px-centered container
 wraps every page from the root `layout.tsx`; every `ErrorState` call site now
-offers `onRetry`; `RideCard`/`RideDetailView`'s cover image uses `next/image`
-— live since CR-086, no longer inert. `/organizer/rides/[id]/cover`
+offers `onRetry`; `RideDetailView`'s cover image uses `next/image`. `/organizer/rides/[id]/cover`
 (CR-086, new): upload/replace/delete a ride's cover image, linked from
 `EditRideForm`.
 
@@ -364,12 +304,18 @@ guards, no edit/delete. CR-043 ("Organizer rating summary") added no endpoint:
 `avg(rating)`/`count(*)` across an organizer's rides is additive `rating`/
 `reviewCount` on `RideOrganizerSummary` (`GET /v1/rides`, `GET /v1/rides/:id`,
 batched not N+1 on the paginated endpoints) and on `GET`/`POST`/`PATCH
-/v1/organizers/me`.
+/v1/organizers/me`. Pace groups (CR-117, ADR-022): owner-only group CRUD under
+`/v1/rides/:id/groups` (`modules/rides/ride-groups.routes.ts`/`.service.ts`), `groupId`
+on register/waitlist join, `PATCH /v1/rides/:id/register` (change group) and the
+signed-in-only `GET /v1/rides/:id/riders` (in `registrations`). `GET /v1/rides` items
+are `PublicRideListItem` with `registrationsCount`/`startLabel`/`routePreview`/`groups`
+(CR-116, `modules/rides/route-preview.ts`). See "Current task" above for the list.
 
 **packages/db**: Drizzle + Postgres. Tables: `users`, `email_verification_tokens`,
 `password_reset_tokens`, `sessions`, `organizer_profiles`, `rides`, `routes`, `stops`,
-`route_points`, `registrations`, `waitlist_entries`, `ride_updates`, `notifications`,
-`reviews`. `scripts/backup.sh`/`scripts/restore.sh` (CR-078, new): plain
+`route_points`, `ride_groups` (CR-117, ADR-022), `registrations`, `waitlist_entries`,
+`ride_updates`, `notifications`, `reviews`. Migrations `0000`–`0017` (latest
+`0017_ride_groups`; applied to the dev DB). `scripts/backup.sh`/`scripts/restore.sh` (CR-078, new): plain
 `pg_dump --format=custom`/`pg_restore --clean --if-exists` wrappers driven
 entirely by `DATABASE_URL`, same hosting-agnostic shape as `migrate.ts` —
 `pnpm --filter db db:backup`/`db:restore`, documented in `docs/database.md`.
@@ -396,9 +342,12 @@ cleanup running against `.env`'s real `DATABASE_URL`).
 - terminology (§6-7, §13), component set — `MetricTile`/`MetricRow`, `StatusBadge`,
   `DifficultyScale`, `Skeleton`, `EmptyState`, `ErrorState`, `Button`/`Input`/
   `FormField`/`Card`/`Textarea`, `Avatar`, `Dialog`/`ConfirmDialog`/`Toast` (CR-103),
-  `Wordmark` (CR-107). `--scrim`/`--glass-bg`/`--glass-border` tokens + a shared
-  `GLASS_PANEL_CLASSNAME` (CR-107, `lib/glass.ts`) — pure Tailwind utility
-  composition, reserved for exactly two `apps/web` surfaces (see below).
+  `NavMenu` (CR-108), `FileInput` (CR-113), `Wordmark` («coffee◦ride», rewritten by
+  CR-115). Tokens follow ADR-021 «Топокарта» (additive `surface`, `frame`, `route`,
+  `route-casing`, `contour`, `warning-fill`, `info-tint`, …); `Button` has an outline
+  `danger` and an additive `danger-filled`. The CR-107 glass layer (`lib/glass.ts`,
+  `--glass-*`) is deleted; `--scrim` stays. Formatters gained `formatStartPlace`
+  (CR-119/120 review); `terminology.ts` has one module-local `pluralRu`.
 
 **packages/maps-core / packages/maps-2gis**: provider-neutral `MapProvider` interface
 (ADR-010) + a 2GIS REST adapter (geocode/reverseGeocode/getRoute, no SDK dependency). A
@@ -445,6 +394,12 @@ a 6-digit hex `color` (MapGL's own RGBA hex support). `RouteMap.tsx` now renders
 assert `Polyline`'s constructor args directly, since this environment has no outbound
 network access to actually load the real SDK.
 
+CR-118 (2026-09-23): `MapMarkerInput` gained optional `shape` (`'dot' | 'ring'`),
+`selected` and `haloColor`, `MapRenderOptions` gained `onMarkerClick` — additive, no
+new ADR (`.claude/rules/maps.md` updated). Discovery pins are control rings with the
+start time; route colours come from the `route`/`route-casing` tokens. The 2GIS
+basemap itself stays light in the dark theme (KI-057).
+
 **packages/resilience** (new, CR-049): shared `callWithResilience` (timeout via
 `AbortSignal` + bounded retry with jittered backoff) and `CircuitBreaker`
 (closed/open/half-open). Wired into `packages/maps-2gis` and `apps/api`'s S3
@@ -461,9 +416,9 @@ That timeout helper now lives in `apps/api/src/lib/race-timeout.ts` (extracted f
 no-`AbortSignal` gap; its S3 check goes through `callWithResilience` directly instead,
 since the AWS SDK does honor `abortSignal`.
 
-Current test counts and per-feature detail: see the latest entries in
-`docs/changelog.md` rather than this file — a fixed number here goes stale the moment
-the next ticket adds tests.
+Test counts as of CR-120 (2026-09-23): api 417 passed + 3 skipped (with
+`TEST_DATABASE_URL`), web 292, ui 132, maps-2gis 30. Per-feature detail: the latest
+entries in `docs/changelog.md`.
 
 ## In progress
 
@@ -471,34 +426,17 @@ None.
 
 ## Next
 
-`docs/tasks.md` Registration (CR-032..037, CR-091), Communication (CR-038..041),
-Post-ride (CR-042/CR-043), Quality (CR-044..048), Resilience (CR-049..052), and
-Extensibility foundations (CR-053..056) sections are all now fully complete.
-Security foundations section is now fully complete: CR-058 (Redis-backed,
-per-IP-and-per-account auth rate limiting) closed 2026-09-19, once Docker/a
-live Redis happened to be reachable in this environment. KI-044 (whether
-`apps/api` sees each real client's IP through the Caddy→web→api hop, not
-just `web`'s internal one) stays open — it matters for the per-IP tier
-specifically, unaffected by this ticket. Deployment: CR-074/075/076/077/078/079/080
-(Dockerfiles; Caddy reverse proxy/TLS/resource limits/restart policy,
-ADR-018; migrations as an explicit, concurrency-safe deploy step; Redis
-password + AOF persistence; Postgres backups + a live-verified restore;
-request-id correlation + error-reporting funnel; CI MinIO service + real S3
-round-trip test + Playwright e2e job, KI-007) and now CR-081 (full prod env
-var set + `docs/deployment.md`, new — also resolved KI-046 for real), and
-CR-082 (fixed `.github/dependabot.yml`'s docker/docker-compose coverage —
-nothing that sets a base image version had ever actually been scanned by
-Dependabot before this) are all closed — the entire Deployment section is
-now done. CR-083 (registration/waitlist-join idempotency — a network retry
-of an already-successful call now returns the existing row instead of
-`409`, no client change needed) and CR-092 (real critical-journey e2e
-specs — `apps/web/e2e/critical-journeys.spec.ts`, the three journeys
-`.claude/rules/testing.md` names, API-seeded fixtures + real UI-driven
-assertions) are also closed, and CR-058 (Redis-backed auth rate limiting)
-closed 2026-09-19 (above). CR-094 (SIGTERM/SIGINT graceful shutdown,
-KI-048), CR-095 (test-suite data-loss guard + backup schedule, KI-049), and
-CR-086 (cover image pipeline, ADR-019) are also closed — `docs/tasks.md` has
-no unchecked ticket left.
+1. **Critique P0 — login bounce loses the ride (KI-064).** `/login` has no
+   `?next=`, so an anonymous «Зарегистрироваться» on `/rides/[id]` sends the
+   visitor to `/login` and they land elsewhere after signing in. Add a validated
+   same-origin `next` parameter to login (and register) and return to the ride.
+2. **2GIS dark basemap style (KI-057)** — the basemap stays light in the dark theme.
+3. Commit CR-118…CR-120 (still uncommitted in the working tree).
+4. CR-114 live verification against 2GIS once the VPN allows it (KI-056).
+
+Every other `docs/tasks.md` section (Registration, Communication, Post-ride,
+Quality, Resilience, Extensibility and Security foundations, Deployment, Contract &
+model follow-ups) is complete; CR-114 is the only unchecked ticket.
 
 ## Important decisions
 
@@ -553,10 +491,18 @@ See `docs/decisions.md`. Notably:
   `DATABASE_URL`-driven `pg_dump`/`pg_restore` wrappers; backup destination
   (local disk vs. offsite/S3 sync) stays exactly as undecided as Postgres
   hosting itself (ADR-018) — deliberately not resolved here.
-- Design direction (not an ADR — see `docs/design.md`): calm, low-saturation palette,
-  warm neutral base with one muted teal-green accent. One exception: `danger` is a
-  bright red, reserved for cancellation/failure (`StatusBadge`, `Button
-variant="danger"`).
+- ADR-019: cover images — size/type limits, resize bound, served through an API
+  proxy, never a direct S3 URL.
+- ADR-020: live MapGL rendering — render-layer types in `maps-core`, one composition
+  point in `apps/web` (`lib/maps/create-map-renderer.ts`).
+- ADR-021: visual direction «Топокарта» replaces Calm/Quiet Instrument — paper, ink,
+  one plum overprint for route + primary action only, meaning inks, Sofia Sans
+  Condensed display face (`<html lang="ru">` required), 4px radius, no card shadows,
+  glass retired. `danger` stays the bright red, reserved for cancellation/destructive/
+  validation. Exact values: `docs/design.md` §3.
+- ADR-022: pace groups are a new domain entity `RideGroup` (not a `RideRequirement`,
+  `Stop` or a `Ride` field); composite FK keeps a registration's group on the same
+  ride; capacity stays ride-level; max 6 groups per ride.
 
 ## Known limitations
 
@@ -641,14 +587,20 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   gap KI-014 still leaves open (an enqueued job actually round-tripping
   through the `Worker` into a real `notifications` row) was not exercised
   again this session.
-- `GET /health` (CR-051): this session, with Docker up (KI-019 resolved),
-  returned `{"db":"ok","redis":"ok","s3":"ok"}` against the real stack —
-  confirms KI-014/KI-015's connection-level reachability holds again, not a
-  new fact by itself; the endpoint's own degraded-vs-error distinction
-  (always `200`, `error` only for a genuine failure, `not_configured` for an
-  absent optional dependency) remains as documented either way.
+- `GET /health` (CR-051): as of CR-120 the local MinIO container is stopped, so
+  it reports `s3: "error"` (db/redis `ok`) and uploads are unavailable locally
+  until `docker compose up minio` (KI-063). The endpoint's degraded-vs-error
+  distinction (always `200`, `error` only for a genuine failure,
+  `not_configured` for an absent optional dependency) is unchanged.
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
   are deferred, no design-doc backing yet (KI-030).
+- «Топокарта»/pace-group follow-ups (CR-115…CR-120): the 2GIS basemap stays light
+  in the dark theme (KI-057); `routePreview` samples the full stored geometry on
+  every list request (KI-058); the rider list has no avatars (KI-059); the
+  discovery list's «Старт: …» only has the route-point label (KI-060); organizer
+  ride sub-page links are a plain list in `EditRideForm`, not a registry (KI-061);
+  pace step 0.5 is client-only (KI-062); `/login` has no `?next=` (KI-064, the
+  next task).
 - Observability (CR-079/KI-006): request-id correlation and structured
   error-reporting logging are real and live-verified. No error-tracking
   vendor is chosen yet — `ERROR_REPORTING_WEBHOOK_URL`'s webhook sink is a
@@ -811,15 +763,24 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   constructing a second live `mapglAPI.Map` on a container another call already claimed
   (CR-101) — this is what keeps React Strict Mode's dev-only double-effect-invoke from
   silently blanking the map.
-- the glass surface treatment (`GLASS_PANEL_CLASSNAME`, `packages/ui/src/lib/glass.ts`)
-  staying pure Tailwind utility composition, never a hand-written unlayered CSS class —
-  an unlayered rule unconditionally outranks every `@layer utilities` rule regardless of
-  source order, which would silently break a caller's own `md:`-style responsive reset
-  on the same element (found and fixed before shipping, CR-107);
-- the glass treatment staying reserved for exactly two surfaces (cover-photo title/
-  status panel, sticky mobile registration bar) — `docs/design.md` §3's "Quiet
-  Instrument" scoping, not a general card/`MetricTile`/form treatment.
+- no hand-written unlayered CSS class competing with Tailwind utilities — an
+  unlayered rule unconditionally outranks every `@layer utilities` rule regardless of
+  source order and silently breaks a caller's own `md:`-style reset (found before
+  shipping in CR-107);
+- `<html lang="ru">` in `apps/web/src/app/layout.tsx` — Sofia Sans Condensed's
+  Russian letterforms come from `locl` and need it (ADR-021); `app/icon.svg` repeats
+  the two `primary` hex values and must be kept in step with `tokens.css` by hand;
+- the plum overprint (`primary`/`route`) staying reserved for the route line and the
+  primary action — no second accent, no map-themed decoration (ADR-021);
+- the composite FK `(group_id, ride_id) → ride_groups(id, ride_id)` on
+  `registrations`/`waitlist_entries` (a group can only belong to the same ride) and
+  the `group_required`/`group_not_found` checks staying inside the existing locked
+  registration transaction (ADR-022);
+- `GET /v1/rides/:id/riders` staying signed-in only and returning display name +
+  group only — no ids, emails, phones or emergency data (ADR-022, CR-117);
+- `DiscoveryMap`'s markers following the filtered ride list (CR-118 fixed markers
+  that never updated after the first render).
 
 ## Last updated
 
-2026-09-23 (CR-114)
+2026-09-23 (CR-115…CR-120)

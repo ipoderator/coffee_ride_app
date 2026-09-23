@@ -229,3 +229,70 @@ describe('*Parts helpers (CR-065)', () => {
     expect(formatPrice(1500)).toBe(`1${NBSP}500${NBSP}₽`);
   });
 });
+
+// CR-119 (ride detail «Топокарта»).
+describe('CR-119 formatters', () => {
+  it('formats a ride start line with weekday, time and a Moscow-relative zone', async () => {
+    const { formatRideStartLine } = await import('./format');
+    const now = new Date('2026-01-01T00:00:00Z');
+    // 2026-06-13T04:30Z is Saturday 07:30 in Moscow.
+    expect(
+      formatRideStartLine(new Date('2026-06-13T04:30:00Z'), {
+        timeZone: 'Europe/Moscow',
+        now,
+      }),
+    ).toBe('сб 13 июня · 07:30 · МСК');
+    // Same instant in Yekaterinburg (UTC+5) → МСК+2.
+    expect(
+      formatRideStartLine(new Date('2026-06-13T04:30:00Z'), {
+        timeZone: 'Asia/Yekaterinburg',
+        now,
+      }),
+    ).toBe('сб 13 июня · 09:30 · МСК+2');
+    // Kaliningrad is behind Moscow; the year shows when it isn't the current one.
+    expect(
+      formatRideStartLine(new Date('2027-01-03T08:00:00Z'), {
+        timeZone: 'Europe/Kaliningrad',
+        now,
+      }),
+    ).toBe('вс 3 января 2027 · 10:00 · МСК−1');
+    expect(formatRideStartLine(null)).toBe('—');
+  });
+
+  it('falls back to a UTC offset for zones outside Russia', async () => {
+    const { formatTimeZoneHint } = await import('./format');
+    const date = new Date('2026-06-13T04:30:00Z');
+    expect(formatTimeZoneHint(date, 'UTC')).toBe('UTC');
+    expect(formatTimeZoneHint(date, 'Europe/Berlin')).toBe('UTC+2');
+    expect(formatTimeZoneHint(date, 'Asia/Kolkata')).toBe('UTC+5:30');
+  });
+
+  it('formats group paces compactly, and a pace range across groups', async () => {
+    const { formatGroupPace, formatGroupPaceParts, formatPaceRangeParts } =
+      await import('./format');
+    expect(formatGroupPace(25)).toBe(`25${NBSP}км/ч`);
+    expect(formatGroupPaceParts(27.5)).toEqual({ value: '27,5', unit: 'км/ч' });
+    expect(formatGroupPaceParts(null)).toEqual({ value: '—', unit: '' });
+    expect(formatPaceRangeParts([35, 25, 30])).toEqual({
+      value: '25–35',
+      unit: 'км/ч',
+    });
+    expect(formatPaceRangeParts([25, 25])).toEqual({
+      value: '25',
+      unit: 'км/ч',
+    });
+    expect(formatPaceRangeParts([])).toEqual({ value: '—', unit: '' });
+  });
+});
+
+describe('formatStartPlace', () => {
+  it('uses a real label, falls back to the description for a bare «Старт»', async () => {
+    const { formatStartPlace } = await import('./format');
+    expect(formatStartPlace('м. Спортивная')).toBe('м. Спортивная');
+    expect(formatStartPlace('Старт', 'Парковка у велотрека Крылатское.')).toBe(
+      'Парковка у велотрека Крылатское',
+    );
+    expect(formatStartPlace(' старт ')).toBeNull();
+    expect(formatStartPlace(null, '  ')).toBeNull();
+  });
+});

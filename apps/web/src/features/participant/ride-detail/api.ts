@@ -6,7 +6,9 @@ import type {
   GetRideResponse,
   GetRouteGeometryResponse,
   ListRideReviewsResponse,
+  ListRideRidersResponse,
   ProblemDetails,
+  UpdateRegistrationGroupResponse,
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
 
@@ -18,9 +20,28 @@ export type {
   GetRideResponse,
   GetRouteGeometryResponse,
   ListRideReviewsResponse,
+  ListRideRidersResponse,
+  UpdateRegistrationGroupResponse,
 };
 
 const RIDES_ENDPOINT = '/api/v1/rides';
+
+/** Page size for the «Участники» list (ADR-011 allows up to 100). */
+export const RIDERS_PAGE_SIZE = 50;
+
+/** CR-119: `{ groupId }` as a JSON body when present, no body at all otherwise. */
+function groupBody(groupId: string | undefined): RequestInit {
+  if (!groupId) return {};
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupId }),
+  };
+}
+
+/** Same-origin URL of the ride's GPX track (`GET /v1/rides/:id/route/download`). */
+export function routeDownloadUrl(rideId: string): string {
+  return `${RIDES_ENDPOINT}/${rideId}/route/download`;
+}
 
 /**
  * CR-023 ("Ride detail"): unlike every other typed client in this codebase, this
@@ -70,12 +91,19 @@ export async function getRouteGeometry(
  * CR-032 ("Register"). Throws `ApiError` on any non-2xx response — `unauthorized`
  * (401, no session — `RegistrationButton` redirects to `/login`),
  * `ride_registration_not_open`/`registration_already_exists`/`ride_full` (409).
+ *
+ * CR-117/CR-119 (pace groups): `groupId` goes in a JSON body only when given — a
+ * ride without groups keeps the original body-less request. A ride with groups
+ * rejects a missing one with `422 group_required`, a foreign one with `422
+ * group_not_found`.
  */
 export async function registerForRide(
   rideId: string,
+  groupId?: string,
 ): Promise<CreateRegistrationResponse> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/register`, {
     method: 'POST',
+    ...groupBody(groupId),
   });
 
   const body = (await response.json()) as
@@ -86,6 +114,32 @@ export async function registerForRide(
   }
 
   return body as CreateRegistrationResponse;
+}
+
+/**
+ * CR-119: `PATCH /v1/rides/:id/register` — move the caller's own active
+ * registration to another group of the same ride. Throws `ApiError` —
+ * `unauthorized` (401), `registration_not_found` (404), `group_change_not_allowed`
+ * (409), `group_not_found` (422).
+ */
+export async function changeRegistrationGroup(
+  rideId: string,
+  groupId: string,
+): Promise<UpdateRegistrationGroupResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/register`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupId }),
+  });
+
+  const body = (await response.json()) as
+    UpdateRegistrationGroupResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as UpdateRegistrationGroupResponse;
 }
 
 /**
@@ -110,9 +164,11 @@ export async function cancelRideRegistration(rideId: string): Promise<void> {
  */
 export async function joinRideWaitlist(
   rideId: string,
+  groupId?: string,
 ): Promise<CreateWaitlistEntryResponse> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/waitlist`, {
     method: 'POST',
+    ...groupBody(groupId),
   });
 
   const body = (await response.json()) as
@@ -181,4 +237,31 @@ export async function getRideReviews(
   }
 
   return body as ListRideReviewsResponse;
+}
+
+/**
+ * CR-119: `GET /v1/rides/:id/riders` — who is riding (display name + group only).
+ * Signed-in only: an anonymous caller gets `401 unauthorized`, which the
+ * «Участники» section turns into its sign-in prompt rather than an error.
+ * Paginated per ADR-011; `cursor` is passed through opaque.
+ */
+export async function getRideRiders(
+  rideId: string,
+  cursor?: string | null,
+): Promise<ListRideRidersResponse> {
+  const params = new URLSearchParams({ limit: String(RIDERS_PAGE_SIZE) });
+  if (cursor) params.set('cursor', cursor);
+  const response = await fetch(
+    `${RIDES_ENDPOINT}/${rideId}/riders?${params.toString()}`,
+    { cache: 'no-store' },
+  );
+
+  const body = (await response.json()) as
+    ListRideRidersResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as ListRideRidersResponse;
 }

@@ -1,7 +1,7 @@
 import { Skeleton } from 'ui';
 
 // Shared Next.js loading boundary for every `/organizer/rides/[id]/*` leaf
-// (`edit`, `route`, `cover`, `participants`, `updates`) — CR-099. Each leaf's
+// (`edit`, `route`, `cover`, `participants`, `updates`, `groups`) — CR-099. Each leaf's
 // own client component already shows a matching `Skeleton` once it mounts
 // (`EditRideForm`, `RouteUploadForm`, `CoverImageUploadForm`, ...), but
 // without this file the App Router shows nothing at all during the RSC

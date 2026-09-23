@@ -6,15 +6,26 @@ import {
   within,
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GetRideResponse, Ride, RouteSummary, Stop } from 'types';
+import type {
+  GetRideResponse,
+  Registration,
+  Ride,
+  RideGroupSummary,
+  RoutePoint,
+  RouteSummary,
+  Stop,
+} from 'types';
 import { ToastProvider } from 'ui';
 import { RideDetailView } from './components/RideDetailView';
 import {
   ApiError,
   cancelRideRegistration,
+  changeRegistrationGroup,
   getRideDetail,
   getRideReviews,
+  getRideRiders,
   getRouteGeometry,
+  joinRideWaitlist,
   registerForRide,
 } from './api';
 
@@ -23,6 +34,20 @@ import {
 // mount a real Next.js App Router.
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+}));
+
+// CR-119: `RidersSection` reads the shared session (`SessionProvider` in the
+// root layout) to skip a guaranteed-401 riders request for anonymous visitors.
+// Anonymous by default; a test flips it to exercise the signed-in list.
+const sessionState: {
+  status: 'loading' | 'authenticated' | 'anonymous' | 'error';
+} = { status: 'anonymous' };
+vi.mock('@/lib/auth/session-context', () => ({
+  useSession: () => ({
+    status: sessionState.status,
+    user: null,
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock('./api', async () => {
@@ -34,6 +59,9 @@ vi.mock('./api', async () => {
     getRideReviews: vi.fn(),
     registerForRide: vi.fn(),
     cancelRideRegistration: vi.fn(),
+    changeRegistrationGroup: vi.fn(),
+    joinRideWaitlist: vi.fn(),
+    getRideRiders: vi.fn(),
   };
 });
 
@@ -42,6 +70,9 @@ const getRouteGeometryMock = vi.mocked(getRouteGeometry);
 const getRideReviewsMock = vi.mocked(getRideReviews);
 const registerForRideMock = vi.mocked(registerForRide);
 const cancelRideRegistrationMock = vi.mocked(cancelRideRegistration);
+const changeRegistrationGroupMock = vi.mocked(changeRegistrationGroup);
+const joinRideWaitlistMock = vi.mocked(joinRideWaitlist);
+const getRideRidersMock = vi.mocked(getRideRiders);
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -121,6 +152,50 @@ function baseDetailResponse(
   };
 }
 
+function activeRegistration(
+  overrides: Partial<Registration> = {},
+): Registration {
+  return {
+    id: 'registration-1',
+    rideId: 'ride-1',
+    userId: 'user-1',
+    status: 'active',
+    groupId: null,
+    createdAt: '2027-01-01T00:00:00.000Z',
+    updatedAt: '2027-01-01T00:00:00.000Z',
+    cancelledAt: null,
+    ...overrides,
+  };
+}
+
+const groupOne: RideGroupSummary = {
+  id: 'group-1',
+  name: 'Группа 1',
+  paceKmh: 25,
+  description: null,
+  position: 0,
+  registrationsCount: 7,
+};
+const groupTwo: RideGroupSummary = {
+  id: 'group-2',
+  name: 'Группа 2',
+  paceKmh: 35,
+  description: null,
+  position: 1,
+  registrationsCount: 1,
+};
+
+function groupProblem(code: string, status = 422): ApiError {
+  return new ApiError({
+    type: `https://coffee-ride.example/errors/${code}`,
+    title: code,
+    status,
+    detail: code,
+    instance: '/v1/rides/ride-1/register',
+    code,
+  });
+}
+
 describe('RideDetailView', () => {
   beforeEach(() => {
     getRideDetailMock.mockReset();
@@ -129,6 +204,11 @@ describe('RideDetailView', () => {
     getRideReviewsMock.mockResolvedValue({ items: [], nextCursor: null });
     registerForRideMock.mockReset();
     cancelRideRegistrationMock.mockReset();
+    changeRegistrationGroupMock.mockReset();
+    joinRideWaitlistMock.mockReset();
+    getRideRidersMock.mockReset();
+    getRideRidersMock.mockResolvedValue({ items: [], nextCursor: null });
+    sessionState.status = 'anonymous';
   });
 
   it('shows a not-found state for a non-existent/draft ride', async () => {
@@ -208,7 +288,11 @@ describe('RideDetailView', () => {
     expect(screen.queryByText('Набор высоты')).not.toBeInTheDocument();
     expect(screen.queryByText('Средний темп')).not.toBeInTheDocument();
     expect(screen.queryByText('Длительность')).not.toBeInTheDocument();
-    expect(screen.queryByText('Участники')).not.toBeInTheDocument();
+    // CR-119: «Участники» is also the riders section's heading now — the
+    // participants *fact* is what must be absent without a limit.
+    expect(
+      within(screen.getByTestId('ride-facts')).queryByText('Участники'),
+    ).not.toBeInTheDocument();
   });
 
   it('omits the "Маршрут" section entirely when no route has been uploaded', async () => {
@@ -418,9 +502,12 @@ describe('RideDetailView', () => {
 
       render(<RideDetailView rideId="ride-1" />);
 
+      // CR-119: a status badge, not a disabled button posing as one.
       const waitlistedLabel = await screen.findByText('В списке ожидания');
-      expect(waitlistedLabel.closest('button')).toBeDisabled();
-      expect(screen.getByText('Покинуть список ожидания')).toBeInTheDocument();
+      expect(waitlistedLabel.closest('button')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Покинуть список ожидания' }),
+      ).toBeInTheDocument();
     });
 
     it('offers cancellation when the viewer already has an active registration, even once registration has closed', async () => {
@@ -561,83 +648,44 @@ describe('RideDetailView', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    // CR-105 (`/impeccable critique` P1 item 4): sticky mobile registration bar,
-    // behind `FEATURE_STICKY_REGISTRATION_CTA`.
-    it('does not apply the sticky-bar positioning when the flag prop is off (default)', async () => {
+    // CR-105's sticky mobile registration bar — the default since CR-119
+    // (`FEATURE_STICKY_REGISTRATION_CTA` removed).
+    it('renders the register action in the fixed bottom bar, with no flag', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: { ...baseRide, status: 'registration_open' },
+          registrationsCount: 14,
         }),
       );
 
       render(<RideDetailView rideId="ride-1" />);
 
-      const button = await screen.findByText('Зарегистрироваться');
-      expect(button.closest('div[class*="fixed"]')).not.toBeInTheDocument();
-    });
-
-    it('applies the fixed-bottom-bar positioning when stickyRegistrationCta is on', async () => {
-      getRideDetailMock.mockResolvedValue(
-        baseDetailResponse({
-          ride: { ...baseRide, status: 'registration_open' },
-        }),
-      );
-
-      render(<RideDetailView rideId="ride-1" stickyRegistrationCta />);
-
-      const button = await screen.findByText('Зарегистрироваться');
-      expect(button.closest('div[class*="fixed"]')).toBeInTheDocument();
-    });
-
-    // CR-107 ("Quiet Instrument"): glass status panel over the cover photo,
-    // behind `FEATURE_COVER_GLASS_PANEL`.
-    it('shows the status badge below the title (not over the photo) when the flag prop is off (default)', async () => {
-      getRideDetailMock.mockResolvedValue(
-        baseDetailResponse({
-          ride: {
-            ...baseRide,
-            coverImageUrl: '/v1/rides/ride-1/cover',
-          },
-        }),
-      );
-
-      render(<RideDetailView rideId="ride-1" />);
-
-      const badge = await screen.findByText('Опубликован');
+      const button = await screen.findByRole('button', {
+        name: 'Зарегистрироваться',
+      });
+      const bar = button.closest('div[class*="fixed"]');
+      expect(bar).toBeInTheDocument();
+      // Seats left sit above the button inside the same bar.
       expect(
-        badge.closest('div[class*="bg-glass-bg"]'),
-      ).not.toBeInTheDocument();
-    });
-
-    it('moves the status badge onto a glass panel over the cover photo when coverGlassPanel is on', async () => {
-      getRideDetailMock.mockResolvedValue(
-        baseDetailResponse({
-          ride: {
-            ...baseRide,
-            coverImageUrl: '/v1/rides/ride-1/cover',
-          },
-        }),
-      );
-
-      render(<RideDetailView rideId="ride-1" coverGlassPanel />);
-
-      const badge = await screen.findByText('Опубликован');
-      expect(badge.closest('div[class*="bg-glass-bg"]')).toBeInTheDocument();
-      // The title stays a real, non-duplicated `<h1>` below the photo either way.
-      expect(
-        screen.getByRole('heading', { level: 1, name: baseRide.title }),
+        within(bar as HTMLElement).getByText('Осталось 6 мест'),
       ).toBeInTheDocument();
     });
 
-    it('does not apply the glass panel when there is no cover photo, even with the flag on', async () => {
-      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+    it("keeps a registered viewer's block in the flow, not in the fixed bar", async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          registrationsCount: 1,
+          viewerRegistration: activeRegistration(),
+        }),
+      );
 
-      render(<RideDetailView rideId="ride-1" coverGlassPanel />);
+      render(<RideDetailView rideId="ride-1" />);
 
-      const badge = await screen.findByText('Опубликован');
-      expect(
-        badge.closest('div[class*="bg-glass-bg"]'),
-      ).not.toBeInTheDocument();
+      const cancel = await screen.findByRole('button', {
+        name: 'Отменить регистрацию',
+      });
+      expect(cancel.closest('div[class*="fixed"]')).not.toBeInTheDocument();
     });
   });
 
@@ -751,5 +799,493 @@ describe('RideDetailView', () => {
       expect(organizerLine.textContent).toContain('4,5');
       expect(organizerLine.textContent).toContain('3 отзыва');
     });
+  });
+  describe('pace groups (CR-119)', () => {
+    const openWithGroups = (overrides: Partial<GetRideResponse> = {}) =>
+      baseDetailResponse({
+        ride: { ...baseRide, status: 'registration_open' },
+        groups: [groupOne, groupTwo],
+        registrationsCount: 8,
+        ...overrides,
+      });
+
+    it('lists the groups as a radio group and keeps registration disabled until one is chosen', async () => {
+      getRideDetailMock.mockResolvedValue(openWithGroups());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const picker = await screen.findByRole('group', {
+        name: 'Выберите группу',
+      });
+      const radios = within(picker).getAllByRole('radio');
+      expect(radios).toHaveLength(2);
+      expect(within(picker).getByText('Группа 1')).toBeInTheDocument();
+      expect(within(picker).getByText('7 участников')).toBeInTheDocument();
+      expect(within(picker).getByText('1 участник')).toBeInTheDocument();
+      // Group pace in the compact form: «25 км/ч», not «25,0».
+      expect(within(picker).getByText('25')).toBeInTheDocument();
+
+      const button = screen.getByRole('button', { name: 'Зарегистрироваться' });
+      expect(button).toBeDisabled();
+      expect(
+        screen.getByText('Выберите группу, чтобы записаться'),
+      ).toBeInTheDocument();
+
+      fireEvent.click(within(picker).getByRole('radio', { name: /Группа 1/ }));
+
+      expect(button).not.toBeDisabled();
+      expect(
+        screen.queryByText('Выберите группу, чтобы записаться'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('sends the chosen groupId when registering', async () => {
+      getRideDetailMock.mockResolvedValue(openWithGroups());
+      registerForRideMock.mockResolvedValue({
+        registration: activeRegistration({ groupId: 'group-2' }),
+      });
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole('radio', { name: /Группа 2/ }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Зарегистрироваться' }),
+      );
+
+      await waitFor(() => {
+        expect(registerForRideMock).toHaveBeenCalledWith('ride-1', 'group-2');
+      });
+      expect(
+        await screen.findByText('Вы едете в группе «Группа 2» · 35 км/ч'),
+      ).toBeInTheDocument();
+    });
+
+    it('sends the chosen groupId when joining the waitlist of a full ride', async () => {
+      getRideDetailMock.mockResolvedValue(
+        openWithGroups({
+          ride: {
+            ...baseRide,
+            status: 'registration_open',
+            participantLimit: 8,
+          },
+        }),
+      );
+      joinRideWaitlistMock.mockResolvedValue({
+        waitlistEntry: {
+          id: 'waitlist-entry-1',
+          rideId: 'ride-1',
+          userId: 'user-1',
+          status: 'waiting',
+          groupId: 'group-1',
+          createdAt: '2027-01-01T00:00:00.000Z',
+          updatedAt: '2027-01-01T00:00:00.000Z',
+          cancelledAt: null,
+          promotedAt: null,
+        },
+      });
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      expect(await screen.findByText('Мест не осталось')).toBeInTheDocument();
+      const join = screen.getByRole('button', {
+        name: 'Встать в список ожидания',
+      });
+      expect(join).toBeDisabled();
+      fireEvent.click(screen.getByRole('radio', { name: /Группа 1/ }));
+      fireEvent.click(join);
+
+      await waitFor(() => {
+        expect(joinRideWaitlistMock).toHaveBeenCalledWith('ride-1', 'group-1');
+      });
+    });
+
+    it('keeps the body-less register call for a ride without groups', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+      registerForRideMock.mockResolvedValue({
+        registration: activeRegistration(),
+      });
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+      );
+      await waitFor(() => {
+        expect(registerForRideMock).toHaveBeenCalledTimes(1);
+      });
+      expect(registerForRideMock.mock.calls[0]).toEqual(['ride-1']);
+    });
+
+    it.each([
+      ['group_required', 'Чтобы записаться, выберите группу.'],
+      [
+        'group_not_found',
+        'Этой группы больше нет в заезде. Обновите страницу и выберите другую.',
+      ],
+    ])('maps a 422 %s to a clear message', async (code, message) => {
+      getRideDetailMock.mockResolvedValue(openWithGroups());
+      registerForRideMock.mockRejectedValue(groupProblem(code));
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole('radio', { name: /Группа 1/ }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Зарегистрироваться' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    });
+
+    it('shows the pace range across groups as the pace metric', async () => {
+      getRideDetailMock.mockResolvedValue(openWithGroups());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      expect(screen.getByText('25–35')).toBeInTheDocument();
+      // The ride's own single `paceKmh` is superseded by the groups' range.
+      expect(screen.queryByText('24,5')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('registered state (CR-119)', () => {
+    const startPoint: RoutePoint = {
+      id: 'rp-start',
+      rideId: 'ride-1',
+      type: 'start',
+      label: 'Кофейня «Зерно»',
+      description: null,
+      lat: 55.75,
+      lng: 37.61,
+      createdAt: '2027-01-01T00:00:00.000Z',
+      updatedAt: '2027-01-01T00:00:00.000Z',
+      updatedBy: null,
+    };
+
+    it('shows «Вы зарегистрированы» with when, start and group, and a danger-outline cancel', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          groups: [groupOne, groupTwo],
+          routePoints: [startPoint],
+          registrationsCount: 8,
+          viewerRegistration: activeRegistration({ groupId: 'group-1' }),
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const block = (
+        await screen.findByRole('heading', { name: 'Вы зарегистрированы' })
+      ).closest('section') as HTMLElement;
+      expect(within(block).getByText(/08:00/)).toBeInTheDocument();
+      expect(within(block).getByText(/МСК/)).toBeInTheDocument();
+      expect(within(block).getByText('Кофейня «Зерно»')).toBeInTheDocument();
+      expect(
+        within(block).getByText('Вы едете в группе «Группа 1» · 25 км/ч'),
+      ).toBeInTheDocument();
+      const cancel = within(block).getByRole('button', {
+        name: 'Отменить регистрацию',
+      });
+      expect(cancel.className).toContain('border-danger');
+      expect(cancel.className).not.toContain('bg-danger ');
+      // No second «Группы» picker next to the registered block.
+      expect(
+        screen.queryByRole('group', { name: 'Выберите группу' }),
+      ).not.toBeInTheDocument();
+      // The start point label is also on the page header.
+      expect(screen.getAllByText('Кофейня «Зерно»').length).toBeGreaterThan(1);
+    });
+
+    it('changes group via PATCH', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          groups: [groupOne, groupTwo],
+          registrationsCount: 8,
+          viewerRegistration: activeRegistration({ groupId: 'group-1' }),
+        }),
+      );
+      changeRegistrationGroupMock.mockResolvedValue({
+        registration: activeRegistration({ groupId: 'group-2' }),
+      });
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Сменить группу' }),
+      );
+      const picker = screen.getByRole('group', { name: 'Сменить группу' });
+      const save = screen.getByRole('button', { name: 'Сохранить' });
+      // The current group is preselected — saving it again is a no-op.
+      expect(
+        within(picker).getByRole('radio', { name: /Группа 1/ }),
+      ).toBeChecked();
+      expect(save).toBeDisabled();
+
+      fireEvent.click(within(picker).getByRole('radio', { name: /Группа 2/ }));
+      fireEvent.click(save);
+
+      await waitFor(() => {
+        expect(changeRegistrationGroupMock).toHaveBeenCalledWith(
+          'ride-1',
+          'group-2',
+        );
+      });
+      expect(await screen.findByText('Группа изменена.')).toBeInTheDocument();
+      expect(
+        screen.getByText('Вы едете в группе «Группа 2» · 35 км/ч'),
+      ).toBeInTheDocument();
+    });
+
+    it('maps a failed group change to a clear message', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          groups: [groupOne, groupTwo],
+          viewerRegistration: activeRegistration({ groupId: 'group-1' }),
+        }),
+      );
+      changeRegistrationGroupMock.mockRejectedValue(
+        groupProblem('group_not_found'),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Сменить группу' }),
+      );
+      fireEvent.click(screen.getByRole('radio', { name: /Группа 2/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Этой группы больше нет в заезде.',
+      );
+    });
+
+    it('prompts a viewer registered without a group to choose one', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          groups: [groupOne, groupTwo],
+          viewerRegistration: activeRegistration({ groupId: null }),
+        }),
+      );
+      changeRegistrationGroupMock.mockResolvedValue({
+        registration: activeRegistration({ groupId: 'group-1' }),
+      });
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      const picker = await screen.findByRole('group', {
+        name: 'Выберите группу',
+      });
+      expect(
+        screen.queryByRole('button', { name: 'Сменить группу' }),
+      ).not.toBeInTheDocument();
+      fireEvent.click(within(picker).getByRole('radio', { name: /Группа 1/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+      await waitFor(() => {
+        expect(changeRegistrationGroupMock).toHaveBeenCalledWith(
+          'ride-1',
+          'group-1',
+        );
+      });
+    });
+  });
+
+  describe('«Участники» (CR-119)', () => {
+    it('shows only the count and a sign-in link to anonymous viewers, without requesting the list', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ registrationsCount: 14 }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(
+        await screen.findByRole('link', {
+          name: 'Войдите, чтобы увидеть список',
+        }),
+      ).toHaveAttribute('href', '/login');
+      expect(screen.getByText('14 участников')).toBeInTheDocument();
+      expect(getRideRidersMock).not.toHaveBeenCalled();
+    });
+
+    it('lists signed-in viewers the riders grouped by group, ungrouped last', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          groups: [
+            { ...groupOne, registrationsCount: 2 },
+            { ...groupTwo, registrationsCount: 1 },
+          ],
+          registrationsCount: 4,
+        }),
+      );
+      getRideRidersMock.mockResolvedValue({
+        items: [
+          {
+            displayName: 'Анна',
+            group: { id: 'group-1', name: 'Группа 1', paceKmh: 25 },
+          },
+          {
+            displayName: null,
+            group: { id: 'group-1', name: 'Группа 1', paceKmh: 25 },
+          },
+          {
+            displayName: 'Борис',
+            group: { id: 'group-2', name: 'Группа 2', paceKmh: 35 },
+          },
+          { displayName: 'Вера', group: null },
+        ],
+        nextCursor: null,
+      });
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      // `findByText`, not a role query: the pace joins value and unit with an
+      // NBSP, which the text matcher's normalizer collapses and the
+      // accessible-name matcher does not.
+      const headingOne = await screen.findByText('Группа 1 · 25 км/ч — 2');
+      const headings = screen
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent?.replace(/\s+/g, ' '));
+      expect(headings).toEqual([
+        'Группа 1 · 25 км/ч — 2',
+        'Группа 2 · 35 км/ч — 1',
+        'Без группы — 1',
+      ]);
+      const groupOneList = headingOne.parentElement as HTMLElement;
+      expect(within(groupOneList).getByText('Анна')).toBeInTheDocument();
+      expect(
+        within(groupOneList).getByText('Участник без имени'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Вера')).toBeInTheDocument();
+      expect(getRideRidersMock).toHaveBeenCalledWith('ride-1');
+    });
+
+    it('falls back to the sign-in prompt on a 401 from the riders endpoint', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ registrationsCount: 3 }),
+      );
+      getRideRidersMock.mockRejectedValue(groupProblem('unauthorized', 401));
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(
+        await screen.findByRole('link', {
+          name: 'Войдите, чтобы увидеть список',
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows a retryable error when the list fails to load', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ registrationsCount: 3 }),
+      );
+      getRideRidersMock.mockRejectedValue(new Error('network error'));
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(
+        await screen.findByText(
+          'Не удалось загрузить список участников. Попробуйте ещё раз.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('shows an empty state when nobody has registered yet', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(
+        await screen.findByText('Пока никто не записался'),
+      ).toBeInTheDocument();
+    });
+
+    it('loads the next page with «Показать ещё»', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ registrationsCount: 2 }),
+      );
+      getRideRidersMock
+        .mockResolvedValueOnce({
+          items: [{ displayName: 'Анна', group: null }],
+          nextCursor: 'cursor-2',
+        })
+        .mockResolvedValueOnce({
+          items: [{ displayName: 'Борис', group: null }],
+          nextCursor: null,
+        });
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      expect(await screen.findByText('Анна')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Показать ещё' }));
+
+      expect(await screen.findByText('Борис')).toBeInTheDocument();
+      expect(getRideRidersMock).toHaveBeenLastCalledWith('ride-1', 'cursor-2');
+      expect(
+        screen.queryByRole('button', { name: 'Показать ещё' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers the GPX download once a route exists', async () => {
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({ route: baseRoute }),
+    );
+    getRouteGeometryMock.mockResolvedValue({ points: [] });
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Скачать GPX' }),
+    ).toHaveAttribute('href', '/api/v1/rides/ride-1/route/download');
+  });
+
+  it('shows the start line with weekday, time and zone hint', async () => {
+    getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    // 2027-05-01T05:00Z is Saturday 08:00 in Moscow.
+    expect(
+      await screen.findByText(/сб 1 мая 2027 · 08:00 · МСК/),
+    ).toBeInTheDocument();
   });
 });

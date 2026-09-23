@@ -140,3 +140,31 @@ describe('ORGANIZER_TERMS.ratingReviewsCount (CR-043)', () => {
     expect(ORGANIZER_TERMS.ratingReviewsCount(12)).toBe('12 отзывов');
   });
 });
+
+// CR-119 (ride detail «Топокарта»).
+describe('CR-119 ride detail terms', () => {
+  it('pluralizes seats left and rider counts', async () => {
+    const {
+      RIDE_DETAIL_GROUP_TERMS,
+      RIDE_DETAIL_REGISTRATION_TERMS,
+      RIDE_DETAIL_RIDERS_TERMS,
+    } = await import('./terminology');
+    expect(RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(1)).toBe(
+      'Осталось 1 место',
+    );
+    expect(RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(3)).toBe(
+      'Осталось 3 места',
+    );
+    expect(RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(11)).toBe(
+      'Осталось 11 мест',
+    );
+    expect(RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(21)).toBe(
+      'Осталось 21 место',
+    );
+    expect(RIDE_DETAIL_RIDERS_TERMS.ridersCount(14)).toBe('14 участников');
+    expect(RIDE_DETAIL_GROUP_TERMS.ridersCount(22)).toBe('22 участника');
+    expect(RIDE_DETAIL_GROUP_TERMS.ridingIn('Группа 1', '25 км/ч')).toBe(
+      'Вы едете в группе «Группа 1» · 25 км/ч',
+    );
+  });
+});

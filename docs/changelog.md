@@ -2183,3 +2183,85 @@ route without geometry as `no_route`).
 
 Next logical task: with the VPN off — live-verify the builder, and rebuild the
 "Тестовый заезд на выходные" seed route through 2GIS.
+
+## 2026-09-23 — CR-115…CR-120 — «Топокарта» redesign, pace groups, rider list
+
+Why: `/impeccable critique apps/web` scored the UI 21/40 — calm but anonymous
+("could be an HR portal"), map and route secondary, price louder than the ride. The
+product owner chose the «Топокарта» direction (orienteering-map sheet) out of three,
+and in the same session asked for pace groups (a ride splits into groups by average
+speed, e.g. 25 / 30 / 35 km/h) and a list of everyone who is riding. Built by six
+sub-agents in two waves; every wave was re-checked by the main session (diff review,
+full test runs, own screenshots) before commit.
+
+- CR-115 (ADR-021): «Топокарта» foundation — white paper / black ink, one plum
+  overprint (`primary` #7A2482 / #D79BE0) for route + primary action only; meaning
+  inks: `contour` brown (elevation), `info` blue, `success` green, `warning` yellow;
+  graphite dark theme. `bg-raised` = `bg`, new `surface`; additive tokens `frame`,
+  `primary-hover`, `primary-tint`, `route`, `route-casing`, `contour`, `warning-fill`,
+  `on-warning-fill`, `info-tint`. Sofia Sans Condensed as `font-display` (headings,
+  labels, metrics, wordmark) — its Russian letterforms come from `locl`, so
+  `<html lang="ru">` is now load-bearing. 4px radius, no card shadows. Button
+  `danger` became an outline; new additive `danger-filled` used by ConfirmDialog.
+  «coffee◦ride» wordmark (dot → control-point ring) + `app/icon.svg`. Glass retired:
+  `lib/glass.ts`, `--glass-*` and the `FEATURE_COVER_GLASS_PANEL` flag deleted.
+- CR-116: `GET /v1/rides` items are now `PublicRideListItem` (additive):
+  `registrationsCount`, `startLabel`, `routePreview` (≤ 40 `[lat, lng]`, thinned in
+  SQL then Douglas–Peucker, four batched queries per page), `groups`.
+- CR-117 (ADR-022): `RideGroup` entity. Migration `0017_ride_groups`: table
+  `ride_groups` (pace 5–60, name 1–60, unique position and lower(name) per ride),
+  nullable `group_id` on `registrations` and `waitlist_entries` with a composite FK
+  `(group_id, ride_id) → ride_groups(id, ride_id)` so a group can only belong to the
+  same ride. Endpoints: owner-only `GET/POST /v1/rides/:id/groups`,
+  `PATCH/DELETE /v1/rides/:id/groups/:groupId` (max 6, `group_has_registrations`
+  on delete, not editable once finished/cancelled); register / waitlist join take
+  optional `groupId` (required when the ride has groups — `422 group_required` —
+  checked inside the existing locked transaction; capacity stays ride-level);
+  `PATCH /v1/rides/:id/register` changes one's group; `GET /v1/rides/:id` gains
+  `groups[]` with counts; organizer participants/waitlist items gain `group`;
+  `GET /v1/rides/:id/riders` — signed-in only, display name + group, no ids/contacts.
+- CR-118: discovery rebuilt — map is the page (desktop: map left, 440px list
+  column right; phone: 45vh map strip over the list, «Список / Карта» toggle
+  removed). Legend rows instead of cards: route glyph from `routePreview`, date line
+  in the ride's timezone, title as the link, «Старт: …», one metric line with the
+  pace range from groups («25–35 км/ч · 2 группы»), seats/difficulty/price as small
+  chips. Fixed the old bug where markers never followed filter changes; pins are
+  control rings with the start time; row hover/focus draws that ride's route; pin
+  click selects the row. maps-core additive: `MapMarkerInput.shape/selected/
+haloColor`, `MapRenderOptions.onMarkerClick` (`.claude/rules/maps.md` updated).
+- CR-119: ride detail map-first (sticky 7/12 map on desktop), group picker (real
+  radios, registration blocked until a group is chosen), «Вы зарегистрированы» block
+  with «Сменить группу», «Участники» grouped by group for signed-in viewers
+  (anonymous: count + sign-in link), «Условные знаки» legend, «Скачать GPX». The
+  sticky mobile registration bar is now default — `FEATURE_STICKY_REGISTRATION_CTA`
+  removed.
+- CR-120: organizer «Группы по темпу» page (`/organizer/rides/[id]/groups`: add,
+  edit, delete with confirm, reorder with buttons, all four API error codes mapped),
+  participants page grouped by group with counts, waitlist shows the chosen group.
+  RouteBuilder's last waypoint no longer uses danger red.
+- Main-session review fixes: one `pluralRu` in `terminology.ts` instead of four
+  copies; `formatStartPlace` — a start point labelled just «Старт» showed
+  «Старт: Старт», now falls back to the point's description (detail) or is hidden
+  (discovery list, which only has the label).
+
+Dev data: dev DB backed up (`packages/db/backups/coffee_ride_20260923T103231Z.dump`)
+before applying 0017. «Тестовый заезд на выходные» got «Группа 1» 25 km/h and
+«Группа 2» 35 km/h (inserted by SQL, organizer password unknown) with 13 of its 14
+riders assigned; test users `test.uchastnik{1,2,3}.cr117@example.com`; a second
+test organizer `test.organizer.cr120@example.com` with ride «CR-120 · Проверка групп
+по темпу» (3 groups, 4 riders). All test passwords `CoffeeRide-test-2026`.
+
+Incident: a sub-agent ran `pkill -f cat`, which matches every process under
+`/Applicat…` — it killed Docker Desktop (test Postgres/Redis) and ended the Claude
+session mid-wave. Docker and both containers were restarted, test DB intact.
+Sub-agent briefs now forbid broad `pkill -f`/`killall`. Also: running `next build`
+while `next dev` serves `apps/web` overwrites the shared `.next` and leaves the dev
+server serving 404 chunks — the dev server was restarted with a clean `.next`.
+
+Verification: typecheck + lint clean (17/17 tasks); tests api 417 (+3 skipped, with
+`TEST_DATABASE_URL`), web 292, ui 132, maps-2gis 30. Screenshots reviewed by the main
+session at 1440 and 390 px (discovery, ride detail anonymous + signed-in dark,
+organizer groups and participants).
+
+Next logical task: critique P0 still open — the login bounce loses the ride
+(`/login` has no `?next=`), then a 2GIS dark basemap style for the dark theme.

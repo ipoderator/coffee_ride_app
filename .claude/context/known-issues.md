@@ -753,6 +753,120 @@ coordinate in `outcoming_path.geometry[].selection` (otherwise built routes have
 no elevation profile), and what 2GIS returns for an unroutable pair of points
 (the adapter maps 204 / empty result / no geometry to `no_route` → 422).
 
+### KI-057 — The 2GIS basemap stays light in the dark theme
+
+Status: open. Discovered: 2026-09-23 (CR-118/CR-119 review).
+Problem: the «Топокарта» dark theme (ADR-021) re-colours every app surface, but
+both MapGL maps (`DiscoveryMap`, `RouteMap`, `RouteBuilder`) keep 2GIS's default
+light basemap style. Marker halos and the route casing resolve from the dark
+theme's tokens (`--route-casing`), so on the light tiles they read as dark
+outlines instead of the intended "paper" halo.
+Impact: low-medium — cosmetic, nothing breaks, but the largest surface on
+discovery and ride detail ignores the theme.
+Workaround: none needed; the maps stay legible.
+Next action: pick a 2GIS MapGL dark style (style id from the 2GIS account's
+style editor), pass it through `MapRenderOptions` as an additive provider-neutral
+option (e.g. a `theme: 'light' | 'dark'`, mapped to a style id inside
+`packages/maps-2gis`), switch it when the theme changes, and re-check the halo
+colours on both basemaps. Next task after KI-064.
+
+### KI-058 — `routePreview` samples each ride's full stored geometry on every list request
+
+Status: open. Discovered: 2026-09-23 (CR-116).
+Problem: `GET /v1/rides` builds each item's `routePreview` at request time —
+`rides.service.ts`'s batched list extras sample every ride's full
+`routes.geometry` in SQL, then `modules/rides/route-preview.ts` runs
+Douglas–Peucker over the sample. The full geometry never leaves Postgres, but
+Postgres still expands it for every ride on every page of every discovery
+request.
+Impact: low today (few rides, short routes); grows with route length × page size
+× discovery traffic.
+Workaround: none needed at current scale.
+Next action: if the list query becomes hot, compute the preview once at route
+write time (GPX upload/replace and `POST /v1/rides/:id/route/build`) into a
+stored column and read that instead — the response contract stays unchanged.
+
+### KI-059 — The rider list has no avatars
+
+Status: open. Discovered: 2026-09-23 (CR-119).
+Problem: «Участники» on `/rides/[id]` (`GET /v1/rides/:id/riders`) shows display
+name + group only. There is no public per-user avatar endpoint — only
+`/v1/users/me/avatar` and `/v1/organizers/:id/avatar` — and `project-state.md`'s
+"Do not break" deliberately keeps `users` free of a public-by-id pattern without
+a product reason.
+Impact: low — the list works; it is just plainer than the rest of the page.
+Workaround: none.
+Next action: product decision first (is a participant's avatar public to other
+signed-in users?). If yes, add a scoped avatar path for riders of a ride
+(no user ids in the payload, same privacy rule as the riders endpoint) — a
+security-review item, not a UI tweak.
+
+### KI-060 — Discovery's «Старт: …» only knows the start route-point label
+
+Status: open. Discovered: 2026-09-23 (CR-118…CR-120 main-session review).
+Problem: `PublicRideListItem.startLabel` carries only the start route point's
+`label`. When an organizer labels it just «Старт», `formatStartPlace` hides the
+line on the discovery list (to avoid «Старт: Старт»), while ride detail falls
+back to the point's description — so the list shows no start place for such
+rides.
+Impact: low — the ride's map pin still shows where it starts.
+Workaround: organizers can name the start point by place («Парк Горького»).
+Next action: send the start point's description too (additive field) or add a
+dedicated start-place field on `Ride`, and use the same fallback on both screens.
+
+### KI-061 — Organizer ride sub-page links are a hard-coded list, not a registry
+
+Status: open. Discovered: 2026-09-23 (CR-120).
+Problem: `EditRideForm` links to the ride's sub-pages (Маршрут, Обложка,
+Группы, Участники, Обновления) as a plain hand-written link list; CR-120 added
+«Группы» as one more entry. `.claude/rules/extensibility.md` ("Registration over
+branching") asks for a descriptor registry on shared surfaces that every feature
+extends.
+Impact: low now (five links); each new ride sub-feature edits a shared form
+component, which is the coupling ADR-009 exists to prevent.
+Workaround: none needed.
+Next action: when the next ride sub-page is added, move these links into a
+small descriptor registry (label, href builder, order, optional flag), the same
+pattern as the cabinet nav/widget registries.
+
+### KI-062 — Group pace: the client requires 0.5 km/h steps, the API only checks 5–60
+
+Status: open. Discovered: 2026-09-23 (CR-120).
+Problem: `features/organizer/groups/validation.ts` enforces a 0.5 km/h step,
+but the API's `groupPaceSchema` (`packages/types/src/api/ride-groups.ts`) and the
+DB (`numeric(4,1)`, CHECK 5–60) accept any one-decimal value, e.g. 27.3.
+Impact: very low — only a direct API call can store a non-0.5 pace; it is still
+valid data.
+Workaround: none needed.
+Next action: decide whether 0.5 is a real rule; if so, add it to the shared Zod
+schema (one source for client and server), otherwise drop the client-only step.
+
+### KI-063 — Local MinIO/S3 container is stopped; uploads are unavailable in local dev
+
+Status: open. Discovered: 2026-09-23 (CR-115…CR-120 verification).
+Problem: in the current local stack `GET /health` reports `s3: "error"`
+(db/redis `ok`) — the MinIO container is not running.
+Impact: GPX upload/download, cover images and avatars fail locally with the
+documented "upload unavailable" degraded state; nothing else is affected.
+Workaround: `docker compose up -d minio` before any session that needs uploads.
+Next action: start MinIO and re-check `/health`; close this entry once it
+reports `s3: "ok"` again.
+
+### KI-064 — Critique P0: `/login` has no `?next=`, so an anonymous «Зарегистрироваться» loses the ride
+
+Status: open. Discovered: 2026-09-23 (P0 of the `/impeccable critique apps/web`
+run, 21/40, that led to CR-115); still open after CR-115…CR-120.
+Problem: on `/rides/[id]` an anonymous visitor's «Зарегистрироваться»
+(`RegistrationButton`'s `router.push('/login')` on 401) and the «Участники»
+sign-in link (`RidersSection`, a plain `href="/login"`) send them to `/login`
+without any return target; after signing in they do not come back to the ride they wanted to join.
+Impact: high for the core participant journey (discover → register) — the
+registration intent is dropped at the one point the product most needs it.
+Workaround: the visitor navigates back to the ride by hand.
+Next action: next logical task — pass a validated same-origin relative `next`
+path to `/login` (and on to `/register`), redirect there after a successful
+sign-in, and reject absolute/external URLs (open-redirect protection).
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

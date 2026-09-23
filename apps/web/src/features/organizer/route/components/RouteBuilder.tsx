@@ -158,11 +158,14 @@ export function RouteBuilder({
       waypoints.map((point, index) => ({
         id: `waypoint-${index}`,
         point,
+        // CR-120: the finish is overprint `--primary`, the same token
+        // `/rides/[id]`'s finish route point uses — never `--danger`, which
+        // `docs/design.md` §1 reserves for destructive/failed states.
         color: getCssColorVar(
           index === 0
             ? '--success'
             : index === waypoints.length - 1
-              ? '--danger'
+              ? '--primary'
               : '--info',
         ),
         label: String(index + 1),

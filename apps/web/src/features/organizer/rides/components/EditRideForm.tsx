@@ -12,6 +12,7 @@ import {
   ErrorState,
   FormField,
   Input,
+  ORGANIZER_GROUPS_TERMS,
   RIDE_EDIT_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
   Skeleton,
@@ -406,7 +407,7 @@ export function EditRideForm({ rideId }: { rideId: string }) {
   return (
     <Card>
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
           <Link
             href={`/organizer/rides/${rideId}/route`}
@@ -419,6 +420,12 @@ export function EditRideForm({ rideId }: { rideId: string }) {
             className="text-sm font-medium text-primary hover:underline"
           >
             {RIDE_EDIT_TERMS.coverLink}
+          </Link>
+          <Link
+            href={`/organizer/rides/${rideId}/groups`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {ORGANIZER_GROUPS_TERMS.rideEditLink}
           </Link>
           <Link
             href={`/organizer/rides/${rideId}/participants`}

@@ -25,8 +25,7 @@ import { cn } from '../lib/cn';
  * Styling + semantics for one item inside a {@link NavMenu}. The consumer
  * applies it to its own element (`next/link`'s `Link`, an `<a>`, a `<button>`)
  * and adds `role="menuitem"` — `packages/ui` stays router-agnostic, and a
- * shared constant keeps the several call sites from drifting (same precedent as
- * CR-107's `GLASS_PANEL_CLASSNAME`).
+ * shared constant keeps the several call sites from drifting.
  */
 export const NAV_MENU_ITEM_CLASSNAME =
   'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';

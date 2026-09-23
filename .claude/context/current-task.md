@@ -41,12 +41,39 @@ runs on :3000 (it shares `apps/web/.next`); docs/changelog.md, docs/tasks.md,
 
 ### Progress
 
-- [ ] wave 1 - [ ] wave 1 review - [ ] wave 2 - [ ] wave 2 review - [ ] docs/context
+- [x] wave 1
+- [x] wave 1 review (committed `3fe806b`; api 417, web 242, ui 125)
+- [x] wave 2 (CR-118…CR-120)
+- [x] wave 2 review (main session: diff review, full test runs, screenshots; fixes:
+      one `pluralRu`, `formatStartPlace`)
+- [x] docs/context (changelog, ADR-021/022, design.md, api.md, database.md,
+      project-state, architecture-map, known-issues, tasks)
+- [x] commit wave 2
 
 ### Validation results
 
-(pending)
+- typecheck + lint: clean (17/17 turbo tasks).
+- tests: api 417 passed + 3 skipped (with `TEST_DATABASE_URL`), web 292, ui 132,
+  maps-2gis 30.
+- Screenshots reviewed by the main session at 1440 and 390 px: discovery, ride
+  detail (anonymous + signed-in, dark), organizer groups and participants.
 
 ### Discovered issues
 
 - Critique P2: discovery markers never update after the first render (filter change).
+  Fixed in CR-118.
+- Follow-ups recorded in `.claude/context/known-issues.md`: KI-057 (2GIS basemap
+  light in dark theme), KI-058 (`routePreview` computed per list request), KI-059
+  (no rider avatars), KI-060 (list start place only from the route-point label),
+  KI-061 (ride sub-page links not a registry), KI-062 (pace 0.5 step client-only),
+  KI-063 (local MinIO stopped), KI-064 (critique P0: `/login` has no `?next=`).
+- Incident: a sub-agent's `pkill -f cat` killed Docker Desktop and the session;
+  briefs now forbid broad `pkill -f`/`killall` (see changelog entry).
+
+### Final result
+
+Done and reviewed: «Топокарта» visual direction (ADR-021), pace groups
+(`RideGroup`, ADR-022, migration 0017), discovery and ride detail rebuilt
+map-first, rider list, organizer groups editor and grouped participants. Glass and
+both feature flags removed. Next: KI-064 (login `?next=`), then KI-057 (2GIS dark
+basemap).

@@ -800,6 +800,52 @@ without importing an adapter; `maps-2gis` re-exports it. `rides.service.ts`'s
 `buildRoute` + `POST /v1/rides/:id/route/build`; web side is
 `features/organizer/route/components/RouteBuilder.tsx` on the organizer route page.
 
+CR-115…CR-120 («Топокарта» redesign + pace groups + rider list, 2026-09-23, ADR-021,
+ADR-022). No new package and no new dependency-direction edge; one new domain entity.
+
+- **packages/db**: `src/schema/ride-group.ts` (`ride_groups`), migration
+  `0017_ride_groups` (18 migrations total). `registration.ts`/`waitlist-entry.ts`
+  gained nullable `groupId` with a composite FK
+  `(group_id, ride_id) → ride_groups(id, ride_id)`.
+- **packages/types**: `domain/ride-group.ts`, `api/ride-groups.ts` (group CRUD
+  contracts, `RideGroupRef`, the riders list); `api/rides.ts` gained
+  `PublicRideListItem` (`GET /v1/rides` items: `registrationsCount`, `startLabel`,
+  `routePreview`, `groups`) and `groups[]` on ride detail; `api/registrations.ts`
+  gained the optional `groupId` body, the change-group request and `group` on
+  participant/waitlist items.
+- **apps/api** (`modules/rides/`): `ride-groups.routes.ts` + `ride-groups.service.ts`
+  (owner-only `GET/POST /v1/rides/:id/groups`, `PATCH/DELETE .../groups/:groupId`,
+  registered in `routes/v1.ts` under the `/rides` prefix, locks the `rides` row like
+  every other ride-child mutation); `route-preview.ts` (Douglas–Peucker over an
+  SQL-sampled route, used by `rides.service.ts`'s batched list extras).
+  `modules/registrations/` owns the group rules on register/waitlist join,
+  `PATCH /v1/rides/:id/register` and `GET /v1/rides/:id/riders` — the registration
+  transaction stays in one module; `ride-groups.service.ts` touches
+  `registrations`/`waitlist_entries` only for group counts, the
+  `group_has_registrations` refusal and clearing `groupId` on historical rows when
+  a group is deleted.
+- **apps/web**: new feature module `features/organizer/groups/` (`api.ts`,
+  `types.ts`, `validation.ts`, `hooks/useRideGroups.ts`, `components/GroupsEditor.tsx`,
+  `components/GroupForm.tsx`) behind the new route `app/organizer/rides/[id]/groups/page.tsx`;
+  `features/organizer/participants/group-sections.ts` groups the participants table.
+  Discovery (`features/participant/discovery/`): `RideLegendRow`,
+  `RoutePreviewGlyph`, `ContoursIllustration` (empty state) and `lib/route-preview.ts`
+  (fits `routePreview` into the glyph's SVG box); `RideCard.tsx` and
+  `DiscoveryViewToggle.tsx` are deleted. Ride detail
+  (`features/participant/ride-detail/`): `GroupPicker`, `RidersSection`,
+  `RouteLegend`, `lib/use-route-geometry.ts` (one geometry fetch shared by the map and
+  the elevation profile); `StopList.tsx` is deleted. `app/icon.svg` is the ring-only
+  favicon. The organizer ride sub-pages (Маршрут, Обложка, Группы, Участники,
+  Обновления) are still a plain link list in `EditRideForm`, not a registry (KI-061).
+- **packages/ui**: `Wordmark` rewritten («coffee◦ride», Sofia Sans Condensed),
+  `lib/glass.ts` deleted (and its `index.ts` export), tokens rewritten per ADR-021,
+  `Button` `danger-filled` variant, `format.ts`'s `formatStartPlace`, one module-local
+  `pluralRu` in `terminology.ts`.
+- **packages/maps-core / maps-2gis** (render layer only): additive
+  `MapMarkerInput.shape`/`selected`/`haloColor` and `MapRenderOptions.onMarkerClick`,
+  implemented in `maps-2gis/src/render.ts` (`.claude/rules/maps.md` updated). The
+  `create-map-renderer.ts` composition point is unchanged.
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the
@@ -829,6 +875,7 @@ Ride
 → Route
 → RoutePoint
 → Stop
+→ RideGroup (ADR-022; Registration/WaitlistEntry → RideGroup of the same Ride)
 → RideRequirement
 → RideService
 → Registration

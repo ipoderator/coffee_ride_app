@@ -1,13 +1,19 @@
 import type {
+  GetRideResponse,
   ListRideParticipantsResponse,
   ListRideWaitlistResponse,
   ProblemDetails,
+  RideGroupSummary,
   RideStatus,
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
 
 export { ApiError };
-export type { RideParticipantSummary } from 'types';
+export type {
+  RideGroupRef,
+  RideGroupSummary,
+  RideParticipantSummary,
+} from 'types';
 
 const RIDES_ENDPOINT = '/api/v1/rides';
 
@@ -55,4 +61,23 @@ export async function getRideWaitlist(
     throw new ApiError(body as ProblemDetails);
   }
   return body as ListRideWaitlistResponse;
+}
+
+/**
+ * CR-120: the ride's pace groups in `position` order, read off the same
+ * `GET /v1/rides/:id` as {@link getRideStatus} (`groups: []` without groups) —
+ * needed so the participant list can show every group heading in the
+ * organizer's order, including a group nobody has joined yet.
+ */
+export async function getRideGroups(
+  rideId: string,
+): Promise<RideGroupSummary[]> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}`);
+  // `groups` sits next to `ride` in `GetRideResponse`, not inside it.
+  const body = (await response.json()) as
+    Pick<GetRideResponse, 'groups'> | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as Pick<GetRideResponse, 'groups'>).groups ?? [];
 }

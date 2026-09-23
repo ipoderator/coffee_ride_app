@@ -1,4 +1,4 @@
-import { ErrorState, ROUTE_RENDERING_TERMS } from 'ui';
+import { cn, ErrorState, ROUTE_RENDERING_TERMS } from 'ui';
 
 /**
  * `/rides/[id]`'s route map degraded state (CR-028, kept live by the KI-036
@@ -10,12 +10,21 @@ import { ErrorState, ROUTE_RENDERING_TERMS } from 'ui';
  * (`features/participant/discovery/`) reaching into another's internals
  * (`features/participant/ride-detail/`).
  */
-export function RouteMapPlaceholder() {
+export function RouteMapPlaceholder({ className }: { className?: string }) {
+  // CR-119: sized like the map it replaces (`className` is the map's own
+  // height/framing), the notice centered on a plain `surface` sheet.
   return (
-    <ErrorState
-      message={ROUTE_RENDERING_TERMS.mapUnavailable}
-      tone="warning"
-      variant="inline"
-    />
+    <div
+      className={cn(
+        'flex h-80 w-full items-center justify-center overflow-hidden rounded-lg bg-surface p-4',
+        className,
+      )}
+    >
+      <ErrorState
+        message={ROUTE_RENDERING_TERMS.mapUnavailable}
+        tone="warning"
+        variant="inline"
+      />
+    </div>
   );
 }
