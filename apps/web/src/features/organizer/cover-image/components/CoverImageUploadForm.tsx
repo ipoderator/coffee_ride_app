@@ -3,7 +3,14 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, ErrorState, RIDE_COVER_TERMS, Skeleton } from 'ui';
+import {
+  Button,
+  Card,
+  ErrorState,
+  FileInput,
+  RIDE_COVER_TERMS,
+  Skeleton,
+} from 'ui';
 import { apiAssetUrl } from '@/lib/api/asset-url';
 import {
   ApiError,
@@ -223,13 +230,11 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
             >
               {RIDE_COVER_TERMS.uploadLabel}
             </label>
-            <input
+            <FileInput
               id="cover-image-file"
               ref={fileInputRef}
-              type="file"
               accept="image/jpeg,image/png,image/webp"
               disabled={isPending}
-              className="text-sm text-text"
             />
           </div>
         )}

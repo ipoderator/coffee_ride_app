@@ -28,18 +28,35 @@ export interface MapPolylineInput {
   /** 0-1; fully opaque if omitted. Only honored together with a hex `color`
    * (see `packages/maps-2gis`) — a non-hex `color` renders at full opacity. */
   opacity?: number;
+  /** Optional contrasting casing drawn under the line (2px wider each side),
+   * so the route stays legible over any basemap. Omit for no casing. */
+  outlineColor?: string;
+}
+
+export interface MapFitOptions {
+  /** Inner padding in pixels between the fitted points and the map edge. */
+  padding?: number;
+  /** Upper zoom bound — a single point or a very short route must not zoom
+   * in to street-number level. */
+  maxZoom?: number;
 }
 
 export interface MapRenderOptions {
   container: HTMLElement;
   center: LatLng;
   zoom?: number;
+  /** Called with the map coordinate under a click/tap on the map surface
+   * (CR-114's route builder places waypoints this way). */
+  onClick?: (point: LatLng) => void;
 }
 
 export interface MapHandle {
   setMarkers(markers: MapMarkerInput[]): void;
   /** Draws one route line, replacing any previous one; `null` clears it. */
   setPolyline(polyline: MapPolylineInput | null): void;
+  /** Moves/zooms the camera so every given point is visible. No-op for an
+   * empty list. */
+  fitBounds(points: LatLng[], options?: MapFitOptions): void;
   destroy(): void;
 }
 

@@ -4,7 +4,7 @@ import { ORGANIZER_WIDGETS } from './organizer-widgets';
 import { PARTICIPANT_NAV_ITEMS } from './participant-nav';
 
 // ADR-009 (`.claude/rules/extensibility.md`): each registry sorts itself by
-// `order` at module load so `CabinetShell`/the widget grid can render the
+// `order` at module load so `AppHeader`/the widget grid can render the
 // list as-is. Guards that sort, not the specific entries — a feature adding
 // its own descriptor should never need to touch this test.
 function expectSortedByOrder(items: ReadonlyArray<{ order: number }>) {

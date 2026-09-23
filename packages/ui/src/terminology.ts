@@ -241,13 +241,14 @@ export const RESET_PASSWORD_TERMS = {
 } as const;
 
 /**
- * Shared header (CR-099) for the three public, pre-cabinet screens (`/`,
- * `/register`, `/login`) — `docs/design.md` never named this component
- * explicitly, but the QA finding that there was no way to move between them,
- * or into a cabinet, without typing a URL was real. Deliberately static (no
- * session fetch): `/me` already redirects to `/login` for a logged-out
- * visitor (`CabinetShell`), so showing all three links unconditionally is
- * correct without adding a client-side auth check just for nav display.
+ * The one global header (CR-099, generalized by CR-108). Was a static
+ * three-link bar shown only on `/`, `/register` and `/login`; CR-108 makes it
+ * the app's single navigation surface on every route — `/rides/[id]` and the
+ * auth sub-flows had no header at all, and both cabinets had only a side
+ * column with no wordmark, no way to switch cabinets and no way to sign out.
+ * Session-aware since CR-108: the signed-out links and the two cabinet menus
+ * are mutually exclusive, so it resolves the session rather than showing all
+ * of them unconditionally.
  */
 export const SITE_HEADER_TERMS = {
   navLabel: 'Основная навигация',
@@ -255,6 +256,44 @@ export const SITE_HEADER_TERMS = {
   loginLink: 'Войти',
   registerLink: 'Регистрация',
   cabinetLink: 'Личный кабинет',
+  // CR-108: the two registry-backed section menus, their overview entries,
+  // and the account menu.
+  participantMenuLabel: 'Участник',
+  participantOverviewLink: 'Личный кабинет',
+  organizerMenuLabel: 'Организатор',
+  organizerOverviewLink: 'Кабинет организатора',
+  accountMenuLabel: 'Аккаунт',
+  logoutLink: 'Выйти',
+  logoutError: 'Не удалось выйти. Попробуйте ещё раз.',
+  // Mobile: the same sections behind one disclosure, since they cannot all
+  // fit in the bar at 375px (`docs/design.md` §11).
+  openMenuLabel: 'Открыть меню',
+  closeMenuLabel: 'Закрыть меню',
+} as const;
+
+/**
+ * Back links (CR-109). Every nested screen names the parent it returns to
+ * rather than saying a bare "Назад" — a labeled destination survives a deep
+ * link, which browser history does not: someone who opened `/rides/<id>` from
+ * a shared URL has nothing to go back *to*.
+ */
+export const BACK_LINK_TERMS = {
+  toDiscovery: 'Ко всем заездам',
+  toOrganizerRides: 'К моим заездам',
+  toOrganizerCabinet: 'В кабинет организатора',
+  toParticipantCabinet: 'В личный кабинет',
+} as const;
+
+/**
+ * Theme control (CR-110). `docs/design.md` §3's dark palette has existed since
+ * CR-063 but followed `prefers-color-scheme` with no way to override it;
+ * "системная" keeps that behavior as the default rather than replacing it.
+ */
+export const THEME_TERMS = {
+  menuLabel: 'Тема оформления',
+  system: 'Системная',
+  light: 'Светлая',
+  dark: 'Тёмная',
 } as const;
 
 /**
@@ -542,6 +581,7 @@ export const RIDE_DETAIL_TERMS = {
   organizedByLabel: 'Организатор',
   startLabel: 'Старт',
   priceLabel: 'Стоимость участия',
+  bicycleTypeLabel: 'Тип велосипеда',
   // CR-032 ("Register"): `METRIC_TERMS.participants` + `formatParticipantsParts`
   // replaced this screen's old bare-number `participantLimitLabel` tile with a
   // registered/capacity ratio ("12 из 20") — `RIDE_EDIT_TERMS.participantLimitLabel`
@@ -645,6 +685,34 @@ export const RIDE_ROUTE_TERMS = {
 } as const;
 
 /**
+ * CR-114 ("Route builder"): `/organizer/rides/[id]/route`'s map-based route
+ * construction — the organizer clicks waypoints, the API routes them along
+ * 2GIS roads. Separate from `RIDE_ROUTE_TERMS` (the GPX upload flow).
+ */
+export const RIDE_ROUTE_BUILDER_TERMS = {
+  sectionTitle: 'Построить по карте',
+  description:
+    'Нажимайте на карту, чтобы расставить точки: старт, промежуточные и финиш. Маршрут проложится только по дорогам и дорожкам 2GIS.',
+  mapLabel: 'Карта для построения маршрута',
+  pointLabel: (index: number) => `Точка ${index}`,
+  removePoint: (index: number) => `Удалить точку ${index}`,
+  pointsCount: (count: number, max: number) => `Точек: ${count} из ${max}`,
+  emptyPoints: 'Точек пока нет — нажмите на карту.',
+  needMorePoints: 'Нужно минимум две точки.',
+  tooManyPoints: (max: number) => `Можно поставить не больше ${max} точек.`,
+  undo: 'Убрать последнюю',
+  clear: 'Очистить',
+  closeLoop: 'Замкнуть круг',
+  build: 'Построить маршрут',
+  buildPending: 'Строим маршрут…',
+  buildSuccess: 'Маршрут построен по дорогам 2GIS.',
+  notBuildable:
+    'Между этими точками нет проезда по дорогам 2GIS. Передвиньте точку ближе к дороге и попробуйте снова.',
+  unavailable: 'Построение маршрута временно недоступно. Попробуйте позже.',
+  mapUnavailable: 'Карта недоступна — построить маршрут сейчас нельзя.',
+} as const;
+
+/**
  * `/organizer/rides/[id]/cover` (ADR-019/CR-086, `docs/design.md` §14). Same
  * shape as `RIDE_ROUTE_TERMS` — one image field, create/replace/delete.
  */
@@ -686,6 +754,9 @@ export const ROUTE_RENDERING_TERMS = {
   elevationProfileLoadError:
     'Не удалось загрузить профиль высоты. Попробуйте ещё раз.',
   mapUnavailable: 'Карта маршрута временно недоступна.',
+  // Heading for the map panel when a ride has a start point/stops on the map
+  // but no uploaded route line yet.
+  startLocationTitle: 'Место старта',
 } as const;
 
 /**

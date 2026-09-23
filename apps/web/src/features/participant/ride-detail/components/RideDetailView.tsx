@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import type {
   Registration,
   Review,
@@ -57,28 +57,39 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 type GeometryStatus = 'loading' | 'ready' | 'error';
 
 /**
- * CR-028: the "Маршрут" section, shown only when `route` (the ride's `RouteSummary`)
- * is non-null. Fetches the full point array separately from the ride's own load
- * (`GetRideResponse.route` deliberately omits `geometry` — KI-035) so a route-render
- * failure degrades locally instead of blanking the rest of the already-loaded page
- * (`.claude/rules/resilience.md`).
+ * CR-028: the "Маршрут" panel. Shown when the ride has anything to put on a
+ * map — an uploaded route, stops, route points, or just a start point. With a
+ * route, fetches the full point array separately from the ride's own load
+ * (`GetRideResponse.route` deliberately omits `geometry` — KI-035) so a
+ * route-render failure degrades locally instead of blanking the rest of the
+ * already-loaded page (`.claude/rules/resilience.md`).
+ *
+ * Layout: one panel, the map as its dominant surface with the stop list as a
+ * narrow side column at `md` (a ride's "splits" next to its map), and the
+ * elevation profile full-width underneath.
  */
-function RouteSection({
+function RoutePanel({
   rideId,
   route,
   routePoints,
   stops,
+  start,
 }: {
   rideId: string;
-  route: RouteSummary;
+  route: RouteSummary | null;
   routePoints: RoutePoint[];
   stops: Stop[];
+  start: { lat: number; lng: number } | null;
 }) {
-  const [status, setStatus] = useState<GeometryStatus>('loading');
+  const [status, setStatus] = useState<GeometryStatus>(
+    route ? 'loading' : 'ready',
+  );
   const [points, setPoints] = useState<RouteGeometryPoint[]>([]);
   const [attempt, setAttempt] = useState(0);
+  const routeId = route?.id ?? null;
 
   useEffect(() => {
+    if (!routeId) return;
     let cancelled = false;
     setStatus('loading');
 
@@ -96,34 +107,99 @@ function RouteSection({
     return () => {
       cancelled = true;
     };
-  }, [rideId, route.id, attempt]);
+  }, [rideId, routeId, attempt]);
+
+  const hasSideColumn = stops.length > 0;
+  const mapHeight = 'h-80 md:h-[26rem]';
 
   return (
-    <div className="flex flex-col gap-4">
+    <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold text-text">
-        {ROUTE_RENDERING_TERMS.sectionTitle}
+        {route
+          ? ROUTE_RENDERING_TERMS.sectionTitle
+          : ROUTE_RENDERING_TERMS.startLocationTitle}
       </h2>
-      {status === 'loading' && <Skeleton className="h-80 w-full" />}
-      {status === 'error' && <RouteMapPlaceholder />}
-      {status === 'ready' && (
-        <RouteMap geometry={points} routePoints={routePoints} stops={stops} />
-      )}
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
-          {ROUTE_RENDERING_TERMS.elevationProfileLabel}
-        </p>
-        {status === 'loading' && <Skeleton className="h-40 w-full" />}
-        {status === 'error' && (
-          <ErrorState
-            message={ROUTE_RENDERING_TERMS.elevationProfileLoadError}
-            tone="warning"
-            variant="inline"
-            onRetry={() => setAttempt((n) => n + 1)}
-          />
+      <Card className="overflow-hidden p-0">
+        <div
+          className={
+            hasSideColumn
+              ? 'flex flex-col md:grid md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]'
+              : 'flex flex-col'
+          }
+        >
+          {hasSideColumn && (
+            // Map first on mobile (it's the panel's point), list first — as a
+            // left rail — from `md` up.
+            <div className="order-2 border-t border-border p-5 md:order-1 md:max-h-[26rem] md:overflow-y-auto md:border-t-0 md:border-r">
+              <StopList stops={stops} />
+            </div>
+          )}
+          <div className="order-1 p-2 md:order-2">
+            {status === 'loading' && (
+              <Skeleton className={cn('w-full rounded-lg', mapHeight)} />
+            )}
+            {status === 'error' && <RouteMapPlaceholder />}
+            {status === 'ready' && (
+              <RouteMap
+                geometry={points}
+                routePoints={routePoints}
+                stops={stops}
+                start={start}
+                className={mapHeight}
+              />
+            )}
+          </div>
+        </div>
+        {route && (
+          <div className="flex flex-col gap-2 border-t border-border p-5">
+            <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
+              {ROUTE_RENDERING_TERMS.elevationProfileLabel}
+            </p>
+            {status === 'loading' && <Skeleton className="h-40 w-full" />}
+            {status === 'error' && (
+              <ErrorState
+                message={ROUTE_RENDERING_TERMS.elevationProfileLoadError}
+                tone="warning"
+                variant="inline"
+                onRetry={() => setAttempt((n) => n + 1)}
+              />
+            )}
+            {status === 'ready' && <ElevationProfileChart points={points} />}
+          </div>
         )}
-        {status === 'ready' && <ElevationProfileChart points={points} />}
-      </div>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * One label/value line of the summary panel's secondary facts (difficulty,
+ * bike type, price, participants) — quieter than a `MetricTile`, the way a
+ * ride's headline numbers and its supporting details differ in weight. Value
+ * and unit stay separate spans, same unit-is-quieter rule as `MetricTile`
+ * (`docs/design.md` §6).
+ */
+function FactRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2.5 sm:justify-start">
+      <dt className="text-sm text-text-secondary sm:w-40 sm:shrink-0">
+        {label}
+      </dt>
+      <dd className="text-right text-sm font-semibold text-text tabular-nums sm:text-left">
+        {children}
+      </dd>
     </div>
+  );
+}
+
+function FactValue({ value, unit }: { value: string; unit: string }) {
+  return (
+    <>
+      <span>{value}</span>
+      {unit ? (
+        <span className="ml-1 font-normal text-text-secondary">{unit}</span>
+      ) : null}
+    </>
   );
 }
 
@@ -286,10 +362,23 @@ export function RideDetailView({
 
   const statusTerm = RIDE_STATUS_TERMS[ride.status];
   const startDate = new Date(ride.startsAt);
-  const hasRouteOrStops = route !== null || stops.length > 0;
+  const start =
+    ride.startLat !== null && ride.startLng !== null
+      ? { lat: ride.startLat, lng: ride.startLng }
+      : null;
+  const hasMapContent =
+    route !== null ||
+    stops.length > 0 ||
+    routePoints.length > 0 ||
+    start !== null;
+  const hasHeadlineMetrics =
+    ride.distanceKm !== null ||
+    ride.elevationGainMeters !== null ||
+    ride.durationMinutes !== null ||
+    ride.paceKmh !== null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       {ride.coverImageUrl ? (
         // ADR-019/CR-086: `coverImageUrl` is the API's bare `/v1/...` path
         // (ADR-011) — `apiAssetUrl` adds the `/api` same-origin rewrite prefix.
@@ -316,180 +405,174 @@ export function RideDetailView({
         </div>
       ) : null}
 
-      {/* docs/design.md §11 ("md: two-column ride detail"): primary content
-          (title/metrics/registration) on the left, route + stops on the right.
-          Reviews stay full-width below both — a long-form list doesn't fit a
-          fixed-width column. Single stacked column below `md`. Route and stops
-          are both optional per-ride data (`docs/product.md`) — when neither
-          exists there's nothing for the right column to hold, so the two-column
-          grid collapses to one rather than reserving half the width for
-          nothing (confirmed live: a route/stops-less ride left ~55% of the
-          viewport blank). */}
-      <div
-        className={
-          hasRouteOrStops
-            ? 'flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start md:gap-x-8 md:gap-y-6'
-            : 'flex flex-col gap-6'
-        }
-      >
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
+      {/* Summary panel: identity (when, what, who) on the left, the ride's
+          numbers on the right, split by a hairline at `lg` — one scannable
+          block instead of a long single column of equally loud tiles.
+          Headline metrics (distance/elevation/duration/pace) keep the big
+          `MetricTile` treatment; supporting facts drop to quieter label/value
+          rows. Stacks to one column below `lg`. */}
+      <Card className="p-0">
+        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <div className="flex flex-col gap-4 p-6">
             {!(coverGlassPanel && ride.coverImageUrl) && (
               <div className="flex items-center gap-3">
                 <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
               </div>
             )}
-            <h1 className="text-2xl font-semibold text-text">{ride.title}</h1>
-            <p className="text-sm text-text-secondary">
-              {RIDE_DETAIL_TERMS.organizedByLabel}: {organizerName}
-              {organizerReviewCount > 0 && (
-                <>
-                  {' · '}
-                  {formatRating(organizerRating, organizerReviewCount)}{' '}
-                  {RIDE_DETAIL_TERMS.ratingReviewsCount(organizerReviewCount)}
-                </>
-              )}
-            </p>
-          </div>
-
-          <Card className="flex flex-col gap-2">
-            <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
-              {RIDE_DETAIL_TERMS.startLabel}
-            </p>
-            <p className="text-lg font-semibold text-text">
-              {formatDate(startDate, { timeZone: ride.startTimezone })}
-              {', '}
-              {formatTime(startDate, { timeZone: ride.startTimezone })}
-            </p>
-          </Card>
-
-          {ride.description && (
-            <p className="whitespace-pre-wrap text-sm text-text">
-              {ride.description}
-            </p>
-          )}
-
-          <MetricRow>
-            {ride.distanceKm !== null && (
-              <MetricTile
-                label={METRIC_TERMS.distance}
-                {...formatDistanceParts(ride.distanceKm)}
-              />
-            )}
-            {ride.elevationGainMeters !== null && (
-              <MetricTile
-                label={METRIC_TERMS.elevation}
-                {...formatElevationParts(ride.elevationGainMeters)}
-              />
-            )}
-            {ride.paceKmh !== null && (
-              <MetricTile
-                label={METRIC_TERMS.pace}
-                {...formatSpeedParts(ride.paceKmh)}
-              />
-            )}
-            {ride.durationMinutes !== null && (
-              <MetricTile
-                label={METRIC_TERMS.duration}
-                {...formatDurationParts(ride.durationMinutes)}
-              />
-            )}
-          </MetricRow>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            {ride.difficulty !== null && (
-              <DifficultyScale level={ride.difficulty} />
-            )}
-            <span className="text-sm text-text-secondary">
-              {BICYCLE_TYPE_TERMS[ride.bicycleType]}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap gap-x-8 gap-y-4">
-            <MetricTile
-              label={RIDE_DETAIL_TERMS.priceLabel}
-              {...formatPriceParts(ride.priceRub)}
-            />
-            {ride.participantLimit !== null && (
-              <MetricTile
-                label={METRIC_TERMS.participants}
-                {...formatParticipantsParts(
-                  registrationsCount,
-                  ride.participantLimit,
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-text-secondary tabular-nums">
+                <span className="sr-only">
+                  {RIDE_DETAIL_TERMS.startLabel}:{' '}
+                </span>
+                {formatDate(startDate, { timeZone: ride.startTimezone })}
+                {', '}
+                {formatTime(startDate, { timeZone: ride.startTimezone })}
+              </p>
+              <h1 className="text-2xl leading-tight font-semibold text-balance text-text md:text-3xl">
+                {ride.title}
+              </h1>
+              <p className="text-sm text-text-secondary">
+                {RIDE_DETAIL_TERMS.organizedByLabel}: {organizerName}
+                {organizerReviewCount > 0 && (
+                  <>
+                    {' · '}
+                    {formatRating(organizerRating, organizerReviewCount)}{' '}
+                    {RIDE_DETAIL_TERMS.ratingReviewsCount(organizerReviewCount)}
+                  </>
                 )}
-              />
+              </p>
+            </div>
+            {ride.description && (
+              <p className="max-w-prose whitespace-pre-wrap text-sm leading-relaxed text-text">
+                {ride.description}
+              </p>
             )}
           </div>
 
-          {/* CR-105: same single `RegistrationButton` instance, just repositioned
-              below `md` when the flag is on — a fixed bottom bar (`CabinetShell`'s
-              own pattern) instead of a second mounted instance, so there's no
-              duplicate pending/error state or double-submit risk between a mobile
-              and desktop copy. Returns `null` itself when no action is possible,
-              so the bar simply doesn't appear then. */}
-          <div
-            className={
-              stickyRegistrationCta
-                ? // CR-107 ("Quiet Instrument"): glass treatment on this
-                  // surface too (the two the visual direction names) —
-                  // `GLASS_PANEL_CLASSNAME` supplies the border on every
-                  // side, so the old `border-t border-border` is dropped
-                  // rather than fighting it for the same property.
-                  cn(
-                    GLASS_PANEL_CLASSNAME,
-                    'fixed inset-x-0 bottom-0 z-10 p-4 shadow-overlay md:static md:inset-x-auto md:bottom-auto md:z-auto md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none',
-                  )
-                : undefined
-            }
-          >
-            <RegistrationButton
-              rideId={rideId}
-              rideStatus={ride.status}
-              participantLimit={ride.participantLimit}
-              registrationsCount={registrationsCount}
-              viewerRegistration={viewerRegistration}
-              viewerWaitlistEntry={viewerWaitlistEntry}
-              onChange={(registration) => {
-                setViewerRegistration(registration);
-                if (registration) {
-                  setRegistrationsCount((count) => count + 1);
-                  return;
-                }
-                // CR-036 ("Waitlist"): cancelling may have silently promoted the
-                // oldest waiting entry into the freed spot server-side, so the
-                // count might not actually have gone down — refetch instead of
-                // guessing (`.claude/rules/database.md`: "live status, not stale
-                // coordination").
-                getRideDetail(rideId)
-                  .then((response) => {
-                    setRegistrationsCount(response.registrationsCount);
-                    setViewerWaitlistEntry(response.viewerWaitlistEntry);
-                  })
-                  .catch(() => {
-                    // Best-effort refresh only — the cancellation itself already
-                    // succeeded; a stale count here is not worth surfacing an
-                    // error for.
-                  });
-              }}
-              onWaitlistChange={setViewerWaitlistEntry}
-            />
+          <div className="flex flex-col gap-5 border-t border-border p-6 lg:border-t-0 lg:border-l">
+            {hasHeadlineMetrics && (
+              <MetricRow>
+                {ride.distanceKm !== null && (
+                  <MetricTile
+                    label={METRIC_TERMS.distance}
+                    {...formatDistanceParts(ride.distanceKm)}
+                  />
+                )}
+                {ride.elevationGainMeters !== null && (
+                  <MetricTile
+                    label={METRIC_TERMS.elevation}
+                    {...formatElevationParts(ride.elevationGainMeters)}
+                  />
+                )}
+                {ride.paceKmh !== null && (
+                  <MetricTile
+                    label={METRIC_TERMS.pace}
+                    {...formatSpeedParts(ride.paceKmh)}
+                  />
+                )}
+                {ride.durationMinutes !== null && (
+                  <MetricTile
+                    label={METRIC_TERMS.duration}
+                    {...formatDurationParts(ride.durationMinutes)}
+                  />
+                )}
+              </MetricRow>
+            )}
+
+            <dl
+              className={cn(
+                'flex flex-col divide-y divide-border',
+                hasHeadlineMetrics && 'border-t border-border',
+              )}
+            >
+              {ride.difficulty !== null && (
+                <FactRow label={METRIC_TERMS.difficulty}>
+                  <DifficultyScale level={ride.difficulty} />
+                </FactRow>
+              )}
+              <FactRow label={RIDE_DETAIL_TERMS.bicycleTypeLabel}>
+                {BICYCLE_TYPE_TERMS[ride.bicycleType]}
+              </FactRow>
+              <FactRow label={RIDE_DETAIL_TERMS.priceLabel}>
+                <FactValue {...formatPriceParts(ride.priceRub)} />
+              </FactRow>
+              {ride.participantLimit !== null && (
+                <FactRow label={METRIC_TERMS.participants}>
+                  <FactValue
+                    {...formatParticipantsParts(
+                      registrationsCount,
+                      ride.participantLimit,
+                    )}
+                  />
+                </FactRow>
+              )}
+            </dl>
+            {/* CR-105: same single `RegistrationButton` instance, just repositioned
+                below `md` when the flag is on — a fixed bottom bar instead of a
+                second mounted instance, so there's no
+                duplicate pending/error state or double-submit risk between a mobile
+                and desktop copy. Returns `null` itself when no action is possible,
+                so the bar simply doesn't appear then. */}
+            <div
+              className={
+                stickyRegistrationCta
+                  ? // CR-107 ("Quiet Instrument"): glass treatment on this
+                    // surface too (the two the visual direction names) —
+                    // `GLASS_PANEL_CLASSNAME` supplies the border on every
+                    // side, so the old `border-t border-border` is dropped
+                    // rather than fighting it for the same property.
+                    cn(
+                      GLASS_PANEL_CLASSNAME,
+                      'fixed inset-x-0 bottom-0 z-10 p-4 shadow-overlay md:static md:inset-x-auto md:bottom-auto md:z-auto md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none',
+                    )
+                  : undefined
+              }
+            >
+              <RegistrationButton
+                rideId={rideId}
+                rideStatus={ride.status}
+                participantLimit={ride.participantLimit}
+                registrationsCount={registrationsCount}
+                viewerRegistration={viewerRegistration}
+                viewerWaitlistEntry={viewerWaitlistEntry}
+                onChange={(registration) => {
+                  setViewerRegistration(registration);
+                  if (registration) {
+                    setRegistrationsCount((count) => count + 1);
+                    return;
+                  }
+                  // CR-036 ("Waitlist"): cancelling may have silently promoted the
+                  // oldest waiting entry into the freed spot server-side, so the
+                  // count might not actually have gone down — refetch instead of
+                  // guessing (`.claude/rules/database.md`: "live status, not stale
+                  // coordination").
+                  getRideDetail(rideId)
+                    .then((response) => {
+                      setRegistrationsCount(response.registrationsCount);
+                      setViewerWaitlistEntry(response.viewerWaitlistEntry);
+                    })
+                    .catch(() => {
+                      // Best-effort refresh only — the cancellation itself already
+                      // succeeded; a stale count here is not worth surfacing an
+                      // error for.
+                    });
+                }}
+                onWaitlistChange={setViewerWaitlistEntry}
+              />
+            </div>
           </div>
         </div>
+      </Card>
 
-        {hasRouteOrStops && (
-          <div className="flex flex-col gap-6">
-            {route ? (
-              <RouteSection
-                rideId={rideId}
-                route={route}
-                routePoints={routePoints}
-                stops={stops}
-              />
-            ) : null}
-            <StopList stops={stops} />
-          </div>
-        )}
-      </div>
+      {hasMapContent && (
+        <RoutePanel
+          rideId={rideId}
+          route={route}
+          routePoints={routePoints}
+          stops={stops}
+          start={start}
+        />
+      )}
 
       {ride.status === 'finished' && (
         <ReviewsSection

@@ -2,21 +2,13 @@ import type { Metadata } from 'next';
 import { Golos_Text, IBM_Plex_Mono } from 'next/font/google';
 import Script from 'next/script';
 import { ToastProvider } from 'ui';
+import { AppHeader } from '@/components/site/AppHeader';
+import { filterEnabled } from '@/lib/cabinet/feature-flags';
+import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
+import { PARTICIPANT_NAV_ITEMS } from '@/lib/cabinet/participant-nav';
+import { SessionProvider } from '@/lib/auth/session-context';
+import { THEME_INIT_SCRIPT } from '@/lib/theme/theme';
 import './globals.css';
-
-// `docs/design.md` "Dark theme": "not optional or later." `packages/ui/src/
-// tokens.css` defines the `.dark` token set but nothing ever applied the
-// class — this is that activation. `beforeInteractive` runs from the initial
-// HTML, before hydration/paint, so the correct theme is there on first paint
-// (no flash of the wrong theme). No manual toggle: design.md only requires
-// the theme to exist and respond to the system preference, not a switch.
-const THEME_INIT_SCRIPT = `
-  try {
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      document.documentElement.classList.add('dark');
-    }
-  } catch (e) {}
-`;
 
 // docs/design.md §4: Golos Text (Cyrillic-first grotesque) for UI text, IBM
 // Plex Mono for tabular/data text (hex values, IDs). Both bundle a
@@ -63,10 +55,18 @@ export default function RootLayout({
             one shared cap here rather than repeated per-page, per
             `.claude/context/current-task.md`'s CR-044 finding. Every page's own
             (narrower) container still applies inside it; this only bounds the
-            widest screens/layouts (cabinet side nav, discovery split view). */}
-        <ToastProvider>
-          <div className="mx-auto w-full xl:max-w-300">{children}</div>
-        </ToastProvider>
+            widest screens/layouts (the discovery split view).
+            CR-108: `AppHeader` sits outside that cap so its bottom border runs
+            the full width of the viewport, and caps its own inner nav instead. */}
+        <SessionProvider>
+          <ToastProvider>
+            <AppHeader
+              participantNavItems={filterEnabled(PARTICIPANT_NAV_ITEMS)}
+              organizerNavItems={filterEnabled(ORGANIZER_NAV_ITEMS)}
+            />
+            <div className="mx-auto w-full xl:max-w-300">{children}</div>
+          </ToastProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -46,6 +46,12 @@ still call 2GIS's REST APIs via plain `fetch`, no SDK; `render.ts` (ADR-020, CR-
 the one real 2GIS SDK dependency in the monorepo (`@2gis/mapgl`), browser-only and
 dynamically imported.
 
+Server code imports `maps-core/server` / `maps-2gis/server` (CR-114): the same
+exports minus the render layer, whose types need DOM globals a Node tsconfig lacks.
+`apps/api/src/plugins/maps.ts` is apps/api's one composition point (decorates
+`app.mapProvider`, `null` without `MAPS_2GIS_API_KEY`), with the same `files`-scoped
+lint override as apps/web's.
+
 `apps/web` and `apps/api` depend only on `packages/maps-core`'s interface types plus
 whichever concrete adapter is wired in at the composition point (a single place — e.g. a
 provider factory read from config — not scattered imports). `apps/web/src/lib/maps/
@@ -73,10 +79,24 @@ export interface RouteRequest {
   profile: 'cycling' | 'driving' | 'walking';
 }
 
+export interface LatLngAlt extends LatLng {
+  elevationMeters?: number; // CR-114: terrain altitude, when the provider has it
+}
+
 export interface RouteResult {
-  geometry: LatLng[]; // provider-neutral polyline as points, or GeoJSON LineString
+  // The actual path along the provider's road graph. Never the request
+  // waypoints joined by straight lines: no geometry → MapProviderError
+  // with code 'no_route' (CR-114).
+  geometry: LatLngAlt[];
   distanceMeters: number;
   durationSeconds: number;
+}
+
+// CR-114: provider-neutral failure type, in maps-core so callers can branch
+// on `code` without importing an adapter.
+export class MapProviderError extends Error {
+  readonly status?: number;
+  readonly code: 'unavailable' | 'no_route';
 }
 
 export interface MapProvider {
@@ -108,17 +128,29 @@ export interface MapPolylineInput {
   // color/label addition below — no new ADR.
   width?: number;
   opacity?: number;
+  // CR-112: optional casing under the line (MapGL `color2`/`width2`).
+  outlineColor?: string;
+}
+
+export interface MapFitOptions {
+  padding?: number;
+  maxZoom?: number;
 }
 
 export interface MapRenderOptions {
   container: HTMLElement;
   center: LatLng;
   zoom?: number;
+  // CR-114: map click/tap coordinate (the route builder places waypoints).
+  onClick?: (point: LatLng) => void;
 }
 
 export interface MapHandle {
   setMarkers(markers: MapMarkerInput[]): void;
   setPolyline(polyline: MapPolylineInput | null): void;
+  // CR-112: frame every given point; a single point centers instead of
+  // zooming to max. The 2GIS adapter re-applies the last fit on resize.
+  fitBounds(points: LatLng[], options?: MapFitOptions): void;
   destroy(): void;
 }
 

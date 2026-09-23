@@ -1,4 +1,5 @@
-import { RIDE_LIST_TERMS } from 'ui';
+import { BACK_LINK_TERMS, RIDE_LIST_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { RidesList } from '@/features/organizer/rides/components/RidesList';
 
 // `/organizer/rides` (`docs/design.md` §8 "My rides", CR-088). Inherits
@@ -7,6 +8,7 @@ import { RidesList } from '@/features/organizer/rides/components/RidesList';
 export default function OrganizerRidesPage() {
   return (
     <div className="flex flex-col gap-6">
+      <BackLink href="/organizer" label={BACK_LINK_TERMS.toOrganizerCabinet} />
       <h1 className="text-2xl font-semibold text-text">
         {RIDE_LIST_TERMS.pageTitle}
       </h1>

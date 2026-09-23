@@ -135,13 +135,28 @@ describe('getRoute', () => {
   it('also accepts the { result: [...] } wrapped response shape', async () => {
     mockFetchOnce({
       json: async () => ({
-        result: [{ total_distance: 500, total_duration: 60 }],
+        result: [
+          {
+            total_distance: 500,
+            total_duration: 60,
+            maneuvers: [
+              {
+                outcoming_path: {
+                  geometry: [{ selection: 'LINESTRING(2 1, 4 3)' }],
+                },
+              },
+            ],
+          },
+        ],
       }),
     });
 
     const provider = create2GisMapProvider(config);
     const result = await provider.getRoute({
-      points: [{ lat: 1, lng: 2 }],
+      points: [
+        { lat: 1, lng: 2 },
+        { lat: 3, lng: 4 },
+      ],
       profile: 'driving',
     });
 
@@ -149,17 +164,75 @@ describe('getRoute', () => {
     expect(result.durationSeconds).toBe(60);
   });
 
-  it('falls back to the requested waypoints when the response has no geometry', async () => {
+  // Regression: the adapter used to return the request waypoints themselves
+  // here — straight lines that cut across rivers and relief on the map.
+  it('never falls back to straight lines between the waypoints: no geometry is a no_route error', async () => {
     mockFetchOnce({ json: async () => [{ distance: 500, duration: 60 }] });
 
     const provider = create2GisMapProvider(config);
-    const points = [
-      { lat: 1, lng: 2 },
-      { lat: 3, lng: 4 },
-    ];
-    const result = await provider.getRoute({ points, profile: 'walking' });
+    await expect(
+      provider.getRoute({
+        points: [
+          { lat: 1, lng: 2 },
+          { lat: 3, lng: 4 },
+        ],
+        profile: 'walking',
+      }),
+    ).rejects.toMatchObject({ name: 'MapProviderError', code: 'no_route' });
+  });
 
-    expect(result.geometry).toEqual(points);
+  it('treats a 204 No Content answer as no_route, not as an outage', async () => {
+    mockFetchOnce({ status: 204, json: async () => undefined });
+
+    const provider = create2GisMapProvider(config);
+    await expect(
+      provider.getRoute({
+        points: [
+          { lat: 1, lng: 2 },
+          { lat: 3, lng: 4 },
+        ],
+        profile: 'cycling',
+      }),
+    ).rejects.toMatchObject({ code: 'no_route' });
+  });
+
+  it('asks for bicycle transport with altitudes, and reads a Z coordinate as elevation', async () => {
+    const fetchMock = mockFetchOnce({
+      json: async () => [
+        {
+          total_distance: 1500,
+          total_duration: 400,
+          maneuvers: [
+            {
+              outcoming_path: {
+                geometry: [
+                  { selection: 'LINESTRING Z(2 1 150.5, 3 2 152)' },
+                  { selection: 'LINESTRING Z(3 2 152, 4 3 149)' },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const provider = create2GisMapProvider(config);
+    const result = await provider.getRoute({
+      points: [
+        { lat: 1, lng: 2 },
+        { lat: 3, lng: 4 },
+      ],
+      profile: 'cycling',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body).toMatchObject({ transport: 'bicycle', need_altitudes: true });
+    // The shared joint vertex between the two segments appears once.
+    expect(result.geometry).toEqual([
+      { lat: 1, lng: 2, elevationMeters: 150.5 },
+      { lat: 2, lng: 3, elevationMeters: 152 },
+      { lat: 3, lng: 4, elevationMeters: 149 },
+    ]);
   });
 
   it('throws MapProviderError when no usable route is present', async () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Avatar, AVATAR_TERMS, Button, Card, ErrorState } from 'ui';
+import { Avatar, AVATAR_TERMS, Button, Card, ErrorState, FileInput } from 'ui';
 import { apiAssetUrl } from '@/lib/api/asset-url';
 import {
   ApiError,
@@ -128,13 +128,11 @@ export function AvatarUploadForm({
         >
           {AVATAR_TERMS.uploadLabel}
         </label>
-        <input
+        <FileInput
           id="organizer-avatar-file"
           ref={fileInputRef}
-          type="file"
           accept="image/jpeg,image/png,image/webp"
           disabled={isPending}
-          className="text-sm text-text"
         />
       </div>
 

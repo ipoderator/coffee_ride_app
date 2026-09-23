@@ -380,6 +380,36 @@ export interface GetRouteGeometryResponse {
   points: RouteGeometryPoint[];
 }
 
+// CR-114 ("Route builder"): `POST /v1/rides/:id/route/build`. Ordered
+// waypoints the organizer placed on the map; the API routes them along the
+// map provider's road graph (bicycle) and stores the result as the ride's
+// route, creating or replacing it. 25 is the per-request waypoint ceiling —
+// enough for a detailed club ride, bounded so one call can't fan out into an
+// arbitrarily large (billed) routing request.
+export const ROUTE_BUILDER_MAX_POINTS = 25;
+
+export const buildRouteRequestSchema = z.object({
+  points: z
+    .array(
+      z.object({
+        lat: z
+          .number()
+          .min(-90, 'lat must be between -90 and 90.')
+          .max(90, 'lat must be between -90 and 90.'),
+        lng: z
+          .number()
+          .min(-180, 'lng must be between -180 and 180.')
+          .max(180, 'lng must be between -180 and 180.'),
+      }),
+    )
+    .min(2, 'At least two points are required to build a route.')
+    .max(
+      ROUTE_BUILDER_MAX_POINTS,
+      `At most ${ROUTE_BUILDER_MAX_POINTS} points are allowed.`,
+    ),
+});
+export type BuildRouteRequest = z.infer<typeof buildRouteRequestSchema>;
+
 // ADR-019/CR-086: `POST`/`PATCH /v1/rides/:id/cover`'s response. Deliberately
 // minimal (not the whole `Ride`) — `coverImageUrl` is the only field either
 // mutation changes; `GET /v1/rides/:id`'s embedded `ride.coverImageUrl` is the

@@ -29,7 +29,58 @@ test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 
 ## Current task
 
-None active. The entire `/impeccable critique apps/web` backlog is now
+None active.
+
+**CR-112 (2026-09-23)** — `/rides/[id]` redesigned after a Strava-style
+reference: one split summary panel (identity left; headline `MetricTile`s,
+compact fact rows and the registration action right) and one map panel (map as
+the dominant surface, stops rail at `md`, elevation profile underneath).
+`MapHandle` gained `fitBounds` (the route map now frames the whole ride instead
+of zooming on its first point) and the 2GIS adapter re-fits on container
+resize; `MapPolylineInput` gained `outlineColor`. A ride's own start point is
+pinned, so the map panel appears for a start-only or stops-only ride too.
+
+**CR-113 (2026-09-23)** — every upload form's native file picker was
+invisible (Tailwind preflight); new `packages/ui` `FileInput` fixes all four.
+`OrganizerProfileForm` now toasts each save and drops its stale "saved" line
+on edit.
+
+**CR-114 (2026-09-23)** — route builder: organizer clicks waypoints on
+`/organizer/rides/[id]/route`, `POST /v1/rides/:id/route/build` routes them
+along 2GIS roads (bicycle) and stores the line like an uploaded GPX. The
+adapter no longer returns straight lines between waypoints when 2GIS has no
+geometry (`no_route` → 422). apps/api now has a maps composition point
+(`plugins/maps.ts`, `app.mapProvider`). **Not yet live-verified against 2GIS**
+— the 2GIS REST APIs are unreachable through this machine's VPN (KI-056).
+
+**CR-108…CR-111 (2026-09-22)** — four user-reported gaps in `apps/web`,
+worked as four tickets. Navigation is now one global header
+(`components/site/AppHeader.tsx`) on every route, replacing both the old
+`SiteHeader` (which existed only on `/`, `/login`, `/register`) and the
+cabinets' side column: wordmark, discovery, a dropdown per cabinet rendered
+from the same ADR-009 registries, a theme control, and an account menu with
+sign-out; below `md` the sections collapse into one disclosure panel.
+`CabinetShell` is narrowed to the `/me/*`/`/organizer/*` session gate, and
+that session is resolved once by a new `SessionProvider` that both it and the
+header read. `packages/ui` gained `NavMenu`, the accessible dropdown
+primitive all of the above is built from (it draws its own chevron inline
+rather than taking on `lucide-react` as a dependency, and stays
+router-agnostic). Every nested screen now carries a `BackLink` naming its
+parent. The theme is switchable системная/светлая/тёмная, stored per browser
+and applied pre-hydration.
+
+The map fix is the one worth remembering: `apps/web` never received the
+repo-root `.env` at all. `apps/api` loads it explicitly
+(`src/server.ts`'s `process.loadEnvFile`), but Next only auto-loads `.env`
+from its own project directory and `apps/web/.env` does not exist — so every
+`NEXT_PUBLIC_*` var was undefined in the browser bundle,
+`createMapRenderer()` returned `null` on every call, and both maps had been
+showing their degraded state permanently in local dev. `apps/web/
+next.config.ts` now loads it the same explicit way. This is also why
+`FEATURE_STICKY_REGISTRATION_CTA`/`FEATURE_COVER_GLASS_PANEL` appear to do
+nothing locally: they are simply absent from this checkout's `.env`.
+
+Earlier: the entire `/impeccable critique apps/web` backlog is
 closed, each item individually authorized with the literal word «внедряй»
 across two sessions: **CR-103** (`Dialog`/`ConfirmDialog`/`Toast`
 primitives, wired into `RegistrationButton` — the critique's P0),
@@ -771,4 +822,4 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 
 ## Last updated
 
-2026-09-22 (CR-107)
+2026-09-23 (CR-114)

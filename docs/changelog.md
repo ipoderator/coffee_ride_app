@@ -1878,3 +1878,308 @@ through. Remaining open items: P3 (`docs/design.md` §9 component inventory
 vs. `packages/ui`'s actual contents — `Tabs`/`Sheet`/`Select`/`Checkbox`/
 `RadioGroup`/`DatePicker`/`Pagination` still listed but not built) and the
 pixel-verification follow-up above.
+
+---
+
+## 2026-09-22 — CR-111 — `apps/web` never received the repo-root `.env`, so the map never rendered
+
+Summary: `/` and `/rides/[id]` had been showing the degraded "Карта временно
+недоступна" state permanently, in every local-dev session, even with a valid
+`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` in the repo-root `.env`. Root cause: this
+monorepo keeps one `.env` at the root and `apps/api` loads it explicitly
+(`apps/api/src/server.ts`'s `process.loadEnvFile`), but Next.js only
+auto-loads `.env` from its own project directory — `apps/web/.env` does not
+exist, so every `NEXT_PUBLIC_*` var was undefined in the browser bundle and
+`createMapRenderer()` returned `null` on every call. Confirmed before
+changing anything: the var was absent from the running `next dev` process
+environment and from the served HTML. `apps/web/next.config.ts` now loads
+the root file the same way `apps/api` does. Also enlarged the discovery map
+per the user's choice — it was a short panel in the top-right of the `lg`
+split view with dead space beneath it; it now fills the column height and is
+sticky, so it stays in view while the list scrolls past.
+
+Files: `apps/web/next.config.ts`; `apps/web/src/features/participant/
+discovery/components/DiscoveryMap.tsx`, `.../DiscoveryList.tsx`;
+`apps/web/src/features/participant/discovery/discovery.test.tsx` (the
+split-view test asserted the map panel's entire class string, so it broke on
+an added layout class — narrowed to assert the `hidden`/`lg:block` pair it
+actually cares about).
+
+Decisions: none — no ADR. `process.loadEnvFile` does not override a variable
+already set in the real environment (verified against Node's actual behavior
+rather than assumed), so a platform that injects env vars directly —
+`docker-compose.prod.yml`'s `web` service, CI — is unaffected.
+
+Follow-up: `FEATURE_STICKY_REGISTRATION_CTA` and `FEATURE_COVER_GLASS_PANEL`
+are absent from this checkout's `.env`, so CR-105/CR-107's work stays
+invisible locally until they are set. Not changed here: that file is the
+user's own local config, not repository content.
+
+---
+
+## 2026-09-22 — CR-108 — One global header, replacing both the public bar and the cabinet side nav
+
+Summary: navigation was incomplete in three separate ways. `SiteHeader`
+existed only on `/`, `/login` and `/register`; `/rides/[id]` and the auth
+sub-flows (`/verify-email`, `/forgot-password`, `/reset-password`) had no
+header at all; and both cabinets had only a 2–3 item side column with no
+wordmark, no way to switch between the participant and organizer cabinets,
+and no way to sign out. Replaced all of it with one persistent header on
+every route — Strava-style per the reference screenshot the user supplied —
+carrying the wordmark, discovery, one dropdown per cabinet, the theme control
+(CR-110) and an account menu with sign-out. Below `md` the same sections
+collapse into one disclosure panel, since they cannot fit the bar at 375px.
+
+Both cabinet menus render from the existing ADR-009 registries
+(`PARTICIPANT_NAV_ITEMS`/`ORGANIZER_NAV_ITEMS`), so adding a cabinet feature
+is still a descriptor and never a branch in the header — the registry
+regression coverage `CabinetShell.test.tsx` used to carry moved to
+`AppHeader.test.tsx` intact. `filterEnabled` still runs server-side, now in
+`app/layout.tsx`: it reads non-`NEXT_PUBLIC_` env vars, so calling it from
+the `'use client'` header would have silently disabled every flagged item.
+
+Files: added `packages/ui/src/components/NavMenu.tsx` (+ test) — the
+accessible dropdown primitive the header needed and `docs/design.md` §9 had
+never listed; `apps/web/src/components/site/AppHeader.tsx` (+ test);
+`apps/web/src/lib/auth/session-context.tsx`. Removed
+`apps/web/src/components/site/SiteHeader.tsx` and `app/(public)/layout.tsx`.
+Narrowed `CabinetShell` to the session gate alone; `app/me/layout.tsx` and
+`app/organizer/layout.tsx` no longer pass nav items. `packages/ui`'s
+`terminology.ts`/`index.ts`, `lib/api/current-user.ts` (new `logout`).
+
+Decisions: none — no ADR; ADR-009's registry contract is unchanged, only its
+consumer moved. `NavMenu` draws its own chevron as inline SVG rather than
+adding `lucide-react` to `packages/ui`'s dependencies (it is `apps/web`'s
+dependency, and CR-106 deliberately kept icon resolution on the app side),
+and stays router-agnostic — consumers supply their own links and apply
+`NAV_MENU_ITEM_CLASSNAME`. New `SessionProvider` resolves `/v1/auth/me` once
+for the header and the cabinet gate to share, instead of each fetching it;
+it distinguishes `anonymous` (a 401 — ordinary on a public page) from
+`error` (the request itself failed), so a network blip no longer looks like
+being signed out.
+
+Follow-up: a signed-out visitor now triggers a 401 on `/v1/auth/me` on every
+page rather than only in the cabinets — expected, and how anonymity is
+detected, but it does surface as a console error in dev.
+
+---
+
+## 2026-09-22 — CR-110 — Light/dark/system theme switch
+
+Summary: `packages/ui`'s `.dark` palette has existed since CR-063, but
+`app/layout.tsx` only ever applied it from `prefers-color-scheme` — a viewer
+had no way to override the OS. Added a three-state control (системная /
+светлая / тёмная) to the global header. Three states rather than a two-way
+switch so choosing one does not permanently discard the documented
+follow-the-OS default; on `system` the app also tracks the OS changing
+mid-session.
+
+Files: `apps/web/src/lib/theme/theme.ts` (preference storage, `applyTheme`,
+and the pre-hydration script — exported from the same module as the storage
+key so the inline script and the runtime cannot drift to different keys);
+`apps/web/src/components/site/ThemeToggle.tsx`; `apps/web/src/app/layout.tsx`;
+`packages/ui/src/terminology.ts`; `apps/web/vitest.setup.ts`.
+
+Decisions: none — no ADR. The preference is per-browser `localStorage`, not
+server state: it is a display choice, not account data, and storing it
+server-side would mean a fetch before first paint. Every storage access is
+wrapped, since `localStorage` throws outright in a private window with site
+data blocked.
+
+Follow-up: none. jsdom implements no `matchMedia` at all, so the shared test
+setup now stubs it — an environment gap, not behavior under test.
+
+---
+
+## 2026-09-22 — CR-109 — Labeled back links on every nested screen
+
+Summary: no nested screen offered a way back to its parent — the browser's
+own Back button was the only route out of `/rides/[id]`, every
+`/organizer/rides/[id]/*` screen, and each cabinet sub-page. Added a
+`BackLink` to all twelve.
+
+Files: `apps/web/src/components/site/BackLink.tsx`; the twelve page
+components under `app/rides/[id]`, `app/organizer/*` and `app/me/*`;
+`packages/ui/src/terminology.ts` (`BACK_LINK_TERMS`).
+
+Decisions: none — no ADR. Each link takes an explicit parent `href` rather
+than calling `router.back()`: history is not a reliable parent, since
+`/rides/[id]` is routinely opened from a shared URL with nothing behind it,
+and `back()` would drop that visitor out of the app entirely. Naming the
+destination also lets the label say where it goes, which a bare "Назад"
+cannot. Lives in `apps/web`, not `packages/ui`, because it depends on
+`next/link` and that package stays router-agnostic.
+
+Follow-up: the `/organizer/rides/[id]/*` screens all point at
+`/organizer/rides` — there is no per-ride organizer overview page to return
+to yet. Worth revisiting if one is ever added.
+
+Next logical task: none authorized. Unrelated pre-existing gap noticed while
+verifying: `/me` shows its "Организуете заезды? Создайте профиль
+организатора" call to action unconditionally, including to a user who
+already has an `OrganizerProfile`.
+
+## 2026-09-23 — CR-112 — Ride detail redesign (summary panel + map panel) and a route map that frames the whole ride
+
+Summary: `/rides/[id]` was one long column of equally loud blocks — a whole
+card just for the start time, then every metric, price and participant count
+at the same `MetricTile` size — and the route map, when present, opened
+zoomed to level 13 on the route's _first point_, so most of a longer route
+sat off-screen. The user supplied a Strava activity page as a reference
+("похожее, не копия"). Reworked the page into two panels:
+
+- **Summary panel** (one `Card`, split by a hairline at `lg`): left — status,
+  start date/time as a quiet meta line, title, organizer, description; right —
+  headline metrics (distance/elevation/pace/duration, still `MetricTile`),
+  then supporting facts as compact label/value rows (difficulty, bike type,
+  price, participants), then the registration action. Stacks below `lg`.
+- **Map panel**: the map is the panel's dominant surface (`h-80`,
+  `md:h-[26rem]`), stops as a left rail at `md` (below the map on mobile),
+  elevation profile full-width underneath.
+
+Map fixes:
+
+- `MapHandle.fitBounds(points, { padding, maxZoom })` (additive,
+  `packages/maps-core`) — `RouteMap` frames the whole line plus every pin.
+  A single point centers at zoom 14 instead of MapGL zooming to max.
+- The 2GIS adapter now watches its container with a `ResizeObserver`, calls
+  `map.invalidateSize()` and re-applies the last fit — MapGL sizes its canvas
+  once at construction, so a container that settled later (grid layout,
+  fonts, theme change) left the map stale-sized and off-center.
+- Optional `MapPolylineInput.outlineColor` → MapGL's `color2`/`width2` casing
+  under the route line (`--bg-raised`), so the line stays legible over busy
+  basemap detail in both themes.
+- The ride's own start point (`Ride.startLat`/`startLng`) is now pinned as a
+  start marker (unless a `start` route point already exists), and the map
+  panel appears for a ride that has only a start point or only stops —
+  headed "Место старта" rather than "Маршрут" when there's no route line.
+- Legend glyphs are now colored dots matching the markers.
+
+Files: `packages/maps-core/src/render.ts`, `packages/maps-2gis/src/render.ts`
+(+ tests), `apps/web/src/features/participant/ride-detail/components/
+RideDetailView.tsx`, `RouteMap.tsx`, `ride-detail.test.tsx`,
+`apps/web/src/app/rides/[id]/page.tsx` (`max-w-4xl` → `max-w-5xl` so the split
+panel has room), `packages/ui/src/terminology.ts`
+(`RIDE_DETAIL_TERMS.bicycleTypeLabel`, `ROUTE_RENDERING_TERMS.startLocationTitle`),
+`.claude/rules/maps.md`.
+
+Decisions: none — no ADR. `fitBounds`/`outlineColor` extend the ADR-020 render
+contract additively, same precedent as CR-107's `width`/`opacity`.
+
+Verification: `web`/`ui`/`maps-core`/`maps-2gis` typecheck + lint clean;
+web 233/233, ui 118/118, maps-2gis 20/20. Live: MapGL renders in headless
+Chromium here (canvas present) — screenshot of the CR-101 test ride shows the
+entire loop framed with casing and typed markers; 375px has no horizontal
+scroll.
+
+Known limitation: the ride the user screenshotted ("Тестовый заезд на
+выходные") has no route, no stops, no route points and no start coordinates,
+so it still shows no map — there is nothing to put on one. Organizers can't
+set a start point from the UI yet except by typing coordinates (KI-016,
+no geocode-by-address). The basemap stays 2GIS's default light style in
+dark theme too.
+
+Next logical task: none authorized.
+
+## 2026-09-23 — CR-113 — Upload forms showed no file picker; organizer "Сохранить" looked like a no-op
+
+Summary: user report on `/organizer/profile` — "Сохранить" doesn't work and
+the photo upload doesn't work.
+
+- **File picker invisible.** Tailwind's preflight strips
+  `::file-selector-button` to bare text, so every native `<input
+type="file">` rendered as the plain line "Выберите файл Файл не выбран" —
+  nobody recognized it as clickable, pressed "Загрузить фото" with no file,
+  and got "Выберите файл изображения для загрузки.". New `packages/ui`
+  `FileInput` primitive styles the native picker button as a secondary
+  button (label association, keyboard behavior and `.files` untouched);
+  used by all four upload forms — both `AvatarUploadForm`s,
+  `CoverImageUploadForm`, `RouteUploadForm`.
+- **Save looked dead, but wasn't.** Reproduced live: `PATCH
+/v1/organizers/me` returned 200 and the change persisted. The inline
+  "Изменения сохранены." line stayed on screen from the first save, so a
+  second save produced no visible change. `OrganizerProfileForm` now clears
+  that line as soon as a field is edited and shows a `Toast` on every
+  successful create/save (CR-103 precedent).
+- **Local storage was down.** MinIO wasn't running, so any upload would
+  have failed with "Загрузка недоступна" even with a visible picker.
+  Started it with `docker compose up -d minio` (bucket already existed in
+  the volume); `/health` now reports `s3: "ok"`. Environment only — no code.
+
+Files: `packages/ui/src/components/FileInput.tsx` (+ test, export),
+the four upload forms above, `OrganizerProfileForm.tsx`,
+`organizer-profile.test.tsx`.
+
+Decisions: none — no ADR. `FileInput` is additive to `packages/ui`.
+
+Verification: web/ui typecheck + lint clean; web 234/234, ui 121/121.
+Live, as a fresh verified organizer: picker visible as a button, a PNG
+upload → `POST /v1/organizers/me/avatar` 201 and the avatar renders; a
+second save shows the toast.
+
+Not changed: participant `ProfileForm` (`/me/profile`) likely has the same
+stale-success-line pattern — not reported, not touched.
+
+Next logical task: none authorized.
+
+## 2026-09-23 — CR-114 — Route builder: organizer routes follow 2GIS roads, never a straight line across a river
+
+Summary: user report — the route on `/rides/[id]` crossed the Moskva river where
+nothing can be ridden; routes must come only from roads 2GIS knows. Two causes:
+
+1. **The dev seed route (mine, after CR-112)** was built from OSM (OSRM) because the
+   2GIS REST APIs are unreachable from this machine's VPN egress (KI-056), and then
+   thinned to one point per 120 m — the thinning cut corners across the river.
+   Re-seeded at full resolution (1865 points, 69,5 км); still OSM data until it can be
+   rebuilt through 2GIS.
+2. **A latent adapter bug**: `maps-2gis`'s `getRoute` silently returned the _request
+   waypoints_ whenever 2GIS's geometry didn't parse — straight lines between points,
+   i.e. exactly "through rivers and relief". Now a missing geometry (or a 204) throws
+   `MapProviderError` with `code: 'no_route'`.
+
+The user chose a route builder (over GPX map-matching): the organizer clicks
+waypoints on the map, the API routes them through 2GIS Routing (bicycle).
+
+- `POST /v1/rides/:id/route/build` (`docs/api.md`) — owner + draft only, 2–25 points,
+  creates or replaces the route. The 2GIS line is serialized to GPX and stored exactly
+  like an upload (download works, same metrics parser, same ride auto-fill; elevation
+  auto-filled only if 2GIS returned altitudes — never a fabricated 0). `422
+route_not_buildable` (no road path — nothing stored), `503 route_builder_unavailable`
+  (no key / 2GIS down). 30/min/IP rate limit — every call is billed by 2GIS.
+- Adapter: requests `need_altitudes`, reads a Z coordinate as elevation, dedupes the
+  joint vertex between maneuver segments.
+- `apps/api/src/plugins/maps.ts` — apps/api's maps composition point (`app.mapProvider`).
+  `maps-core`/`maps-2gis` gained `./server` entries (no DOM-typed render layer) for it;
+  `MapProviderError` moved into `maps-core` so the service can branch on `code` without
+  importing the adapter. `MapRenderOptions.onClick` added (additive).
+- Web: `RouteBuilder` on `/organizer/rides/[id]/route` (above GPX upload, which stays):
+  click to add numbered points, remove one/last/all, "Замкнуть круг", build; the map
+  shows only the stored 2GIS line, never the waypoints joined.
+
+Also fixed: `organizers.routes.test.ts`/`users.routes.test.ts` deleted `users` without
+first deleting `rides` — passed only while Vitest happened to run them before the
+rides suites; the new test file shifted the order and exposed it (FK `RESTRICT` from
+`rides.organizer_id`).
+
+Files: packages/maps-core (`types.ts`, `errors.ts` new, `render.ts`, `server.ts` new,
+package.json), packages/maps-2gis (`route.ts`, `http.ts`, `errors.ts`, `render.ts`,
+`server.ts` new, tests), packages/types (`buildRouteRequestSchema`,
+`ROUTE_BUILDER_MAX_POINTS`), apps/api (`plugins/maps.ts` new, `app.ts`,
+`rides.service.ts`, `rides.routes.ts`, `gpx.ts` `serializeGpx`, eslint, build script,
+package.json, `route-builder.routes.test.ts` new, two test-isolation fixes), apps/web
+(`RouteBuilder.tsx` new, `RouteUploadForm.tsx`, `api.ts`, `route-builder.test.tsx`
+new, route test fixtures), packages/ui (`RIDE_ROUTE_BUILDER_TERMS`), docs.
+
+Decisions: no new ADR — ADR-010/`.claude/rules/architecture.md` already allow
+`api → maps-core` and one composition point per app; this builds the API one.
+
+Verification: typecheck + lint clean in maps-core/maps-2gis/types/ui/web/api; tests
+maps-2gis 24, ui 121, web 242, api 384 (+3 skipped); `web`/`api` builds pass. Live in
+the browser: waypoint clicks, list, build → the degraded `503` message (2GIS
+unreachable here). **Not yet verified against real 2GIS** (KI-056) — in particular
+whether `need_altitudes` returns a Z coordinate in this API version, and what 2GIS
+answers for an unroutable point pair (the adapter treats 204 / an empty result / a
+route without geometry as `no_route`).
+
+Next logical task: with the VPN off — live-verify the builder, and rebuild the
+"Тестовый заезд на выходные" seed route through 2GIS.

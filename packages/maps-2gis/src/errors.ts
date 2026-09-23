@@ -1,5 +1,6 @@
 /**
- * Thrown by every `MapProvider` method on a failed 2GIS call (timeout,
+ * `MapProviderError` (defined in `maps-core` since CR-114) is what this
+ * adapter throws from every `MapProvider` method on a failed 2GIS call (timeout,
  * network error, non-2xx response, an open circuit breaker). Callers get one
  * stable error type regardless of which of the three methods failed or why —
  * the caller decides the actual fallback (e.g. "create the ride without
@@ -13,15 +14,4 @@
  * See KI-016 for the still-open "never exercised against a live 2GIS
  * account" gap.
  */
-export class MapProviderError extends Error {
-  /** HTTP status from 2GIS, if the request reached it. */
-  readonly status?: number;
-
-  constructor(message: string, options?: { cause?: unknown; status?: number }) {
-    // `cause` is the standard ES2022 Error field (lib.es2022.error) — not
-    // redeclared here, just forwarded to the base constructor.
-    super(message, { cause: options?.cause });
-    this.name = 'MapProviderError';
-    this.status = options?.status;
-  }
-}
+export { MapProviderError, type MapProviderErrorCode } from 'maps-core/server';

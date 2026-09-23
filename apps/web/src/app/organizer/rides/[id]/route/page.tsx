@@ -1,4 +1,5 @@
-import { RIDE_ROUTE_TERMS } from 'ui';
+import { BACK_LINK_TERMS, RIDE_ROUTE_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { RouteUploadForm } from '@/features/organizer/route/components/RouteUploadForm';
 
 // `/organizer/rides/[id]/route` (`docs/design.md` §8 "Route, GPX upload, stops,
@@ -15,6 +16,10 @@ export default async function RideRoutePage({
   const { id } = await params;
   return (
     <div className="flex flex-col gap-6">
+      <BackLink
+        href="/organizer/rides"
+        label={BACK_LINK_TERMS.toOrganizerRides}
+      />
       <h1 className="text-2xl font-semibold text-text">
         {RIDE_ROUTE_TERMS.pageTitle}
       </h1>

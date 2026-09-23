@@ -10,7 +10,13 @@ import { build } from 'esbuild';
 // mean every dev/test consumer needs a dual source/dist export condition).
 // Bundling `apps/api`'s own build fixes the one broken path (this app's
 // compiled production boot) without touching any of that.
-const WORKSPACE_PACKAGES = ['db', 'types', 'resilience'];
+const WORKSPACE_PACKAGES = [
+  'db',
+  'types',
+  'resilience',
+  'maps-core',
+  'maps-2gis',
+];
 
 function readDependencies(relativePkgPath) {
   const url = new URL(relativePkgPath, import.meta.url);
@@ -50,6 +56,10 @@ const external = [
     ...readDependencies('../../../packages/db/package.json'),
     ...readDependencies('../../../packages/types/package.json'),
     ...readDependencies('../../../packages/resilience/package.json'),
+    ...readDependencies('../../../packages/maps-core/package.json'),
+    // `@2gis/mapgl` lands here as an external: only `render.ts` (browser-only)
+    // imports it, lazily, so it's never loaded by the server bundle.
+    ...readDependencies('../../../packages/maps-2gis/package.json'),
   ]),
 ].filter((name) => !WORKSPACE_PACKAGES.includes(name));
 

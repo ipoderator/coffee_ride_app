@@ -54,6 +54,9 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
 describe('PATCH /v1/users/me', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    // Rides left by an earlier file would block the users cascade
+    // (`rides.organizer_id` is `ON DELETE RESTRICT`) — see organizers.routes.test.ts.
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });

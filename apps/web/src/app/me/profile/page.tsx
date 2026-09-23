@@ -1,6 +1,7 @@
 'use client';
 
-import { PROFILE_TERMS } from 'ui';
+import { BACK_LINK_TERMS, PROFILE_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { AvatarUploadForm } from '@/features/participant/profile/components/AvatarUploadForm';
 import { ProfileForm } from '@/features/participant/profile/components/ProfileForm';
 import { useCurrentUser } from '@/lib/auth/current-user-context';
@@ -13,6 +14,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <BackLink href="/me" label={BACK_LINK_TERMS.toParticipantCabinet} />
       <h1 className="text-2xl font-semibold text-text">
         {PROFILE_TERMS.pageTitle}
       </h1>

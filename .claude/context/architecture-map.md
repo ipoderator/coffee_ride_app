@@ -787,10 +787,25 @@ PostgreSQL schema, Drizzle client, migrations.
 
 Types/contracts and reusable UI.
 
+CR-114 ("Route builder"): `apps/api` got its own maps composition point,
+`src/plugins/maps.ts` — decorates `app.mapProvider` (`MapProvider | null`, null
+without `MAPS_2GIS_API_KEY`), same decorate-or-null shape as `plugins/email.ts`.
+New dependency edges: `apps/api` → `maps-core`/`maps-2gis`, the latter only through
+that one file (a `files`-scoped `no-restricted-imports` override in
+`apps/api/eslint.config.mjs`, mirroring apps/web's). Both map packages gained a
+`./server` subpath entry (everything except the DOM-typed render layer) — apps/api
+imports only from `maps-core/server`/`maps-2gis/server`. `MapProviderError` moved to
+`maps-core` (with a `code: 'unavailable' | 'no_route'`) so a caller can branch on it
+without importing an adapter; `maps-2gis` re-exports it. `rides.service.ts`'s
+`buildRoute` + `POST /v1/rides/:id/route/build`; web side is
+`features/organizer/route/components/RouteBuilder.tsx` on the organizer route page.
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the
   only package allowed to import the 2GIS SDK (ADR-010, `.claude/rules/maps.md`).
+  Composition points: `apps/web/src/lib/maps/create-map-renderer.ts` (render) and
+  `apps/api/src/plugins/maps.ts` (Geocoder/Routing, CR-114).
 - Storage: S3-compatible adapter isolated behind storage interface.
 - Notifications: provider-specific adapters isolated behind notification interface,
   delivered asynchronously via a queue (see `.claude/rules/resilience.md`) so delivery

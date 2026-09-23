@@ -14,6 +14,7 @@ import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerErrorReporting } from './plugins/error-reporting.js';
 import { registerOpenApi } from './plugins/openapi.js';
 import { registerEmail } from './plugins/email.js';
+import { registerMaps } from './plugins/maps.js';
 import { registerS3 } from './plugins/s3.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
 import { registerNotificationQueue } from './modules/notifications/queue.js';
@@ -79,6 +80,7 @@ export async function buildApp(env: Env) {
   registerDb(app, env);
   registerS3(app, env);
   registerEmail(app, env);
+  registerMaps(app, env);
   // Needs app.db/app.emailProvider (worker's job processor reads/writes
   // notifications and sends email) — must come after registerDb/registerEmail.
   registerNotificationQueue(app, env);

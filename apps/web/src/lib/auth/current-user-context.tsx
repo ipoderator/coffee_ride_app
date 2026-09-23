@@ -3,7 +3,7 @@
 import { createContext, useContext } from 'react';
 import type { User } from 'types';
 
-// Populated by `CabinetShell` once it has resolved the session (it never
+// Populated by `CabinetShell` once the shared session resolves (it never
 // renders `children` until then, and it redirects to `/login` on a 401
 // instead) — so any component under the shell can assume a non-null value.
 export const CurrentUserContext = createContext<User | null>(null);

@@ -1,6 +1,7 @@
 'use client';
 
-import { ORGANIZER_TERMS } from 'ui';
+import { BACK_LINK_TERMS, ORGANIZER_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { OrganizerProfileForm } from '@/features/organizer/profile/components/OrganizerProfileForm';
 
 // `/organizer/profile` — "Organizer profile" (`docs/design.md` §8, CR-014). Unlike
@@ -11,6 +12,7 @@ import { OrganizerProfileForm } from '@/features/organizer/profile/components/Or
 export default function OrganizerProfilePage() {
   return (
     <div className="flex flex-col gap-6">
+      <BackLink href="/organizer" label={BACK_LINK_TERMS.toOrganizerCabinet} />
       <h1 className="text-2xl font-semibold text-text">
         {ORGANIZER_TERMS.pageTitle}
       </h1>

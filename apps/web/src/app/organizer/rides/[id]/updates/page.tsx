@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { RIDE_UPDATES_TERMS } from 'ui';
+import { BACK_LINK_TERMS, RIDE_UPDATES_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { UpdateComposer } from '@/features/organizer/updates/components/UpdateComposer';
 
 // `/organizer/rides/[id]/updates` (`docs/design.md` §8 "Ride updates composer",
@@ -17,6 +18,10 @@ export default async function RideUpdatesPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
+        <BackLink
+          href="/organizer/rides"
+          label={BACK_LINK_TERMS.toOrganizerRides}
+        />
         <h1 className="text-2xl font-semibold text-text">
           {RIDE_UPDATES_TERMS.pageTitle}
         </h1>

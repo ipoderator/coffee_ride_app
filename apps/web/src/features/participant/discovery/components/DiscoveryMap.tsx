@@ -83,12 +83,17 @@ export function DiscoveryMap({ rides }: { rides: PublicRide[] }) {
     return <RideMapPlaceholder />;
   }
 
+  // CR-111: the map is the point of the map view, so it gets real height
+  // instead of a short panel with dead space under it — `h-120` (480px) when
+  // it's the whole mobile view, and the full column height of `docs/design.md`
+  // §11's `lg` split view, where `DiscoveryList` also makes it sticky so it
+  // stays put while the list scrolls past it.
   return (
     <div
       ref={containerRef}
       role="img"
       aria-label={RIDE_DISCOVERY_TERMS.viewMapLabel}
-      className="h-120 w-full overflow-hidden rounded-lg"
+      className="h-120 w-full overflow-hidden rounded-lg lg:h-[calc(100vh-9rem)]"
     />
   );
 }

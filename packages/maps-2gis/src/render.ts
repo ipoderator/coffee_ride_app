@@ -1,5 +1,6 @@
 import type {
   LatLng,
+  MapFitOptions,
   MapHandle,
   MapMarkerInput,
   MapPolylineInput,
@@ -23,6 +24,10 @@ function toLngLat(point: LatLng): [number, number] {
 
 const DEFAULT_POLYLINE_COLOR = '#3b82f6';
 const DEFAULT_POLYLINE_WIDTH = 4;
+const DEFAULT_FIT_PADDING = 40;
+const DEFAULT_FIT_MAX_ZOOM = 15;
+// Extra width (px, total) of the optional casing line drawn under the route.
+const OUTLINE_EXTRA_WIDTH = 4;
 
 // 2GIS's own `color` option accepts 8-digit RGBA hex (`#ff0000ff`), so an
 // `opacity` is applied by appending an alpha suffix rather than as a
@@ -82,6 +87,7 @@ export function create2GisMapRenderer(
         return {
           setMarkers() {},
           setPolyline() {},
+          fitBounds() {},
           destroy() {},
         };
       }
@@ -92,8 +98,64 @@ export function create2GisMapRenderer(
         key: config.apiKey,
       });
 
+      if (options.onClick) {
+        const onClick = options.onClick;
+        map.on('click', (event) => {
+          const [lng, lat] = event.lngLat;
+          if (lng !== undefined && lat !== undefined) onClick({ lat, lng });
+        });
+      }
+
       let markers: Array<{ destroy(): void }> = [];
       let polyline: InstanceType<typeof mapglAPI.Polyline> | null = null;
+      let lastFit: { points: LatLng[]; options?: MapFitOptions } | null = null;
+
+      function applyFit(points: LatLng[], fitOptions: MapFitOptions = {}) {
+        const maxZoom = fitOptions.maxZoom ?? DEFAULT_FIT_MAX_ZOOM;
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLng = Infinity;
+        let maxLng = -Infinity;
+        for (const point of points) {
+          minLat = Math.min(minLat, point.lat);
+          maxLat = Math.max(maxLat, point.lat);
+          minLng = Math.min(minLng, point.lng);
+          maxLng = Math.max(maxLng, point.lng);
+        }
+        // A single point (or several at the same spot) has zero-area bounds —
+        // MapGL's `fitBounds` would zoom in to its maximum, so center instead.
+        if (minLat === maxLat && minLng === maxLng) {
+          map.setCenter([minLng, minLat]);
+          map.setZoom(Math.min(maxZoom, 14));
+          return;
+        }
+        const padding = fitOptions.padding ?? DEFAULT_FIT_PADDING;
+        map.fitBounds(
+          { northEast: [maxLng, maxLat], southWest: [minLng, minLat] },
+          {
+            padding: {
+              top: padding,
+              right: padding,
+              bottom: padding,
+              left: padding,
+            },
+            maxZoom,
+          },
+        );
+      }
+
+      // MapGL sizes its canvas once, at construction. The container's final
+      // size often settles later (grid/flex layout, fonts, a theme switch
+      // toggling a scrollbar), which left the map drawn at a stale size and
+      // the route off-center — so track the container and re-fit on resize.
+      const resizeObserver =
+        typeof ResizeObserver === 'undefined'
+          ? null
+          : new ResizeObserver(() => {
+              map.invalidateSize();
+              if (lastFit) applyFit(lastFit.points, lastFit.options);
+            });
+      resizeObserver?.observe(options.container);
 
       const clearMarkers = () => {
         for (const marker of markers) {
@@ -145,17 +207,30 @@ export function create2GisMapRenderer(
           polyline?.destroy();
           polyline = null;
           if (next && next.points.length >= 2) {
+            const width = next.width ?? DEFAULT_POLYLINE_WIDTH;
             polyline = new mapglAPI.Polyline(map, {
               coordinates: next.points.map(toLngLat),
               color: withOpacity(
                 next.color ?? DEFAULT_POLYLINE_COLOR,
                 next.opacity,
               ),
-              width: next.width ?? DEFAULT_POLYLINE_WIDTH,
+              width,
+              ...(next.outlineColor
+                ? {
+                    color2: next.outlineColor,
+                    width2: width + OUTLINE_EXTRA_WIDTH,
+                  }
+                : {}),
             });
           }
         },
+        fitBounds(points: LatLng[], fitOptions?: MapFitOptions) {
+          if (points.length === 0) return;
+          lastFit = { points, options: fitOptions };
+          applyFit(points, fitOptions);
+        },
         destroy() {
+          resizeObserver?.disconnect();
           if (containerGeneration.get(options.container) === generation) {
             containerGeneration.delete(options.container);
           }

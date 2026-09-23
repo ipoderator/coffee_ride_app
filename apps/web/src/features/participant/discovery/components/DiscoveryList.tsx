@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { BicycleType, PublicRide } from 'types';
 import {
   Button,
+  cn,
   EmptyState,
   ErrorState,
   RIDE_DISCOVERY_TERMS,
@@ -139,7 +140,13 @@ export function DiscoveryList() {
         </div>
         <div
           data-testid="discovery-map-panel"
-          className={view === 'list' ? 'hidden lg:block' : undefined}
+          className={cn(
+            // CR-111: sticky at `lg`, so the map stays in view while the list
+            // column scrolls past it — the whole reason a split view beats a
+            // toggle at that width.
+            'lg:sticky lg:top-6',
+            view === 'list' && 'hidden lg:block',
+          )}
         >
           <DiscoveryMap rides={rides} />
         </div>

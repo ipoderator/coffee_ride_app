@@ -248,6 +248,31 @@ describe('OrganizerProfileForm', () => {
     ).toBeInTheDocument();
   });
 
+  it('drops the stale "saved" line as soon as the form is edited again', async () => {
+    getOrganizerProfileMock.mockResolvedValue({
+      organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
+    });
+    updateOrganizerProfileMock.mockResolvedValue({
+      organizerProfile: { ...baseProfile, name: 'Новое имя' },
+      rating: null,
+      reviewCount: 0,
+    });
+
+    render(<OrganizerProfileForm />);
+    await screen.findByRole('button', { name: 'Сохранить' });
+    submit(/Сохранить/);
+    expect(await screen.findByText('Изменения сохранены.')).toBeInTheDocument();
+
+    // Regression: the line used to stay put, so a second save looked like a
+    // no-op to the user.
+    fireEvent.change(screen.getByLabelText('Описание'), {
+      target: { value: 'Ещё правка' },
+    });
+    expect(screen.queryByText('Изменения сохранены.')).not.toBeInTheDocument();
+  });
+
   it('updates an existing organizer profile', async () => {
     getOrganizerProfileMock.mockResolvedValue({
       organizerProfile: baseProfile,

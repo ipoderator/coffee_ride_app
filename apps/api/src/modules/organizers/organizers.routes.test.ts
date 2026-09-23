@@ -71,6 +71,11 @@ async function registerAndLogin(
 describe('/v1/organizers/me', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    // `rides.organizer_id` is `ON DELETE RESTRICT` — rides left behind by an
+    // earlier test file (file order isn't fixed) would block the cascade from
+    // `users` to `organizer_profiles`, so clear them first, same as every
+    // rides-module suite does.
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });

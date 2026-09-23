@@ -58,7 +58,7 @@ import {
   decodeCursor,
   encodeCursor,
 } from '../../lib/cursor.js';
-import { GpxParseError, parseGpx } from './gpx.js';
+import { GpxParseError, parseGpx, serializeGpx } from './gpx.js';
 import {
   RouteStorageError,
   deleteGpxObject,
@@ -73,6 +73,11 @@ import {
   uploadImageObject,
 } from '../../lib/image-storage.js';
 import type { S3Handle } from '../../plugins/s3.js';
+import {
+  MapProviderError,
+  type LatLng,
+  type MapProvider,
+} from 'maps-core/server';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `OrganizerServiceError`/`AuthServiceError` (`.claude/rules/backend.md`: route ->
@@ -300,6 +305,26 @@ const GPX_INVALID = (detail: string) =>
 // `.claude/rules/resilience.md`: a degraded-storage response, not a generic 500 —
 // covers both "S3 not configured in this environment" and "the call to S3 failed"
 // (`route-storage.ts`'s `RouteStorageError` covers both uniformly).
+// CR-114 ("Route builder"). Two distinct failure modes, deliberately two codes:
+// "the routing provider is down/unconfigured" is worth retrying later (503),
+// "the provider has no road path between these points" means the organizer
+// has to move a point (422) — retrying the same request changes nothing.
+const ROUTE_BUILDER_UNAVAILABLE = () =>
+  new RideServiceError(
+    'route_builder_unavailable',
+    503,
+    'Route builder unavailable',
+    'Route building is temporarily unavailable. Try again shortly.',
+  );
+
+const ROUTE_NOT_BUILDABLE = () =>
+  new RideServiceError(
+    'route_not_buildable',
+    422,
+    'No route between these points',
+    'No road route connects these points. Move a point closer to a road and try again.',
+  );
+
 const ROUTE_STORAGE_UNAVAILABLE = () =>
   new RideServiceError(
     'route_storage_unavailable',
@@ -1421,6 +1446,139 @@ export async function replaceRoute(
   }
 
   return toRouteSummary(updated);
+}
+
+const BUILT_ROUTE_FILE_NAME = 'route-2gis.gpx';
+
+/**
+ * CR-114 ("Route builder"): builds a draft ride's route from the organizer's
+ * ordered waypoints by routing them along the map provider's road graph
+ * (bicycle profile), then stores it exactly like an uploaded GPX — the line
+ * is serialized to GPX (so download keeps working) and measured by the same
+ * {@link parseGpx}. Creates the route, or replaces an existing one (uploaded
+ * or built): the organizer is iterating on the line, so there's no separate
+ * create/replace verb to pick.
+ *
+ * Never stores a straight-line guess: the adapter throws `no_route` rather
+ * than returning the waypoints, which surfaces here as 422
+ * `route_not_buildable`. Provider down or unconfigured → 503
+ * `route_builder_unavailable` (`.claude/rules/resilience.md`). The provider
+ * call happens before any DB write, outside any transaction.
+ *
+ * Same ride auto-fill rule as {@link uploadRoute} on create (fills only
+ * still-`null` metrics); elevation is auto-filled only when the provider
+ * actually returned altitudes — never a fabricated `0`.
+ */
+export async function buildRoute(
+  db: DbClient,
+  s3: S3Handle | null,
+  mapProvider: MapProvider | null,
+  userId: string,
+  rideId: string,
+  points: LatLng[],
+): Promise<RouteSummary> {
+  await resolveOwnDraftRide(db, userId, rideId);
+  if (!mapProvider) {
+    throw ROUTE_BUILDER_UNAVAILABLE();
+  }
+
+  let geometry;
+  try {
+    ({ geometry } = await mapProvider.getRoute({
+      points,
+      profile: 'cycling',
+    }));
+  } catch (err) {
+    if (err instanceof MapProviderError) {
+      throw err.code === 'no_route'
+        ? ROUTE_NOT_BUILDABLE()
+        : ROUTE_BUILDER_UNAVAILABLE();
+    }
+    throw err;
+  }
+
+  const gpx = serializeGpx('Coffee Ride', geometry);
+  const buffer = Buffer.from(gpx, 'utf-8');
+  const parsed = parseGpx(gpx);
+  const hasElevation = parsed.geometry.some(
+    (point) => point.elevationMeters !== null,
+  );
+
+  const [existingRoute] = await db
+    .select({ id: routes.id, gpxFileKey: routes.gpxFileKey })
+    .from(routes)
+    .where(eq(routes.rideId, rideId))
+    .limit(1);
+
+  const key = `routes/${rideId}/${randomUUID()}.gpx`;
+  try {
+    await uploadGpxObject(s3, key, buffer);
+  } catch (err) {
+    if (err instanceof RouteStorageError) throw ROUTE_STORAGE_UNAVAILABLE();
+    throw err;
+  }
+
+  const values = {
+    gpxFileKey: key,
+    gpxFileName: BUILT_ROUTE_FILE_NAME,
+    gpxFileSizeBytes: buffer.byteLength,
+    distanceKm: parsed.distanceKm,
+    elevationGainMeters: parsed.elevationGainMeters,
+    pointCount: parsed.pointCount,
+    geometry: parsed.geometry,
+    updatedBy: userId,
+  };
+
+  const saved = await db.transaction(async (tx) => {
+    if (existingRoute) {
+      const [updated] = await tx
+        .update(routes)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(routes.id, existingRoute.id))
+        .returning();
+      if (!updated) throw new Error('Route update returned no row.');
+      return updated;
+    }
+
+    const [inserted] = await tx
+      .insert(routes)
+      .values({ rideId, ...values })
+      .returning();
+    if (!inserted) throw new Error('Route insert returned no row.');
+
+    const [currentRide] = await tx
+      .select({
+        distanceKm: rides.distanceKm,
+        elevationGainMeters: rides.elevationGainMeters,
+      })
+      .from(rides)
+      .where(eq(rides.id, rideId))
+      .limit(1);
+    const ridePatch: Partial<typeof rides.$inferInsert> = {};
+    if (currentRide?.distanceKm === null) {
+      ridePatch.distanceKm = parsed.distanceKm;
+    }
+    if (currentRide?.elevationGainMeters === null && hasElevation) {
+      ridePatch.elevationGainMeters = parsed.elevationGainMeters;
+    }
+    if (Object.keys(ridePatch).length > 0) {
+      await tx
+        .update(rides)
+        .set({ ...ridePatch, updatedAt: new Date(), updatedBy: userId })
+        .where(eq(rides.id, rideId));
+    }
+    return inserted;
+  });
+
+  if (existingRoute) {
+    try {
+      await deleteGpxObject(s3, existingRoute.gpxFileKey);
+    } catch {
+      // Best-effort — see `replaceRoute`'s doc comment.
+    }
+  }
+
+  return toRouteSummary(saved);
 }
 
 /**

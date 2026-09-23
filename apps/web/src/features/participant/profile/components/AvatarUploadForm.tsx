@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Avatar, AVATAR_TERMS, Button, Card, ErrorState } from 'ui';
+import { Avatar, AVATAR_TERMS, Button, Card, ErrorState, FileInput } from 'ui';
 import { apiAssetUrl } from '@/lib/api/asset-url';
 import { ApiError, deleteAvatar, replaceAvatar, uploadAvatar } from '../api';
 
@@ -124,13 +124,11 @@ export function AvatarUploadForm({
         <label htmlFor="avatar-file" className="text-sm font-medium text-text">
           {AVATAR_TERMS.uploadLabel}
         </label>
-        <input
+        <FileInput
           id="avatar-file"
           ref={fileInputRef}
-          type="file"
           accept="image/jpeg,image/png,image/webp"
           disabled={isPending}
-          className="text-sm text-text"
         />
       </div>
 

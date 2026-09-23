@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   ErrorState,
+  FileInput,
   MetricTile,
   RIDE_ROUTE_TERMS,
   Skeleton,
@@ -24,6 +25,7 @@ import {
   type RouteSummary,
   type Stop,
 } from '../api';
+import { RouteBuilder } from './RouteBuilder';
 import { RoutePointsSection } from './RoutePointsSection';
 import { StopsSection } from './StopsSection';
 
@@ -46,6 +48,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [rideElevationGainMeters, setRideElevationGainMeters] = useState<
     number | null
   >(null);
+  const [start, setStart] = useState<{ lat: number; lng: number } | null>(null);
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
   const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
@@ -61,6 +64,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     setRideStatus(state.status);
     setRideDistanceKm(state.distanceKm);
     setRideElevationGainMeters(state.elevationGainMeters);
+    setStart(state.start);
     setRoute(state.route);
     setStops(state.stops);
     setRoutePoints(state.routePoints);
@@ -251,6 +255,18 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
         {RIDE_ROUTE_TERMS.backToEdit}
       </Link>
 
+      {/* CR-114: building on 2GIS roads comes first — it's the path that
+          can't produce a line through a river; GPX upload stays below as the
+          alternative for an organizer who already has a recorded track. */}
+      {isDraft && (
+        <RouteBuilder
+          rideId={rideId}
+          hasRoute={route !== null}
+          start={start}
+          onBuilt={reload}
+        />
+      )}
+
       <Card className="flex flex-col gap-4">
         {!isDraft && (
           <p role="status" className="text-sm text-warning">
@@ -339,13 +355,11 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
             >
               {RIDE_ROUTE_TERMS.uploadLabel}
             </label>
-            <input
+            <FileInput
               id="route-gpx-file"
               ref={fileInputRef}
-              type="file"
               accept=".gpx,application/gpx+xml"
               disabled={isPending}
-              className="text-sm text-text"
             />
           </div>
         )}

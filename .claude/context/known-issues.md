@@ -558,11 +558,30 @@ pruned output directory against this environment's real local Postgres — `GET
 /health` responded `200`, proving the pruned, production-only `node_modules`
 (no devDependencies) is actually sufficient and argon2's native binding still
 resolves correctly from within it.
-Next action: the first session with a working Docker daemon should run
-`docker build -f apps/web/Dockerfile .` and `docker build -f apps/api/Dockerfile .`
-from the repo root, then `docker run` each with real env vars and confirm
-`apps/web` serves its pages and `apps/api`'s `/health` responds, before this is
-trusted as a real, deployable artifact (not just "the Dockerfile parses").
+Update 2026-09-22: the Docker daemon is reachable this session (`docker info`
+succeeds, `docker compose up -d` brings up postgres/redis/minio healthy — same
+daemon used for CR-097 live verification). Ran `docker build -f apps/api/
+Dockerfile .`; it fails before any of this repo's own build steps run, while
+resolving the `node:24-alpine` base image: BuildKit (and, tried as a fallback,
+the legacy `DOCKER_BUILDKIT=0` engine) cannot resolve DNS for
+`production.cloudfront.docker.com` (Docker Hub's blob-storage CDN) from inside
+Docker Desktop's own Linux VM — confirmed reproducible (3/3 attempts) with
+`docker run --rm redis:8-alpine getent hosts production.cloudfront.docker.com`
+(`rc=2`), while `registry-1.docker.io` and `google.com` resolve fine from the
+same container — so this is one specific domain blocked at the network/DNS
+level this sandbox sits behind, the same class of restriction already tracked
+as KI-055 for `unisender.ru`, not a general Docker/network outage. Already-cached
+base images (`postgres:17-alpine`, `redis:8-alpine`, `quay.io/minio/
+minio:...`) pull/run fine since no new blob fetch through that CDN is needed;
+`node:24-alpine` (and likely any other not-yet-cached Docker Hub image) is not
+cached locally and cannot be pulled. `apps/web`'s Dockerfile was not attempted
+separately — it depends on the same `node:24-alpine` base and would fail
+identically at the same step.
+Next action: unchanged in substance — still needs a session where this specific
+CDN domain resolves (or `node:24-alpine`/`docker/dockerfile:1` are pre-pulled
+some other way, e.g. `docker save`/`docker load` from a machine that can reach
+it) before `docker build` can be exercised at all here. Not a code fix; no
+Dockerfile change is implicated by this failure.
 
 ### KI-044 — `apps/api`'s rate limiter may see one internal IP for every request once deployed behind Caddy
 
@@ -709,6 +728,30 @@ verification/reset email end to end (register or forgot-password → check a
 real inbox → click the link) once `EMAIL_FROM_ADDRESS` is configured to a
 sender verified in the Unisender Go account — see KI-026/KI-042's matching
 "Next action."
+
+### KI-056 — 2GIS REST APIs (Routing/Geocoder) unreachable from this machine's current egress
+
+Status: open. Discovered: 2026-09-23 (while seeding a dev route after CR-112).
+Problem: `routing.api.2gis.com`/`catalog.api.2gis.com` resolve (to
+`91.236.49.x`) but every TCP connect to :443 times out, sandbox on or off.
+MapGL tiles/JS (`mapgl.2gis.com`, a different subnet) load fine, so maps
+render but nothing server-side can call 2GIS. Egress country reported as
+`FR` — the machine is routed through a VPN; 2GIS's API edge appears not to
+accept that path.
+Impact: high for any route-building work — `MapProvider.getRoute`/`geocode`
+cannot be exercised live. A dev route seeded as a stand-in was built from
+OSM (OSRM bike profile), not 2GIS; an earlier version of that seed thinned
+the line to one point per 120 m and visibly cut across the Moskva river —
+fixed by re-seeding at full resolution, but it's still OSM data, not 2GIS.
+Workaround: turn the VPN off (or split-tunnel `*.2gis.com`) before any
+session that needs the 2GIS REST APIs.
+Next action: with 2GIS reachable, rebuild the "Тестовый заезд на выходные"
+seed route through `create2GisMapProvider().getRoute({ profile: 'cycling' })`.
+Update 2026-09-23 (CR-114): the route builder is implemented against mocked
+2GIS responses only. Also verify live: that `need_altitudes: true` yields a Z
+coordinate in `outcoming_path.geometry[].selection` (otherwise built routes have
+no elevation profile), and what 2GIS returns for an unroutable pair of points
+(the adapter maps 204 / empty result / no geometry to `no_route` → 422).
 
 ## Resolved
 

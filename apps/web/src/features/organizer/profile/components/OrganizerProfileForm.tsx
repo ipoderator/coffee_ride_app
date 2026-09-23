@@ -13,6 +13,7 @@ import {
   Skeleton,
   Textarea,
   formatRating,
+  useToast,
 } from 'ui';
 import {
   ApiError,
@@ -64,6 +65,7 @@ export function OrganizerProfileForm() {
   // which would make a `profile`-derived message pick the wrong text.
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -147,9 +149,14 @@ export function OrganizerProfileForm() {
       setReviewCount(response.reviewCount);
       setName(response.organizerProfile.name);
       setDescription(response.organizerProfile.description ?? '');
-      setSuccessMessage(
-        wasCreate ? ORGANIZER_TERMS.createSuccess : ORGANIZER_TERMS.saveSuccess,
-      );
+      const message = wasCreate
+        ? ORGANIZER_TERMS.createSuccess
+        : ORGANIZER_TERMS.saveSuccess;
+      setSuccessMessage(message);
+      // The inline message alone gave no feedback on a second save: it was
+      // already on screen from the first one, so the click looked like a
+      // no-op. The toast confirms every successful save (CR-103 precedent).
+      showToast(message);
     } catch (error) {
       if (
         error instanceof ApiError &&
@@ -238,7 +245,11 @@ export function OrganizerProfileForm() {
             <Input
               type="text"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                // A "saved" line under an edited form would be stale.
+                setSuccessMessage(null);
+              }}
               disabled={isPending}
             />
           </FormField>
@@ -251,7 +262,10 @@ export function OrganizerProfileForm() {
           >
             <Textarea
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setSuccessMessage(null);
+              }}
               disabled={isPending}
             />
           </FormField>

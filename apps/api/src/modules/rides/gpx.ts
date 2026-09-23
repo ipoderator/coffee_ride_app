@@ -148,3 +148,38 @@ export function parseGpx(xml: string): ParsedGpx {
     pointCount: geometry.length,
   };
 }
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * CR-114 ("Route builder"): the inverse of {@link parseGpx}, for a route built
+ * from waypoints rather than uploaded — so a built route is stored, downloaded
+ * and measured exactly like an uploaded one. A point without an elevation gets
+ * no `<ele>`, which `parseGpx` reads back as `null`.
+ */
+export function serializeGpx(
+  name: string,
+  points: Array<{ lat: number; lng: number; elevationMeters?: number | null }>,
+): string {
+  const trackPoints = points
+    .map((point) => {
+      const ele =
+        point.elevationMeters === undefined || point.elevationMeters === null
+          ? ''
+          : `<ele>${point.elevationMeters}</ele>`;
+      return `<trkpt lat="${point.lat}" lon="${point.lng}">${ele}</trkpt>`;
+    })
+    .join('');
+  return (
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<gpx version="1.1" creator="Coffee Ride" xmlns="http://www.topografix.com/GPX/1/1">' +
+    `<trk><name>${escapeXml(name)}</name><trkseg>${trackPoints}</trkseg></trk>` +
+    '</gpx>'
+  );
+}

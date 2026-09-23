@@ -77,6 +77,12 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
+      maps-2gis:
+        specifier: workspace:*
+        version: link:../../packages/maps-2gis
+      maps-core:
+        specifier: workspace:*
+        version: link:../../packages/maps-core
       postgres:
         specifier: ^3.4.9
         version: 3.4.9

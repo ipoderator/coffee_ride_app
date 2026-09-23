@@ -1,9 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { MapHandle } from 'maps-core';
+import type { LatLng, MapHandle } from 'maps-core';
 import type { RouteGeometryPoint, RoutePoint, Stop } from 'types';
-import { ROUTE_POINT_TYPE_TERMS, ROUTE_RENDERING_TERMS, STOPS_TERMS } from 'ui';
+import {
+  cn,
+  ROUTE_POINT_TYPE_TERMS,
+  ROUTE_RENDERING_TERMS,
+  STOPS_TERMS,
+} from 'ui';
 import { createMapRenderer } from '@/lib/maps/create-map-renderer';
 import { getCssColorVar } from '@/lib/maps/css-color';
 import {
@@ -18,6 +23,21 @@ import { RouteMapPlaceholder } from './RouteMapPlaceholder';
 // (duplicated, not imported: `.claude/rules/extensibility.md` forbids one
 // feature module reaching into another's internals).
 const DEFAULT_CENTER = { lat: 55.7558, lng: 37.6173 };
+
+// Same colored-dot-plus-glyph look as the map's own HTML markers, so the
+// legend reads as a key to what's actually drawn. The color comes from a
+// design-token custom property, not a literal (`docs/design.md` §14).
+function LegendDot({ colorVar, label }: { colorVar: string; label: string }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-flex size-4 items-center justify-center rounded-full text-[0.625rem] leading-none font-semibold text-on-primary"
+      style={{ background: `var(${colorVar})` }}
+    >
+      {label}
+    </span>
+  );
+}
 
 /**
  * `/rides/[id]`'s route map (KI-036, ADR-020): replaces the always-shown
@@ -34,11 +54,23 @@ export function RouteMap({
   geometry,
   routePoints,
   stops,
+  start = null,
+  className,
 }: {
   geometry: RouteGeometryPoint[];
   routePoints: RoutePoint[];
   stops: Stop[];
+  /** The ride's own start point (`Ride.startLat`/`startLng`) — pinned as a
+   * start marker unless a `start` route point already marks it. */
+  start?: LatLng | null;
+  /** Sizing for the map surface itself (height/rounding); defaults to `h-80`. */
+  className?: string;
 }) {
+  const hasStartRoutePoint = routePoints.some(
+    (point) => point.type === 'start',
+  );
+  const showStartMarker = start !== null && !hasStartRoutePoint;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [renderFailed, setRenderFailed] = useState(false);
 
@@ -49,7 +81,16 @@ export function RouteMap({
       return;
     }
 
-    const center = geometry[0] ?? routePoints[0] ?? stops[0] ?? DEFAULT_CENTER;
+    // Every point that should be in view — the whole line plus every pin —
+    // so the camera frames the entire ride instead of zooming in on its
+    // first point and leaving most of the route off-screen.
+    const framedPoints: LatLng[] = [
+      ...geometry,
+      ...routePoints,
+      ...stops,
+      ...(showStartMarker && start ? [start] : []),
+    ].map((point) => ({ lat: point.lat, lng: point.lng }));
+    const center = framedPoints[0] ?? DEFAULT_CENTER;
 
     let cancelled = false;
     let handle: MapHandle | undefined;
@@ -74,10 +115,23 @@ export function RouteMap({
                 // CR-107 ("Quiet Instrument"): a bolder route line than the
                 // renderer's own 4px default — still primary-only, no glow.
                 width: 6,
+                // Casing in the page's own surface color so the line stays
+                // legible over any basemap detail (roads, water, parks).
+                outlineColor: getCssColorVar('--bg-raised'),
               }
             : null,
         );
         handle.setMarkers([
+          ...(showStartMarker && start
+            ? [
+                {
+                  id: 'ride-start',
+                  point: start,
+                  color: getCssColorVar(ROUTE_POINT_MARKER_COLOR_VAR.start),
+                  label: ROUTE_POINT_MARKER_LABEL.start,
+                },
+              ]
+            : []),
           ...routePoints.map((point) => ({
             id: point.id,
             point: { lat: point.lat, lng: point.lng },
@@ -91,6 +145,7 @@ export function RouteMap({
             label: STOP_MARKER_LABEL,
           })),
         ]);
+        handle.fitBounds(framedPoints, { padding: 48, maxZoom: 15 });
       })
       .catch(() => {
         if (!cancelled) setRenderFailed(true);
@@ -111,7 +166,12 @@ export function RouteMap({
     return <RouteMapPlaceholder />;
   }
 
-  const legendTypes = [...new Set(routePoints.map((point) => point.type))];
+  const legendTypes = [
+    ...new Set([
+      ...(showStartMarker ? (['start'] as const) : []),
+      ...routePoints.map((point) => point.type),
+    ]),
+  ];
 
   return (
     <div className="flex flex-col gap-2">
@@ -119,23 +179,25 @@ export function RouteMap({
         ref={containerRef}
         role="img"
         aria-label={ROUTE_RENDERING_TERMS.sectionTitle}
-        className="h-80 w-full overflow-hidden rounded-lg"
+        className={cn('h-80 w-full overflow-hidden rounded-lg', className)}
       />
       {(legendTypes.length > 0 || stops.length > 0) && (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-text-secondary">
           {legendTypes.map((type) => (
             <li key={type} className="flex items-center gap-1.5">
-              <span aria-hidden className="font-mono">
-                {ROUTE_POINT_MARKER_LABEL[type]}
-              </span>
+              <LegendDot
+                colorVar={ROUTE_POINT_MARKER_COLOR_VAR[type]}
+                label={ROUTE_POINT_MARKER_LABEL[type]}
+              />
               {ROUTE_POINT_TYPE_TERMS[type]}
             </li>
           ))}
           {stops.length > 0 && (
             <li className="flex items-center gap-1.5">
-              <span aria-hidden className="font-mono">
-                {STOP_MARKER_LABEL}
-              </span>
+              <LegendDot
+                colorVar={STOP_MARKER_COLOR_VAR}
+                label={STOP_MARKER_LABEL}
+              />
               {STOPS_TERMS.sectionTitle}
             </li>
           )}

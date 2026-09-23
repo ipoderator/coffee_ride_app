@@ -1,4 +1,4 @@
-import type { MapProvider } from 'maps-core';
+import type { MapProvider } from 'maps-core/server';
 import { CircuitBreaker } from 'resilience';
 import type { TwoGisProviderConfig } from './config.js';
 import { createGeocodeMethods } from './geocode.js';

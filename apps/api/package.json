@@ -30,6 +30,8 @@
     "fastify": "^5.12.4",
     "ioredis": "^6.0.0",
     "postgres": "^3.4.9",
+    "maps-2gis": "workspace:*",
+    "maps-core": "workspace:*",
     "resilience": "workspace:*",
     "sax": "^1.6.1",
     "sharp": "^0.35.4",

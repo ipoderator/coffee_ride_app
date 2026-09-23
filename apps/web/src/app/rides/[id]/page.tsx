@@ -1,3 +1,5 @@
+import { BACK_LINK_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { RideDetailView } from '@/features/participant/ride-detail/components/RideDetailView';
 import { isFeatureEnabled } from '@/lib/cabinet/feature-flags';
 
@@ -18,8 +20,8 @@ export default async function RideDetailPage({
   // gated per `.claude/rules/extensibility.md`/CR-055. `isFeatureEnabled` is
   // server-only (`@/lib/cabinet/feature-flags`'s own doc comment), so it's read
   // here and threaded down as a prop rather than from `RideDetailView` itself,
-  // which is a Client Component. `pb-24 md:pb-6` mirrors `CabinetShell`'s own
-  // fixed-bottom-bar spacer so the bar never overlaps page content.
+  // which is a Client Component. `pb-24 md:pb-6` is the fixed bar's own
+  // spacer, so it never overlaps the end of the page content.
   const stickyRegistrationCta = isFeatureEnabled('STICKY_REGISTRATION_CTA');
   // CR-107 ("Quiet Instrument"): glass status panel over the cover photo,
   // same server-side-read/thread-as-prop reasoning as the flag above.
@@ -28,10 +30,13 @@ export default async function RideDetailPage({
     <main
       className={
         stickyRegistrationCta
-          ? 'mx-auto flex max-w-4xl flex-col gap-6 p-6 pb-24 md:pb-6'
-          : 'mx-auto flex max-w-4xl flex-col gap-6 p-6'
+          ? 'mx-auto flex max-w-5xl flex-col gap-6 p-6 pb-24 md:pb-6'
+          : 'mx-auto flex max-w-5xl flex-col gap-6 p-6'
       }
     >
+      {/* CR-109: `/rides/[id]` is the app's most-shared URL, so its visitor is
+          the one most likely to have arrived with no history to go back to. */}
+      <BackLink href="/" label={BACK_LINK_TERMS.toDiscovery} />
       <RideDetailView
         rideId={id}
         stickyRegistrationCta={stickyRegistrationCta}

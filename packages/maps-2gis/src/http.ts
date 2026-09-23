@@ -33,6 +33,10 @@ export async function fetchJson(
           throw new MapProviderError('2GIS request failed.', { cause });
         }
 
+        // 204: a well-formed request with nothing to return (2GIS Routing
+        // answers this way when there is no path between the points).
+        if (response.status === 204) return null;
+
         if (!response.ok) {
           // Never surface the raw response body — it may contain
           // provider-internal detail (`.claude/rules/backend.md`'s "never

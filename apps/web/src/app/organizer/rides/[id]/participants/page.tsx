@@ -1,4 +1,5 @@
-import { PARTICIPANTS_TERMS } from 'ui';
+import { BACK_LINK_TERMS, PARTICIPANTS_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { ParticipantTable } from '@/features/organizer/participants/components/ParticipantTable';
 import { WaitlistTable } from '@/features/organizer/participants/components/WaitlistTable';
 
@@ -16,6 +17,10 @@ export default async function RideParticipantsPage({
   const { id } = await params;
   return (
     <div className="flex flex-col gap-6">
+      <BackLink
+        href="/organizer/rides"
+        label={BACK_LINK_TERMS.toOrganizerRides}
+      />
       <h1 className="text-2xl font-semibold text-text">
         {PARTICIPANTS_TERMS.pageTitle}
       </h1>

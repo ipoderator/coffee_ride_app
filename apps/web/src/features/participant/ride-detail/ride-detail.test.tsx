@@ -220,31 +220,60 @@ describe('RideDetailView', () => {
     expect(getRouteGeometryMock).not.toHaveBeenCalled();
   });
 
-  it('collapses the two-column layout when there is no route and no stops', async () => {
+  it('omits the map panel entirely when there is nothing to put on a map', async () => {
     getRideDetailMock.mockResolvedValue(baseDetailResponse());
 
-    const { container } = render(<RideDetailView rideId="ride-1" />);
+    render(<RideDetailView rideId="ride-1" />);
 
     await screen.findByText(baseRide.title);
-    // Regression: the right-hand column used to stay reserved by
-    // `md:grid-cols-2` even with nothing to put in it, leaving ~55% of the
-    // viewport blank (confirmed live via a route/stops-less ride).
+    // Regression: an empty panel used to reserve ~55% of the viewport for
+    // nothing (confirmed live via a route/stops-less ride).
+    expect(screen.queryByText('Место старта')).not.toBeInTheDocument();
     expect(
-      container.querySelector('[class*="md:grid-cols-2"]'),
+      screen.queryByText('Карта маршрута временно недоступна.'),
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the two-column layout once a route or stops exist', async () => {
+  it('shows a start-location map panel for a ride with a start point but no route', async () => {
+    getRideDetailMock.mockResolvedValue(
+      baseDetailResponse({
+        ride: { ...baseRide, startLat: 55.75, startLng: 37.61 },
+      }),
+    );
+
+    render(<RideDetailView rideId="ride-1" />);
+
+    expect(await screen.findByText('Место старта')).toBeInTheDocument();
+    expect(screen.queryByText('Маршрут')).not.toBeInTheDocument();
+    expect(getRouteGeometryMock).not.toHaveBeenCalled();
+    // No MapGL key in the test env — the degraded placeholder, never a blank box.
+    expect(
+      await screen.findByText('Карта маршрута временно недоступна.'),
+    ).toBeInTheDocument();
+    // No route → no elevation profile section either.
+    expect(screen.queryByText('Профиль высоты')).not.toBeInTheDocument();
+  });
+
+  it('shows the map panel once stops exist, even without a route', async () => {
     getRideDetailMock.mockResolvedValue(
       baseDetailResponse({ stops: [baseStop] }),
     );
 
-    const { container } = render(<RideDetailView rideId="ride-1" />);
+    render(<RideDetailView rideId="ride-1" />);
+
+    expect(await screen.findByText('Место старта')).toBeInTheDocument();
+    expect(screen.getByText(/1\. Кофейня на набережной/)).toBeInTheDocument();
+  });
+
+  it('shows price and bike type as supporting facts next to the headline metrics', async () => {
+    getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+    render(<RideDetailView rideId="ride-1" />);
 
     await screen.findByText(baseRide.title);
-    expect(
-      container.querySelector('[class*="md:grid-cols-2"]'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Тип велосипеда')).toBeInTheDocument();
+    expect(screen.getByText('Стоимость участия')).toBeInTheDocument();
+    expect(screen.getByText('₽')).toBeInTheDocument();
   });
 
   it('shows the route map placeholder and elevation profile once a route exists', async () => {

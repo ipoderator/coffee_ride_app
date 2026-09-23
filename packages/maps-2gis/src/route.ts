@@ -1,4 +1,4 @@
-import type { LatLng, RouteRequest, RouteResult } from 'maps-core';
+import type { LatLngAlt, RouteRequest, RouteResult } from 'maps-core/server';
 import type { CircuitBreaker } from 'resilience';
 import type { TwoGisProviderConfig } from './config.js';
 import { DEFAULT_ROUTING_BASE_URL, DEFAULT_TIMEOUT_MS } from './config.js';
@@ -38,37 +38,55 @@ interface RoutingResponseItem {
 }
 
 type RoutingResponse =
-  RoutingResponseItem[] | { result?: RoutingResponseItem[] };
+  RoutingResponseItem[] | { result?: RoutingResponseItem[] } | null;
 
 function extractItems(body: RoutingResponse): RoutingResponseItem[] {
+  if (body === null) return [];
   return Array.isArray(body) ? body : (body.result ?? []);
 }
 
 // Parses 2GIS's `"LINESTRING(lon lat, lon lat, ...)"` WKT string (note:
-// longitude first, per the WKT spec) into provider-neutral points.
-function parseWktLineString(wkt: string): LatLng[] {
-  const match = /LINESTRING\(([^)]*)\)/.exec(wkt);
+// longitude first, per the WKT spec) into provider-neutral points. With
+// `need_altitudes` a vertex may carry a third number, its altitude
+// (`LINESTRING Z(lon lat alt, ...)` or the same without the `Z`).
+function parseWktLineString(wkt: string): LatLngAlt[] {
+  const match = /LINESTRING\s*Z?\s*\(([^)]*)\)/i.exec(wkt);
   const coordinates = match?.[1];
   if (!coordinates) return [];
   return coordinates
     .split(',')
-    .map((pair) => {
-      const [lng, lat] = pair.trim().split(/\s+/).map(Number);
-      return { lat: lat ?? NaN, lng: lng ?? NaN };
+    .map((pair): LatLngAlt => {
+      const [lng, lat, alt] = pair.trim().split(/\s+/).map(Number);
+      const point: LatLngAlt = { lat: lat ?? NaN, lng: lng ?? NaN };
+      if (alt !== undefined && Number.isFinite(alt)) {
+        point.elevationMeters = alt;
+      }
+      return point;
     })
     .filter(
       (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng),
     );
 }
 
-function extractGeometry(
-  item: RoutingResponseItem,
-  fallback: LatLng[],
-): LatLng[] {
-  const points = item.maneuvers
-    ?.flatMap((maneuver) => maneuver.outcoming_path?.geometry ?? [])
-    .flatMap((segment) => parseWktLineString(segment.selection));
-  return points && points.length > 0 ? points : fallback;
+// Consecutive maneuver segments share their joint vertex — drop the repeat
+// so the polyline has no zero-length steps.
+function dedupeConsecutive(points: LatLngAlt[]): LatLngAlt[] {
+  return points.filter((point, index) => {
+    const previous = points[index - 1];
+    return (
+      previous === undefined ||
+      point.lat !== previous.lat ||
+      point.lng !== previous.lng
+    );
+  });
+}
+
+function extractGeometry(item: RoutingResponseItem): LatLngAlt[] {
+  const points =
+    item.maneuvers
+      ?.flatMap((maneuver) => maneuver.outcoming_path?.geometry ?? [])
+      .flatMap((segment) => parseWktLineString(segment.selection)) ?? [];
+  return dedupeConsecutive(points);
 }
 
 export function createGetRoute(
@@ -89,6 +107,8 @@ export function createGetRoute(
         type: 'stop',
       })),
       transport: PROFILE_TO_TRANSPORT[request.profile],
+      // Terrain altitude per vertex, for the elevation profile/gain.
+      need_altitudes: true,
     };
 
     const body = (await fetchJson(
@@ -113,13 +133,21 @@ export function createGetRoute(
     ) {
       throw new MapProviderError(
         '2GIS routing response did not contain a usable route.',
+        { code: 'no_route' },
       );
     }
 
-    return {
-      geometry: extractGeometry(route, request.points),
-      distanceMeters,
-      durationSeconds,
-    };
+    // Never substitute the request waypoints for a missing path: joined by
+    // straight lines they cut across rivers, rail and relief — exactly what
+    // a route built "on 2GIS roads" must not do.
+    const geometry = extractGeometry(route);
+    if (geometry.length < 2) {
+      throw new MapProviderError(
+        '2GIS routing response contained no route geometry.',
+        { code: 'no_route' },
+      );
+    }
+
+    return { geometry, distanceMeters, durationSeconds };
   };
 }

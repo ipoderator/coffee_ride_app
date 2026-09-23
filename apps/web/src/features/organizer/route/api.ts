@@ -1,7 +1,10 @@
 import type {
+  BuildRouteRequest,
   CreateRoutePointRequest,
   CreateStopRequest,
+  GetRouteGeometryResponse,
   ProblemDetails,
+  RouteGeometryPoint,
   RoutePoint,
   RouteSummary,
   Stop,
@@ -11,7 +14,7 @@ import type {
 import { ApiError } from '@/lib/api/errors';
 
 export { ApiError };
-export type { RoutePoint, RouteSummary, Stop };
+export type { RouteGeometryPoint, RoutePoint, RouteSummary, Stop };
 
 const RIDES_ENDPOINT = '/api/v1/rides';
 
@@ -29,6 +32,8 @@ export async function getRideRouteState(rideId: string): Promise<{
   status: string;
   distanceKm: number | null;
   elevationGainMeters: number | null;
+  /** CR-114: the ride's start point, where the route builder's map opens. */
+  start: { lat: number; lng: number } | null;
   route: RouteSummary | null;
   stops: Stop[];
   routePoints: RoutePoint[];
@@ -40,6 +45,8 @@ export async function getRideRouteState(rideId: string): Promise<{
           status: string;
           distanceKm: number | null;
           elevationGainMeters: number | null;
+          startLat: number | null;
+          startLng: number | null;
         };
         route: RouteSummary | null;
         stops: Stop[];
@@ -55,6 +62,8 @@ export async function getRideRouteState(rideId: string): Promise<{
       status: string;
       distanceKm: number | null;
       elevationGainMeters: number | null;
+      startLat: number | null;
+      startLng: number | null;
     };
     route: RouteSummary | null;
     stops: Stop[];
@@ -64,6 +73,10 @@ export async function getRideRouteState(rideId: string): Promise<{
     status: parsed.ride.status,
     distanceKm: parsed.ride.distanceKm,
     elevationGainMeters: parsed.ride.elevationGainMeters,
+    start:
+      parsed.ride.startLat !== null && parsed.ride.startLng !== null
+        ? { lat: parsed.ride.startLat, lng: parsed.ride.startLng }
+        : null,
     route: parsed.route,
     stops: parsed.stops,
     routePoints: parsed.routePoints,
@@ -247,4 +260,43 @@ export async function deleteRoute(rideId: string): Promise<void> {
  * the browser's own `Content-Disposition: attachment` handling drives the save. */
 export function routeDownloadUrl(rideId: string): string {
   return `${RIDES_ENDPOINT}/${rideId}/route/download`;
+}
+
+/**
+ * CR-114 ("Route builder"): routes the ordered waypoints along 2GIS roads and
+ * stores the result as the ride's route (creating or replacing it). 422
+ * `route_not_buildable` when 2GIS has no road path between the points, 503
+ * `route_builder_unavailable` when routing is down/unconfigured, 409
+ * `ride_not_editable` unless the ride is still `draft`.
+ */
+export async function buildRoute(
+  rideId: string,
+  points: BuildRouteRequest['points'],
+): Promise<RouteSummary> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/route/build`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ points }),
+  });
+  const body = (await response.json()) as
+    { route: RouteSummary } | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as { route: RouteSummary }).route;
+}
+
+/** The stored route line, to draw it on the builder's map. */
+export async function getRouteGeometry(
+  rideId: string,
+): Promise<RouteGeometryPoint[]> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/route/geometry`, {
+    cache: 'no-store',
+  });
+  const body = (await response.json()) as
+    GetRouteGeometryResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as GetRouteGeometryResponse).points;
 }

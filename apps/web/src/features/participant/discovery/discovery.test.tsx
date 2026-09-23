@@ -198,10 +198,14 @@ describe('DiscoveryList', () => {
     // Neither panel is unconditionally hidden — the `hidden` class is always
     // paired with an `lg:block` override, so a real `lg`+ viewport shows both
     // simultaneously even while `view` still says "list".
+    // Asserts the hide/override pair specifically, not the panel's whole class
+    // list — CR-111 added `lg:sticky lg:top-6` alongside it, which is layout,
+    // not visibility, and should not have to be restated here.
     const listPanel = screen.getByTestId('discovery-list-panel');
     const mapPanel = screen.getByTestId('discovery-map-panel');
     expect(listPanel.className ?? '').not.toContain('hidden');
-    expect(mapPanel.className).toBe('hidden lg:block');
+    expect(mapPanel.className).toContain('hidden');
+    expect(mapPanel.className).toContain('lg:block');
   });
 
   it('hides the list/map toggle above the lg split-view breakpoint (CR-044)', async () => {

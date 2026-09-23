@@ -118,6 +118,13 @@ Contrast ratios below were computed against the theme background and meet WCAG 2
 Dark theme is not optional or "later": it is part of CR-063. An app used before dawn and
 after dusk needs it.
 
+Since CR-110 the viewer can also choose explicitly — системная / светлая / тёмная, from
+the global header. Three states, not a two-way switch, so picking one does not
+permanently discard the "follow the OS" default. The choice is stored per browser
+(`localStorage`, key `coffee-ride-theme`) and applied by a pre-hydration script in
+`app/layout.tsx`, so there is no flash of the wrong theme on first paint; every storage
+access is guarded, since it throws outright in a private window with site data blocked.
+
 ### Glass and scrim tokens ("Quiet Instrument", CR-107)
 
 Reserved for exactly two surfaces — the title/status panel over a ride's cover photo,
@@ -288,8 +295,15 @@ Organizer cabinet:
 | `/organizer/rides/[id]/updates`      | Ride updates composer                         |
 | `/organizer/profile`                 | Organizer profile                             |
 
-Both cabinets share a shell (nav + header) that renders from the feature registry
-(ADR-009). A new screen registers itself; it does not edit the shell.
+Navigation is one global header on every route (CR-108) — wordmark, the public
+discovery link, one dropdown per cabinet built from that cabinet's ADR-009 feature
+registry, the theme control (§3), and the account menu. A new screen registers itself
+into its registry; it does not edit the header. `CabinetShell` remains, narrowed to
+the `/me/*` and `/organizer/*` session gate.
+
+Every nested screen carries a labeled back link to its parent (CR-109) — an explicit
+destination, not browser history, since `/rides/[id]` is routinely opened from a shared
+URL with no history behind it.
 
 ---
 
@@ -299,7 +313,13 @@ Both cabinets share a shell (nav + header) that renders from the feature registr
 `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`,
 `FormField`, `Card`, `Badge`, `Tabs`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toast`,
 `Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `Pagination`, `MetricTile`,
-`MetricRow`, `StatusBadge`, `DifficultyScale`, `Wordmark`.
+`MetricRow`, `StatusBadge`, `DifficultyScale`, `Wordmark`, `NavMenu`.
+
+`NavMenu` (CR-108) is the accessible dropdown the global header's sections, theme
+control and account menu are all built from — `aria-haspopup="menu"`/`aria-expanded`,
+`role="menu"`/`menuitem`, arrow-key/Home/End/Escape handling, and focus returned to
+the trigger on Escape (§12). Like every primitive here it stays router-agnostic: the
+consumer supplies its own links and applies `NAV_MENU_ITEM_CLASSNAME`.
 
 Per `.claude/rules/extensibility.md`: new props on these are **optional with defaults**;
 removing or repurposing a prop requires checking both cabinets first.
@@ -342,13 +362,17 @@ messages tied to the field, a pending state, and duplicate-submit protection.
 
 **Mobile-first — design at 375px, then scale up.** The primary context is a phone.
 
-| Breakpoint | Width  | Layout                                                      |
-| ---------- | ------ | ----------------------------------------------------------- |
-| base       | ≥ 375  | Single column; bottom nav in cabinets; list-first discovery |
-| `sm`       | ≥ 640  | Two-column metric grid                                      |
-| `md`       | ≥ 768  | Side nav appears; two-column ride detail                    |
-| `lg`       | ≥ 1024 | Discovery becomes split list + map                          |
-| `xl`       | ≥ 1280 | Max content width 1200px, centered                          |
+| Breakpoint | Width  | Layout                                                                        |
+| ---------- | ------ | ----------------------------------------------------------------------------- |
+| base       | ≥ 375  | Single column; header collapses to one disclosure panel; list-first discovery |
+| `sm`       | ≥ 640  | Two-column metric grid                                                        |
+| `md`       | ≥ 768  | Full header bar (sections as dropdowns); two-column ride detail               |
+| `lg`       | ≥ 1024 | Discovery becomes split list + map, the map sticky and full-column-height     |
+| `xl`       | ≥ 1280 | Max content width 1200px, centered                                            |
+
+CR-108 replaced the cabinets' own nav (a bottom bar at base, a side column at `md`+)
+with the single global header described in §8 — there is no longer a per-cabinet
+navigation surface to break at a breakpoint.
 
 Tables (participant lists) collapse to stacked cards below `md` — never a horizontally
 scrolling table on a phone.

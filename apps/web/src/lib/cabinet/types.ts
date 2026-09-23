@@ -18,11 +18,11 @@ export interface CabinetNavItem {
   /** CR-106 (`/impeccable critique` P2, "Quiet Instrument" direction: outline
    * icons, always paired with a text label, never icon-only). A *name* into
    * `./icons.ts`'s registry, not the `lucide-react` component itself — this
-   * registry is built by a Server Component (`app/organizer/layout.tsx`,
-   * `app/me/layout.tsx`) and passed as a prop into the Client Component
-   * `CabinetShell`, and React Server Components can only serialize plain
-   * data across that boundary, not a function/`forwardRef` component value.
-   * `CabinetShell` resolves the name back to a component client-side.
+   * registry is built by a Server Component (`app/layout.tsx` since CR-108)
+   * and passed as a prop into the Client Component `AppHeader`, and React
+   * Server Components can only serialize plain data across that boundary, not
+   * a function/`forwardRef` component value. `AppHeader` resolves the name
+   * back to a component client-side.
    * Optional so a feature that hasn't picked an icon yet still renders
    * (label-only), same as before this field existed. */
   icon?: CabinetIconName;

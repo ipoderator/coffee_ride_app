@@ -3,10 +3,11 @@
 // change + restart, never a code revert ("a rushed hotfix").
 //
 // Server-only by design. `CabinetNavItem`/`DashboardWidget` registries are
-// only ever imported by Server Components (`app/organizer/layout.tsx`,
-// `app/me/layout.tsx`, `app/organizer/page.tsx`) — `filterEnabled` runs there,
+// only ever imported by Server Components (`app/layout.tsx` for the nav
+// registries since CR-108, `app/organizer/page.tsx` for the widget one, plus
+// `app/rides/[id]/page.tsx`'s own flags) — `filterEnabled` runs there,
 // before the already-filtered list crosses to a Client Component
-// (`CabinetShell`, a widget's own `Component`). That's deliberate, not
+// (`AppHeader`, a widget's own `Component`). That's deliberate, not
 // incidental: a flag read this way never needs the `NEXT_PUBLIC_` prefix
 // (browser exposure is a real cost — see `.env.example`'s
 // `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` note), and plain server-side

@@ -430,6 +430,19 @@ DELETE `/v1/rides/:id/route` — **implemented (CR-027)**. Same auth/ownership/
 draft-only rules. `404 route_not_found` if none exists. `204` — the DB row is deleted
 first; the S3 object is deleted best-effort afterward (never blocks the response).
 
+POST `/v1/rides/:id/route/build` — **implemented (CR-114, "Route builder")**. Same
+auth/ownership/draft-only rules as `POST .../route`. JSON body `{ points: { lat, lng }[] }`
+(2–25, ordered). Routes the waypoints along 2GIS's road graph (bicycle profile,
+altitudes requested) and stores the result as the ride's route — creating it, or
+replacing an existing one (uploaded or built). The line is stored exactly like an
+uploaded track: serialized to GPX (`route-2gis.gpx`, so `.../download` works), measured
+by the same parser, same ride auto-fill rule on create (elevation only when 2GIS returned
+altitudes). `200` → `{ route }`. `422 route_not_buildable` when 2GIS has no road path
+between the points (nothing is stored — the API never substitutes straight lines between
+waypoints); `503 route_builder_unavailable` when no `MAPS_2GIS_API_KEY` is configured or
+2GIS is unreachable; `503 route_storage_unavailable` as for upload. Rate limit: 30/min
+per IP (every call is a billed 2GIS request).
+
 GET `/v1/rides/:id/route/download` — **implemented (CR-027)**. Not in the original
 contract sketch — added to fulfill `docs/product.md`'s "route (including a
 downloadable track)" promise (same "product spec requires it, add the endpoint"

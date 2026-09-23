@@ -1,4 +1,4 @@
-import type { GeocodeResult, LatLng } from 'maps-core';
+import type { GeocodeResult, LatLng } from 'maps-core/server';
 import type { CircuitBreaker } from 'resilience';
 import type { TwoGisProviderConfig } from './config.js';
 import { DEFAULT_GEOCODER_BASE_URL, DEFAULT_TIMEOUT_MS } from './config.js';

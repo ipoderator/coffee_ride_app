@@ -1,4 +1,5 @@
-import { RIDE_EDIT_TERMS } from 'ui';
+import { BACK_LINK_TERMS, RIDE_EDIT_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { EditRideForm } from '@/features/organizer/rides/components/EditRideForm';
 
 // `/organizer/rides/[id]/edit` (`docs/design.md` §8 "Edit draft", CR-018). Inherits
@@ -15,6 +16,10 @@ export default async function EditRidePage({
   const { id } = await params;
   return (
     <div className="flex flex-col gap-6">
+      <BackLink
+        href="/organizer/rides"
+        label={BACK_LINK_TERMS.toOrganizerRides}
+      />
       <h1 className="text-2xl font-semibold text-text">
         {RIDE_EDIT_TERMS.pageTitle}
       </h1>

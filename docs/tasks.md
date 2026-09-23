@@ -899,14 +899,14 @@ layout.tsx`. See `docs/changelog.md`.
       state — `/organizer/rides` already owns the "create your first ride"
       empty state. See `docs/changelog.md`.
 - [x] CR-105 Sticky mobile registration CTA — the `/impeccable critique
-  apps/web` P1 ("registration CTA is the hardest element to reach on
+apps/web` P1 ("registration CTA is the hardest element to reach on
       `/rides/[id]`, no sticky/mobile placement"), done 2026-09-21: below
       `md`, `RegistrationButton` repositions into a fixed bottom bar instead
       of rendering 7 content blocks down; `md`+ is unchanged (in normal
       flow). Behind `FEATURE_STICKY_REGISTRATION_CTA` per
       `.claude/rules/extensibility.md`/CR-055. See `docs/changelog.md`.
 - [x] CR-106 Icons in the cabinet nav / site header — the `/impeccable
-  critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
+critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
       nav/site header/mobile bottom tab bar all plain text"), done
       2026-09-21: `CabinetNavItem` gained an optional icon (a name resolved
       against a small lookup map in `CabinetShell.tsx`, not the
@@ -924,3 +924,37 @@ layout.tsx`. See `docs/changelog.md`.
       `FEATURE_COVER_GLASS_PANEL`) and on the CR-105 sticky bar; bolder
       route-line weight via an additive `MapPolylineInput.width`/`opacity`.
       See `docs/changelog.md`.
+- [x] CR-111 Map key never reached `apps/web` (+ bigger discovery map) —
+      done 2026-09-22: Next only auto-loads `.env` from its own project
+      directory, so the repo-root `.env`'s `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`
+      never reached the browser bundle and both maps sat in their degraded
+      state permanently. `next.config.ts` now loads it the same explicit way
+      `apps/api/src/server.ts` does. Discovery map also made full-column-height
+      and sticky at `lg`. See `docs/changelog.md`.
+- [x] CR-108 One global header (replaces the public bar and both cabinet side
+      navs) — done 2026-09-22: persistent Strava-style header on every route,
+      with a dropdown per cabinet rendered from the ADR-009 registries, an
+      account menu with sign-out, and a mobile disclosure panel below `md`.
+      Added `packages/ui`'s `NavMenu` primitive and a shared `SessionProvider`;
+      `CabinetShell` narrowed to the session gate. See `docs/changelog.md`.
+- [x] CR-110 Light/dark/system theme switch — done 2026-09-22: three-state
+      control in the header, stored per browser and applied pre-hydration so
+      there is no flash of the wrong theme. See `docs/changelog.md`.
+- [x] CR-109 Back links on nested screens — done 2026-09-22: `BackLink` on all
+      twelve nested screens, each with an explicit parent `href` rather than
+      `router.back()`. See `docs/changelog.md`.
+- [x] CR-112 Ride detail redesign + route map framing — done 2026-09-23:
+      `/rides/[id]` reworked into a split summary panel (identity | headline
+      metrics + supporting facts + registration) and a map panel (map, stops
+      rail, elevation profile). Map now fits the whole route/pins
+      (`MapHandle.fitBounds`), re-fits on container resize, draws a casing
+      under the line, and pins the ride's start point. See `docs/changelog.md`.
+- [x] CR-113 Upload forms' invisible file picker + organizer save feedback —
+      done 2026-09-23: `packages/ui` `FileInput` (native picker styled as a
+      button) in all four upload forms; `OrganizerProfileForm` clears its
+      stale "saved" line on edit and toasts every save. See `docs/changelog.md`.
+- [ ] CR-114 Route builder on 2GIS roads — implemented 2026-09-23
+      (`POST /v1/rides/:id/route/build` + `RouteBuilder` on the organizer route
+      page; adapter no longer falls back to straight lines). Open item: live
+      verification against real 2GIS, blocked by KI-056 (VPN). See
+      `docs/changelog.md`.

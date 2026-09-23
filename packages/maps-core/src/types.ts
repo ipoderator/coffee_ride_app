@@ -20,9 +20,16 @@ export interface RouteRequest {
   profile: 'cycling' | 'driving' | 'walking';
 }
 
+/** A polyline vertex with the terrain elevation under it, when the provider
+ * supplies one. */
+export interface LatLngAlt extends LatLng {
+  elevationMeters?: number;
+}
+
 export interface RouteResult {
-  /** Provider-neutral polyline as points, or GeoJSON LineString. */
-  geometry: LatLng[];
+  /** Provider-neutral polyline — the actual path along the provider's road
+   * graph, never the bare request waypoints joined by straight lines. */
+  geometry: LatLngAlt[];
   distanceMeters: number;
   durationSeconds: number;
 }

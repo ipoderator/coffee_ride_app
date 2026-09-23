@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  buildRouteRequestSchema,
   createRideRequestSchema,
   createRoutePointRequestSchema,
   createStopRequestSchema,
@@ -26,6 +27,7 @@ import {
   stopResponseSchema,
 } from './ride-response.schema.js';
 import {
+  buildRoute,
   RideServiceError,
   cancelRide,
   closeRegistration,
@@ -153,6 +155,10 @@ const rideDetailResponseSchema = z.object({
   viewerReview: reviewResponseSchema.nullable(),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
+
+// CR-114: an organizer iterating on a route rebuilds it often, but each call
+// is a billed 2GIS request — generous for a human, bounded for a script.
+const ROUTE_BUILD_RATE_LIMIT = { max: 30, timeWindow: '1 minute' };
 const stopResponseWrapper = z.object({ stop: stopResponseSchema });
 const stopIdParamsSchema = z.object({
   id: z.uuid('id must be a valid ride id.'),
@@ -498,6 +504,35 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.user!.id,
         request.params.id,
         file,
+      );
+      return reply.status(200).send({ route });
+    },
+  );
+
+  // CR-114 ("Route builder"): routes the organizer's ordered waypoints along
+  // the map provider's road graph and stores the result as the ride's route
+  // (creating or replacing it). Same draft-only ownership gate as the GPX
+  // verbs above. Rate-limited per IP more tightly than the global default:
+  // every call is a billed request to 2GIS.
+  app.post(
+    '/:id/route/build',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: buildRouteRequestSchema,
+        response: { 200: routeResponseWrapper },
+      },
+      config: { rateLimit: ROUTE_BUILD_RATE_LIMIT },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const route = await buildRoute(
+        app.db,
+        app.s3,
+        app.mapProvider,
+        request.user!.id,
+        request.params.id,
+        request.body.points,
       );
       return reply.status(200).send({ route });
     },

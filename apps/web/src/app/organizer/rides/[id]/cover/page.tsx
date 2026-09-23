@@ -1,4 +1,5 @@
-import { RIDE_COVER_TERMS } from 'ui';
+import { BACK_LINK_TERMS, RIDE_COVER_TERMS } from 'ui';
+import { BackLink } from '@/components/site/BackLink';
 import { CoverImageUploadForm } from '@/features/organizer/cover-image/components/CoverImageUploadForm';
 
 // `/organizer/rides/[id]/cover` (ADR-019/CR-086, `docs/design.md` §14). Inherits
@@ -15,6 +16,10 @@ export default async function RideCoverPage({
   const { id } = await params;
   return (
     <div className="flex flex-col gap-6">
+      <BackLink
+        href="/organizer/rides"
+        label={BACK_LINK_TERMS.toOrganizerRides}
+      />
       <h1 className="text-2xl font-semibold text-text">
         {RIDE_COVER_TERMS.pageTitle}
       </h1>

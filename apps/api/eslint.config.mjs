@@ -52,4 +52,15 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // CR-114: `plugins/maps.ts` is apps/api's one composition point
+    // (`.claude/rules/architecture.md`) — the only file here allowed to import
+    // `maps-2gis` (whose name the `*2gis*` glob also matches) to wire the
+    // concrete adapter behind `maps-core`'s `MapProvider`. Same shape as
+    // apps/web's `create-map-renderer.ts` override.
+    files: ['src/plugins/maps.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
 );
