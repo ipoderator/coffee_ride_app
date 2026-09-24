@@ -14,9 +14,12 @@ import {
 } from '../rides/ride-response.schema.js';
 import { registrationResponseSchema } from './registration-response.schema.js';
 import { waitlistEntryResponseSchema } from './waitlist-entry-response.schema.js';
+import { bikeResponseSchema } from '../users/user-response.schema.js';
 import {
   cancelRegistration,
   createRegistration,
+  getRiderAvatarDownload,
+  getRiderProfile,
   joinWaitlist,
   leaveWaitlist,
   listMyRegistrations,
@@ -52,17 +55,45 @@ const listParticipantsResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 
-// CR-117: `GET /:id/riders` — deliberately no id fields at all; Fastify's Zod
-// serializer strips anything not listed here, so even a future service-layer slip
-// can't leak more than display name + group.
+// CR-117/CR-126: `GET /:id/riders` — display name, group, and (CR-126) the opaque
+// `registrationId` that unlocks the gated profile/avatar routes below; Fastify's
+// Zod serializer strips anything not listed here, so even a future service-layer
+// slip can't leak more than this.
 const listRidersResponseSchema = z.object({
   items: z.array(
     z.object({
+      registrationId: z.string(),
       displayName: z.string().nullable(),
       group: rideGroupRefResponseSchema.nullable(),
     }),
   ),
   nextCursor: z.string().nullable(),
+});
+
+// CR-126. Never `phone`/`email` — `getRiderProfile` doesn't even select them.
+const riderProfileResponseSchema = z.object({
+  registrationId: z.string(),
+  displayName: z.string().nullable(),
+  bio: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  bikes: z.array(bikeResponseSchema),
+  distanceWeekKm: z.number().nullable(),
+  distanceMonthKm: z.number().nullable(),
+  distanceYearKm: z.number().nullable(),
+  recentRides: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      startsAt: z.string(),
+    }),
+  ),
+});
+const riderProfileResponseWrapper = z.object({
+  profile: riderProfileResponseSchema,
+});
+const riderParamsSchema = z.object({
+  id: z.uuid('id must be a valid ride id.'),
+  registrationId: z.uuid('registrationId must be a valid registration id.'),
 });
 
 // CR-091 ("My registrations", `.claude/context/current-task.md`): reuses
@@ -290,6 +321,54 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         request.query,
       );
       return reply.status(200).send(page);
+    },
+  );
+
+  // CR-126: a rider's card, reached only through a `registrationId` from this
+  // same ride's `/riders` list (`resolveRiderAccess` in `registrations.service.ts`
+  // is the single access gate — profile owner, the ride's organizer, or a viewer
+  // the owner's `profileVisibility` setting allows). `403 riders_hidden` if the
+  // organizer turned the list off, `403 profile_private` if the owner's setting
+  // doesn't grant this viewer, `404 rider_not_found` for no such active rider.
+  app.get(
+    '/:id/riders/:registrationId/profile',
+    {
+      schema: {
+        params: riderParamsSchema,
+        response: { 200: riderProfileResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const profile = await getRiderProfile(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.params.registrationId,
+      );
+      return reply.status(200).send({ profile });
+    },
+  );
+
+  // CR-126: the body behind the profile card's `avatarUrl` — same access gate,
+  // streamed like `users.routes.ts`'s `GET /me/avatar`. Not JSON, so no Zod
+  // `response` schema.
+  app.get(
+    '/:id/riders/:registrationId/avatar',
+    { schema: { params: riderParamsSchema }, preHandler: requireAuth },
+    async (request, reply) => {
+      const { body, contentType } = await getRiderAvatarDownload(
+        app.db,
+        app.s3,
+        request.user!.id,
+        request.params.id,
+        request.params.registrationId,
+      );
+      return reply
+        .status(200)
+        .header('Cache-Control', 'private, max-age=31536000, immutable')
+        .type(contentType)
+        .send(body);
     },
   );
 };

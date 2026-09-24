@@ -27,25 +27,54 @@ utilities), CR-050 (async notification delivery via Redis queue), CR-051
 test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 `/health`-banner scoping decision) are all done. Post-MVP product work on top:
 the «Топокарта» visual direction (ADR-021), pace groups (`RideGroup`, ADR-022) and
-a rider list (CR-115…CR-120, 2026-09-23).
+a rider list (CR-115…CR-120, 2026-09-23), CR-125 (2026-09-24): real
+first/last name on `User` and a per-ride participants-visibility toggle, and
+CR-126 (2026-09-24): the rider-profile card — `profileVisibility` (3-tier,
+ADR-023), a new `Bike` entity ("garage"), self-reported distance stats, and
+`GET /v1/rides/:id/riders/:registrationId/profile`/`.../avatar`, reachable
+from the riders list.
 
 ## Current task
 
-None active. CR-115…CR-120 (the «Топокарта» redesign, pace groups and the
-rider list) are implemented and reviewed: CR-115…CR-117 committed as
+None active. CR-121 (new wordmark), CR-122 (header bar items one type style,
+`NAV_BAR_ITEM_CLASSNAME`: Golos 600 16px), CR-123 (discovery map
+fullscreen toggle — list column widened to ~528px, desktop-only fullscreen
+button, `isMapFullscreen` in `DiscoveryList`), CR-124 (brand purple locked
+to `#9033A1` — `primary`/`route`/map inks unified, were two drifted purples)
+and CR-125 (`users.firstName`/`lastName`, migration `0018`; `rides.
+participantsVisible` boolean default `true`, editable only via `PATCH
+/v1/rides/:id`'s existing draft-only gate; `GET /v1/rides/:id/riders` →
+`403 riders_hidden` when off, for every caller; riders/participants/waitlist
+name resolution now prefers `firstName`+`lastName` over the free-text
+`displayName`; see `.claude/context/known-issues.md` KI-065 for the
+post-publish-editing limitation), and CR-126 (`users.profileVisibility`
+3-tier enum default `co_participants`, `distanceWeekKm`/`distanceMonthKm`/
+`distanceYearKm` self-reported; new `Bike` entity/`user_bikes` table
+("garage"), migration `0019_real_steve_rogers`; `GET /v1/rides/:id/riders`
+now returns `registrationId` per item; new `GET /v1/rides/:id/riders/
+:registrationId/profile`+`.../avatar` gated by `resolveRiderAccess`
+(closed/co_participants/open, plus self/organizer always granted); new `/me/
+profile` garage UI and `/rides/[id]/riders/[registrationId]` card page; see
+ADR-023, KI-059 resolved)
+done, uncommitted. CR-115…CR-120 (the «Топокарта» redesign, pace groups and
+the rider list) are implemented and reviewed: CR-115…CR-117 committed as
 `3fe806b`, CR-118…CR-120 in the working tree, not yet committed. Full detail:
-`docs/changelog.md`'s «2026-09-23 — CR-115…CR-120» entry, ADR-021, ADR-022.
+`docs/changelog.md`'s «2026-09-23 — CR-115…CR-120», «2026-09-24 — CR-123»,
+«2026-09-24 — CR-124», «2026-09-24 — CR-125» and «2026-09-24 — CR-126»
+entries, ADR-021, ADR-022, ADR-023.
 
 **Visual direction: «Топокарта» (ADR-021).** The UI is a printed
 orienteering-map sheet: white paper / black ink, one plum overprint
-(`primary`/`route`, #7A2482 light / #D79BE0 dark) used only for the route line
+(`primary`/`route`, `#9033A1` light / `#D79BE0` dark — locked exact value,
+CR-124, `.claude/CLAUDE.md` "Brand color") used only for the route line
 and the primary action; meaning inks `contour` (elevation), `info`, `success`,
 `warning`; graphite dark theme. `bg-raised` equals `bg`; `surface` is the one
 raised plane. Sofia Sans Condensed is `font-display` (headings, labels,
-metrics, wordmark) next to Golos Text — its Russian forms come from `locl`, so
+metrics) next to Golos Text — its Russian forms come from `locl`, so
 `<html lang="ru">` is load-bearing. 4px radius, no card shadows. `Button`
 `danger` is an outline; `danger-filled` (additive) is `ConfirmDialog`'s
-confirm. Wordmark «coffee◦ride» (control-point ring) + `app/icon.svg`. The
+confirm. Wordmark «кофе•райд» (CR-121: plum elevation-profile mark + Golos 800, filled
+plum dot, 1.8rem; accessible name «Кофе Райд») + `app/icon.svg` = the mark. The
 CR-107 "Quiet Instrument" glass treatment is **retired**: `lib/glass.ts`,
 `--glass-*` tokens and `FEATURE_COVER_GLASS_PANEL` are deleted. The sticky
 mobile registration bar is now the **default** — `FEATURE_STICKY_REGISTRATION_CTA`
@@ -741,12 +770,26 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   and `organizers` — don't move them back into one capability module, and
   don't let `users`/`organizers` import a `rides`-owned file directly if a
   fourth caller ever needs this pipeline again;
-- `users`/`organizers` avatar mutations stay "me"-scoped only (no `:id`
-  variant for either) — only the organizer avatar _download_ is public and
-  keyed by `:id` (`GET /v1/organizers/:id/avatar`), because an organizer's
-  identity is already public via `RideOrganizerSummary`; don't extend that
-  same public-by-id pattern to `users` without a real product reason (there
-  is still no `GET /v1/users/:id` of any kind);
+- `users`/`organizers` avatar _mutations_ stay "me"-scoped only (no `:id`
+  variant for either). Reads: the organizer avatar download is public and
+  keyed by `:id` (`GET /v1/organizers/:id/avatar`) since an organizer's
+  identity is already public via `RideOrganizerSummary`. CR-126 added the one
+  other exception — `GET /v1/rides/:id/riders/:registrationId/avatar` — but
+  it is _not_ a `users/:id` route: it's keyed by ride+registration, gated by
+  `resolveRiderAccess`, and never resolvable from a bare user id. There is
+  still no `GET /v1/users/:id` of any kind — don't add one; a cross-
+  participant need goes through the ride-scoped pattern ADR-023 established,
+  not a new bare-id route;
+- `resolveRiderAccess` (`apps/api/src/modules/registrations/
+registrations.service.ts`, ADR-023) is the one place the rider-profile/
+  avatar tier logic lives — don't duplicate the `closed`/`co_participants`/
+  `open` check anywhere else; both routes call it. It never selects
+  `phone`/`email` regardless of tier — don't widen that select to "just this
+  one extra field" later without re-reading ADR-023;
+- `user_bikes`' partial unique index (`user_bikes_one_active_per_user`) is
+  the actual "at most one active bike" invariant — `users.service.ts`'s
+  create/update transactions unset the previous active bike as a matching
+  courtesy, not the source of truth;
 - the render-layer/server-provider split in `packages/maps-core`
   (`render.ts`'s `MapRenderer` vs. `provider.ts`'s `MapProvider`) — don't
   merge them onto one interface; server code must never see a render method
@@ -777,10 +820,11 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   the `group_required`/`group_not_found` checks staying inside the existing locked
   registration transaction (ADR-022);
 - `GET /v1/rides/:id/riders` staying signed-in only and returning display name +
-  group only — no ids, emails, phones or emergency data (ADR-022, CR-117);
+  group + (CR-126) an opaque `registrationId` — never a raw user id, email,
+  phone or emergency data (ADR-022, CR-117, ADR-023);
 - `DiscoveryMap`'s markers following the filtered ride list (CR-118 fixed markers
   that never updated after the first render).
 
 ## Last updated
 
-2026-09-23 (CR-115…CR-120)
+2026-09-24 (CR-126)

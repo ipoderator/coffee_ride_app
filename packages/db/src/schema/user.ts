@@ -2,6 +2,7 @@ import {
   boolean,
   check,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -9,6 +10,17 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+// CR-126: who besides the owner can view a rider-profile card
+// (`GET /v1/rides/:id/riders/:registrationId/profile`) — see
+// `apps/api/src/modules/registrations/registrations.service.ts`'s
+// `resolveRiderAccess`. Never controls `phone`/`email` (never returned to anyone but
+// the owner, regardless of this setting) — only the social-profile fields below.
+export const profileVisibilityEnum = pgEnum('profile_visibility', [
+  'closed',
+  'co_participants',
+  'open',
+]);
 
 // First domain table (CR-011, `.claude/rules/database.md`/`docs/database.md`).
 //
@@ -38,6 +50,12 @@ export const users = pgTable(
     // DB CHECK constraint — same tier of "required-shaped-but-not-DB-invariant" data
     // as nothing else on this table yet.
     displayName: text('display_name'),
+    // CR-125: shown in the ride riders/participants/waitlist lists in preference
+    // to `displayName` (a free-text nickname) when either is set — see
+    // `apps/api/src/modules/registrations/registrations.service.ts`'s
+    // `resolveParticipantName`. Nullable for the same reason as `displayName`.
+    firstName: text('first_name'),
+    lastName: text('last_name'),
     // Private contact data (`.claude/rules/security.md`) — returned only to the
     // profile's own owner (`GET /v1/auth/me`, `PATCH /v1/users/me`), never to another
     // user; no other endpoint exposes another user's row today, so there is nothing
@@ -51,6 +69,20 @@ export const users = pgTable(
     avatarKey: text('avatar_key'),
     avatarContentType: text('avatar_content_type'),
     avatarSizeBytes: integer('avatar_size_bytes'),
+    // CR-126: gates the rider-profile card (bio, avatar, bikes, distance stats,
+    // recent rides) — see `profileVisibilityEnum` above. Defaults `co_participants`:
+    // visible to people the user actually shares a ride with, not the whole platform,
+    // without shipping the feature switched off for everyone.
+    profileVisibility: profileVisibilityEnum('profile_visibility')
+      .notNull()
+      .default('co_participants'),
+    // CR-126: self-reported distance stats shown on the rider-profile card
+    // (`docs/product.md` confirmed: manually entered, not derived from ride history).
+    // Nullable — missing renders `—` per `docs/design.md` §7, never `0`. Bounds are
+    // generous sanity caps against garbage input, not real-world limits.
+    distanceWeekKm: integer('distance_week_km'),
+    distanceMonthKm: integer('distance_month_km'),
+    distanceYearKm: integer('distance_year_km'),
     // ADR-012: every timestamp column is `timestamptz`, never bare `timestamp`.
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -64,6 +96,18 @@ export const users = pgTable(
     check(
       'users_avatar_size_bytes_non_negative',
       sql`${table.avatarSizeBytes} is null or ${table.avatarSizeBytes} >= 0`,
+    ),
+    check(
+      'users_distance_week_km_range',
+      sql`${table.distanceWeekKm} is null or (${table.distanceWeekKm} >= 0 and ${table.distanceWeekKm} <= 3000)`,
+    ),
+    check(
+      'users_distance_month_km_range',
+      sql`${table.distanceMonthKm} is null or (${table.distanceMonthKm} >= 0 and ${table.distanceMonthKm} <= 10000)`,
+    ),
+    check(
+      'users_distance_year_km_range',
+      sql`${table.distanceYearKm} is null or (${table.distanceYearKm} >= 0 and ${table.distanceYearKm} <= 100000)`,
     ),
   ],
 );

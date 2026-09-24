@@ -60,6 +60,7 @@ interface FormState {
   difficulty: '' | DifficultyLevel;
   startLat: string;
   startLng: string;
+  participantsVisible: boolean;
 }
 
 function toFormState(ride: Ride): FormState {
@@ -78,6 +79,7 @@ function toFormState(ride: Ride): FormState {
     difficulty: ride.difficulty ?? '',
     startLat: ride.startLat?.toString() ?? '',
     startLng: ride.startLng?.toString() ?? '',
+    participantsVisible: ride.participantsVisible,
   };
 }
 
@@ -180,6 +182,7 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       difficulty: form.difficulty === '' ? null : form.difficulty,
       startLat: toNullableNumber(form.startLat),
       startLng: toNullableNumber(form.startLng),
+      participantsVisible: form.participantsVisible,
     };
 
     const parsed = updateRideRequestSchema.safeParse(payload);
@@ -696,6 +699,25 @@ export function EditRideForm({ rideId }: { rideId: string }) {
               </option>
             ))}
           </select>
+        </FormField>
+
+        <FormField
+          id="ride-participants-visible"
+          label={RIDE_EDIT_TERMS.participantsVisibleLabel}
+          hint={RIDE_EDIT_TERMS.participantsVisibleHint}
+        >
+          <input
+            type="checkbox"
+            checked={form.participantsVisible}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                participantsVisible: event.target.checked,
+              })
+            }
+            disabled={isPending || !isDraft}
+            className="size-5 rounded border-[1.5px] border-frame accent-primary disabled:cursor-not-allowed disabled:opacity-60"
+          />
         </FormField>
 
         {publishVerificationRequired && (

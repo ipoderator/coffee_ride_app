@@ -22,13 +22,14 @@ import './globals.css';
 // `--font-mono` source (see tokens.css's `var(--font-golos, ...)` fallback).
 const golosText = Golos_Text({
   subsets: ['cyrillic', 'latin'],
-  weight: ['400', '500', '600'],
+  // 800: the wordmark only (CR-121).
+  weight: ['400', '500', '600', '800'],
   variable: '--font-golos',
   display: 'swap',
 });
 
 // ADR-021 («Топокарта»): the display face — headings, labels, metric
-// numerals, the wordmark (`font-display`). Variable font, so no `weight` list.
+// numerals (`font-display`). Variable font, so no `weight` list.
 // Sofia Sans' default Cyrillic is the Bulgarian form set (в/д/и/т drawn
 // like b/g/u/m); the Russian forms come from its `locl` OpenType feature,
 // which browsers apply only when the text's language is Russian. That is

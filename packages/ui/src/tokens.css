@@ -34,14 +34,27 @@
   --text-muted: #676d74;
   /* The ink rule: map frame, secondary-button outline, strong dividers. */
   --frame: #15171a;
-  --primary: #7a2482;
-  --primary-hover: #651d6c;
+  /* CR-124: the brand purple, locked to the exact value measured off the
+     rendered UI (macOS Digital Color Meter, RGB 144/51/161) — the single
+     source of truth for "фирменный цвет" (`.claude/CLAUDE.md`). `route` and
+     the map inks below are the SAME value, not just the same name: ADR-021
+     calls for one overprint ink and CR-124 fixes the drift where `primary`
+     and `route` had quietly diverged into two different purples. */
+  --primary: #9033a1;
+  --primary-hover: #772a85;
   --on-primary: #ffffff;
-  --primary-tint: #f5eaf6;
+  --primary-tint: #f6eef7;
   /* The route line on a map, drawn over a casing so it stays legible on
      any basemap detail (read at call time by `getCssColorVar`). */
-  --route: #9c2aa6;
+  --route: #9033a1;
   --route-casing: #ffffff;
+  /* Map overlay inks: follow the 2GIS basemap, not the UI theme. The basemap
+     stays light in both themes (KI-057), so these have NO `.dark` override —
+     a graphite casing on light tiles drew the route as a heavy black-outlined
+     band. Switch them together with a dark basemap style when one lands. */
+  --map-route: #9033a1;
+  --map-route-casing: #ffffff;
+  --map-marker-selected: #9033a1;
   --contour: #8c5419;
   --success: #1d6f38;
   --warning: #7a5300;
@@ -94,11 +107,15 @@
   --text-secondary: #b4b9be;
   --text-muted: #8e959c;
   --frame: #ecedea;
+  /* CR-124: `route` matched `primary` was drifting here too (#DA8FE4 vs
+     #D79BE0) — unified to the one lifted overprint value, same fix as the
+     light theme. Left lifted rather than reusing the light-theme hex
+     directly: that stays the documented, accessible dark-ground value. */
   --primary: #d79be0;
   --primary-hover: #e4b6eb;
   --on-primary: #1c0f1e;
   --primary-tint: #2c1f2f;
-  --route: #da8fe4;
+  --route: #d79be0;
   --route-casing: #111315;
   --contour: #d39b5f;
   --success: #62c483;

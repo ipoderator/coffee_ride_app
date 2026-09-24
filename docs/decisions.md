@@ -992,3 +992,83 @@ recorded reason, not just a migration.
 
 If organizers ask for per-group limits/waitlists or per-group start times, or if more
 than 6 groups per ride turns out to be a real need.
+
+## ADR-023 — Rider profile: cross-participant access always scoped through a shared ride, three-tier visibility
+
+Status: Accepted (2026-09-24).
+
+### Context
+
+The product owner asked for participant profile cards: from a ride's riders list,
+open another participant's card and see their bio, "garage" (bikes), self-reported
+distance stats, and recent rides — a step toward the platform feeling social. This is
+the first feature where one user's data is shown to another. `.claude/context/
+project-state.md` had already recorded a standing constraint from KI-059's discovery:
+do not add a general `GET /v1/users/:id` without a real product reason. This is that
+reason, but the shape still had to avoid becoming a general participant directory —
+`.claude/rules/security.md` (no endpoint exposes another user's row) and `docs/
+product.md`'s "no social feed" scope note both cut against an unscoped profile-by-id
+endpoint.
+
+### Decision
+
+1. **No `GET /v1/users/:id`, ever.** Instead, two new routes nested under the ride/
+   rider a viewer already reached through the (already signed-in-only) riders list:
+   `GET /v1/rides/:id/riders/:registrationId/profile` and `.../avatar`. `GET /v1/
+rides/:id/riders` additively gained `registrationId` per item (an opaque id, never
+   a raw `userId`) — the only way to obtain one.
+2. **Three-tier `profileVisibility`** on `User` (`closed` / `co_participants` /
+   `open`, default `co_participants`), settable only by the profile's own owner via
+   the existing `PATCH /v1/users/me`. `co_participants` is checked by "does the viewer
+   have their own active registration on _this_ ride" — sharing the specific ride the
+   card was opened from, not a search across the viewer's whole ride history.
+3. **One access function, `resolveRiderAccess`**, backs both new routes so the tier
+   logic exists exactly once. It always re-checks `Ride.participantsVisible` first
+   (`403 riders_hidden`, same as the riders list itself) before considering
+   `profileVisibility` at all — a rider list the organizer hid is hidden completely,
+   not just thinned to "closed" profiles.
+4. **The ride's own organizer always has access**, on top of the visibility tiers —
+   they already have equal-or-greater access to the same participant via `GET .../
+participants` (which includes contact data this new route never does), so this is
+   not a new escalation.
+5. **`phone`/`email` are never part of the response**, regardless of
+   `profileVisibility` — the query behind the profile route does not select them at
+   all, not just omit them at serialization. Only `bio`, `avatarUrl`, `bikes`,
+   `distanceWeekKm`/`distanceMonthKm`/`distanceYearKm`, and `recentRides`.
+6. **Distance stats are self-reported**, not derived from the participant's actual
+   ride history — confirmed explicitly with the product owner. `recentRides` (up to 5,
+   most recent first) reuses `Ride.participantsVisible` as its one visibility rule
+   (a ride the organizer hid never appears in anyone's "recent rides" either) rather
+   than inventing a second flag.
+7. **`Bike`** ("garage") is a new domain entity (`packages/db/src/schema/bike.ts`,
+   `user_bikes` table) — `userId`, `bikeType` (reuses `Ride`'s existing
+   `bicycleTypeEnum`, narrowed at the app layer to exclude `'any'`), `brand`, `model`,
+   `isActive` (DB-enforced: at most one active bike per user, partial unique index).
+   Not a duplicate of any existing concept — a participant's personal equipment is
+   genuinely new, unlike `RideRequirement` (a rule the ride imposes).
+
+### Rationale — why ride-scoped, not a general profile-by-id endpoint
+
+A general `GET /v1/users/:id` would need its own, independent authorization check
+disconnected from any specific ride — inviting exactly the kind of "just check if the
+id exists" shortcut `.claude/rules/security.md` warns against, and turning the app
+into a browsable user directory (explicitly out of scope, `docs/product.md`). Scoping
+through `registrationId` means the _only_ way to reach a card is a ride the viewer
+already legitimately saw the riders list of, and the access check has natural,
+narrow inputs (this ride, this rider, this viewer) rather than "any user, any user".
+
+### What this does NOT mean
+
+- No cross-ride "people you may know" or follow/friend graph — `co_participants`
+  is evaluated per ride at request time, not a stored relationship.
+- No profile search or public directory — a card is only reachable via a ride's own
+  riders list link.
+- Avatar streaming (`.../avatar`) duplicates the same gate rather than being a
+  separately-securable resource — it is not safe to leave less protected than the
+  profile JSON it illustrates.
+
+### When to revisit
+
+If a real product need appears for viewing a profile independent of any shared ride
+(e.g. organizer-to-past-participant outreach), that is a new, separately-considered
+decision — not a quiet loosening of `resolveRiderAccess`.

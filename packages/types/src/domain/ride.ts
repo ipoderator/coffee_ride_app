@@ -62,6 +62,10 @@ export interface Ride {
   paceKmh: number | null;
   durationMinutes: number | null;
   difficulty: DifficultyLevel | null;
+  /** CR-125: organizer-facing privacy toggle for `GET /v1/rides/:id/riders` —
+   * `false` hides the named participant list for every viewer (the ride's own
+   * `registrationsCount` is unaffected). Defaults `true`. */
+  participantsVisible: boolean;
   status: RideStatus;
   createdAt: string;
   updatedAt: string;

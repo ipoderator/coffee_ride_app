@@ -6,6 +6,8 @@ import type { PublicRideListItem } from 'types';
 import { RIDE_DISCOVERY_ROW_TERMS, cn, formatTime } from 'ui';
 import { createMapRenderer } from '@/lib/maps/create-map-renderer';
 import { getCssColorVar } from '@/lib/maps/css-color';
+import { getRouteGeometry } from '../api';
+import { smoothRoutePreview } from '../lib/route-preview';
 import { RideMapPlaceholder } from './RideMapPlaceholder';
 
 // A ride with no start location can't get a pin — same "missing data" stance
@@ -25,6 +27,11 @@ function isPlottable(ride: PublicRideListItem): ride is PlottableRide {
 // map has somewhere to point before any pin exists.
 const DEFAULT_CENTER = { lat: 55.7558, lng: 37.6173 };
 const FIT_OPTIONS = { padding: 64, maxZoom: 12 };
+// Route line: 5px of overprint inside a 2px paper casing each side (the
+// adapter adds 4px for `outlineColor`) — enough weight to read over roads
+// without turning into a band.
+const ROUTE_LINE_WIDTH = 5;
+const GEOMETRY_FETCH_DELAY_MS = 120;
 
 /**
  * Bumps whenever the theme class on `<html>` changes (CR-110's theme control),
@@ -131,9 +138,10 @@ export function DiscoveryMap({
   // Pins: rebuilt whenever the rides, the active ride or the theme change.
   useEffect(() => {
     if (!handle) return;
-    const route = getCssColorVar('--route');
-    const primary = getCssColorVar('--primary');
-    const halo = getCssColorVar('--route-casing');
+    // `--map-*`: basemap-bound inks, identical in both themes (KI-057).
+    const route = getCssColorVar('--map-route');
+    const primary = getCssColorVar('--map-marker-selected');
+    const halo = getCssColorVar('--map-route-casing');
     handle.setMarkers(
       plottable.map((ride) => {
         const selected = ride.id === activeId;
@@ -165,24 +173,63 @@ export function DiscoveryMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handle, plottableKey]);
 
-  // Route line: the active ride's simplified geometry (CR-116), if it has one.
+  // Route line. The list only carries `routePreview` (≤ 40 points, CR-116) —
+  // fine for the row glyph, but at map scale it's a chain of straight sticks
+  // cutting across the road network. So the active ride's full stored line is
+  // fetched (once per ride, cached) and drawn instead; until it arrives, or if
+  // the request fails, the preview is drawn smoothed rather than nothing.
   const activeRoute = useMemo(
     () => rides.find((ride) => ride.id === activeId)?.routePreview ?? null,
     [rides, activeId],
   );
+  const geometryCache = useRef(new Map<string, LatLng[]>());
+  const [fullRoute, setFullRoute] = useState<{
+    rideId: string;
+    points: LatLng[];
+  } | null>(null);
+  useEffect(() => {
+    if (!activeId || !activeRoute) return;
+    const cached = geometryCache.current.get(activeId);
+    if (cached) {
+      setFullRoute({ rideId: activeId, points: cached });
+      return;
+    }
+    let cancelled = false;
+    // A short delay so sweeping the pointer down the list doesn't fire a
+    // request per row it crosses.
+    const timer = setTimeout(() => {
+      getRouteGeometry(activeId)
+        .then(({ points }) => {
+          const line = points.map(({ lat, lng }) => ({ lat, lng }));
+          geometryCache.current.set(activeId, line);
+          if (!cancelled) setFullRoute({ rideId: activeId, points: line });
+        })
+        // Degraded, not broken: the smoothed preview stays on the map.
+        .catch(() => {});
+    }, GEOMETRY_FETCH_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [activeId, activeRoute]);
+
   useEffect(() => {
     if (!handle) return;
     if (!activeRoute || activeRoute.length < 2) {
       handle.setPolyline(null);
       return;
     }
+    const points =
+      fullRoute && fullRoute.rideId === activeId && fullRoute.points.length >= 2
+        ? fullRoute.points
+        : smoothRoutePreview(activeRoute).map(([lat, lng]) => ({ lat, lng }));
     handle.setPolyline({
-      points: activeRoute.map(([lat, lng]) => ({ lat, lng })),
-      color: getCssColorVar('--route'),
-      width: 6,
-      outlineColor: getCssColorVar('--route-casing'),
+      points,
+      color: getCssColorVar('--map-route'),
+      width: ROUTE_LINE_WIDTH,
+      outlineColor: getCssColorVar('--map-route-casing'),
     });
-  }, [handle, activeRoute, themeVersion]);
+  }, [handle, activeId, activeRoute, fullRoute, themeVersion]);
 
   if (renderFailed) {
     return (

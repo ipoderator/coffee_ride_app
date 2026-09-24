@@ -846,6 +846,40 @@ ADR-022). No new package and no new dependency-direction edge; one new domain en
   implemented in `maps-2gis/src/render.ts` (`.claude/rules/maps.md` updated). The
   `create-map-renderer.ts` composition point is unchanged.
 
+CR-126 (rider profile: privacy tiers, garage, self-reported distance stats, recent
+rides, 2026-09-24, ADR-023). No new package; one new domain entity, one new
+cross-participant access pattern (`resolveRiderAccess`) that any future
+cross-user feature should reuse rather than re-deriving.
+
+- **packages/db**: `src/schema/bike.ts` (`user_bikes`, FK → `users`, reuses
+  `ride.ts`'s `bicycleTypeEnum`), migration `0019_real_steve_rogers` (19
+  migrations total). `user.ts` gained `profileVisibilityEnum` +
+  `profileVisibility`/`distanceWeekKm`/`distanceMonthKm`/`distanceYearKm`.
+- **packages/types**: `domain/bike.ts` (`Bike`, `BikeType`/`BIKE_TYPES` —
+  narrower than `Ride`'s `BicycleType`, excludes `'any'`), `api/bikes.ts`
+  (bike CRUD contracts), `api/rider-profile.ts` (`RiderProfile`,
+  `GetRiderProfileResponse`); `domain/user.ts` gained `ProfileVisibility`/
+  `PROFILE_VISIBILITIES` and the new `User` fields; `api/ride-groups.ts`'s
+  `RideRider` gained `registrationId`.
+- **apps/api**: `modules/users/` gained `me`-scoped bike CRUD
+  (`users.service.ts`/`users.routes.ts`, exports `toBike` for cross-module
+  reuse — same "share a mapper across modules" precedent as `rides.service.ts`'s
+  `toPublicRide`). `modules/registrations/registrations.service.ts` gained
+  `hasActiveRegistration`, `resolveRiderAccess` (the one access-tier gate),
+  `getRiderProfile`, `getRiderAvatarDownload`, and `listRiders`'s
+  `registrationId` field; two new routes on `registrations.routes.ts`
+  (`.../riders/:registrationId/profile`, `.../avatar`), same `/rides` prefix
+  as every other registrations route.
+- **apps/web**: extended `features/participant/profile/` (`ProfileForm.tsx`
+  privacy/distance fields, new `GarageForm.tsx`) — not a new module, same "my
+  own profile" surface. New feature module `features/participant/
+rider-profile/` (`api.ts`, `components/RiderProfileCard.tsx`) behind new
+  route `app/rides/[id]/riders/[registrationId]/page.tsx`; `ride-detail/
+components/RidersSection.tsx` now links each rider to that route.
+- **packages/ui**: `terminology.ts` gained `GARAGE_TERMS` and
+  `RIDER_PROFILE_TERMS` blocks, plus additive keys on `PROFILE_TERMS`/
+  `BACK_LINK_TERMS`.
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the
@@ -869,6 +903,7 @@ so now. See `.claude/rules/resilience.md` for the actual failure-isolation mecha
 
 User
 → OrganizerProfile
+→ Bike (ADR-023; "garage" — a User's own bikes, not ride-scoped)
 → Ride
 
 Ride

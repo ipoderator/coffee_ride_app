@@ -7,8 +7,18 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   (default `false`, flipped by verify-email), `displayName`/`phone`/`bio`
   (CR-013, all nullable — profile fields set via `PATCH /v1/users/me`; `phone`
   is private contact data, returned only to the profile's own owner),
-  `createdAt`/`updatedAt` (`timestamptz`). No `passwordHash` ever leaves
-  `apps/api` in a response.
+  `firstName`/`lastName` (CR-125, nullable, same `PATCH /v1/users/me` — the
+  name shown in a ride's riders/participants/waitlist lists in preference to
+  `displayName`, a free-text nickname, when either is set),
+  `profileVisibility` (CR-126, pg enum `closed`/`co_participants`/`open`, not
+  null, default `co_participants` — who else can view this user's rider-
+  profile card, see `Bike` below and `apps/api/src/modules/registrations/
+registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
+  which stays owner-only regardless), `distanceWeekKm`/`distanceMonthKm`/
+  `distanceYearKm` (CR-126, nullable integers, self-reported — not derived
+  from ride history — each with a CHECK bounding it to a sane non-negative
+  range: 3000/10000/100000), `createdAt`/`updatedAt` (`timestamptz`). No
+  `passwordHash` ever leaves `apps/api` in a response.
 - EmailVerificationToken — one row per issued verification token for a User
   (CR-011): `id`, `userId` (FK → User, cascade delete), `tokenHash` (SHA-256 of
   the raw token — the raw value is never persisted, same pattern as ADR-013's
@@ -61,8 +71,11 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   (nullable int, CHECK `>= 0`), `distanceKm` (nullable numeric(6,1), CHECK
   `>= 0`), `elevationGainMeters` (nullable int, CHECK `>= 0`), `paceKmh`
   (nullable numeric(4,1), CHECK `>= 0`), `durationMinutes` (nullable int,
-  CHECK `>= 0`), `difficulty` (nullable int, CHECK `1-5`), `status` (not null,
-  pg enum matching the Lifecycle section above, default `draft`),
+  CHECK `>= 0`), `difficulty` (nullable int, CHECK `1-5`),
+  `participantsVisible` (not null boolean, default `true` — CR-125, the
+  organizer-facing toggle for `GET /v1/rides/:id/riders`; `false` hides the
+  named list for every caller, `registrationsCount` is unaffected), `status`
+  (not null, pg enum matching the Lifecycle section above, default `draft`),
   `createdAt`/`updatedAt` (`timestamptz`), `updatedBy` (nullable FK → User,
   `ON DELETE SET NULL` — audit trail, `.claude/rules/security.md`). CR-018
   ("Edit draft") needed no migration — every column already existed from
@@ -114,6 +127,18 @@ Conceptual model. Exact columns and indexes evolve through migrations.
   renumbering a reorder needs). Capacity stays ride-level; no per-group limit.
 - RideRequirement — participation rules.
 - RideService — included logistics/services.
+- Bike — a participant's "garage" entry (CR-126): `id`, `userId` (FK → User,
+  `ON DELETE CASCADE`), `bikeType` (reuses `Ride.bicycleType`'s pg enum
+  wholesale — same physical-bike-type concept — but the app layer never
+  writes `'any'` to this column; `packages/types`' narrower `BikeType`
+  excludes it), `brand`/`model` (nullable text), `isActive` (not null, default
+  `false`), `createdAt`/`updatedAt`. A partial unique index on `(userId)
+WHERE isActive` enforces "at most one active bike per user" at the DB
+  level — `users.service.ts`'s create/update functions unset the previous
+  active bike inside the same transaction, but the index is the actual
+  invariant backstop. Not one of the fixed domain entities in
+  `.claude/CLAUDE.md`'s original list — added by CR-126 as a genuinely new
+  product concept (a participant's bike), not a duplicate of an existing one.
 - Registration — User ↔ Ride (CR-032, "Register"): `id`, `rideId` (FK → Ride,
   `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`), `status` (not
   null, pg enum `active`/`cancelled`, default `active`), `createdAt`/`updatedAt`

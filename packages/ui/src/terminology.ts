@@ -250,6 +250,14 @@ export const RESET_PASSWORD_TERMS = {
 } as const;
 
 /**
+ * The wordmark's accessible name (CR-121). The logo reads «кофе•райд», so the
+ * name assistive tech announces matches the visible letters (WCAG 2.5.3).
+ */
+export const WORDMARK_TERMS = {
+  name: 'Кофе Райд',
+} as const;
+
+/**
  * The one global header (CR-099, generalized by CR-108). Was a static
  * three-link bar shown only on `/`, `/register` and `/login`; CR-108 makes it
  * the app's single navigation surface on every route — `/rides/[id]` and the
@@ -291,6 +299,9 @@ export const BACK_LINK_TERMS = {
   toOrganizerRides: 'К моим заездам',
   toOrganizerCabinet: 'В кабинет организатора',
   toParticipantCabinet: 'В личный кабинет',
+  // CR-126: `/rides/[id]/riders/[registrationId]` back to the ride it was
+  // opened from.
+  toRide: 'К заезду',
 } as const;
 
 /**
@@ -346,15 +357,77 @@ export const CABINET_TERMS = {
 /** `/me/profile` (CR-013, `docs/design.md` §8 "Profile settings"). */
 export const PROFILE_TERMS = {
   pageTitle: 'Профиль',
-  displayNameLabel: 'Имя',
-  displayNameHint: 'Видно другим участникам заезда.',
+  // CR-125: the primary identity shown in a ride's «Участники» list.
+  firstNameLabel: 'Имя',
+  lastNameLabel: 'Фамилия',
+  nameHint: 'Показываются в списке участников заезда.',
+  displayNameLabel: 'Отображаемое имя',
+  displayNameHint:
+    'Показывается в списке участников вместо имени и фамилии, если не заполнены.',
   phoneLabel: 'Телефон',
   phoneHint: 'Виден только вам — не показывается другим участникам.',
   bioLabel: 'О себе',
   bioHint: 'До 500 символов.',
+  // CR-126: who can see this profile besides the owner — `ProfileVisibility`.
+  profileVisibilityLabel: 'Видимость профиля',
+  profileVisibilityClosed: 'Закрытый — видите только вы',
+  profileVisibilityCoParticipants:
+    'Только со-участники — видят те, с кем вы участвовали в заездах вместе',
+  profileVisibilityOpen: 'Открытый — видят все участники платформы',
+  // CR-126: self-reported distance stats, all optional.
+  distanceWeekKmLabel: 'Км за неделю',
+  distanceMonthKmLabel: 'Км за месяц',
+  distanceYearKmLabel: 'Км за год',
+  distanceStatsHint: 'Вносится вручную — необязательно.',
   saveSubmit: 'Сохранить',
   saveSubmitPending: 'Сохранение…',
   saveSuccess: 'Изменения сохранены.',
+} as const;
+
+// ---------------------------------------------------------------------------
+// CR-126 ("garage"): the participant's own bikes, `/me/profile`'s `GarageForm`.
+// Kept in its own block, separate from `PROFILE_TERMS` above, so a concurrent
+// CR-126 edit to `packages/types/src/api/rider-profile.ts`'s terminology
+// elsewhere in this file doesn't collide with it — see
+// `.claude/context/current-task.md`.
+// ---------------------------------------------------------------------------
+
+/** `/me/profile`'s `GarageForm` (CR-126): list/add/edit/delete the participant's
+ * bikes, and mark one active. Bike-type names themselves reuse the existing
+ * `BICYCLE_TYPE_TERMS` map — this block only adds what's specific to the garage
+ * UI (labels, actions, empty/error/confirm copy). */
+export const GARAGE_TERMS = {
+  sectionTitle: 'Гараж',
+  hint: 'Велосипеды, которые вы используете на заездах.',
+  loadError: 'Не удалось загрузить гараж. Попробуйте ещё раз.',
+  emptyTitle: 'Велосипедов пока нет',
+  emptyDescription: 'Добавьте велосипед, чтобы использовать его в заездах.',
+  addButton: 'Добавить велосипед',
+  addTitle: 'Новый велосипед',
+  editTitle: 'Изменение велосипеда',
+  bikeTypeLabel: 'Тип',
+  brandLabel: 'Марка',
+  modelLabel: 'Модель',
+  save: 'Сохранить',
+  create: 'Добавить',
+  pending: 'Сохранение…',
+  cancel: 'Отмена',
+  edit: 'Изменить',
+  delete: 'Удалить',
+  editAria: (label: string) => `Изменить велосипед «${label}»`,
+  deleteAria: (label: string) => `Удалить велосипед «${label}»`,
+  makeActiveButton: 'Сделать активным',
+  makeActiveAria: (label: string) => `Сделать «${label}» активным велосипедом`,
+  activeLabel: 'Активный',
+  unnamedBike: 'Без марки и модели',
+  createSuccess: 'Велосипед добавлен.',
+  updateSuccess: 'Изменения сохранены.',
+  deleteSuccess: 'Велосипед удалён.',
+  deleteConfirmTitle: (label: string) => `Удалить велосипед «${label}»?`,
+  deleteConfirmDescription: 'Это действие нельзя отменить.',
+  deleteConfirmAction: 'Удалить велосипед',
+  bikeLimitReached: 'Достигнут предел — не больше 20 велосипедов.',
+  genericError: 'Не удалось сохранить изменения. Попробуйте ещё раз.',
 } as const;
 
 /**
@@ -530,6 +603,10 @@ export const RIDE_EDIT_TERMS = {
   durationMinutesLabel: 'Длительность, мин',
   difficultyLabel: 'Сложность',
   difficultyNotSet: 'Не указана',
+  // CR-125: per-ride privacy toggle for the participant-facing «Участники» list.
+  participantsVisibleLabel: 'Показывать список участников',
+  participantsVisibleHint:
+    'Участники смогут видеть имена и фамилии друг друга в списке «Участники». Число мест видно всегда.',
   // CR-026 ("Map discovery"), ADR-014: manual coordinate entry — no geocode-by-
   // address UI yet (KI-016).
   startLatLabel: 'Широта старта',
@@ -645,6 +722,9 @@ export const RIDE_DISCOVERY_TERMS = {
   viewListLabel: 'Список',
   viewMapLabel: 'Карта',
   mapUnavailable: 'Карта временно недоступна. Используйте список заездов.',
+  // CR-123: the map-fullscreen toggle on the discovery map panel.
+  expandMapLabel: 'Развернуть карту на весь экран',
+  collapseMapLabel: 'Свернуть карту',
 } as const;
 
 /**
@@ -1082,6 +1162,8 @@ export const RIDE_DETAIL_RIDERS_TERMS = {
   groupHeading: (name: string, pace: string, count: number) =>
     `${name} · ${pace} — ${count}`,
   signInPrompt: 'Войдите, чтобы увидеть список',
+  // CR-125: the organizer turned off `Ride.participantsVisible`.
+  hiddenByOrganizer: 'Организатор скрыл список участников этого заезда.',
   showMore: 'Показать ещё',
   loadError: 'Не удалось загрузить список участников. Попробуйте ещё раз.',
   emptyTitle: 'Пока никто не записался',
@@ -1090,6 +1172,42 @@ export const RIDE_DETAIL_RIDERS_TERMS = {
 } as const;
 
 // --------------------------- end CR-119 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-126 (rider profile card, `/rides/[id]/riders/[registrationId]`). Kept in
+// its own block, separate from the concurrent CR-126 "garage" edits to
+// `PROFILE_TERMS`/`GARAGE_TERMS` above (that's `/me/profile`'s own-profile
+// settings screen, a different feature module) — see
+// `.claude/context/current-task.md`. Denial states reuse
+// `RIDE_DETAIL_RIDERS_TERMS.hiddenByOrganizer`/`signInPrompt` directly rather
+// than duplicating that copy.
+// ---------------------------------------------------------------------------
+
+export const RIDER_PROFILE_TERMS = {
+  bioLabel: 'О себе',
+  garageTitle: 'Гараж',
+  noBikes: 'Пока нет добавленных велосипедов.',
+  unnamedBike: 'Без марки и модели',
+  activeBikeLabel: 'Активный',
+  // Distance stats are `MetricTile`s — the unit («км») is rendered separately
+  // by `formatDistanceParts`, so these labels name only the period.
+  distanceWeekLabel: 'За неделю',
+  distanceMonthLabel: 'За месяц',
+  distanceYearLabel: 'За год',
+  recentRidesTitle: 'Недавние заезды',
+  recentRidesEmpty: 'Недавних заездов пока нет.',
+  // `403 profile_private`: the rider's own `profileVisibility` doesn't grant
+  // this viewer access — distinct from `hiddenByOrganizer` (the organizer
+  // hid the whole list) above.
+  profilePrivateTitle: 'Профиль закрыт',
+  profilePrivateDescription: 'Участник ограничил доступ к своему профилю.',
+  // `404 rider_not_found`.
+  notFoundTitle: 'Участник не найден',
+  notFoundDescription: 'Такого участника больше нет в этом заезде.',
+  loadError: 'Не удалось загрузить профиль участника. Попробуйте ещё раз.',
+} as const;
+
+// --------------------------- end CR-126 block ------------------------------
 
 // ---------------------------------------------------------------------------
 // CR-118 (discovery «Топокарта»: legend rows, start-time pins, list↔map sync).

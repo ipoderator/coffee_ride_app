@@ -24,6 +24,8 @@ export const rideResponseSchema = z.object({
   paceKmh: z.number().nullable(),
   durationMinutes: z.number().nullable(),
   difficulty: z.number().nullable(),
+  // CR-125: organizer-facing privacy toggle for `GET /v1/rides/:id/riders`.
+  participantsVisible: z.boolean(),
   status: z.enum(RIDE_STATUSES),
   createdAt: z.string(),
   updatedAt: z.string(),

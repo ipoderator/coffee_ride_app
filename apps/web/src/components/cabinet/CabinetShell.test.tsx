@@ -23,9 +23,15 @@ const user: User = {
   emailVerified: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   displayName: null,
+  firstName: null,
+  lastName: null,
   phone: null,
   bio: null,
   avatarUrl: null,
+  profileVisibility: 'co_participants',
+  distanceWeekKm: null,
+  distanceMonthKm: null,
+  distanceYearKm: null,
 };
 
 function renderShell() {

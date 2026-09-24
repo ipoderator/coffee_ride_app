@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import { X } from 'lucide-react';
+import { Maximize2, Minimize2, X } from 'lucide-react';
 import type { BicycleType, PublicRideListItem } from 'types';
 import {
   Button,
@@ -83,13 +83,18 @@ function LoadingRows() {
  *
  * Layout (`docs/design.md` §11):
  * - `lg`+: the map fills the left side at viewport height (minus the header),
- *   the ~440px right column holds the heading, the bicycle-type filter
+ *   the ~528px right column holds the heading, the bicycle-type filter
  *   (CR-025) and the legend rows, and scrolls on its own. At `xl` the grid
  *   breaks out of the 1200px content cap so the map runs to the viewport edge
- *   while the column stays aligned with the header's content edge.
+ *   while the column stays aligned with the header's content edge. CR-123
+ *   adds a fullscreen toggle (`isMapFullscreen`, top-left over the map,
+ *   desktop-only): it takes the map panel out of the grid with `fixed
+ *   inset-0` over the header and hides the column, for searching rides
+ *   directly on the map without the list competing for space.
  * - below `lg`: a map strip on top (~45vh) and the list below it as the page's
  *   main scroll. Both are always shown — CR-026's «Список / Карта» toggle was
- *   retired because the strip already gives the map without hiding the list.
+ *   retired because the strip already gives the map without hiding the list;
+ *   CR-123's fullscreen toggle stays desktop-only for the same reason.
  *
  * Map ↔ list sync: the active ride is the hovered row, else the selected one.
  * Selection comes from focusing a row's link (keyboard — never hover-only) or
@@ -110,6 +115,18 @@ export function DiscoveryList() {
   const rowRefs = useRef(new Map<string, HTMLLIElement>());
   const rootRef = useRef<HTMLDivElement>(null);
   const [topOffset, setTopOffset] = useState<number | null>(null);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+
+  // Fullscreen covers the viewport (`fixed inset-0`) — lock body scroll so a
+  // touch/wheel gesture can't move the page hiding behind it.
+  useEffect(() => {
+    if (!isMapFullscreen) return;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [isMapFullscreen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -225,12 +242,18 @@ export function DiscoveryList() {
     <div
       ref={rootRef}
       style={rootStyle}
-      className="flex flex-col lg:grid lg:h-[calc(100dvh-var(--discovery-top,4.875rem))] lg:grid-cols-[minmax(0,1fr)_27.5rem] xl:mx-[calc(50%-50vw)] xl:pr-[calc(50vw-37.5rem)]"
+      className="flex flex-col lg:grid lg:h-[calc(100dvh-var(--discovery-top,4.875rem))] lg:grid-cols-[minmax(0,1fr)_33rem] xl:mx-[calc(50%-50vw)] xl:pr-[calc(50vw-37.5rem)]"
     >
       <section
         aria-labelledby="discovery-heading"
         data-testid="discovery-list-panel"
-        className="flex min-h-0 flex-col lg:col-start-2 lg:row-start-1 lg:overflow-y-auto lg:border-l-[1.5px] lg:border-frame"
+        className={cn(
+          'flex min-h-0 flex-col lg:col-start-2 lg:row-start-1 lg:overflow-y-auto lg:border-l-[1.5px] lg:border-frame',
+          // The map-fullscreen toggle (CR-123) is desktop-only (see the button
+          // below), so only hide the column at `lg`+ — collapsing it on a
+          // phone would fight the always-both-shown layout §11 documents.
+          isMapFullscreen && 'lg:hidden',
+        )}
       >
         <div className="flex flex-wrap items-end justify-between gap-4 border-b-[1.5px] border-frame bg-bg px-4 pt-6 pb-4 lg:sticky lg:top-0 lg:z-10 lg:px-6">
           <h1
@@ -247,10 +270,13 @@ export function DiscoveryList() {
       <div
         data-testid="discovery-map-panel"
         className={cn(
-          'relative order-first h-[45vh] min-h-64 border-b-[1.5px] border-frame lg:order-0 lg:col-start-1 lg:row-start-1 lg:h-auto lg:min-h-0 lg:border-b-0',
+          'relative order-first h-[45vh] min-h-64 border-b-[1.5px] border-frame bg-bg lg:order-0 lg:col-start-1 lg:row-start-1 lg:h-auto lg:min-h-0 lg:border-b-0',
           // Degraded (no key / render failed): the strip shrinks to the notice
           // instead of leaving a tall blank band above the list.
           'has-[[data-map-unavailable]]:h-auto has-[[data-map-unavailable]]:min-h-0',
+          // CR-123: fullscreen takes the panel out of the grid entirely and
+          // over the header (it has no z-index of its own).
+          isMapFullscreen && 'lg:fixed lg:inset-0 lg:z-50 lg:h-dvh',
         )}
       >
         <DiscoveryMap
@@ -258,6 +284,22 @@ export function DiscoveryList() {
           activeId={activeId}
           onSelect={handlePinSelect}
         />
+        <Button
+          variant="primary"
+          onClick={() => setIsMapFullscreen((current) => !current)}
+          aria-label={
+            isMapFullscreen
+              ? RIDE_DISCOVERY_TERMS.collapseMapLabel
+              : RIDE_DISCOVERY_TERMS.expandMapLabel
+          }
+          className="absolute top-4 left-4 z-20 hidden shadow-overlay lg:inline-flex"
+        >
+          {isMapFullscreen ? (
+            <Minimize2 className="size-5" aria-hidden="true" />
+          ) : (
+            <Maximize2 className="size-5" aria-hidden="true" />
+          )}
+        </Button>
         {raisedRide ? (
           // `bottom-8` keeps the provider's attribution in the corner visible.
           <div className="absolute inset-x-2 bottom-8 z-10 overflow-hidden rounded-xl border border-frame bg-bg shadow-overlay lg:hidden">

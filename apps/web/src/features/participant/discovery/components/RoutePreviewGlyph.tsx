@@ -1,4 +1,4 @@
-import { projectRoutePreview } from '../lib/route-preview';
+import { projectRoutePreview, smoothRoutePreview } from '../lib/route-preview';
 
 const SIZE = 32;
 
@@ -14,7 +14,11 @@ export function RoutePreviewGlyph({
 }: {
   routePreview: Array<[number, number]> | null;
 }) {
-  const points = projectRoutePreview(routePreview, SIZE, 2);
+  const points = projectRoutePreview(
+    routePreview ? smoothRoutePreview(routePreview) : null,
+    SIZE,
+    2,
+  );
 
   return (
     <svg

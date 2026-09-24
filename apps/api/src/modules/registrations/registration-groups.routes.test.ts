@@ -498,6 +498,7 @@ describe('registration into pace groups (CR-117)', () => {
       expect(response.json()).toEqual({
         items: [
           {
+            registrationId: expect.any(String),
             displayName: 'Тест Участник',
             group: { id: groupIds[1], name: 'Группа 2', paceKmh: 35 },
           },
@@ -553,7 +554,11 @@ describe('registration into pace groups (CR-117)', () => {
         cookies: { session: viewer.rawToken },
       });
       expect(first.json().items).toEqual([
-        { displayName: 'Первый', group: null },
+        {
+          registrationId: expect.any(String),
+          displayName: 'Первый',
+          group: null,
+        },
       ]);
       const second = await app.inject({
         method: 'GET',
@@ -561,7 +566,13 @@ describe('registration into pace groups (CR-117)', () => {
         cookies: { session: viewer.rawToken },
       });
       expect(second.json()).toEqual({
-        items: [{ displayName: 'Второй', group: null }],
+        items: [
+          {
+            registrationId: expect.any(String),
+            displayName: 'Второй',
+            group: null,
+          },
+        ],
         nextCursor: null,
       });
 

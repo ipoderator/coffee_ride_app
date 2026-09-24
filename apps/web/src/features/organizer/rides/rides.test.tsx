@@ -64,6 +64,7 @@ const baseRide: Ride = {
   paceKmh: null,
   durationMinutes: null,
   difficulty: null,
+  participantsVisible: true,
   status: 'draft',
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',

@@ -330,6 +330,9 @@ export const updateRideRequestSchema = z
     // `1`/`5`, not `DIFFICULTY_LEVELS[0]`/`[...length - 1]` — a computed tuple index
     // widens to `number | undefined` under `noUncheckedIndexedAccess`.
     difficulty: z.number().int().min(1).max(5).nullable().optional(),
+    // CR-125: not nullable — unlike the fields above, this setting always has a
+    // value (default `true`), so there is no "clear it" state to express.
+    participantsVisible: z.boolean().optional(),
   })
   .refine(
     (value) =>

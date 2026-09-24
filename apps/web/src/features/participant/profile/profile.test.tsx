@@ -17,9 +17,15 @@ const baseUser: User = {
   emailVerified: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   displayName: null,
+  firstName: null,
+  lastName: null,
   phone: null,
   bio: null,
   avatarUrl: null,
+  profileVisibility: 'co_participants',
+  distanceWeekKm: null,
+  distanceMonthKm: null,
+  distanceYearKm: null,
 };
 
 function submit() {
@@ -38,7 +44,9 @@ describe('ProfileForm', () => {
       <ProfileForm
         initialUser={{
           ...baseUser,
-          displayName: 'Иван',
+          firstName: 'Иван',
+          lastName: 'Иванов',
+          displayName: 'IvanTheBiker',
           phone: '+79001234567',
           bio: 'Люблю шоссе.',
         }}
@@ -46,6 +54,10 @@ describe('ProfileForm', () => {
     );
 
     expect(screen.getByLabelText('Имя')).toHaveValue('Иван');
+    expect(screen.getByLabelText('Фамилия')).toHaveValue('Иванов');
+    expect(screen.getByLabelText('Отображаемое имя')).toHaveValue(
+      'IvanTheBiker',
+    );
     expect(screen.getByLabelText('Телефон')).toHaveValue('+79001234567');
     expect(screen.getByLabelText('О себе')).toHaveValue('Люблю шоссе.');
   });
@@ -69,14 +81,14 @@ describe('ProfileForm', () => {
 
   it('sends null for an emptied field (clears it) and unchanged values for the rest', async () => {
     updateProfileMock.mockResolvedValue({
-      user: { ...baseUser, displayName: 'Иван', phone: null, bio: null },
+      user: { ...baseUser, firstName: 'Иван', phone: null, bio: null },
     });
 
     render(
       <ProfileForm
         initialUser={{
           ...baseUser,
-          displayName: 'Иван',
+          firstName: 'Иван',
           phone: '+79001234567',
         }}
       />,
@@ -89,9 +101,15 @@ describe('ProfileForm', () => {
 
     await waitFor(() =>
       expect(updateProfileMock).toHaveBeenCalledWith({
-        displayName: 'Иван',
+        firstName: 'Иван',
+        lastName: null,
+        displayName: null,
         phone: null,
         bio: null,
+        profileVisibility: 'co_participants',
+        distanceWeekKm: null,
+        distanceMonthKm: null,
+        distanceYearKm: null,
       }),
     );
   });
@@ -122,17 +140,72 @@ describe('ProfileForm', () => {
 
   it('shows a success message and reflects the saved values after a successful submit', async () => {
     updateProfileMock.mockResolvedValue({
-      user: { ...baseUser, displayName: 'Иван Иванов' },
+      user: { ...baseUser, firstName: 'Иван', lastName: 'Иванов' },
     });
 
     render(<ProfileForm initialUser={baseUser} />);
     fireEvent.change(screen.getByLabelText('Имя'), {
-      target: { value: 'Иван Иванов' },
+      target: { value: 'Иван' },
+    });
+    fireEvent.change(screen.getByLabelText('Фамилия'), {
+      target: { value: 'Иванов' },
     });
     submit();
 
     expect(await screen.findByText('Изменения сохранены.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Имя')).toHaveValue('Иван Иванов');
+    expect(screen.getByLabelText('Имя')).toHaveValue('Иван');
+    expect(screen.getByLabelText('Фамилия')).toHaveValue('Иванов');
+  });
+
+  it('submits the profile-visibility and distance-stat fields alongside the rest', async () => {
+    updateProfileMock.mockResolvedValue({ user: baseUser });
+
+    render(<ProfileForm initialUser={baseUser} />);
+
+    fireEvent.change(screen.getByLabelText('Видимость профиля'), {
+      target: { value: 'open' },
+    });
+    fireEvent.change(screen.getByLabelText('Км за неделю'), {
+      target: { value: '150' },
+    });
+    fireEvent.change(screen.getByLabelText('Км за месяц'), {
+      target: { value: '600' },
+    });
+    fireEvent.change(screen.getByLabelText('Км за год'), {
+      target: { value: '7200' },
+    });
+    submit();
+
+    await waitFor(() =>
+      expect(updateProfileMock).toHaveBeenCalledWith({
+        firstName: null,
+        lastName: null,
+        displayName: null,
+        phone: null,
+        bio: null,
+        profileVisibility: 'open',
+        distanceWeekKm: 150,
+        distanceMonthKm: 600,
+        distanceYearKm: 7200,
+      }),
+    );
+  });
+
+  it('shows a client-side validation error for an out-of-range distance value', async () => {
+    render(<ProfileForm initialUser={baseUser} />);
+
+    fireEvent.change(screen.getByLabelText('Км за неделю'), {
+      target: { value: '5000' },
+    });
+    submit();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Км за неделю')).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      ),
+    );
+    expect(updateProfileMock).not.toHaveBeenCalled();
   });
 
   it('maps a server validation error onto the matching field', async () => {

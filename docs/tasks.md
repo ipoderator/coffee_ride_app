@@ -994,3 +994,30 @@ critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
       reorder), participants page grouped by group with counts, waitlist shows
       the chosen group; RouteBuilder's last waypoint no longer uses danger red.
       See `docs/changelog.md`.
+- [x] CR-121 New wordmark «кофе•райд» — done 2026-09-23: elevation-profile
+      mark + Golos 800 «кофе•райд», ~20% larger, favicon = the mark. See
+      `docs/changelog.md`.
+- [x] CR-122 Header bar in one type style — done 2026-09-23: every top-level
+      header item (links + dropdown triggers) is Golos 600 16px via one shared
+      `NAV_BAR_ITEM_CLASSNAME`; «Заезды» icon Home → Route. See
+      `docs/changelog.md`.
+- [x] CR-123 Discovery map fullscreen toggle — done 2026-09-24: list column
+      widened to ~528px, desktop-only fullscreen button over the map
+      (`fixed inset-0`, list hidden, body scroll locked). See
+      `docs/changelog.md`.
+- [x] CR-124 Brand purple locked to #9033A1 — done 2026-09-24: unified
+      `primary`/`route`/map inks (were two drifted purples) to the owner's
+      sampled value; recomputed contrast ratios still AA. See
+      `docs/changelog.md`.
+- [x] CR-125 Participant first/last name + participants-visibility toggle —
+      done 2026-09-24: `users.firstName`/`lastName`, `rides.
+    participantsVisible` (default true, draft-only edit); riders list shows
+      real name, `403 riders_hidden` when off. See `docs/changelog.md`,
+      KI-065.
+- [x] CR-126 Rider profile: privacy tiers, garage, self-reported distance
+      stats, recent rides — done 2026-09-24: `profileVisibility` (closed/
+      co_participants/open, default co_participants), new `Bike` entity
+      ("garage"), `GET /v1/rides/:id/riders/:registrationId/profile`+`.../
+    avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
+    :id`. Riders list links to the new card. See `docs/changelog.md`,
+      ADR-023, KI-059 (resolved).

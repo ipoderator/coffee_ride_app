@@ -32,6 +32,7 @@ const baseRide: PublicRide = {
   paceKmh: 24.5,
   durationMinutes: 150,
   difficulty: 3,
+  participantsVisible: true,
   status: 'registration_open',
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',

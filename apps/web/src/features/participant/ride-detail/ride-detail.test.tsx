@@ -104,6 +104,7 @@ const baseRide: Ride = {
   paceKmh: 24.5,
   durationMinutes: 150,
   difficulty: 3,
+  participantsVisible: true,
   status: 'published',
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',
@@ -1155,18 +1156,21 @@ describe('RideDetailView', () => {
       getRideRidersMock.mockResolvedValue({
         items: [
           {
+            registrationId: 'reg-anna',
             displayName: 'Анна',
             group: { id: 'group-1', name: 'Группа 1', paceKmh: 25 },
           },
           {
+            registrationId: 'reg-noname',
             displayName: null,
             group: { id: 'group-1', name: 'Группа 1', paceKmh: 25 },
           },
           {
+            registrationId: 'reg-boris',
             displayName: 'Борис',
             group: { id: 'group-2', name: 'Группа 2', paceKmh: 35 },
           },
-          { displayName: 'Вера', group: null },
+          { registrationId: 'reg-vera', displayName: 'Вера', group: null },
         ],
         nextCursor: null,
       });
@@ -1192,6 +1196,14 @@ describe('RideDetailView', () => {
       ).toBeInTheDocument();
       expect(screen.getByText('Вера')).toBeInTheDocument();
       expect(getRideRidersMock).toHaveBeenCalledWith('ride-1');
+      // CR-126: each rider name links to their profile card, by registrationId.
+      expect(screen.getByText('Анна').closest('a')).toHaveAttribute(
+        'href',
+        '/rides/ride-1/riders/reg-anna',
+      );
+      expect(
+        within(groupOneList).getByText('Участник без имени').closest('a'),
+      ).toHaveAttribute('href', '/rides/ride-1/riders/reg-noname');
     });
 
     it('falls back to the sign-in prompt on a 401 from the riders endpoint', async () => {
@@ -1244,11 +1256,15 @@ describe('RideDetailView', () => {
       );
       getRideRidersMock
         .mockResolvedValueOnce({
-          items: [{ displayName: 'Анна', group: null }],
+          items: [
+            { registrationId: 'reg-anna', displayName: 'Анна', group: null },
+          ],
           nextCursor: 'cursor-2',
         })
         .mockResolvedValueOnce({
-          items: [{ displayName: 'Борис', group: null }],
+          items: [
+            { registrationId: 'reg-boris', displayName: 'Борис', group: null },
+          ],
           nextCursor: null,
         });
 

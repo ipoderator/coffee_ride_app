@@ -14,13 +14,13 @@ import {
 import { useSession } from '@/lib/auth/session-context';
 import { ApiError, getRideRiders } from '../api';
 
-type RidersStatus = 'loading' | 'ready' | 'anonymous' | 'error';
+type RidersStatus = 'loading' | 'ready' | 'anonymous' | 'hidden' | 'error';
 
 interface RiderBucket {
   key: string;
   group: RideGroupRef | null;
   count: number;
-  names: (string | null)[];
+  riders: { registrationId: string; displayName: string | null }[];
 }
 
 /**
@@ -40,7 +40,7 @@ function bucketRiders(
       key: group.id,
       group,
       count: group.registrationsCount,
-      names: [],
+      riders: [],
     });
   }
   const ungrouped: RiderBucket = {
@@ -52,47 +52,61 @@ function bucketRiders(
         groups.reduce((sum, group) => sum + group.registrationsCount, 0),
       0,
     ),
-    names: [],
+    riders: [],
   };
   for (const rider of riders) {
     if (!rider.group) {
-      ungrouped.names.push(rider.displayName);
+      ungrouped.riders.push(rider);
       continue;
     }
     let bucket = buckets.get(rider.group.id);
     if (!bucket) {
       // A group the ride payload didn't list (created/renamed between the two
       // requests) — still show its riders rather than dropping them.
-      bucket = { key: rider.group.id, group: rider.group, count: 0, names: [] };
+      bucket = {
+        key: rider.group.id,
+        group: rider.group,
+        count: 0,
+        riders: [],
+      };
       buckets.set(rider.group.id, bucket);
     }
-    bucket.names.push(rider.displayName);
+    bucket.riders.push(rider);
   }
   // Headings only for what is actually loaded; a count never reads lower than
   // the rows shown under it.
   return [...buckets.values(), ungrouped]
-    .filter((bucket) => bucket.names.length > 0)
+    .filter((bucket) => bucket.riders.length > 0)
     .map((bucket) => ({
       ...bucket,
-      count: Math.max(bucket.count, bucket.names.length),
+      count: Math.max(bucket.count, bucket.riders.length),
     }));
 }
 
-function RiderNames({ names }: { names: (string | null)[] }) {
+function RiderNames({
+  riders,
+  rideId,
+}: {
+  riders: { registrationId: string; displayName: string | null }[];
+  rideId: string;
+}) {
   return (
     <ul className="flex flex-col divide-y divide-border">
-      {names.map((name, index) => (
-        <li
-          // Riders carry no id by design (`docs/api.md`: no user/registration
-          // id in this payload) — position within the loaded list is stable.
-          key={index}
-          className={
-            name
-              ? 'py-2 text-base text-text'
-              : 'py-2 text-base text-text-secondary'
-          }
-        >
-          {name ?? RIDE_DETAIL_RIDERS_TERMS.noName}
+      {riders.map((rider) => (
+        // CR-126: `registrationId` is an opaque id — not a user id — that only
+        // unlocks the access-gated rider-profile route below, itself gated by
+        // the profile owner's own privacy setting. Safe to link to directly.
+        <li key={rider.registrationId} className="py-2 text-base">
+          <Link
+            href={`/rides/${rideId}/riders/${rider.registrationId}`}
+            className={
+              rider.displayName
+                ? 'text-text underline decoration-1 underline-offset-2 hover:text-primary'
+                : 'text-text-secondary underline decoration-1 underline-offset-2 hover:text-primary'
+            }
+          >
+            {rider.displayName ?? RIDE_DETAIL_RIDERS_TERMS.noName}
+          </Link>
         </li>
       ))}
     </ul>
@@ -101,11 +115,17 @@ function RiderNames({ names }: { names: (string | null)[] }) {
 
 /**
  * CR-119: «Участники» — who else is riding (`GET /v1/rides/:id/riders`, CR-117).
- * Signed-in viewers see display names grouped by pace group; anonymous visitors
- * see only the count plus a sign-in link (product decision: a named list of
- * people at a dated, located event is not public). The session hint from
- * `SessionProvider` avoids a guaranteed-401 request for an anonymous visitor; a
- * 401 from the endpoint itself (expired session) lands in the same prompt.
+ * Signed-in viewers see names (CR-125: first + last name when set, else the
+ * free-text display name) grouped by pace group; anonymous visitors see only the
+ * count plus a sign-in link (product decision: a named list of people at a
+ * dated, located event is not public). The session hint from `SessionProvider`
+ * avoids a guaranteed-401 request for an anonymous visitor; a 401 from the
+ * endpoint itself (expired session) lands in the same prompt.
+ *
+ * CR-125: the organizer can turn the whole list off per ride
+ * (`Ride.participantsVisible`); the endpoint then answers every signed-in
+ * caller with `403 riders_hidden`, shown as a neutral notice instead of the
+ * sign-in prompt — the count on the page above this section is unaffected.
  *
  * `/login` has no `?next=` redirect support yet, so the link is a plain one.
  */
@@ -150,11 +170,16 @@ export function RidersSection({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setStatus(
-          error instanceof ApiError && error.problem.status === 401
-            ? 'anonymous'
-            : 'error',
-        );
+        if (error instanceof ApiError && error.problem.status === 401) {
+          setStatus('anonymous');
+        } else if (
+          error instanceof ApiError &&
+          error.problem.code === 'riders_hidden'
+        ) {
+          setStatus('hidden');
+        } else {
+          setStatus('error');
+        }
       });
     return () => {
       cancelled = true;
@@ -213,6 +238,12 @@ export function RidersSection({
         </p>
       )}
 
+      {status === 'hidden' && (
+        <p className="text-sm text-text-secondary">
+          {RIDE_DETAIL_RIDERS_TERMS.hiddenByOrganizer}
+        </p>
+      )}
+
       {status === 'error' && (
         <ErrorState
           message={RIDE_DETAIL_RIDERS_TERMS.loadError}
@@ -243,11 +274,11 @@ export function RidersSection({
                       )
                     : `${RIDE_DETAIL_RIDERS_TERMS.noGroup} — ${bucket.count}`}
                 </h3>
-                <RiderNames names={bucket.names} />
+                <RiderNames riders={bucket.riders} rideId={rideId} />
               </div>
             ))
           ) : (
-            <RiderNames names={riders.map((rider) => rider.displayName)} />
+            <RiderNames riders={riders} rideId={rideId} />
           )}
           {loadMoreFailed && (
             <ErrorState

@@ -17,6 +17,23 @@ as part of closing the issue, not as a periodic batch cleanup.
 
 ## Open
 
+### KI-065 — `participantsVisible` can't be changed after publish
+
+Status: open. Discovered 2026-09-24 (CR-125).
+Problem: `Ride.participantsVisible` (the organizer's riders-list privacy toggle) is
+only settable via `PATCH /v1/rides/:id`, which is draft-only
+(`resolveOwnDraftRide`/`409 ride_not_editable`) — the same gate every other ride
+setting in this codebase already uses (`participantLimit`, cover image, route, ...).
+An organizer who wants to hide/show the list on an already-published ride currently
+cannot.
+Impact: minor UX limitation, not a data-safety issue — the setting still defaults to
+`true` (today's live behavior) and works correctly at creation time.
+Workaround: decide the setting before publishing.
+Next action: none planned. If this becomes a real complaint, it needs a small
+dedicated endpoint (or a relaxation of the draft-only rule for this one field) — a
+deliberate product decision, not a bug fix, since draft-only editing is consistent
+project-wide.
+
 ### KI-001 — No deployment artifacts exist
 
 Status: narrowed 2026-09-17 (CR-074). Discovered: 2026-09-11 (pre-foundation audit).
@@ -785,21 +802,6 @@ Workaround: none needed at current scale.
 Next action: if the list query becomes hot, compute the preview once at route
 write time (GPX upload/replace and `POST /v1/rides/:id/route/build`) into a
 stored column and read that instead — the response contract stays unchanged.
-
-### KI-059 — The rider list has no avatars
-
-Status: open. Discovered: 2026-09-23 (CR-119).
-Problem: «Участники» on `/rides/[id]` (`GET /v1/rides/:id/riders`) shows display
-name + group only. There is no public per-user avatar endpoint — only
-`/v1/users/me/avatar` and `/v1/organizers/:id/avatar` — and `project-state.md`'s
-"Do not break" deliberately keeps `users` free of a public-by-id pattern without
-a product reason.
-Impact: low — the list works; it is just plainer than the rest of the page.
-Workaround: none.
-Next action: product decision first (is a participant's avatar public to other
-signed-in users?). If yes, add a scoped avatar path for riders of a ride
-(no user ids in the payload, same privacy rule as the riders endpoint) — a
-security-review item, not a UI tweak.
 
 ### KI-060 — Discovery's «Старт: …» only knows the start route-point label
 

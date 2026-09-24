@@ -127,6 +127,20 @@
       "when": 1790156981841,
       "tag": "0017_ride_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790229598545,
+      "tag": "0018_participant_name_and_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790239780453,
+      "tag": "0019_real_steve_rogers",
+      "breakpoints": true
     }
   ]
 }

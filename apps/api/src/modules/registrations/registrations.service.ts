@@ -4,6 +4,7 @@ import {
   registrations,
   rideGroups,
   rides,
+  userBikes,
   users,
   waitlistEntries,
 } from 'db/schema';
@@ -18,6 +19,7 @@ import type {
   Registration,
   RideGroupRef,
   RideParticipantSummary,
+  RiderProfile,
   WaitlistEntry,
 } from 'types';
 import {
@@ -34,6 +36,12 @@ import {
 } from '../notifications/notifications.service.js';
 import { getOrganizerRatingSummaries } from '../reviews/reviews.service.js';
 import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
+import { toBike } from '../users/users.service.js';
+import {
+  ImageStorageError,
+  downloadImageObject,
+} from '../../lib/image-storage.js';
+import type { S3Handle } from '../../plugins/s3.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `RideServiceError`/`OrganizerServiceError`/`AuthServiceError`
@@ -115,6 +123,59 @@ const WAITLIST_ENTRY_NOT_FOUND = () =>
     404,
     'Waitlist entry not found',
     'You are not on the waitlist for this ride.',
+  );
+
+// CR-125: the organizer turned off `Ride.participantsVisible` — applies to every
+// caller, including the ride's own organizer (they have `listParticipants` for
+// management). `403`, not `404`: the ride itself is visible, only its rider list
+// is hidden — a distinct, machine-readable code so the client can show "the
+// organizer hid this" instead of a generic error (`.claude/rules/backend.md`).
+const RIDERS_HIDDEN = () =>
+  new RegistrationServiceError(
+    'riders_hidden',
+    403,
+    'Rider list hidden',
+    'The organizer has turned off the participant list for this ride.',
+  );
+
+// CR-126: no active registration with that id on this ride — distinct from
+// `REGISTRATION_NOT_FOUND` below, whose message ("you do not have an active
+// registration") is written for the caller's *own* registration, not a lookup by
+// another rider's registration id.
+const RIDER_NOT_FOUND = () =>
+  new RegistrationServiceError(
+    'rider_not_found',
+    404,
+    'Rider not found',
+    'No active rider with that registration id exists for this ride.',
+  );
+
+// CR-126: the rider's `profileVisibility` doesn't grant this viewer access —
+// `resolveRiderAccess`'s single gate, backing both the profile and avatar routes.
+// `403`, not `404`: the rider is a real, visible entry in the riders list (unlike
+// `RIDER_NOT_FOUND`), just not one whose card this viewer may open.
+const PROFILE_PRIVATE = () =>
+  new RegistrationServiceError(
+    'profile_private',
+    403,
+    'Profile private',
+    'This participant has not made their profile visible to you.',
+  );
+
+const RIDER_AVATAR_NOT_FOUND = () =>
+  new RegistrationServiceError(
+    'avatar_not_found',
+    404,
+    'Avatar not found',
+    'No avatar exists for this rider.',
+  );
+
+const RIDER_AVATAR_STORAGE_UNAVAILABLE = () =>
+  new RegistrationServiceError(
+    'avatar_storage_unavailable',
+    503,
+    'Avatar storage unavailable',
+    'File storage is temporarily unavailable. Try again later.',
   );
 
 // CR-037 ("Organizer participant list"). Same code/shape as `rides.service.ts`'s own
@@ -246,6 +307,7 @@ async function resolveVisibleRideStatus(
   const [row] = await db
     .select({
       status: rides.status,
+      participantsVisible: rides.participantsVisible,
       organizerUserId: organizerProfiles.userId,
     })
     .from(rides)
@@ -259,7 +321,7 @@ async function resolveVisibleRideStatus(
   if (!isOwner && row.status === 'draft') {
     throw RIDE_NOT_FOUND();
   }
-  return row.status;
+  return row;
 }
 
 /**
@@ -286,10 +348,25 @@ async function assertOwnRide(
   }
 }
 
+// CR-125: the name shown for a rider/participant/waitlist entry. `firstName`/
+// `lastName` (a real name) take priority over `displayName` (a free-text
+// nickname, CR-013's original field) when either is set; `displayName` alone
+// stays the fallback for a user who hasn't filled in the new fields yet.
+function resolveParticipantName(row: {
+  displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}): string | null {
+  const fullName = [row.firstName, row.lastName].filter(Boolean).join(' ');
+  return fullName || row.displayName;
+}
+
 function toRideParticipantSummary(row: {
   id: string;
   userId: string;
   displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
   createdAt: Date;
   groupId: string | null;
   groupName: string | null;
@@ -298,7 +375,7 @@ function toRideParticipantSummary(row: {
   return {
     id: row.id,
     userId: row.userId,
-    displayName: row.displayName,
+    displayName: resolveParticipantName(row),
     createdAt: row.createdAt.toISOString(),
     group: toGroupRef(row),
   };
@@ -352,6 +429,8 @@ export async function listParticipants(
       id: registrations.id,
       userId: registrations.userId,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       createdAt: registrations.createdAt,
       groupId: registrations.groupId,
       groupName: rideGroups.name,
@@ -413,6 +492,8 @@ export async function listWaitlist(
       id: waitlistEntries.id,
       userId: waitlistEntries.userId,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       createdAt: waitlistEntries.createdAt,
       groupId: waitlistEntries.groupId,
       groupName: rideGroups.name,
@@ -441,9 +522,12 @@ export async function listWaitlist(
  * (the route requires a session; anonymous visitors only see
  * `GetRideResponse.registrationsCount`). Same visibility as `GET /v1/rides/:id`:
  * `404 ride_not_found` for a non-existent ride or someone else's `draft`.
+ * CR-125: `403 riders_hidden` when the organizer has turned off
+ * `Ride.participantsVisible` — checked for every caller, no organizer bypass.
  *
  * Deliberately narrower than the organizer's {@link listParticipants}: display name
- * and group only — no user id, registration id, email, phone or emergency data
+ * (CR-125: `firstName`/`lastName` when set, else the free-text `displayName`) and
+ * group only — no user id, registration id, email, phone or emergency data
  * (`.claude/rules/security.md`: "return unnecessary participant data" is a never).
  * Same active-only filter, `createdAt asc` order and cursor mechanics as
  * {@link listParticipants}; the opaque cursor is the only place a registration id
@@ -455,7 +539,10 @@ export async function listRiders(
   rideId: string,
   query: ListRidesQuery,
 ): Promise<ListRideRidersResponse> {
-  await resolveVisibleRideStatus(db, userId, rideId);
+  const ride = await resolveVisibleRideStatus(db, userId, rideId);
+  if (!ride.participantsVisible) {
+    throw RIDERS_HIDDEN();
+  }
 
   const limit = clampLimit(query.limit);
   const conditions = [
@@ -481,6 +568,8 @@ export async function listRiders(
       id: registrations.id,
       createdAt: registrations.createdAt,
       displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
       groupId: registrations.groupId,
       groupName: rideGroups.name,
       groupPaceKmh: rideGroups.paceKmh,
@@ -502,11 +591,193 @@ export async function listRiders(
 
   return {
     items: page.map((row) => ({
-      displayName: row.displayName,
+      registrationId: row.id,
+      displayName: resolveParticipantName(row),
       group: toGroupRef(row),
     })),
     nextCursor,
   };
+}
+
+/** CR-126: is `userId` an active rider of `rideId` — the "co_participants" check. */
+async function hasActiveRegistration(
+  db: DbClient,
+  rideId: string,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: registrations.id })
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.rideId, rideId),
+        eq(registrations.userId, userId),
+        eq(registrations.status, 'active'),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+// CR-126: `/v1/rides/:id/riders/:registrationId/avatar`'s fixed path shape — same
+// "computed from the key, not stored verbatim" precedent as `users.service.ts`'s
+// own avatar path, just ride/registration-scoped instead of "me".
+function riderAvatarUrlPath(rideId: string, registrationId: string): string {
+  return `/v1/rides/${rideId}/riders/${registrationId}/avatar`;
+}
+
+/**
+ * CR-126: the single access gate backing both {@link getRiderProfile} and
+ * {@link getRiderAvatarDownload} — the tier logic lives here exactly once. Same
+ * `404 ride_not_found`/`403 riders_hidden` as {@link listRiders} (the rider list
+ * itself must be visible before any one card can be), then:
+ * - the profile's own owner always sees it;
+ * - the ride's organizer always sees it (they already have equal-or-greater
+ *   access via {@link listParticipants}'s contact/emergency data);
+ * - `profileVisibility: 'open'` grants any other signed-in viewer;
+ * - `profileVisibility: 'co_participants'` grants a viewer with their own active
+ *   registration on this same ride — sharing *this* ride is sufficient evidence
+ *   of "co-participant", no need to search the viewer's whole ride history;
+ * - `profileVisibility: 'closed'` never grants anyone but the owner.
+ */
+async function resolveRiderAccess(
+  db: DbClient,
+  viewerId: string,
+  rideId: string,
+  registrationId: string,
+) {
+  const ride = await resolveVisibleRideStatus(db, viewerId, rideId);
+  if (!ride.participantsVisible) {
+    throw RIDERS_HIDDEN();
+  }
+
+  const [target] = await db
+    .select({
+      userId: registrations.userId,
+      displayName: users.displayName,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      bio: users.bio,
+      avatarKey: users.avatarKey,
+      avatarContentType: users.avatarContentType,
+      profileVisibility: users.profileVisibility,
+      distanceWeekKm: users.distanceWeekKm,
+      distanceMonthKm: users.distanceMonthKm,
+      distanceYearKm: users.distanceYearKm,
+    })
+    .from(registrations)
+    .innerJoin(users, eq(registrations.userId, users.id))
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.rideId, rideId),
+        eq(registrations.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (!target) {
+    throw RIDER_NOT_FOUND();
+  }
+
+  const isSelf = target.userId === viewerId;
+  const isOrganizer = ride.organizerUserId === viewerId;
+  const granted =
+    isSelf ||
+    isOrganizer ||
+    target.profileVisibility === 'open' ||
+    (target.profileVisibility === 'co_participants' &&
+      (await hasActiveRegistration(db, rideId, viewerId)));
+  if (!granted) {
+    throw PROFILE_PRIVATE();
+  }
+
+  return target;
+}
+
+/**
+ * CR-126: `GET /v1/rides/:id/riders/:registrationId/profile` — a participant's
+ * card. Never exposes `phone`/`email` (`resolveRiderAccess`'s select doesn't even
+ * fetch them) — those stay owner-only regardless of `profileVisibility`
+ * (`.claude/rules/security.md`). "Recent rides" reuses `rides.participantsVisible`
+ * as its one visibility rule, same flag `listRiders`/`resolveVisibleRideStatus`
+ * already gate on, rather than a second concept.
+ */
+export async function getRiderProfile(
+  db: DbClient,
+  viewerId: string,
+  rideId: string,
+  registrationId: string,
+): Promise<RiderProfile> {
+  const target = await resolveRiderAccess(db, viewerId, rideId, registrationId);
+
+  const bikeRows = await db
+    .select()
+    .from(userBikes)
+    .where(eq(userBikes.userId, target.userId))
+    .orderBy(desc(userBikes.isActive), asc(userBikes.createdAt));
+
+  const recentRideRows = await db
+    .select({ id: rides.id, title: rides.title, startsAt: rides.startsAt })
+    .from(registrations)
+    .innerJoin(rides, eq(registrations.rideId, rides.id))
+    .where(
+      and(
+        eq(registrations.userId, target.userId),
+        eq(registrations.status, 'active'),
+        eq(rides.status, 'finished'),
+        eq(rides.participantsVisible, true),
+      ),
+    )
+    .orderBy(desc(rides.startsAt))
+    .limit(5);
+
+  return {
+    registrationId,
+    displayName: resolveParticipantName(target),
+    bio: target.bio,
+    avatarUrl: target.avatarKey
+      ? riderAvatarUrlPath(rideId, registrationId)
+      : null,
+    bikes: bikeRows.map(toBike),
+    distanceWeekKm: target.distanceWeekKm,
+    distanceMonthKm: target.distanceMonthKm,
+    distanceYearKm: target.distanceYearKm,
+    recentRides: recentRideRows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      startsAt: row.startsAt.toISOString(),
+    })),
+  };
+}
+
+/**
+ * CR-126: streams the rider's avatar bytes behind the same
+ * {@link resolveRiderAccess} gate as {@link getRiderProfile} — the body behind
+ * that response's `avatarUrl`.
+ */
+export async function getRiderAvatarDownload(
+  db: DbClient,
+  s3: S3Handle | null,
+  viewerId: string,
+  rideId: string,
+  registrationId: string,
+): Promise<{ body: Buffer; contentType: string }> {
+  const target = await resolveRiderAccess(db, viewerId, rideId, registrationId);
+  if (!target.avatarKey) {
+    throw RIDER_AVATAR_NOT_FOUND();
+  }
+
+  try {
+    const downloaded = await downloadImageObject(s3, target.avatarKey);
+    return {
+      body: downloaded.body,
+      contentType: target.avatarContentType ?? 'application/octet-stream',
+    };
+  } catch (err) {
+    if (err instanceof ImageStorageError)
+      throw RIDER_AVATAR_STORAGE_UNAVAILABLE();
+    throw err;
+  }
 }
 
 /**

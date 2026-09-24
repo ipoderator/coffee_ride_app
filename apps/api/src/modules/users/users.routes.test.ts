@@ -108,6 +108,58 @@ describe('PATCH /v1/users/me', () => {
     await app.close();
   });
 
+  it('CR-126: updates profileVisibility and self-reported distance stats, defaulting to co_participants', async () => {
+    const app = await buildApp(testEnv);
+    const { userId, rawToken } = await registerAndLogin(app);
+
+    const [before] = await app.db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
+    expect(before?.profileVisibility).toBe('co_participants');
+    expect(before?.distanceWeekKm).toBeNull();
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/v1/users/me',
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+      payload: {
+        profileVisibility: 'open',
+        distanceWeekKm: 120,
+        distanceMonthKm: 480,
+        distanceYearKm: 5000,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.user.profileVisibility).toBe('open');
+    expect(body.user.distanceWeekKm).toBe(120);
+    expect(body.user.distanceMonthKm).toBe(480);
+    expect(body.user.distanceYearKm).toBe(5000);
+
+    await app.close();
+  });
+
+  it('CR-126: rejects a distance stat outside the sane bounds with a validation error', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken } = await registerAndLogin(app);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/v1/users/me',
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: rawToken },
+      payload: { distanceWeekKm: 999999 },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('validation_error');
+
+    await app.close();
+  });
+
   it('leaves omitted fields unchanged and clears a field set to null', async () => {
     const app = await buildApp(testEnv);
     const { rawToken } = await registerAndLogin(app);

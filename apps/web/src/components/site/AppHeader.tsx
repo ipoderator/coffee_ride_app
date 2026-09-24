@@ -1,12 +1,13 @@
 'use client';
 
-import { Home, LogIn, LogOut, Menu, UserPlus, X } from 'lucide-react';
+import { LogIn, LogOut, Menu, Route, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   cn,
   NavMenu,
+  NAV_BAR_ITEM_CLASSNAME,
   NAV_MENU_ITEM_CLASSNAME,
   SITE_HEADER_TERMS,
   Wordmark,
@@ -78,7 +79,7 @@ export function AppHeader({
         <HeaderLink
           href="/"
           label={SITE_HEADER_TERMS.homeLink}
-          icon={<Home className="h-4 w-4" aria-hidden="true" />}
+          icon={<Route aria-hidden="true" />}
           active={pathname === '/'}
           className="hidden md:inline-flex"
         />
@@ -147,13 +148,13 @@ export function AppHeader({
             <HeaderLink
               href="/login"
               label={SITE_HEADER_TERMS.loginLink}
-              icon={<LogIn className="h-4 w-4" aria-hidden="true" />}
+              icon={<LogIn aria-hidden="true" />}
               active={pathname === '/login'}
             />
             <HeaderLink
               href="/register"
               label={SITE_HEADER_TERMS.registerLink}
-              icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
+              icon={<UserPlus aria-hidden="true" />}
               active={pathname === '/register'}
             />
             <ThemeToggle />
@@ -278,8 +279,7 @@ function HeaderLink({
       href={href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        NAV_BAR_ITEM_CLASSNAME,
         active ? 'text-text' : 'text-text-secondary hover:text-text',
         className,
       )}

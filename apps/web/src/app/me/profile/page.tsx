@@ -3,6 +3,7 @@
 import { BACK_LINK_TERMS, PROFILE_TERMS } from 'ui';
 import { BackLink } from '@/components/site/BackLink';
 import { AvatarUploadForm } from '@/features/participant/profile/components/AvatarUploadForm';
+import { GarageForm } from '@/features/participant/profile/components/GarageForm';
 import { ProfileForm } from '@/features/participant/profile/components/ProfileForm';
 import { useCurrentUser } from '@/lib/auth/current-user-context';
 
@@ -23,6 +24,7 @@ export default function ProfilePage() {
         name={user.displayName}
       />
       <ProfileForm initialUser={user} />
+      <GarageForm />
     </div>
   );
 }

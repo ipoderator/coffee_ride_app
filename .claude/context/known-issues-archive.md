@@ -1176,3 +1176,26 @@ client-side re-fetch after a mutation.
 Next action: none. The same gap likely exists on other dynamic-segment
 routes without their own `loading.tsx` (not audited here — out of this
 fix's reported scope); worth a pass if it comes up again elsewhere.
+
+### KI-059 — The rider list has no avatars
+
+Resolved: 2026-09-24 (CR-126).
+Discovered: 2026-09-23 (CR-119).
+Problem: «Участники» on `/rides/[id]` (`GET /v1/rides/:id/riders`) shows display
+name + group only. There is no public per-user avatar endpoint — only
+`/v1/users/me/avatar` and `/v1/organizers/:id/avatar` — and `project-state.md`'s
+"Do not break" deliberately keeps `users` free of a public-by-id pattern without
+a product reason.
+Impact: low — the list works; it is just plainer than the rest of the page.
+Workaround: none.
+Next action (as originally written): product decision first (is a participant's
+avatar public to other signed-in users?). If yes, add a scoped avatar path for
+riders of a ride (no user ids in the payload, same privacy rule as the riders
+endpoint) — a security-review item, not a UI tweak.
+Resolution: the product decision landed as CR-126's full participant-profile
+feature, following exactly the shape this note called for. `GET /v1/rides/:id/
+riders/:registrationId/avatar` streams a rider's avatar, gated by the same
+`resolveRiderAccess` tier logic as the new profile endpoint — never a bare
+`GET /v1/users/:id`, no user id in the `/riders` payload (only an opaque
+`registrationId`, added additively). See `docs/decisions.md`'s new ADR and
+`docs/changelog.md`'s CR-126 entry for the full design.

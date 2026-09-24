@@ -28,7 +28,7 @@ Rules:
   never violet- or warm-tinted.
 - **One overprint colour — plum.** `primary`/`route` is used for exactly two things: the
   ride's route line on a map and the primary action (filled button, focus ring, the
-  wordmark ring, links). It is never decoration, never a second "brand" fill on cards,
+  wordmark mark and dot, links). It is never decoration, never a second "brand" fill on cards,
   badges or backgrounds. If a screen seems to need a second accent, it needs hierarchy
   instead.
 - **The other inks carry meaning only**, as on a real map: brown `contour` = elevation
@@ -122,12 +122,12 @@ hover and selected rows, segmented-control tracks.
 | `frame`           | `#15171A` | 17.96:1                   | Ink rule: map frame, secondary-button outline, strong dividers |
 | `border`          | `#D3D6D9` | decorative                | Hairlines between rows, card outlines                          |
 | `border-input`    | `#858B92` | 3.44:1 (3.12)             | Form control boundaries (AA for UI components)                 |
-| `primary`         | `#7A2482` | 8.74:1 (7.92)             | Overprint: primary button, links, focus ring, wordmark ring    |
-| `primary-hover`   | `#651D6C` | 10.79:1                   | Primary button hover                                           |
-| `on-primary`      | `#FFFFFF` | 8.74:1 on `primary`       | Text on primary fill                                           |
-| `primary-tint`    | `#F5EAF6` | `primary` on it 7.49:1    | Selected state behind overprint content (sparingly)            |
-| `route`           | `#9C2AA6` | 6.37:1                    | The ride's route line on a map (6px)                           |
-| `route-casing`    | `#FFFFFF` | route on it 6.37:1        | Casing under the route line                                    |
+| `primary`         | `#9033A1` | 6.62:1 (5.99)             | Overprint: primary button, links, focus ring, wordmark marks   |
+| `primary-hover`   | `#772A85` | 8.55:1                    | Primary button hover                                           |
+| `on-primary`      | `#FFFFFF` | 6.62:1 on `primary`       | Text on primary fill                                           |
+| `primary-tint`    | `#F6EEF7` | `primary` on it 5.83:1    | Selected state behind overprint content (sparingly)            |
+| `route`           | `#9033A1` | 6.62:1                    | The ride's route line on a map (6px) — same value as `primary` |
+| `route-casing`    | `#FFFFFF` | route on it 6.62:1        | Casing under the route line                                    |
 | `contour`         | `#8C5419` | 6.18:1 (5.60)             | Elevation: profile chart, gain                                 |
 | `success`         | `#1D6F38` | 6.21:1 (5.62)             | Registration confirmed, published                              |
 | `warning`         | `#7A5300` | 6.85:1 (6.21)             | Warning **text**: waitlist, closing registration, degraded     |
@@ -155,8 +155,8 @@ hover and selected rows, segmented-control tracks.
 | `primary-hover`   | `#E4B6EB` | 10.81:1                   | Primary button hover                   |
 | `on-primary`      | `#1C0F1E` | 8.50:1 on `primary`       | Text on primary fill                   |
 | `primary-tint`    | `#2C1F2F` | `primary` on it 7.18:1    | Selected state (sparingly)             |
-| `route`           | `#DA8FE4` | 8.01:1                    | Route line                             |
-| `route-casing`    | `#111315` | route on it 8.01:1        | Casing under the route line            |
+| `route`           | `#D79BE0` | 8.56:1                    | Route line — same value as `primary`   |
+| `route-casing`    | `#111315` | route on it 8.56:1        | Casing under the route line            |
 | `contour`         | `#D39B5F` | 7.65:1 (6.95)             | Elevation                              |
 | `success`         | `#62C483` | 8.64:1 (7.85)             | —                                      |
 | `warning`         | `#F0C04E` | 10.95:1 (9.96)            | Warning text                           |
@@ -226,15 +226,16 @@ sans-serif`). Utility class `font-sans` (the default).
   minimum — never 14px for reading text on mobile. A condensed display face reads
   smaller than Golos at the same size; prefer the next step up for headings rather than a
   heavier weight.
-- **Weights:** Golos 400 body, 500 labels/UI, 600 emphasis. Sofia Sans Condensed 600 for
-  headings and metric values, 700 only for the wordmark. All-caps only for small labels
+- **Weights:** Golos 400 body, 500 labels/UI, 600 emphasis. Golos 800 only for the wordmark.
+  Sofia Sans Condensed 600 for headings and metric values. All-caps only for small labels
   (12px, letter-spacing ≈0.06em) in `font-display`.
 - **Line height:** 1.5 body, 1.2 headings and metric values.
-- **Wordmark (ADR-021):** `packages/ui`'s `Wordmark` — «coffee◦ride», lowercase Sofia
-  Sans Condensed 700 in ink (`text`), the dot replaced by an SVG ring in `primary`
-  (diameter ≈ x-height 0.5em, stroke ≈0.14em, bottom on the baseline). Accessible name
-  «Coffee Ride» (the stylised glyphs are `aria-hidden`). The favicon (`app/icon.svg`) is
-  the ring alone, plum, 2.5px stroke on 16px, with a dark-scheme variant.
+- **Wordmark (CR-121, supersedes ADR-021's «coffee◦ride»):** `packages/ui`'s `Wordmark` —
+  an elevation-profile mark (2:1, 0.8em tall, bottom on the baseline) in `primary`, then
+  lowercase «кофе•райд» in Golos 800 in ink (`text`), the dot a filled `primary` disc
+  (0.24em, centred on the x-height). Default size 1.8rem. Accessible name «Кофе Райд»
+  (`WORDMARK_TERMS`; the stylised glyphs are `aria-hidden`). The favicon
+  (`app/icon.svg`) is the profile alone, plum, with a dark-scheme variant.
 
 ---
 
@@ -371,6 +372,12 @@ discovery link, one dropdown per cabinet built from that cabinet's ADR-009 featu
 registry, the theme control (§3), and the account menu. A new screen registers itself
 into its registry; it does not edit the header. `CabinetShell` remains, narrowed to
 the `/me/*` and `/organizer/*` session gate.
+
+Every top-level item in the bar — plain link or dropdown trigger — shares one type
+style, `packages/ui`'s `NAV_BAR_ITEM_CLASSNAME` (CR-122): Golos 600, 16px, tracking
+−0.01em, icons and chevron 18px with an 8px gap, `text-secondary` idle / `text` active. The wordmark's face one step lighter, so
+the bar reads as one line of type. Dropdown items (`NAV_MENU_ITEM_CLASSNAME`) stay 14px
+500 as the second level.
 
 Every nested screen carries a labeled back link to its parent (CR-109) — an explicit
 destination, not browser history, since `/rides/[id]` is routinely opened from a shared

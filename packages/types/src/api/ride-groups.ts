@@ -101,10 +101,15 @@ export interface RideGroupRef {
 }
 
 // `GET /v1/rides/:id/riders` — the signed-in-only public participant list. Display
-// name + group only: no user/registration id, email, phone or emergency data
-// (`.claude/rules/security.md`). `displayName` is `null` when the participant never
-// set one (the client shows a neutral placeholder).
+// name + group, plus (CR-126) an opaque `registrationId` — never email, phone or
+// emergency data (`.claude/rules/security.md`). `registrationId` is safe to expose:
+// it is not a user id, and it only unlocks the access-gated rider-profile/avatar
+// routes below (`resolveRiderAccess` in `apps/api/src/modules/registrations/
+// registrations.service.ts`), which apply the profile owner's own privacy setting
+// before returning anything beyond what this list already shows. `displayName` is
+// `null` when the participant never set one (the client shows a neutral placeholder).
 export interface RideRider {
+  registrationId: string;
   displayName: string | null;
   group: RideGroupRef | null;
 }

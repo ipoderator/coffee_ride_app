@@ -94,12 +94,13 @@ export function RouteMap({
             ? {
                 points: geometry,
                 // ADR-021 («Топокарта»): the route is the overprint ink,
-                // 6px over the renderer's 4px default, no glow.
-                color: getCssColorVar('--route'),
-                width: 6,
-                // Casing (paper in light, graphite in dark) keeps the line
-                // legible over any basemap detail (roads, water, parks).
-                outlineColor: getCssColorVar('--route-casing'),
+                // 5px, no glow.
+                color: getCssColorVar('--map-route'),
+                width: 5,
+                // Paper casing keeps the line legible over roads, water and
+                // parks. `--map-*` inks follow the basemap (always light,
+                // KI-057), not the UI theme.
+                outlineColor: getCssColorVar('--map-route-casing'),
               }
             : null,
         );

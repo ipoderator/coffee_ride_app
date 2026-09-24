@@ -386,6 +386,7 @@ export function toPublicRide(row: typeof rides.$inferSelect): Ride {
     paceKmh: row.paceKmh,
     durationMinutes: row.durationMinutes,
     difficulty: row.difficulty as Ride['difficulty'],
+    participantsVisible: row.participantsVisible,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -1081,6 +1082,8 @@ export async function updateRideDraft(
   if (patch.durationMinutes !== undefined)
     values.durationMinutes = patch.durationMinutes;
   if (patch.difficulty !== undefined) values.difficulty = patch.difficulty;
+  if (patch.participantsVisible !== undefined)
+    values.participantsVisible = patch.participantsVisible;
 
   const [updated] = await db
     .update(rides)

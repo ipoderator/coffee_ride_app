@@ -45,12 +45,19 @@ export function toPublicUser(row: typeof users.$inferSelect): User {
     // shape, so every consumer (register/login/verify-email/me, and
     // `modules/users`' PATCH) gets these for free.
     displayName: row.displayName,
+    firstName: row.firstName,
+    lastName: row.lastName,
     phone: row.phone,
     bio: row.bio,
     // CR-097 (KI-023 remainder): always `/v1/users/me/avatar` when set — this
     // type only ever describes the caller's own profile (see `User.avatarUrl`'s
     // own doc comment in `packages/types`).
     avatarUrl: row.avatarKey ? USER_AVATAR_URL_PATH : null,
+    // CR-126.
+    profileVisibility: row.profileVisibility,
+    distanceWeekKm: row.distanceWeekKm,
+    distanceMonthKm: row.distanceMonthKm,
+    distanceYearKm: row.distanceYearKm,
   };
 }
 

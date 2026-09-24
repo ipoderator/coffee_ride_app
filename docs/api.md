@@ -44,6 +44,9 @@ GET `/v1/auth/me` — **implemented (CR-012)**. Requires a valid session cookie
 (`401` otherwise). `200` → `{ user }`. As of CR-013, `user` includes
 `displayName`/`phone`/`bio` (all `null` until set via `PATCH /v1/users/me`) —
 an additive field change, not a new endpoint (`.claude/rules/extensibility.md`).
+CR-125 adds `firstName`/`lastName` the same additive way — the name shown in a
+ride's riders/participants/waitlist lists in preference to `displayName` when
+either is set.
 
 POST `/v1/auth/forgot-password` — **implemented (CR-060)**. Body: `{ email }`.
 Always `204` with no body, whether or not the email belongs to a real
@@ -75,7 +78,39 @@ check, `bio` ≤500 chars. `200` → `{ user }` (same shape as `GET /v1/auth/me`
 — no separate `GET /v1/users/me`, `.claude/CLAUDE.md`: no duplicate
 concepts). `400 validation_error` on an invalid field. `phone`/`bio` are
 private — returned only to the profile's own owner; no endpoint exposes
-another user's row yet (`.claude/rules/security.md`).
+another user's row yet (`.claude/rules/security.md`). CR-125 adds
+`firstName?`/`lastName?` the same way, 1-60 chars each.
+
+CR-126 additively extends the same body with `profileVisibility?` (`'closed'
+| 'co_participants' | 'open'`, not nullable — the column defaults
+`co_participants` and is never cleared to nothing) and `distanceWeekKm?`/
+`distanceMonthKm?`/`distanceYearKm?` (nullable integers, self-reported —
+`400 validation_error` outside 0-3000/0-10000/0-100000 respectively). See
+"Rider profile" below for what these actually gate.
+
+### Bikes (User)
+
+CR-126 ("garage"): `me`-scoped CRUD, paginated list per ADR-011, same
+ownership discipline as the avatar endpoints below.
+
+GET `/v1/users/me/bikes` — **implemented (CR-126)**. Requires a valid session
+cookie. Query: `limit?`/`cursor?`. `200` → `{ items: Bike[], nextCursor }`,
+`Bike = { id, bikeType, brand, model, isActive }`.
+
+POST `/v1/users/me/bikes` — Body: `{ bikeType, brand?, model?, isActive? }`.
+`bikeType` is one of `'road' | 'gravel' | 'mtb'` — narrower than `Ride`'s own
+`bicycleType` (which also has `'any'`, a ride requirement, not a real bike).
+`201` → `{ bike }`. `409 bike_limit_reached` past 20 bikes.
+
+PATCH `/v1/users/me/bikes/:bikeId` — same body shape, every field optional
+(`brand`/`model` nullable to clear). `200` → `{ bike }`. `404
+bike_not_found` for another account's bike or a nonexistent id.
+
+DELETE `/v1/users/me/bikes/:bikeId` — `204`. `404 bike_not_found` as above.
+
+`isActive: true` on either verb atomically deactivates whichever other bike
+was active for that user (partial unique index, `docs/database.md`) — never
+more than one active bike at a time.
 
 ### Avatar (User)
 
@@ -85,9 +120,12 @@ established (`apps/api/src/lib/image-processing.ts`/`image-storage.ts`,
 relocated there from `modules/rides/` once a second and third caller
 appeared) — same accepted types (JPEG/PNG/WebP, decoded not trusted), same 8
 MB cap, same 1920×1920 resize bound, same metadata-stripping. Entirely
-"me"-scoped, no `:id` variant — there is no `GET /v1/users/:id` at all
-(`.claude/rules/security.md`: no endpoint exposes another user's row), so
-neither does its avatar.
+"me"-scoped, no `:id` variant here — there is still no `GET /v1/users/:id`
+(`.claude/rules/security.md`: no endpoint exposes another user's row by a
+bare user id). CR-126 adds a _ride-scoped_ avatar path for viewing another
+participant's own avatar — see "Rider profile" below; it is a different
+route entirely (keyed by ride + registration, access-gated), not a `:id`
+variant of the routes in this section.
 
 POST `/v1/users/me/avatar` — Requires a valid session cookie (`401`
 otherwise). `multipart/form-data`, one file field named `file`. `400
@@ -252,7 +290,10 @@ endpoint). Body: any subset of `title`, `description`, `bicycleType`,
 each `null` to clear; `startLat` in `[-90, 90]`, `startLng` in
 `[-180, 180]`), `participantLimit`, `priceRub`, `distanceKm`,
 `elevationGainMeters`, `paceKmh`, `durationMinutes`, `difficulty` — every
-field CR-017 left `null` at creation. `coverImageUrl` stays out — it is
+field CR-017 left `null` at creation — plus `participantsVisible` (CR-125, not
+nullable, default `true`; toggles `GET /v1/rides/:id/riders` for the whole
+ride, same draft-only gate as every other field here). `coverImageUrl` stays
+out — it is
 computed, not settable, from the dedicated `.../cover` endpoints below
 (ADR-019/CR-086); `startLat`/`startLng` are entered manually —
 no geocode-by-address UI exists yet (KI-016). `200` → `{ ride }` with the
@@ -435,23 +476,64 @@ createdAt }` — no phone/email. Collection, paginated per ADR-011 (`?limit=`/
 yet, same precedent `GET /v1/rides/mine`'s screen already set.
 
 **CR-117**: each item gains `group: { id, name, paceKmh } | null` (additive; also on
-`GET .../waitlist` below, which shares the item shape).
+`GET .../waitlist` below, which shares the item shape). **CR-125**: `displayName` here
+is computed the same way as `GET .../riders` below —
+`"{firstName} {lastName}"` when either is set, else the free-text `displayName`.
 
 GET `/v1/rides/:id/riders` — **implemented (CR-117)**. Who is riding, for any
 **signed-in** user: `401` without a session (anonymous visitors see only `GET
 /v1/rides/:id`'s `registrationsCount`). Same visibility as `GET /v1/rides/:id` — `404
 ride_not_found` for a non-existent ride or someone else's `draft`. Active registrations,
 `createdAt asc`, paginated per ADR-011 (`400 invalid_cursor`). `200` → `{ items: [{
-displayName, group: { id, name, paceKmh } | null }], nextCursor }` — deliberately no
-user/registration id, email, phone or emergency data (`.claude/rules/security.md`),
+registrationId, displayName, group: { id, name, paceKmh } | null }], nextCursor }` —
+deliberately no user id, email, phone or emergency data (`.claude/rules/security.md`),
 and the response schema itself strips anything else. Rationale for "signed-in only":
 seeing who else rides is part of deciding to join, but a name list of people attending
 a dated, located event should not be scrapeable anonymously; a signed-in account is the
 minimum accountability for viewing it (product owner decision, CR-115…120 brief).
-`displayName` is `null` when the participant never set one. No avatar yet — user
-avatars are only served at `/v1/users/me/avatar`; adding a public per-user avatar URL
-here later is additive. (The opaque cursor encodes a registration id; it grants nothing
-on its own.)
+`displayName` is `null` when the participant never set one; **CR-125**: this field is
+now `"{firstName} {lastName}"` when either is set on the user, falling back to the
+free-text `displayName` column, then `null`. **CR-126**: `registrationId` (previously
+omitted entirely — "the opaque cursor encodes a registration id; it grants nothing on
+its own" was true before this ticket) is now returned per item — it is not a user id,
+and the only thing it unlocks is the access-gated "Rider profile" endpoints just below,
+themselves gated by the profile owner's own `profileVisibility` setting.
+
+**CR-125**: `403 riders_hidden` for every caller (including the ride's own organizer —
+use `GET .../participants` instead) when the organizer has set
+`Ride.participantsVisible` to `false`. `GET /v1/rides/:id`'s `registrationsCount` is
+unaffected — only this named list is gated. Checked after the existing 401/404 rules
+above, so a non-existent/someone-else's-draft ride still 404s first.
+
+### Rider profile
+
+CR-126: a participant's card, reached only through a `registrationId` from the
+`/riders` list above — never a bare `GET /v1/users/:id` (`.claude/context/
+project-state.md`'s standing constraint; `known-issues-archive.md`'s KI-059).
+Both routes below share one access check, `resolveRiderAccess`
+(`apps/api/src/modules/registrations/registrations.service.ts`): `401` without a
+session; `403 riders_hidden` if the organizer turned off the riders list (same rule
+as `/riders` itself — checked first); `404 rider_not_found` for a `registrationId`
+that isn't an active rider of this ride; otherwise access is granted when the viewer
+is the profile's own owner, the ride's organizer, `profileVisibility: 'open'`, or
+`profileVisibility: 'co_participants'` **and** the viewer has their own active
+registration on this same ride — sharing this one ride is sufficient evidence of
+"co-participant", no search of the viewer's whole ride history. Anything else is
+`403 profile_private`.
+
+GET `/v1/rides/:id/riders/:registrationId/profile` — `200` → `{ profile: {
+registrationId, displayName, bio, avatarUrl, bikes: Bike[], distanceWeekKm,
+distanceMonthKm, distanceYearKm, recentRides: [{ id, title, startsAt }] } }`. Never
+`phone`/`email` — the query behind this route doesn't even select them, regardless
+of `profileVisibility` (`.claude/rules/security.md`). `recentRides` is up to 5, most
+recent first: other rides with an active registration for this user, `status:
+'finished'`, and that ride's own `participantsVisible` true — reusing that existing
+flag as the one visibility rule here too, rather than a second concept.
+
+GET `/v1/rides/:id/riders/:registrationId/avatar` — the raw image bytes behind that
+`avatarUrl`, same `Cache-Control: private, max-age=31536000, immutable` as
+`/v1/users/me/avatar`. Same access gate as the profile route above; `404
+avatar_not_found` if the rider has no avatar set.
 
 GET `/v1/rides/:id/waitlist` — **implemented (CR-037)**. Adds a `GET` to the existing
 `POST`/`DELETE /v1/rides/:id/waitlist` path — the organizer's collection view of the

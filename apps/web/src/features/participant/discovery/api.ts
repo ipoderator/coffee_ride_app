@@ -1,5 +1,6 @@
 import type {
   BicycleType,
+  GetRouteGeometryResponse,
   ListPublicRidesResponse,
   ProblemDetails,
 } from 'types';
@@ -41,4 +42,22 @@ export async function listPublicRides(
   }
 
   return body as ListPublicRidesResponse;
+}
+
+/**
+ * `GET /v1/rides/:id/route/geometry` (CR-028) — the full stored line, for the
+ * discovery map's selected ride. The list's `routePreview` (≤ 40 points) is a
+ * simplification meant for the 32px row glyph; drawn at map scale it reads as
+ * straight sticks cutting across the road network.
+ */
+export async function getRouteGeometry(
+  rideId: string,
+): Promise<GetRouteGeometryResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/route/geometry`);
+  const body = (await response.json()) as
+    GetRouteGeometryResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return body as GetRouteGeometryResponse;
 }

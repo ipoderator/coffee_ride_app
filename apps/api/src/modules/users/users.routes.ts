@@ -1,17 +1,29 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { updateProfileRequestSchema } from 'types';
+import {
+  createBikeRequestSchema,
+  listRidesQuerySchema,
+  updateBikeRequestSchema,
+  updateProfileRequestSchema,
+} from 'types';
 import { requireAuth } from '../../plugins/auth.js';
 import {
   readUploadedFile,
   UploadTooLargeError,
 } from '../../lib/read-upload.js';
-import { userResponseSchema } from './user-response.schema.js';
 import {
+  bikeResponseSchema,
+  userResponseSchema,
+} from './user-response.schema.js';
+import {
+  createBike,
   deleteAvatar,
+  deleteBike,
   getAvatarDownload,
+  listBikes,
   replaceAvatar,
+  updateBike,
   updateProfile,
   uploadAvatar,
   UserServiceError,
@@ -23,6 +35,15 @@ const updateProfileResponseSchema = z.object({
 
 const avatarResponseSchema = z.object({
   avatarUrl: z.string(),
+});
+
+const bikeIdParamsSchema = z.object({
+  bikeId: z.uuid('bikeId must be a valid bike id.'),
+});
+const bikeResponseWrapper = z.object({ bike: bikeResponseSchema });
+const listBikesResponseSchema = z.object({
+  items: z.array(bikeResponseSchema),
+  nextCursor: z.string().nullable(),
 });
 
 // CR-097 (KI-023 remainder): smaller than GPX's 10 MB, same as `rides.routes.ts`'s
@@ -136,4 +157,66 @@ export const usersRoutes: FastifyPluginAsyncZod = async (app) => {
       .type(contentType)
       .send(body);
   });
+
+  // CR-126 ("garage"): "me"-scoped bike CRUD, same 4-verb shape/ownership
+  // discipline as the avatar routes above.
+  app.get(
+    '/me/bikes',
+    {
+      schema: {
+        querystring: listRidesQuerySchema,
+        response: { 200: listBikesResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const page = await listBikes(app.db, request.user!.id, request.query);
+      return reply.status(200).send(page);
+    },
+  );
+
+  app.post(
+    '/me/bikes',
+    {
+      schema: {
+        body: createBikeRequestSchema,
+        response: { 201: bikeResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const bike = await createBike(app.db, request.user!.id, request.body);
+      return reply.status(201).send({ bike });
+    },
+  );
+
+  app.patch(
+    '/me/bikes/:bikeId',
+    {
+      schema: {
+        params: bikeIdParamsSchema,
+        body: updateBikeRequestSchema,
+        response: { 200: bikeResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const bike = await updateBike(
+        app.db,
+        request.user!.id,
+        request.params.bikeId,
+        request.body,
+      );
+      return reply.status(200).send({ bike });
+    },
+  );
+
+  app.delete(
+    '/me/bikes/:bikeId',
+    { schema: { params: bikeIdParamsSchema }, preHandler: requireAuth },
+    async (request, reply) => {
+      await deleteBike(app.db, request.user!.id, request.params.bikeId);
+      return reply.status(204).send();
+    },
+  );
 };

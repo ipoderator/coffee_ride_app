@@ -45,9 +45,21 @@ Do not rely on chat history as the only project context. Before every non-trivia
 
 Do not replace the stack without an explicit architectural decision.
 
+## Brand color
+
+"Фирменный цвет" (the brand color) is `#9033A1` — locked in by the project owner
+2026-09-24 (CR-124), measured directly off the rendered UI. It is `packages/ui/src/
+tokens.css`'s light-theme `--primary` (also `--route`/`--map-route`/
+`--map-marker-selected`: one overprint ink, not several shades of purple — ADR-021).
+The dark theme keeps its own lifted variant (`#D79BE0`, documented in `docs/design.md`
+§3) for contrast on a near-black background — not the same hex, same role. Do not
+introduce a new purple hex anywhere without updating `packages/ui/src/tokens.css` and
+`docs/design.md` §3 together; never hard-code this (or any) color literal in
+`apps/web`/`apps/api` source (`.claude/rules/frontend.md`).
+
 ## Domain entities
 
-User, OrganizerProfile, Ride, Route, RoutePoint, Stop, RideGroup (ADR-022), RideRequirement, RideService, Registration, WaitlistEntry, RideUpdate, Notification, Review.
+User, OrganizerProfile, Ride, Route, RoutePoint, Stop, RideGroup (ADR-022), RideRequirement, RideService, Registration, WaitlistEntry, RideUpdate, Notification, Review, Bike (ADR-023).
 
 Do not create duplicate concepts under different names.
 
@@ -70,6 +82,35 @@ For non-trivial work:
 13. Update `docs/tasks.md`.
 14. Review `git diff`.
 15. Commit only when requested/appropriate.
+
+## Autonomous execution and handoff
+
+Once the task scope is approved, continue without asking for confirmation between routine steps.
+
+Do not pause only to:
+
+- summarize a next step without taking it;
+- ask whether to continue when the answer does not affect the implementation;
+- present options that do not block progress.
+
+Ask for my input only when a stop condition applies, the approved scope must change, or a decision materially affects product behavior, architecture, security, cost, or external contracts.
+
+Keep progress in `.claude/context/current-task.md`.
+Do not create a separate `TASKS.md`: `current-task.md` is the active task record, and `docs/tasks.md` is the persistent task list.
+
+At the end of every non-trivial run, respond with exactly these sections:
+
+## Needs my input
+
+Only blockers, decisions, approvals, access, or clarification required from me. Write `None` if there is nothing.
+
+## Changed
+
+Implemented behavior, changed files, migrations, API or configuration changes, and validation performed.
+
+## Found
+
+Risks, defects, technical debt, assumptions, and anything that could not be confirmed. Include the relevant evidence or location.
 
 ## Project skills
 

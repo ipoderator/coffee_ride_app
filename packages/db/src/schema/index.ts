@@ -11,6 +11,7 @@
 //   constraints where duplicates must be impossible; `NOT NULL`/check
 //   constraints for required/bounded fields.
 export * from './user.js';
+export * from './bike.js';
 export * from './email-verification-token.js';
 export * from './password-reset-token.js';
 export * from './session.js';

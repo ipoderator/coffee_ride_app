@@ -36,7 +36,7 @@ Can:
 
 ## Ride fields
 
-title, description, cover image, start, finish, date/time, participant limit, price, distance, duration, group pace, elevation gain, difficulty, bicycle type, age/experience requirements, helmet requirement, what to bring, route, stops, services, organizer, registration status.
+title, description, cover image, start, finish, date/time, participant limit, price, distance, duration, group pace, elevation gain, difficulty, bicycle type, age/experience requirements, helmet requirement, what to bring, route, stops, services, organizer, registration status, participants-visible (CR-125 — organizer toggle for the participant-facing rider list, default on).
 
 ## Bicycle types
 
@@ -76,6 +76,15 @@ Cancellation:
 - automatic route generation;
 - AI route recommendations;
 - full payment marketplace.
+
+CR-126 ("Rider profile": bio, garage, self-reported distance stats, recent rides,
+reachable from a ride's riders list) was explicitly requested by the product owner
+and shipped — a step toward "social" without becoming a feed: no timeline, no
+activity stream, no following/likes/comments, and a profile is only reachable through
+a ride the viewer shares with that participant, never a directory or search. It does
+not retract this line — a real social feed is still out of scope unless separately
+requested. Distance stats are self-reported (confirmed with the product owner), not
+GPS-tracked — "live GPS tracking"/"full Strava replacement" above are unaffected.
 
 ## Users
 

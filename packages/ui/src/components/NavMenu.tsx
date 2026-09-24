@@ -30,6 +30,16 @@ import { cn } from '../lib/cn';
 export const NAV_MENU_ITEM_CLASSNAME =
   'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
 
+/**
+ * One look for every top-level item in the header bar (CR-122): a menu
+ * trigger here, a plain link in `apps/web`'s header. Golos 600 at 16px, the
+ * wordmark's face one step lighter, so the bar reads as one line of type.
+ * Icons (the leading one and the chevron) are sized here, 18px against the
+ * 16px text, so callers pass them unsized. Colour stays with the caller.
+ */
+export const NAV_BAR_ITEM_CLASSNAME =
+  'inline-flex min-h-11 items-center gap-2 rounded-md px-3 font-sans text-base font-semibold tracking-[-0.01em] transition-colors [&>svg]:size-[1.125rem] [&>svg]:shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+
 export interface NavMenuProps {
   /** The trigger's visible text, and its accessible name. */
   label: string;
@@ -159,8 +169,7 @@ export function NavMenu({
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         onKeyDown={handleTriggerKeyDown}
         className={cn(
-          'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors',
-          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+          NAV_BAR_ITEM_CLASSNAME,
           active ? 'text-text' : 'text-text-secondary hover:text-text',
         )}
       >
@@ -179,7 +188,7 @@ export function NavMenu({
           strokeLinecap="round"
           strokeLinejoin="round"
           className={cn(
-            'h-4 w-4 transition-transform motion-reduce:transition-none',
+            'transition-transform motion-reduce:transition-none',
             open && 'rotate-180',
           )}
         >

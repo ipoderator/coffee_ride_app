@@ -10,8 +10,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapHandle, MapMarkerInput, MapRenderOptions } from 'maps-core';
 import type { PublicRideListItem } from 'types';
 import { DiscoveryList } from './components/DiscoveryList';
-import { listPublicRides } from './api';
-import { projectRoutePreview } from './lib/route-preview';
+import { getRouteGeometry, listPublicRides } from './api';
+import { projectRoutePreview, smoothRoutePreview } from './lib/route-preview';
 
 // CR-118: the map renderer is a fake that records what discovery draws — no
 // MapGL/WebGL in jsdom (same approach as route-builder.test.tsx). Off by
@@ -51,10 +51,12 @@ vi.mock('./api', async () => {
   return {
     ...actual,
     listPublicRides: vi.fn(),
+    getRouteGeometry: vi.fn(),
   };
 });
 
 const listPublicRidesMock = vi.mocked(listPublicRides);
+const getRouteGeometryMock = vi.mocked(getRouteGeometry);
 
 const baseRide: PublicRideListItem = {
   id: 'ride-1',
@@ -74,6 +76,7 @@ const baseRide: PublicRideListItem = {
   paceKmh: 24.5,
   durationMinutes: 150,
   difficulty: 3,
+  participantsVisible: true,
   status: 'published',
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',
@@ -93,6 +96,9 @@ const baseRide: PublicRideListItem = {
 
 beforeEach(() => {
   listPublicRidesMock.mockReset();
+  getRouteGeometryMock.mockReset();
+  // Default: the full line never arrives, so the smoothed preview stays.
+  getRouteGeometryMock.mockReturnValue(new Promise(() => {}));
   renderState.available = false;
   renderState.options = null;
   renderState.handle = null;
@@ -458,19 +464,27 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
     const row = (await screen.findByText('Заезд А')).closest('li')!;
     await waitFor(() => expect(renderState.handle).not.toBeNull());
 
+    const fullLine = [
+      { lat: 55.7, lng: 37.5, elevationMeters: null },
+      { lat: 55.705, lng: 37.51, elevationMeters: null },
+      { lat: 55.71, lng: 37.53, elevationMeters: null },
+      { lat: 55.72, lng: 37.55, elevationMeters: null },
+    ];
+    getRouteGeometryMock.mockResolvedValue({ points: fullLine });
+
     fireEvent.mouseEnter(row);
 
+    // The ride's full stored line replaces the ≤ 40-point preview, fetched
+    // once for the active ride.
     await waitFor(() =>
       expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          points: [
-            { lat: 55.7, lng: 37.5 },
-            { lat: 55.72, lng: 37.55 },
-          ],
-          width: 6,
+          points: fullLine.map(({ lat, lng }) => ({ lat, lng })),
+          width: 5,
         }),
       ),
     );
+    expect(getRouteGeometryMock).toHaveBeenCalledWith('ride-a');
     expect(row).toHaveAttribute('data-active', 'true');
     expect(lastMarkers().find((m) => m.id === 'ride-a')?.selected).toBe(true);
 
@@ -498,7 +512,7 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
 
     await waitFor(() =>
       expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(
-        expect.objectContaining({ width: 6 }),
+        expect.objectContaining({ width: 5 }),
       ),
     );
     expect(link.closest('li')).toHaveAttribute('data-active', 'true');
@@ -565,5 +579,52 @@ describe('projectRoutePreview', () => {
         [55, 37],
       ]),
     ).toBeNull();
+  });
+});
+
+describe('route line smoothing', () => {
+  it('draws the preview smoothed while the full line is not there', async () => {
+    renderState.available = true;
+    listPublicRidesMock.mockResolvedValue({
+      items: [plottableA],
+      nextCursor: null,
+    });
+    // `beforeEach`: the geometry request never resolves.
+
+    render(<DiscoveryList />);
+    const row = (await screen.findByText('Заезд А')).closest('li')!;
+    await waitFor(() => expect(renderState.handle).not.toBeNull());
+    fireEvent.mouseEnter(row);
+
+    await waitFor(() =>
+      expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          points: smoothRoutePreview(plottableA.routePreview!).map(
+            ([lat, lng]) => ({ lat, lng }),
+          ),
+        }),
+      ),
+    );
+  });
+
+  it('cuts corners but keeps both ends of the route', () => {
+    const preview: Array<[number, number]> = [
+      [55.7, 37.5],
+      [55.8, 37.5],
+      [55.8, 37.6],
+    ];
+    const smoothed = smoothRoutePreview(preview);
+    expect(smoothed[0]).toEqual([55.7, 37.5]);
+    expect(smoothed[smoothed.length - 1]).toEqual([55.8, 37.6]);
+    // Two Chaikin passes (ends kept, two points per segment): 3 → 6 → 12, and
+    // the sharp corner itself is no longer on the line.
+    expect(smoothed).toHaveLength(12);
+    expect(smoothed).not.toContainEqual([55.8, 37.5]);
+    expect(
+      smoothRoutePreview([
+        [55.7, 37.5],
+        [55.8, 37.6],
+      ]),
+    ).toHaveLength(2);
   });
 });

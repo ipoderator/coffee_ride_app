@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -104,6 +105,12 @@ export const rides = pgTable(
     // constraint below, not a pg enum (an enum of five integers is unusual and
     // Drizzle's `pgEnum` is string-only).
     difficulty: integer('difficulty'),
+    // CR-125: the organizer-facing privacy toggle for `GET /v1/rides/:id/riders`
+    // (`.claude/context/current-task.md`). Defaults `true` so every existing row
+    // keeps today's live behavior unchanged.
+    participantsVisible: boolean('participants_visible')
+      .notNull()
+      .default(true),
     status: rideStatusEnum('status').notNull().default('draft'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

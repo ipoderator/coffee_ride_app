@@ -2265,3 +2265,257 @@ organizer groups and participants).
 
 Next logical task: critique P0 still open — the login bounce loses the ride
 (`/login` has no `?next=`), then a 2GIS dark basemap style for the dark theme.
+
+## 2026-09-23 — CR-121 — New wordmark «кофе•райд»
+
+Summary: the header logo «coffee◦ride» (Sofia Sans Condensed 700, ring for the dot) is
+replaced with the owner's new logo: a plum elevation-profile mark, then «кофе•райд» in
+Golos 800 with a filled plum dot. Rebuilt as inline SVG + text (tokens, both themes)
+rather than the supplied raster, which had a baked-in checkerboard. ~20% larger than
+before (text-2xl → 1.8rem), per the owner's request. Accessible name is now «Кофе
+Райд» so it matches the visible letters (WCAG 2.5.3); page `<title>`s still say
+«Coffee Ride». Favicon is now the profile mark.
+Files: `packages/ui/src/components/Wordmark.tsx` (+ test), `packages/ui/src/
+terminology.ts` (`WORDMARK_TERMS`), `apps/web/src/app/layout.tsx` (Golos 800 loaded),
+`apps/web/src/app/icon.svg`, `docs/design.md` §4.
+Decisions: none (visual update of ADR-021's wordmark item; the rest of ADR-021 stands).
+Follow-up: decide whether page titles switch to «Кофе Райд» too.
+
+## 2026-09-23 — CR-122 — Header bar in one type style
+
+Summary: the header's links and dropdown triggers (Golos 14px 500) looked thin next
+to the new «кофе•райд» wordmark (Golos 800). All top-level bar items now share one
+class, `NAV_BAR_ITEM_CLASSNAME` in `packages/ui`'s NavMenu — Golos 600, 16px,
+tracking −0.01em — used by both `NavMenu`'s trigger and `AppHeader`'s `HeaderLink`,
+which previously each carried a copy of the same class string. Dropdown and mobile
+menu items are unchanged.
+Files: `packages/ui/src/components/NavMenu.tsx`, `apps/web/src/components/site/
+AppHeader.tsx`, `docs/design.md` §8.
+Decisions: none.
+Follow-up: none.
+
+Also in CR-122: the «Заезды» header link's icon is lucide `Route` (a path between
+two points) instead of `Home` — the link opens map-first discovery, not a home
+page, and `Bike` is already the organizer cabinet's «Мои заезды» icon.
+Bar icons (leading icons, the theme icon and the dropdown chevron) are sized once
+in `NAV_BAR_ITEM_CLASSNAME` — 18px against the 16px text, gap 8px — instead of
+each caller's `h-4 w-4`; dropdown items keep 16px icons.
+
+## 2026-09-24 — CR-123 — Discovery map fullscreen toggle
+
+Summary: the discovery list column (`docs/design.md` §11) is now ~528px (was
+440px) at `lg`+, and the map panel gets a fullscreen toggle — a primary-colored
+icon button top-left over the map (`isMapFullscreen` state in `DiscoveryList`).
+Enabling it takes the map panel out of the grid with `fixed inset-0 z-50`
+(same tier as `Dialog`/`Toast`), hiding the list column so rides can be found
+directly on the map without the list competing for space; body scroll is
+locked while active. Desktop-only (`lg:inline-flex`) — the mobile layout
+keeps CR-026's "always show both" design, so the toggle doesn't apply there.
+Added `bg-bg` to the map panel so the fullscreen overlay is opaque even in
+the degraded (no 2GIS key) placeholder state, instead of showing the header
+through the gap.
+Files: `apps/web/src/features/participant/discovery/components/
+DiscoveryList.tsx`, `packages/ui/src/terminology.ts`
+(`RIDE_DISCOVERY_TERMS.expandMapLabel`/`collapseMapLabel`).
+Decisions: none.
+Follow-up: none.
+
+## 2026-09-24 — CR-124 — Brand purple locked to #9033A1
+
+Summary: `primary` and `route` had quietly drifted into two different purples
+(`#7A2482` vs `#9C2AA6` light, `#D79BE0` vs `#DA8FE4` dark) despite ADR-021
+calling for one overprint ink — visible as a mismatch between UI accents
+(buttons, wordmark, focus ring) and the route/ride-type glyphs on ride cards
+and the map. The project owner sampled the intended purple directly off the
+rendered UI (macOS Digital Color Meter, RGB 144/51/161 → `#9033A1`) and this
+is now locked in as the canonical brand color. Light theme: `--primary`,
+`--route`, `--map-route`, `--map-marker-selected` are all `#9033A1`;
+`--primary-hover`/`--primary-tint` recomputed to preserve the same hue and
+relative lightness/tint relationship as before. Dark theme: `--route` now
+matches `--primary` (`#D79BE0`) instead of its own separate shade — kept
+lifted from the light value rather than reusing it verbatim, since that's the
+documented, accessible value for the near-black background (`docs/design.md`
+§3). New contrast ratios recomputed (WCAG 2.1 relative luminance) and still
+comfortably clear AA (6.62:1 primary-on-bg light, 8.56:1 dark; full table in
+`docs/design.md` §3).
+Files: `packages/ui/src/tokens.css`, `apps/web/src/app/icon.svg`,
+`docs/design.md` §3, `.claude/CLAUDE.md` (new "Brand color" section pinning
+`#9033A1` as what "фирменный цвет" means for this project going forward).
+Decisions: none new (a value correction under ADR-021, not a new direction).
+Follow-up: none.
+
+## 2026-09-24 — CR-125 — Participant first/last name, per-ride participants-visibility toggle
+
+Summary: the discovery/ride-detail «Участники» rider list (CR-117/CR-119) always
+showed `User.displayName` — a free-text nickname — and every ride always showed the
+list to any signed-in viewer with no way to turn it off. Two independent additions:
+
+1. **Real name.** `users` gets nullable `firstName`/`lastName` (migration `0018`,
+   additive alongside `displayName`, not a replacement — existing nicknames stay
+   intact). `PATCH /v1/users/me` accepts both (1-60 chars each, same nullable/
+   optional PATCH semantics as every other profile field). Every place a
+   participant's name is shown to another user — `GET /v1/rides/:id/riders`, the
+   organizer's `GET .../participants`/`.../waitlist` — now computes
+   `"{firstName} {lastName}"` when either is set, falling back to `displayName`,
+   then `null` (`resolveParticipantName` in `registrations.service.ts`). The
+   response field is still called `displayName` in all three — an additive
+   behavior change under an unchanged contract, not a new field.
+2. **Per-ride privacy toggle.** `rides.participantsVisible` (migration `0018`,
+   `boolean not null default true` — every existing/new ride keeps today's live
+   behavior unless the organizer turns it off). Editable via `PATCH /v1/rides/:id`,
+   using the exact same draft-only gate every other ride setting in this codebase
+   already uses (`participantLimit`, cover image, route, ...) — not a new
+   precedent. `GET /v1/rides/:id/riders` now checks it for every caller, including
+   the ride's own organizer (who already has `/participants` for management):
+   `403 riders_hidden` when off. `GET /v1/rides/:id`'s `registrationsCount` is
+   untouched — only the named list is gated, matching this ticket's request to
+   make the count/list distinction explicit.
+
+Profile form (`/me/profile`): new «Имя»/«Фамилия» fields above the existing field,
+which is renamed «Отображаемое имя» (was «Имя») with an updated hint — it's now
+explicitly the fallback shown only when first/last name are empty, not the primary
+identity. Organizer edit form (`/organizer/rides/[id]/edit`): a new «Показывать
+список участников» checkbox, same draft-only disabled state as every other field.
+Ride detail's `RidersSection` gets a new state distinct from the existing "sign in
+to see this" prompt — a neutral "the organizer hid this" notice on `403
+riders_hidden`.
+
+Scope decisions not asked back to the user mid-task (called out here since there
+was no follow-up available): visibility scope itself (signed-in-only) is unchanged
+from CR-117 — this ticket only adds the on/off switch, not a public/anonymous mode;
+the toggle's draft-only editability is a real limitation, tracked as
+`.claude/context/known-issues.md` KI-065 rather than silently bypassed with a new
+endpoint (that would be a bigger, unrequested precedent change for this one field).
+
+Verified end to end against the running dev server (not just typecheck/tests): a
+real HTTP flow — register two users, set one's first/last name, create a draft
+ride, publish it with the toggle off, register the other user, confirm
+`403 riders_hidden` while `registrationsCount` still shows, flip the toggle on a
+second ride and confirm the riders list renders "Иван Иванов" — plus a browser
+screenshot of the profile form, the organizer checkbox (disabled + unchecked on
+the non-draft ride, matching its actual state), and the "hidden" notice.
+
+Files: `packages/db/src/schema/user.ts`, `packages/db/src/schema/ride.ts` +
+migration `0018_participant_name_and_visibility`; `packages/types/src/domain/
+user.ts`, `packages/types/src/api/users.ts`, `packages/types/src/domain/ride.ts`,
+`packages/types/src/api/rides.ts`; `apps/api/src/modules/auth/auth.service.ts`,
+`apps/api/src/modules/users/user-response.schema.ts`, `apps/api/src/modules/rides/
+rides.service.ts`, `apps/api/src/modules/rides/ride-response.schema.ts`,
+`apps/api/src/modules/registrations/registrations.service.ts`;
+`apps/web/src/features/participant/profile/components/ProfileForm.tsx` (+ test),
+`apps/web/src/features/organizer/rides/components/EditRideForm.tsx`,
+`apps/web/src/features/participant/ride-detail/components/RidersSection.tsx`,
+`packages/ui/src/terminology.ts`; `docs/database.md`, `docs/api.md`,
+`docs/product.md`.
+Decisions: none new (additive fields/behavior under ADR-006's existing
+authorization model — no new ADR).
+Follow-up: KI-065 (post-publish toggle editing) if it becomes a real ask.
+
+## 2026-09-24 — CR-126 — Rider profile: privacy tiers, garage, self-reported distance stats, recent rides
+
+User request: clickable participant cards from a ride's riders list, a
+participant-controlled profile-visibility setting, a "garage" of the
+participant's bikes, self-reported distance stats (week/month/year), and a
+list of recent rides — a step toward the platform feeling social. Full plan
+approved via plan mode before implementation. `.claude/context/known-issues.md`
+KI-059 had already flagged this exact gap ("no avatars in the riders list")
+and explicitly called for a product decision first plus a _scoped_ avatar
+path — this ticket is that decision landing, resolving KI-059. Recorded as
+ADR-023 (`docs/decisions.md`) since it establishes the pattern for any future
+cross-participant data access: always scoped through a shared ride/
+registration, never a bare `GET /v1/users/:id`.
+
+Product decisions confirmed with the user up front (AskUserQuestion, not
+assumed): 3-tier privacy (closed / co-participants / open, default
+`co_participants`); distance stats are self-reported, not derived from ride
+history; bikes are a "garage" — a list, one marked active.
+
+1. **Schema** (migration `0019_real_steve_rogers`): `users` gains
+   `profileVisibility` (pg enum, not null, default `co_participants`) and
+   nullable `distanceWeekKm`/`distanceMonthKm`/`distanceYearKm` (each with a
+   sane-bound CHECK). New `user_bikes` table (`Bike` — a new fixed domain
+   entity, ADR-023): `userId`, `bikeType` (reuses `Ride`'s
+   `bicycleTypeEnum`), `brand`, `model`, `isActive` — a partial unique index
+   enforces at most one active bike per user at the DB level.
+2. **API**: `PATCH /v1/users/me` additively accepts the new profile fields.
+   New `me`-scoped bike CRUD (`GET/POST /v1/users/me/bikes`,
+   `PATCH/DELETE /v1/users/me/bikes/:bikeId`). `GET /v1/rides/:id/riders`
+   additively gains `registrationId` per item (opaque, never a raw user id —
+   the "no id by design" comment this endpoint carried since CR-117 no
+   longer applies, updated to explain why an id is safe now). New
+   `GET /v1/rides/:id/riders/:registrationId/profile` and `.../avatar`,
+   both gated by one function, `resolveRiderAccess`
+   (`registrations.service.ts`): grants the profile owner, the ride's
+   organizer, any viewer when `open`, or a fellow rider of _this_ ride when
+   `co_participants`; `closed` grants only the owner. Never selects
+   `phone`/`email` regardless of tier. "Recent rides" (up to 5) reuses
+   `Ride.participantsVisible` as its one visibility rule.
+3. **Web**: `/me/profile` gained the visibility select, three distance-stat
+   inputs, and a new `GarageForm` (list/add/edit/delete bikes, mark one
+   active). New feature module `features/participant/rider-profile/` +
+   route `/rides/[id]/riders/[registrationId]` renders the card (bio,
+   distance-stat `MetricTile`s, garage, recent rides), with distinct states
+   for `riders_hidden`/`profile_private`/not-found/generic-error.
+   `RidersSection` now links each rider's name to their card.
+
+Built in three sequential phases (DB/types/API first, fully tested, before
+splitting the two independent web pieces — profile settings vs. the new
+rider-profile feature — across two parallel subagents, since they touch
+disjoint files): this kept the security-sensitive access-control logic under
+direct review before any UI was built on top of it.
+
+Verified two ways beyond the automated suites: (1) a real HTTP flow against
+the running dev API — two users, one sets bio/stats/an active bike and
+`open` visibility, the other (a co-participant) fetches the card and sees
+everything but no `phone`/`email`; flipping the owner's setting to `closed`
+immediately 403s the same viewer with `profile_private`, `co_participants`
+grants them again; (2) a live browser pass (session cookies injected
+directly, `browser-automation` skill) over `/me/profile` (visibility
+select + distance fields + garage with the created bike, all rendered) and
+the riders list → card click-through on a real ride, zero console errors
+and zero failed requests at every step.
+
+Environment note: the Docker daemon was unreachable this session, so
+`apps/api`'s usual docker-compose `TEST_DATABASE_URL` database didn't exist;
+worked around with a local `coffee_ride_test` Postgres database owned by the
+current OS user, `TEST_DATABASE_URL` overridden per test invocation (not a
+config file change). The S3-dependent tests already mock the AWS SDK wire
+call, so this didn't block them; the live-server check above ran with
+`app.s3` in its real "error" (unconfigured MinIO) state, which is why avatar
+upload wasn't exercised live — covered instead by `apps/api`'s existing
+mocked-S3 avatar test suites, extended for the new rider-scoped avatar
+route.
+
+Files: `packages/db/src/schema/user.ts`, `packages/db/src/schema/bike.ts`
+(new) + migration `0019_real_steve_rogers`; `packages/types/src/domain/
+user.ts`, `packages/types/src/domain/bike.ts` (new), `packages/types/src/api/
+users.ts`, `packages/types/src/api/bikes.ts` (new), `packages/types/src/api/
+rider-profile.ts` (new), `packages/types/src/api/ride-groups.ts`;
+`apps/api/src/modules/auth/auth.service.ts`, `apps/api/src/modules/users/
+users.service.ts`, `apps/api/src/modules/users/users.routes.ts`,
+`apps/api/src/modules/users/user-response.schema.ts` (+ new
+`bikes.routes.test.ts`), `apps/api/src/modules/registrations/
+registrations.service.ts`, `apps/api/src/modules/registrations/
+registrations.routes.ts` (+ new `rider-profile.routes.test.ts`,
+`registration-groups.routes.test.ts` updated for `registrationId`);
+`apps/web/src/features/participant/profile/api.ts`, `.../components/
+ProfileForm.tsx` (+ test), `.../components/GarageForm.tsx` (new, + test),
+`apps/web/src/app/me/profile/page.tsx`; new `apps/web/src/features/
+participant/rider-profile/` module (`api.ts`, `components/
+RiderProfileCard.tsx`, test), new `apps/web/src/app/rides/[id]/riders/
+[registrationId]/page.tsx`, `apps/web/src/features/participant/ride-detail/
+components/RidersSection.tsx` (+ `ride-detail.test.tsx` updated);
+`packages/ui/src/terminology.ts` (`PROFILE_TERMS`/new `GARAGE_TERMS`/new
+`RIDER_PROFILE_TERMS`); six unrelated pre-existing test fixtures updated for
+`User`'s new always-present fields (`CabinetShell.test.tsx`,
+`AppHeader.test.tsx`, `login.test.tsx`, `register.test.tsx`,
+`reset-password.test.tsx`, `verify-email.test.tsx`); `.claude/CLAUDE.md`
+(domain entity list), `docs/database.md`, `docs/api.md`, `docs/decisions.md`
+(ADR-023), `docs/product.md`, `.claude/context/known-issues.md`/
+`known-issues-archive.md` (KI-059 resolved).
+Decisions: ADR-023 — cross-participant access always scoped through a
+shared ride/registration, three-tier `profileVisibility`, one shared
+`resolveRiderAccess` gate.
+Follow-up: none planned. If a real need appears for viewing a profile
+independent of any shared ride, that is a new decision, not a quiet
+loosening of `resolveRiderAccess` (ADR-023 "When to revisit").

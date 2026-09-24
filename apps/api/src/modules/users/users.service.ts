@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
-import { users } from 'db/schema';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { users, userBikes } from 'db/schema';
 import type { DbClient } from 'db';
-import type { AvatarResponse, UpdateProfileRequest, User } from 'types';
+import type {
+  AvatarResponse,
+  Bike,
+  CreateBikeRequest,
+  ListBikesResponse,
+  ListRidesQuery,
+  UpdateBikeRequest,
+  UpdateProfileRequest,
+  User,
+} from 'types';
 import { toPublicUser } from '../auth/auth.service.js';
 import { ImageInvalidError, processImage } from '../../lib/image-processing.js';
 import {
@@ -12,6 +21,12 @@ import {
   uploadImageObject,
 } from '../../lib/image-storage.js';
 import type { S3Handle } from '../../plugins/s3.js';
+import {
+  CursorError,
+  clampLimit,
+  decodeCursor,
+  encodeCursor,
+} from '../../lib/cursor.js';
 
 // Domain error the route layer maps to RFC 9457 — same pattern as
 // `OrganizerServiceError`/`RideServiceError` (`.claude/rules/backend.md`).
@@ -282,4 +297,194 @@ export async function getAvatarDownload(
     if (err instanceof ImageStorageError) throw AVATAR_STORAGE_UNAVAILABLE();
     throw err;
   }
+}
+
+// CR-126 ("garage"): "me"-scoped CRUD, same ownership discipline as the avatar
+// functions above — `userId` only ever comes from the verified session.
+
+const BIKE_NOT_FOUND = () =>
+  new UserServiceError(
+    'bike_not_found',
+    404,
+    'Bike not found',
+    'No bike with that id exists for this account.',
+  );
+
+// Sane cap against an unbounded garage, same tier as `ride-groups.service.ts`'s
+// 6-per-ride limit — not a real-world constraint, just abuse resistance.
+const BIKE_MAX_PER_USER = 20;
+
+const BIKE_LIMIT_REACHED = () =>
+  new UserServiceError(
+    'bike_limit_reached',
+    409,
+    'Bike limit reached',
+    `A profile can list at most ${BIKE_MAX_PER_USER} bikes.`,
+  );
+
+const INVALID_CURSOR = () =>
+  new UserServiceError(
+    'invalid_cursor',
+    400,
+    'Invalid cursor',
+    'The cursor parameter is not a valid pagination cursor.',
+  );
+
+// Exported: `registrations.service.ts`'s `getRiderProfile` reuses this same
+// row-to-`Bike` mapping for another user's garage — same "reuse a mapper across
+// modules" precedent as `rides.service.ts`'s `toPublicRide`.
+export function toBike(row: typeof userBikes.$inferSelect): Bike {
+  return {
+    id: row.id,
+    // `row.bikeType`'s DB type is the full `bicycleTypeEnum` (includes `'any'`) —
+    // narrower here because `createBike`/`updateBike` below never write `'any'`.
+    bikeType: row.bikeType as Bike['bikeType'],
+    brand: row.brand,
+    model: row.model,
+    isActive: row.isActive,
+  };
+}
+
+/** Ascending `createdAt`/`id` cursor pagination — same shape as every other list. */
+export async function listBikes(
+  db: DbClient,
+  userId: string,
+  query: ListRidesQuery,
+): Promise<ListBikesResponse> {
+  const limit = clampLimit(query.limit);
+  const conditions = [eq(userBikes.userId, userId)];
+  if (query.cursor) {
+    let cursorKey;
+    try {
+      cursorKey = decodeCursor(query.cursor);
+    } catch (error) {
+      if (error instanceof CursorError) throw INVALID_CURSOR();
+      throw error;
+    }
+    conditions.push(
+      sql`(date_trunc('milliseconds', ${userBikes.createdAt}), ${userBikes.id}) > (${cursorKey.sortValue}::timestamptz, ${cursorKey.id}::uuid)`,
+    );
+  }
+
+  const rows = await db
+    .select()
+    .from(userBikes)
+    .where(and(...conditions))
+    .orderBy(asc(userBikes.createdAt), asc(userBikes.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({ sortValue: last.createdAt.toISOString(), id: last.id })
+      : null;
+
+  return { items: page.map(toBike), nextCursor };
+}
+
+/**
+ * `isActive: true` unsets any other active bike for this user inside the same
+ * transaction — the DB-level partial unique index (`user_bikes_one_active_per_user`)
+ * is the invariant backstop, not a path this code needs to catch a constraint
+ * violation for (`.claude/rules/database.md`).
+ */
+export async function createBike(
+  db: DbClient,
+  userId: string,
+  input: CreateBikeRequest,
+): Promise<Bike> {
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userBikes)
+    .where(eq(userBikes.userId, userId));
+  if ((countRow?.count ?? 0) >= BIKE_MAX_PER_USER) {
+    throw BIKE_LIMIT_REACHED();
+  }
+
+  const isActive = input.isActive ?? false;
+  const row = await db.transaction(async (tx) => {
+    if (isActive) {
+      await tx
+        .update(userBikes)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(and(eq(userBikes.userId, userId), eq(userBikes.isActive, true)));
+    }
+    const [inserted] = await tx
+      .insert(userBikes)
+      .values({
+        userId,
+        bikeType: input.bikeType,
+        brand: input.brand ?? null,
+        model: input.model ?? null,
+        isActive,
+      })
+      .returning();
+    if (!inserted) {
+      throw new Error('Bike insert returned no row.');
+    }
+    return inserted;
+  });
+
+  return toBike(row);
+}
+
+export async function updateBike(
+  db: DbClient,
+  userId: string,
+  bikeId: string,
+  patch: UpdateBikeRequest,
+): Promise<Bike> {
+  const [existing] = await db
+    .select({ id: userBikes.id })
+    .from(userBikes)
+    .where(and(eq(userBikes.id, bikeId), eq(userBikes.userId, userId)))
+    .limit(1);
+  if (!existing) {
+    throw BIKE_NOT_FOUND();
+  }
+
+  const row = await db.transaction(async (tx) => {
+    if (patch.isActive === true) {
+      await tx
+        .update(userBikes)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userBikes.userId, userId),
+            eq(userBikes.isActive, true),
+            ne(userBikes.id, bikeId),
+          ),
+        );
+    }
+    const [updated] = await tx
+      .update(userBikes)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(userBikes.id, bikeId))
+      .returning();
+    if (!updated) {
+      throw new Error('Bike update returned no row.');
+    }
+    return updated;
+  });
+
+  return toBike(row);
+}
+
+export async function deleteBike(
+  db: DbClient,
+  userId: string,
+  bikeId: string,
+): Promise<void> {
+  const [existing] = await db
+    .select({ id: userBikes.id })
+    .from(userBikes)
+    .where(and(eq(userBikes.id, bikeId), eq(userBikes.userId, userId)))
+    .limit(1);
+  if (!existing) {
+    throw BIKE_NOT_FOUND();
+  }
+
+  await db.delete(userBikes).where(eq(userBikes.id, bikeId));
 }

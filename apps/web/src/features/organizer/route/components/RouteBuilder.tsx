@@ -140,9 +140,9 @@ export function RouteBuilder({
         ? {
             points: geometry,
             // ADR-021: same overprint route line + casing as `RouteMap`.
-            color: getCssColorVar('--route'),
-            width: 6,
-            outlineColor: getCssColorVar('--route-casing'),
+            color: getCssColorVar('--map-route'),
+            width: 5,
+            outlineColor: getCssColorVar('--map-route-casing'),
           }
         : null,
     );

@@ -56,3 +56,32 @@ export function projectRoutePreview(
 function round(value: number): string {
   return String(Math.round(value * 10) / 10);
 }
+
+/**
+ * Chaikin corner cutting over `[lat, lng]` pairs: each pass replaces every
+ * segment with points at ¼ and ¾ of it, so the ≤ 40-point `routePreview`
+ * (CR-116 — a Douglas–Peucker simplification) stops reading as a chain of
+ * straight sticks. The first and last points are kept, so the line still
+ * starts and ends where the route does. Only for the preview — full route
+ * geometry is dense enough to draw as is.
+ */
+export function smoothRoutePreview(
+  points: ReadonlyArray<readonly [number, number]>,
+  iterations = 2,
+): Array<[number, number]> {
+  let current: Array<[number, number]> = points.map(([lat, lng]) => [lat, lng]);
+  for (let pass = 0; pass < iterations && current.length > 2; pass += 1) {
+    const next: Array<[number, number]> = [current[0]!];
+    for (let i = 0; i < current.length - 1; i += 1) {
+      const [aLat, aLng] = current[i]!;
+      const [bLat, bLng] = current[i + 1]!;
+      next.push(
+        [aLat * 0.75 + bLat * 0.25, aLng * 0.75 + bLng * 0.25],
+        [aLat * 0.25 + bLat * 0.75, aLng * 0.25 + bLng * 0.75],
+      );
+    }
+    next.push(current[current.length - 1]!);
+    current = next;
+  }
+  return current;
+}
