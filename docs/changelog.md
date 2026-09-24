@@ -2519,3 +2519,87 @@ shared ride/registration, three-tier `profileVisibility`, one shared
 Follow-up: none planned. If a real need appears for viewing a profile
 independent of any shared ride, that is a new decision, not a quiet
 loosening of `resolveRiderAccess` (ADR-023 "When to revisit").
+
+## 2026-09-24 — CR-127 — Visible sign-out in every cabinet
+
+User request: every cabinet must have «Выйти» so a tester can switch
+accounts. Sign-out already existed (CR-108) but only as the one item of the
+header's desktop dropdown labelled with the e-mail (and, below `md`, at the
+bottom of the burger panel) — the owner could not find it. A failed request
+also did nothing visible: `SITE_HEADER_TERMS.logoutError` existed but was
+never rendered. Backend verified live first (`POST /v1/auth/logout` → `204`,
+then `/v1/auth/me` → `401`) — no API change.
+Changed: new `CabinetAccountBar` rendered by `CabinetShell` above every
+`/me/*` and `/organizer/*` screen: «Вы вошли как» + first/last name (then
+`displayName`, then e-mail alone) + e-mail, and a secondary «Выйти» button
+that lands on `/login` (switching accounts is the usual reason to sign out
+of a cabinet). New shared `useLogout(redirectTo)` hook
+(`apps/web/src/lib/auth/use-logout.ts`) used by both the bar and
+`AppHeader` (header still lands on `/`): shows `logoutError` on failure,
+treats a `401` (session already gone) as signed out.
+`CABINET_TERMS.accountBarLabel`/`signedInAs`/`logoutButton` added.
+Files: `apps/web/src/components/cabinet/CabinetAccountBar.tsx` (+ test),
+`CabinetShell.tsx`, `apps/web/src/components/site/AppHeader.tsx` (+ test:
+failure alert), `apps/web/src/lib/auth/use-logout.ts`,
+`packages/ui/src/terminology.ts`.
+Validation: web 318/318 + ui 132/132 tests, typecheck and lint clean; live
+Playwright run at 1280px and 375px — bar present on `/me` and
+`/organizer`, «Выйти» → `/login`, `/me` → `401` afterwards.
+Follow-up: none.
+
+## 2026-09-24 — CR-127 follow-up — Login bounced back to /login
+
+Owner report: «не работает кнопка войти». Reproduced live: `POST
+/v1/auth/login` succeeded (`/v1/auth/me` → `200` afterwards) but the page
+went `/login` → `/me` → `/login`. Root cause (latent since CR-108, made the
+main path by CR-127's «Выйти» → `/login`): the root-layout `SessionProvider`
+resolves the session once; `LoginForm` never told it about the new
+session, so `CabinetShell` saw the stale `anonymous` and redirected back.
+Fix: `LoginForm` calls `useSession().refresh()` before `router.replace('/me')`,
+and `refresh()` now sets `status` to `loading` synchronously — otherwise the
+freshly mounted gate would still act on `anonymous` before the re-fetch
+lands. Files: `apps/web/src/features/auth/login/components/LoginForm.tsx`,
+`apps/web/src/lib/auth/session-context.tsx`, `apps/web/src/features/auth/
+login/login.test.tsx` (now renders inside `SessionProvider`; new regression
+test login → cabinet mount, verified to fail without the fix).
+Validation: web 319/319, typecheck/lint clean; live: login → `/me`, «Выйти»
+→ `/login`, login again → `/me`.
+
+## 2026-09-24 — CR-128 — Light-theme visibility of data graphics
+
+Owner report (screenshot): the «Профиль высоты» chart is barely visible on
+the light theme. Cause: a flat `contour`/15% fill (~1.2:1 against white
+paper) and a 1.5px stroke further thinned by the SVG's
+`preserveAspectRatio="none"`, with no ground line. Fix: 40%→12% vertical
+`contour` gradient (id from `useId`), 2px `vector-effect="non-scaling-stroke"`
+line, 1px `border-input` ground line. Same audit (live Playwright screenshots
+of `/`, `/rides/[id]`, `/login`, light and dark) found `DifficultyScale`'s
+empty segments filled with the `border` hairline colour (~1.5:1) — now a
+hollow `border-input` outline (≥3:1 in both themes). No token changes; the
+«Топокарта» inks stay as they are. `docs/design.md` §3/§6 updated.
+Files: `apps/web/src/features/participant/ride-detail/components/
+ElevationProfileChart.tsx`, `packages/ui/src/components/DifficultyScale.tsx`,
+tests in `ride-detail.test.tsx` and `DifficultyScale.test.tsx`.
+Validation: web 319/319 + ui 132/132, typecheck, lint, prettier clean; live
+screenshots in both themes confirm both elements read clearly.
+Follow-up: selected items in header menus (theme switcher, nav) are marked
+only by `bg-surface` (~1.1:1) plus a text-colour change — worth a stronger
+selected marker.
+
+## 2026-09-24 — CR-129 — Auto-create the MinIO bucket in local infra
+
+Owner report: avatar upload showed «Загрузка недоступна». Cause: Docker
+Desktop was off, so MinIO was down (`/health` → `s3: "error"`) — the degraded
+UI state behaved as designed. Recovery also needed a manual `mc mb` (the
+second time, KI-015): nothing created the `coffee-ride` bucket on a fresh
+volume. Fix: `docker-compose.yml` gains a one-shot `minio-init` service
+(same pinned MinIO image, which bundles `mc`; waits for `minio` healthy; `mc
+mb --ignore-existing local/coffee-ride`; `restart: 'no'`). Plain `docker
+compose up -d` runs it; `up -d minio` alone needs `minio-init` added —
+README says so. Local-dev only; `docker-compose.prod.yml` untouched (prod
+S3 is provisioned externally).
+Validation: `docker compose config -q`; isolated project (`-p crinit`,
+ports reset) on a fresh volume — bucket created, exit 0, re-run exit 0, then
+torn down with its volume; on the real stack `minio-init` exited 0 and
+`/health` → `s3: "ok"`; live avatar upload/download/delete → 201/200/204.
+Files: `docker-compose.yml`, `README.md`, KI-015.

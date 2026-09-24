@@ -387,6 +387,20 @@ describe('RideDetailView', () => {
         screen.getByRole('img', { name: /Профиль высоты/ }),
       ).toBeInTheDocument();
     });
+    // CR-128: legible on white paper — the area is filled with the chart's own
+    // gradient (not a flat 15% tint), and strokes keep their width despite
+    // `preserveAspectRatio="none"`.
+    const chart = screen.getByRole('img', { name: /Профиль высоты/ });
+    const gradient = chart.querySelector('linearGradient');
+    expect(gradient).not.toBeNull();
+    expect(
+      chart.querySelector(`path[fill="url(#${gradient!.id})"]`),
+    ).not.toBeNull();
+    expect(
+      chart.querySelector(
+        'path.stroke-contour[vector-effect="non-scaling-stroke"]',
+      ),
+    ).not.toBeNull();
   });
 
   it('shows a retryable degraded state when the geometry fetch fails', async () => {

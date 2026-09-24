@@ -1011,13 +1011,24 @@ critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
       `docs/changelog.md`.
 - [x] CR-125 Participant first/last name + participants-visibility toggle —
       done 2026-09-24: `users.firstName`/`lastName`, `rides.
-    participantsVisible` (default true, draft-only edit); riders list shows
+  participantsVisible` (default true, draft-only edit); riders list shows
       real name, `403 riders_hidden` when off. See `docs/changelog.md`,
       KI-065.
 - [x] CR-126 Rider profile: privacy tiers, garage, self-reported distance
       stats, recent rides — done 2026-09-24: `profileVisibility` (closed/
       co_participants/open, default co_participants), new `Bike` entity
       ("garage"), `GET /v1/rides/:id/riders/:registrationId/profile`+`.../
-    avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
-    :id`. Riders list links to the new card. See `docs/changelog.md`,
+  avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
+  :id`. Riders list links to the new card. See `docs/changelog.md`,
       ADR-023, KI-059 (resolved).
+- [x] CR-127 Visible sign-out in every cabinet — done 2026-09-24: account
+      bar («Вы вошли как …» + «Выйти» → `/login`) atop every `/me/*` and
+      `/organizer/*` screen; shared `useLogout` hook with error state. See
+      `docs/changelog.md`.
+- [x] CR-128 Light-theme visibility of data graphics — done 2026-09-24:
+      elevation profile (gradient fill, 2px non-scaling stroke, ground line)
+      and difficulty scale (hollow empty segments) legible in both themes.
+      See `docs/changelog.md`.
+- [x] CR-129 Auto-create the MinIO bucket in local infra — done 2026-09-24:
+      one-shot `minio-init` compose service (`mc mb --ignore-existing`).
+      See `docs/changelog.md`, KI-015.

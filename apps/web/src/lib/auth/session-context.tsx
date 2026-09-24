@@ -44,7 +44,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  const refresh = useCallback(() => setAttempt((n) => n + 1), []);
+  // `loading` at once, not after the re-fetch lands: `CabinetShell` acts on
+  // `anonymous`, so a stale value would bounce a just-signed-in user to
+  // `/login`.
+  const refresh = useCallback(() => {
+    setStatus('loading');
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

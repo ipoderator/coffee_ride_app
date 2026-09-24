@@ -55,6 +55,11 @@ pnpm install
 `docker compose down`, kept alongside the raw command so the workflow reads the same
 whether or not you have this repo's scripts memorized.
 
+`docker compose up -d` also runs a one-shot `minio-init` that creates the
+`coffee-ride` bucket on a fresh MinIO volume (idempotent, exits 0). Starting MinIO
+alone? Use `docker compose up -d minio minio-init`, or uploads report
+«Загрузка недоступна» (`/health` → `s3: "error"`).
+
 Node version is pinned in `.nvmrc`. `pnpm install` also sets up the Husky pre-commit hook
 (`prepare` script) which runs lint-staged.
 

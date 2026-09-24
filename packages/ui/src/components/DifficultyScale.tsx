@@ -6,7 +6,9 @@ const LEVELS: readonly DifficultyLevel[] = [1, 2, 3, 4, 5];
 // docs/design.md §6: "A discrete 1-5 scale rendered as filled/empty segments plus a
 // word ... Not a color gradient, not color-only." The segments below are therefore a
 // single tone (`frame`, the ink — ADR-021 keeps the plum overprint for the route
-// and the primary action only) at two states (filled/empty via `border`), not a
+// and the primary action only) at two states — filled ink / hollow `border-input`
+// outline (CR-128: the old `border`-filled empty segment was ~1.5:1 against the
+// paper and all but disappeared in the light theme) — not a
 // per-level color ramp, and are `aria-hidden` — purely decorative, since the word and
 // the `sr-only` qualifier below already carry the full meaning for a screen reader
 // (§12: never color alone, and here not "segments alone" either).
@@ -24,8 +26,10 @@ export function DifficultyScale({ level, className }: DifficultyScaleProps) {
           <span
             key={segment}
             className={cn(
-              'h-2 w-4 rounded-sm',
-              segment <= level ? 'bg-frame' : 'bg-border',
+              'h-2 w-4 rounded-sm border',
+              segment <= level
+                ? 'border-frame bg-frame'
+                : 'border-border-input bg-transparent',
             )}
           />
         ))}

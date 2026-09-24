@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
+import { useSession } from '@/lib/auth/session-context';
 import { ApiError, login, loginRequestSchema } from '../api';
 
 interface FieldErrors {
@@ -21,6 +22,7 @@ interface FieldErrors {
  */
 export function LoginForm() {
   const router = useRouter();
+  const { refresh } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -52,6 +54,7 @@ export function LoginForm() {
 
     try {
       await login(parsed.data);
+      refresh();
       router.replace('/me');
     } catch (error) {
       if (error instanceof ApiError) {

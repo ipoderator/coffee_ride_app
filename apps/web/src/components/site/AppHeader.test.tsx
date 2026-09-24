@@ -146,6 +146,22 @@ describe('AppHeader', () => {
     expect(pushMock).toHaveBeenCalledWith('/');
   });
 
+  it('tells the user when sign-out fails instead of doing nothing', async () => {
+    getCurrentUserMock.mockResolvedValue({ user });
+    logoutMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderHeader();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /rider@example\.com/ }),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Выйти' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось выйти',
+    );
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it('marks the current section on the active nav item', async () => {
     pathname = '/fake/first';
     getCurrentUserMock.mockResolvedValue({ user });

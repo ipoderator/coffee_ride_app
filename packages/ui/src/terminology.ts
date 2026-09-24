@@ -352,6 +352,10 @@ export const CABINET_TERMS = {
   dashboardNoWidgetsTitle: 'Пока здесь нечего показать',
   dashboardNoWidgetsDescription:
     'Виджеты появятся здесь по мере добавления функций.',
+  // CR-127: the account bar atop every cabinet screen.
+  accountBarLabel: 'Текущий аккаунт',
+  signedInAs: 'Вы вошли как',
+  logoutButton: 'Выйти',
 } as const;
 
 /** `/me/profile` (CR-013, `docs/design.md` §8 "Profile settings"). */

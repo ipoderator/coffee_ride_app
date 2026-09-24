@@ -36,32 +36,24 @@ from the riders list.
 
 ## Current task
 
-None active. CR-121 (new wordmark), CR-122 (header bar items one type style,
-`NAV_BAR_ITEM_CLASSNAME`: Golos 600 16px), CR-123 (discovery map
-fullscreen toggle — list column widened to ~528px, desktop-only fullscreen
-button, `isMapFullscreen` in `DiscoveryList`), CR-124 (brand purple locked
-to `#9033A1` — `primary`/`route`/map inks unified, were two drifted purples)
-and CR-125 (`users.firstName`/`lastName`, migration `0018`; `rides.
-participantsVisible` boolean default `true`, editable only via `PATCH
-/v1/rides/:id`'s existing draft-only gate; `GET /v1/rides/:id/riders` →
-`403 riders_hidden` when off, for every caller; riders/participants/waitlist
-name resolution now prefers `firstName`+`lastName` over the free-text
-`displayName`; see `.claude/context/known-issues.md` KI-065 for the
-post-publish-editing limitation), and CR-126 (`users.profileVisibility`
-3-tier enum default `co_participants`, `distanceWeekKm`/`distanceMonthKm`/
-`distanceYearKm` self-reported; new `Bike` entity/`user_bikes` table
-("garage"), migration `0019_real_steve_rogers`; `GET /v1/rides/:id/riders`
-now returns `registrationId` per item; new `GET /v1/rides/:id/riders/
-:registrationId/profile`+`.../avatar` gated by `resolveRiderAccess`
-(closed/co_participants/open, plus self/organizer always granted); new `/me/
-profile` garage UI and `/rides/[id]/riders/[registrationId]` card page; see
-ADR-023, KI-059 resolved)
-done, uncommitted. CR-115…CR-120 (the «Топокарта» redesign, pace groups and
-the rider list) are implemented and reviewed: CR-115…CR-117 committed as
-`3fe806b`, CR-118…CR-120 in the working tree, not yet committed. Full detail:
-`docs/changelog.md`'s «2026-09-23 — CR-115…CR-120», «2026-09-24 — CR-123»,
-«2026-09-24 — CR-124», «2026-09-24 — CR-125» and «2026-09-24 — CR-126»
-entries, ADR-021, ADR-022, ADR-023.
+None active. CR-121…CR-126 are committed (`42330fa`); CR-115…CR-120 as
+`3fe806b`/`c685310`. CR-127 (2026-09-24, uncommitted): visible sign-out in
+every cabinet — `CabinetShell` now renders `CabinetAccountBar` («Вы вошли
+как <имя> · <e-mail>» + «Выйти» → `/login`) above every `/me/*` and
+`/organizer/*` screen at every breakpoint; the header and the bar share one
+`useLogout(redirectTo)` hook (`apps/web/src/lib/auth/use-logout.ts`) that
+shows `logoutError` on failure and treats a `401` as already signed out.
+Follow-up fix: `LoginForm` now calls `useSession().refresh()` (which sets
+`loading` synchronously) — before, a login landed on `/me` and bounced back
+to `/login` because the shared session was still `anonymous`.
+CR-128 (2026-09-24, uncommitted): light-theme visibility — the elevation
+profile uses a 40%→12% `contour` gradient, 2px non-scaling stroke and a
+`border-input` ground line; `DifficultyScale`'s empty segments are hollow
+`border-input` outlines. No token changes.
+CR-129 (2026-09-24, uncommitted): `docker-compose.yml` gained a one-shot
+`minio-init` service that creates the `coffee-ride` bucket on a fresh volume.
+Full detail: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120» through
+«2026-09-24 — CR-129» entries, ADR-021, ADR-022, ADR-023.
 
 **Visual direction: «Топокарта» (ADR-021).** The UI is a printed
 orienteering-map sheet: white paper / black ink, one plum overprint

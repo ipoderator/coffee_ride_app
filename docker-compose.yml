@@ -72,6 +72,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # CR-129 (KI-015): a fresh `minio_data` volume has no bucket, so `/health`
+  # reported `s3: "error"` and every upload showed «Загрузка недоступна» until
+  # someone ran `mc mb` by hand. One-shot: waits for `minio` to be healthy,
+  # creates `.env.example`'s `S3_BUCKET` if missing, exits 0. Same image as
+  # `minio` (it bundles `mc`), so no extra image to pin. Runs with a plain
+  # `docker compose up -d`; after `up -d minio` alone, add `minio-init`.
+  minio-init:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - mc alias set local http://minio:9000 minio minio12345 && mc mb --ignore-existing local/coffee-ride
+    restart: 'no'
+
 volumes:
   postgres_data:
   redis_data:

@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 import { CABINET_TERMS, ErrorState, Skeleton } from 'ui';
 import { CurrentUserContext } from '@/lib/auth/current-user-context';
 import { useSession } from '@/lib/auth/session-context';
+import { CabinetAccountBar } from './CabinetAccountBar';
 
 /**
  * Session gate for every `/me/*` and `/organizer/*` screen. Redirects to
@@ -58,6 +59,7 @@ export function CabinetShell({ children }: { children: ReactNode }) {
   return (
     <CurrentUserContext.Provider value={user}>
       <div className="mx-auto min-h-screen w-full max-w-5xl p-6">
+        <CabinetAccountBar user={user} />
         <main className="min-w-0">{children}</main>
       </div>
     </CurrentUserContext.Provider>

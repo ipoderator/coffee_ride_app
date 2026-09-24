@@ -181,6 +181,16 @@ real `coffee-ride` MinIO bucket (confirmed with `mc find` before and after).
 This proves the S3 client/credential/bucket path genuinely works, but
 `route-storage.ts`'s own GPX-specific code path is still, narrowly,
 unexercised — leaving this open rather than resolving it outright.
+Update 2026-09-24: owner hit «Загрузка недоступна» on avatar upload — Docker
+Desktop was off, so MinIO was down (`/health` → `s3: "error"`); the degraded
+UI state behaved as designed. Fixed by starting Docker + `docker compose up
+-d minio` + `mc mb --ignore-existing local/coffee-ride`; a live avatar
+upload/download/delete then returned 201/200/204. Still nothing auto-creates
+the bucket — a `minio-init` compose service would remove that manual step.
+Update 2026-09-24 (CR-129): done — `docker-compose.yml`'s one-shot
+`minio-init` creates the bucket (`mc mb --ignore-existing`) once `minio` is
+healthy; verified on a fresh isolated volume (bucket created, exit 0, re-run
+exit 0). What keeps this open is only `route-storage.ts`'s GPX path above.
 
 ### KI-017 — `packages/maps-2gis`/`packages/db`/`packages/types` export raw TS source, not compiled `dist`
 

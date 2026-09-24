@@ -2,7 +2,7 @@
 
 import { LogIn, LogOut, Menu, Route, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   cn,
@@ -12,8 +12,8 @@ import {
   SITE_HEADER_TERMS,
   Wordmark,
 } from 'ui';
-import { logout } from '@/lib/api/current-user';
 import { useSession } from '@/lib/auth/session-context';
+import { useLogout } from '@/lib/auth/use-logout';
 import { CABINET_ICONS } from '@/lib/cabinet/icons';
 import type { CabinetNavItem } from '@/lib/cabinet/types';
 import { ThemeToggle } from './ThemeToggle';
@@ -39,27 +39,19 @@ export function AppHeader({
   participantNavItems: CabinetNavItem[];
   organizerNavItems: CabinetNavItem[];
 }) {
-  const { status, user, refresh } = useSession();
-  const router = useRouter();
+  const { status, user } = useSession();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
+  const {
+    signOut: handleLogout,
+    pending: loggingOut,
+    failed: logoutFailed,
+  } = useLogout('/');
 
   // A navigation is exactly when a still-open mobile panel is in the way.
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await logout();
-      refresh();
-      router.push('/');
-    } finally {
-      setLoggingOut(false);
-    }
-  }
 
   const isAuthenticated = status === 'authenticated';
 
@@ -189,6 +181,15 @@ export function AppHeader({
           )}
         </button>
       </nav>
+
+      {logoutFailed && (
+        <p
+          role="alert"
+          className="mx-auto max-w-300 px-4 pb-3 text-sm text-danger"
+        >
+          {SITE_HEADER_TERMS.logoutError}
+        </p>
+      )}
 
       {/* Below `md` the bar cannot hold every section at 375px
           (`docs/design.md` §11), so the same links live in one disclosure

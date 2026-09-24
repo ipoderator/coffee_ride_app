@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { formatDistance, formatElevation } from 'ui';
 import {
   buildElevationProfile,
@@ -13,8 +13,11 @@ const PADDING_Y = 12;
 
 /**
  * `/rides/[id]`'s elevation profile (CR-028, `docs/design.md` §6 "Elevation
- * profile"): area chart, x = distance, y = elevation, `contour` brown fill at ~15%
- * opacity with a 1.5px stroke (ADR-021: the map's own elevation ink); the y axis floors at the data's own minimum (not
+ * profile"): area chart, x = distance, y = elevation, `contour` brown (ADR-021: the
+ * map's own elevation ink). CR-128: the fill is a 40%→12% vertical gradient over a
+ * `border-input` ground line, with a 2px non-scaling stroke — the flat 15% fill and
+ * 1.5px line (thinned further by `preserveAspectRatio="none"`) nearly vanished on
+ * white paper. The y axis floors at the data's own minimum (not
  * forced to zero) so a small elevation spread over a long distance doesn't render
  * flat. Hover/touch shows distance + elevation at the nearest point; the numeric
  * "keyboard-accessible alternative" the spec calls for is the `MetricTile`
@@ -29,6 +32,8 @@ export function ElevationProfileChart({
 }) {
   const profile = useMemo(() => buildElevationProfile(points), [points]);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // `useId`'s delimiters aren't guaranteed safe inside `url(#...)`.
+  const fillId = `elevation-fill-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   const known = profile.filter((point) => point.elevationMeters !== null);
   if (profile.length < 2 || known.length < 2) {
@@ -98,13 +103,37 @@ export function ElevationProfileChart({
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
-        <path d={areaPath} className="fill-contour/15" />
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop
+              offset="0"
+              className="[stop-color:var(--contour)]"
+              stopOpacity={0.4}
+            />
+            <stop
+              offset="1"
+              className="[stop-color:var(--contour)]"
+              stopOpacity={0.12}
+            />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#${fillId})`} />
+        <line
+          x1={0}
+          x2={VIEW_WIDTH}
+          y1={VIEW_HEIGHT}
+          y2={VIEW_HEIGHT}
+          className="stroke-border-input"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
         <path
           d={linePath}
           className="fill-none stroke-contour"
-          strokeWidth={1.5}
+          strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
         />
         {hovered && hoverIndex !== null ? (
           <line
@@ -115,6 +144,7 @@ export function ElevationProfileChart({
             className="stroke-border-input"
             strokeWidth={1}
             strokeDasharray="2,2"
+            vectorEffect="non-scaling-stroke"
           />
         ) : null}
       </svg>

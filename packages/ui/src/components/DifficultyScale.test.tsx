@@ -23,6 +23,12 @@ describe('DifficultyScale', () => {
       segment.className.includes('bg-frame'),
     );
     expect(filled).toHaveLength(3);
+    // CR-128: empty segments are a hollow `border-input` outline, not the
+    // near-invisible `border` hairline fill.
+    const empty = Array.from(segments).filter((segment) =>
+      segment.className.includes('border-border-input'),
+    );
+    expect(empty).toHaveLength(2);
   });
 
   it('exposes the level to assistive tech via sr-only text, without repeating the word visibly', () => {

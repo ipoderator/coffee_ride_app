@@ -193,7 +193,7 @@ a legibility device, not glass.
 ### Data visualization colors
 
 Charts use the map's own inks, never a categorical rainbow. The **elevation profile is
-`contour` brown** (≈15% fill + 1.5px stroke), the colour elevation has on every
+`contour` brown** (40%→12% gradient fill + 2px stroke, CR-128), the colour elevation has on every
 topographic map. `chart-secondary` survives as a name (also the `food` route-point
 marker) and aliases `contour`. Difficulty and status are encoded by **label + position
 on a scale**, not by hue. The route line itself is `route` over `route-casing`, 6px.
@@ -296,8 +296,10 @@ Rules:
 
 ### Elevation profile
 
-- Area chart: x = distance, y = elevation; single `contour` fill at ~15% opacity with a
-  1.5px `contour` stroke (ADR-021 — elevation is brown on every topographic map).
+- Area chart: x = distance, y = elevation; single `contour` ink (ADR-021 — elevation is
+  brown on every topographic map): a vertical fill gradient from 40% at the top to 12%
+  at the base, a 2px non-scaling `contour` stroke and a 1px `border-input` ground line
+  (CR-128 — the earlier flat ~15% fill with a 1.5px stroke nearly vanished on white).
 - Y axis starts at a sensible floor, not forced to zero — a 40 m spread over 60 km should
   not render as a flat line.
 - Always paired with the numeric набор высоты; the chart is an illustration, the number is
@@ -309,7 +311,8 @@ Rules:
 
 A discrete 1–5 scale rendered as filled/empty segments **plus** a word
 (`Лёгкий / Ниже среднего / Средний / Сложный / Очень сложный`). Not a color gradient,
-not color-only.
+not color-only. Filled = solid `frame` ink; empty = hollow 1px `border-input` outline
+(CR-128), never a `border`-hairline fill — that is ~1.5:1 on paper and disappears.
 
 ---
 

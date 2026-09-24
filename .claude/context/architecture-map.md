@@ -235,7 +235,10 @@ schemas + response type aliases).
 generalized to take a `navItems` prop instead of being hard-coded to
 `PARTICIPANT_NAV_ITEMS` — `docs/design.md` §8 already states both cabinets share
 one shell rendering from the feature registry (ADR-009), so this closes that gap
-rather than adding a second, parallel `OrganizerCabinetShell`. New
+rather than adding a second, parallel `OrganizerCabinetShell`. (CR-127: the
+shell also renders `CabinetAccountBar` — signed-in identity + «Выйти» — on
+every cabinet screen; sign-out goes through `lib/auth/use-logout.ts`, shared
+with `AppHeader`.) New
 `lib/cabinet/organizer-nav.ts` registry (one entry: `/organizer/profile`); new
 `app/organizer/{layout,page,profile/page}.tsx` (the bare `/organizer` route is a
 minimal stub, same reasoning as CR-013's `/me` stub — real dashboard content is
