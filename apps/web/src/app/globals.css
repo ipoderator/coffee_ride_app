@@ -24,13 +24,14 @@
   body {
     @apply bg-bg text-text;
   }
-  /* ADR-021 («Топокарта», docs/design.md §4): headings are set in the
-     display face (Sofia Sans Condensed); body text stays Golos Text. Russian
+  /* ADR-024 («Ночной старт», docs/design.md §4): headings are set in the
+     title face (Unbounded); body text stays Golos Text, `font-display`
+     (Sofia Sans Condensed) is now reserved for labels/eyebrows. Russian
      letterforms depend on `<html lang="ru">` (see layout.tsx). */
   h1,
   h2,
   h3 {
-    @apply font-display;
+    @apply font-title;
   }
   :focus-visible {
     /* docs/design.md §12: visible focus ring on every interactive element. */

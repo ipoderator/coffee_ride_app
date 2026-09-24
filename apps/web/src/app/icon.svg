@@ -1,11 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <!-- CR-124: the wordmark's elevation profile alone, in the overprint
-       colour. A static asset cannot read packages/ui's CSS tokens, so the two
-       `--primary` values (light #9033A1 / dark #D79BE0) are repeated here;
-       keep them in step with packages/ui/src/tokens.css. -->
+  <!-- ADR-024: the wordmark's elevation profile alone, in the `brand` ink
+       (logo/graphics role, not the AA-text `primary`). A static asset cannot
+       read packages/ui's CSS tokens, so the two `--brand` values (light
+       #82668C / dark #B8A0C1) are repeated here; keep them in step with
+       packages/ui/src/tokens.css. -->
   <style>
-    path { fill: #9033a1; }
-    @media (prefers-color-scheme: dark) { path { fill: #d79be0; } }
+    path { fill: #82668c; }
+    @media (prefers-color-scheme: dark) { path { fill: #b8a0c1; } }
   </style>
   <path transform="translate(0 4) scale(0.4)" d="M0.4 20C0.4 17 2.6 14.2 5.8 14.1C8 14 9 14.8 10.6 14.4C13.4 13.7 15.6 7.8 20.6 7.6C23 7.5 24.2 8.8 25.8 8C28.8 6.5 31.4 0 35.8 0C38.2 0 40 1.8 40 4.2V19.2C40 19.6 39.6 20 39.2 20Z" />
 </svg>

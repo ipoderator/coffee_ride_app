@@ -24,6 +24,14 @@ describe('Button', () => {
     expect(button).toHaveAttribute('aria-busy', 'true');
   });
 
+  // ADR-024: a busy button also shows a visible spinner, not just the
+  // cursor/disabled state — that was easy to miss.
+  it('shows a visible spinner when isLoading', () => {
+    render(<Button isLoading>Отправить</Button>);
+    const button = screen.getByRole('button', { name: 'Отправить' });
+    expect(button.querySelector('.animate-spin')).not.toBeNull();
+  });
+
   it('defaults to type="button" so it never accidentally submits a form', () => {
     render(<Button>Отмена</Button>);
     expect(screen.getByRole('button', { name: 'Отмена' })).toHaveAttribute(

@@ -719,16 +719,21 @@ export const RIDE_DISCOVERY_TERMS = {
   filterAllOption: 'Все типы',
   emptyFilteredTitle: 'Пока нет заездов по этим фильтрам',
   resetFiltersLabel: 'Сбросить фильтры',
-  // CR-026 ("Map discovery"): the List/Map toggle (`docs/design.md` §8). No live
-  // 2GIS credential is configured in this environment (KI-016), so the map view
-  // shows a degraded notice instead of attempting a real map render
-  // (`.claude/rules/resilience.md`).
-  viewListLabel: 'Список',
+  // ADR-024 («Ночной старт»): the "Заезды / Карта" tab switch above the two
+  // discovery views — a card grid (`RideGrid`) and the map-first list
+  // (`DiscoveryList`, unchanged, ADR-021/CR-118's view). Revives CR-026's
+  // never-wired-up List/Map toggle terms with the new labels.
+  tabsLabel: 'Режим просмотра',
+  viewGridLabel: 'Заезды',
   viewMapLabel: 'Карта',
   mapUnavailable: 'Карта временно недоступна. Используйте список заездов.',
   // CR-123: the map-fullscreen toggle on the discovery map panel.
   expandMapLabel: 'Развернуть карту на весь экран',
   collapseMapLabel: 'Свернуть карту',
+  // ADR-024: the route-cover grid's compact status chip — "мало мест" sits
+  // between `registration_open`'s ordinary label and `registration_closed`'s
+  // "Регистрация закрыта"; derived from seats left, not a `RideStatus` value.
+  lowSeatsLabel: 'Мало мест',
 } as const;
 
 /**

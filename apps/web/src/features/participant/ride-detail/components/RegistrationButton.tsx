@@ -11,8 +11,10 @@ import type {
 } from 'types';
 import {
   Button,
+  cn,
   ConfirmDialog,
   formatGroupPace,
+  METRIC_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_GROUP_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
@@ -399,14 +401,42 @@ export function RegistrationButton({
       ? Math.max(participantLimit - registrationsCount, 0)
       : null;
 
+  // ADR-024: a capacity fill bar alongside the existing text — `docs/design.md`
+  // §12's "colour never carries meaning alone" still holds, the bar is a
+  // visual reinforcement of the text above it, not a replacement for it.
+  const fillPercent =
+    participantLimit !== null && participantLimit > 0
+      ? Math.min(100, Math.round((registrationsCount / participantLimit) * 100))
+      : null;
+
   return (
     <div className="flex flex-col gap-2">
       {seatsLeft !== null && (
-        <p className="font-display text-sm font-semibold tracking-[0.04em] text-text-secondary uppercase tabular-nums">
-          {isFull
-            ? REGISTRATION_ACTION_TERMS.full
-            : RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(seatsLeft)}
-        </p>
+        <>
+          <p className="font-display text-sm font-semibold tracking-[0.04em] text-text-secondary uppercase tabular-nums">
+            {isFull
+              ? REGISTRATION_ACTION_TERMS.full
+              : RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(seatsLeft)}
+          </p>
+          {fillPercent !== null && (
+            <div
+              role="progressbar"
+              aria-valuenow={fillPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={METRIC_TERMS.participants}
+              className="h-2 w-full overflow-hidden rounded-full bg-surface"
+            >
+              <div
+                className={cn(
+                  'h-full rounded-full',
+                  isFull ? 'bg-warning' : 'bg-primary-fill',
+                )}
+                style={{ width: `${fillPercent}%` }}
+              />
+            </div>
+          )}
+        </>
       )}
       <Button
         className="w-full"

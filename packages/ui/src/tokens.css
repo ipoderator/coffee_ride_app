@@ -14,120 +14,135 @@
  */
 
 :root {
-  /* Light theme — «Топокарта» (ADR-021, docs/design.md §3): a printed
-     orienteering-map sheet. White paper, black ink, ONE plum overprint
-     colour (`primary`/`route`) for the ride's route and the primary action.
-     The other map inks carry meaning only: `contour` brown = elevation,
-     `info` blue, `success` green, `warning` yellow. `danger` is unchanged
-     from CR-063 (§1's "one exception").
-
-     Page vs card: `bg` is the paper. `bg-raised` is deliberately the SAME
-     paper, not a tint — cards and form controls have no fill on the page,
-     they are hairline-separated rows/outlines (`border`). `surface` is the
-     sheet margin: the one raised plane, for overlays (dialog, menu popover,
-     sticky bar) and hover/selected rows. */
-  --bg: #ffffff;
+  /* Light theme — «Ночной старт» (ADR-024, docs/design.md §3), superseding
+     ADR-021's «Топокарта». Page (`bg`) and raised surfaces (`bg-raised`,
+     `surface`) are now genuinely different tones — unlike ADR-021's "no card
+     fill" rule — for the softer, deeper-shadowed panels the new direction
+     uses. `bg-raised` is panels/header/tab-bar; `surface` is the one step
+     further raised (metric cells, the selected nav item). */
+  --bg: #f3f1f5;
   --bg-raised: #ffffff;
-  --surface: #f3f4f1;
-  --text: #15171a;
-  --text-secondary: #4b5157;
-  --text-muted: #676d74;
+  --surface: #f8f6f9;
+  --text: #17141a;
+  --text-secondary: #413c47;
+  --text-muted: #5a5460;
   /* The ink rule: map frame, secondary-button outline, strong dividers. */
-  --frame: #15171a;
-  /* CR-124: the brand purple, locked to the exact value measured off the
-     rendered UI (macOS Digital Color Meter, RGB 144/51/161) — the single
-     source of truth for "фирменный цвет" (`.claude/CLAUDE.md`). `route` and
-     the map inks below are the SAME value, not just the same name: ADR-021
-     calls for one overprint ink and CR-124 fixes the drift where `primary`
-     and `route` had quietly diverged into two different purples. */
-  --primary: #9033a1;
-  --primary-hover: #772a85;
+  --frame: #17141a;
+  /* ADR-024: the brand hex moved from CR-124's #9033A1 to #82668C, and split
+     into three roles (a single overprint ink no longer clears AA text
+     contrast at the new hue — `docs/decisions.md` ADR-024 §1/Rationale).
+     `primary` is the AA-checked text/link/focus/active-tab role: one shade
+     darker than the brand hex so body text on `bg` still clears AA. */
+  --primary: #74597e;
+  --primary-hover: #5f4869;
   --on-primary: #ffffff;
-  --primary-tint: #f6eef7;
+  --primary-tint: #ede6f0;
+  /* `brand`: the actual locked brand hex — logo, route track, graphic
+     elements only (needs ≥3:1, not AA text contrast). */
+  --brand: #82668c;
+  /* `primary-fill`: the primary button's fill — same hex as `brand` in both
+     themes, white text clears 5:1 on it. */
+  --primary-fill: #82668c;
+  --primary-fill-hover: #6c5376;
+  --on-primary-fill: #ffffff;
   /* The route line on a map, drawn over a casing so it stays legible on
-     any basemap detail (read at call time by `getCssColorVar`). */
-  --route: #9033a1;
+     any basemap detail (read at call time by `getCssColorVar`). Uses
+     `brand`, not `primary` — a route is graphics, not text. */
+  --route: #82668c;
   --route-casing: #ffffff;
   /* Map overlay inks: follow the 2GIS basemap, not the UI theme. The basemap
      stays light in both themes (KI-057), so these have NO `.dark` override —
-     a graphite casing on light tiles drew the route as a heavy black-outlined
-     band. Switch them together with a dark basemap style when one lands. */
-  --map-route: #9033a1;
+     unchanged by ADR-024, only the hex moved from the old brand to the new
+     one. Switch them together with a dark basemap style when one lands. */
+  --map-route: #82668c;
   --map-route-casing: #ffffff;
-  --map-marker-selected: #9033a1;
-  --contour: #8c5419;
+  --map-marker-selected: #82668c;
+  /* Renamed from `contour` (ADR-024 §2) — same role (elevation profile ink,
+     `chart-secondary`'s alias), name only. */
+  --elevation: #94650f;
   --success: #1d6f38;
   --warning: #7a5300;
   --warning-fill: #ffc94d;
-  --on-warning-fill: #15171a;
+  --on-warning-fill: #17141a;
   --danger: #d42b20;
   --on-danger: #ffffff;
   --info: #0b65a6;
   --info-tint: #e3f0fa;
-  --border: #d3d6d9;
-  --border-input: #858b92;
+  --border: #ddd7e1;
+  --border-input: #a89cb0;
 
-  /* Data visualization (§3): the elevation profile is drawn in `contour`
-     brown, the map's own elevation ink. `chart-secondary` (also the `food`
-     route-point marker, `route-point-colors.ts`) is kept as a name and now
-     aliases the same ink rather than introducing another hue. */
-  --chart-secondary: var(--contour);
+  /* Data visualization (§3): the elevation profile is drawn in `elevation`
+     ink. `chart-secondary` (also the `food` route-point marker,
+     `route-point-colors.ts`) is kept as a name and aliases the same ink
+     rather than introducing another hue. */
+  --chart-secondary: var(--elevation);
 
-  /* CR-107's "Quiet Instrument" glass tokens (`--glass-bg`/`--glass-border`,
-     `GLASS_PANEL_CLASSNAME`) were retired by ADR-021 (the direction bans
-     glass/blur) and deleted by CR-119 once the discovery/ride-detail rebuilds
-     dropped their last call sites. `--scrim` stays a wash under cover-photo
-     text (legibility, not glass), re-toned to ink; same in both themes, since
-     it sits on a photo. */
-  --scrim: rgb(21 23 26 / 55%);
+  /* `--scrim`: a wash under cover-photo text (legibility, not glass), toned
+     to ink; same in both themes, since it sits on a photo. */
+  --scrim: rgb(23 20 26 / 55%);
 
-  /* Radius (§5): 4px — a printed stamp, not a pill — on buttons, inputs and
-     chips; 6px only for dialogs/sheets. */
-  --radius: 0.25rem;
+  /* ADR-024: `RouteCover`'s dark "window" — a route-drawn cover on every ride
+     card/hero, deliberately unaffected by the light/dark UI theme (like a
+     photo would be), so it has no `.dark` override, same pattern as the
+     `map-*` tokens above. */
+  --cover-bg: #16131a;
+  --cover-line: #2c2732;
+  --cover-ink: #ffffff;
+  --cover-route: #b8a0c1;
+  --cover-elevation: #82668c;
 
-  /* Typography (§4). Golos Text / Sofia Sans Condensed / IBM Plex Mono are
-     loaded via `next/font/google` in apps/web's layout.tsx, which binds the
-     actual webfont to the `--font-golos`/`--font-sofia-condensed`/
-     `--font-plex-mono` custom properties below. The nested
-     `var(..., fallback)` keeps this stylesheet safe to use wherever that
-     wiring is absent (e.g. a future non-Next consumer, or a test environment
-     that doesn't render layout.tsx). */
+  /* Radius (§5, ADR-024): pills and large radii replace ADR-021's 4px
+     "printed stamp" — buttons/chips are `rounded-full` directly (not driven
+     by this scale); panels/cards/the route cover use `rounded-2xl`/
+     `rounded-3xl`; metric cells/inputs use `rounded-xl`. This scale remains
+     for anything using the generic `rounded-md`/`rounded-lg` utilities. */
+  --radius: 1rem;
+
+  /* Typography (§4). Golos Text / Sofia Sans Condensed / IBM Plex Mono /
+     Unbounded / Sofia Sans Extra Condensed are loaded via `next/font/google`
+     in apps/web's layout.tsx, which binds the actual webfont to the
+     `--font-golos`/`--font-sofia-condensed`/`--font-plex-mono`/
+     `--font-unbounded`/`--font-sofia-extra-condensed` custom properties
+     below. The nested `var(..., fallback)` keeps this stylesheet safe to use
+     wherever that wiring is absent (e.g. a future non-Next consumer, or a
+     test environment that doesn't render layout.tsx). */
   --font-golos-fallback: -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display-fallback: 'Arial Narrow', var(--font-golos-fallback);
   --font-plex-mono-fallback: ui-monospace, 'SFMono-Regular', monospace;
+  --font-unbounded-fallback: var(--font-golos-fallback);
+  --font-num-fallback: 'Arial Narrow', var(--font-golos-fallback);
 }
 
-/* Dark — «sheet under a head torch»: neutral graphite, never violet-tinted.
-   Only the overprint and the meaning inks are lifted for the dark ground. */
+/* Dark — the default theme (ADR-024 §4). Neutral graphite-violet ground. */
 .dark {
-  --bg: #111315;
-  --bg-raised: #111315;
-  --surface: #1a1d20;
-  --text: #ecedea;
-  --text-secondary: #b4b9be;
-  --text-muted: #8e959c;
-  --frame: #ecedea;
-  /* CR-124: `route` matched `primary` was drifting here too (#DA8FE4 vs
-     #D79BE0) — unified to the one lifted overprint value, same fix as the
-     light theme. Left lifted rather than reusing the light-theme hex
-     directly: that stays the documented, accessible dark-ground value. */
-  --primary: #d79be0;
-  --primary-hover: #e4b6eb;
+  --bg: #121015;
+  --bg-raised: #1c1920;
+  --surface: #25212a;
+  --text: #f3f0f5;
+  --text-secondary: #c7c0cc;
+  --text-muted: #a39ca9;
+  --frame: #f3f0f5;
+  --primary: #b8a0c1;
+  --primary-hover: #c7b3cf;
   --on-primary: #1c0f1e;
-  --primary-tint: #2c1f2f;
-  --route: #d79be0;
-  --route-casing: #111315;
-  --contour: #d39b5f;
+  --primary-tint: #2e2535;
+  --brand: #b8a0c1;
+  --primary-fill: #82668c;
+  --primary-fill-hover: #93779d;
+  --on-primary-fill: #ffffff;
+  --route: #b8a0c1;
+  --route-casing: #121015;
+  --elevation: #d9a441;
   --success: #62c483;
   --warning: #f0c04e;
   --warning-fill: #f0c04e;
-  --on-warning-fill: #111315;
+  --on-warning-fill: #121015;
   --danger: #ff5a4f;
   --on-danger: #171614;
   --info: #6db4ee;
   --info-tint: #15293a;
-  --border: #343a40;
-  --border-input: #6e767e;
+  --border: #2e2934;
+  --border-input: #4a4450;
 }
 
 @theme inline {
@@ -142,9 +157,13 @@
   --color-primary-hover: var(--primary-hover);
   --color-on-primary: var(--on-primary);
   --color-primary-tint: var(--primary-tint);
+  --color-brand: var(--brand);
+  --color-primary-fill: var(--primary-fill);
+  --color-primary-fill-hover: var(--primary-fill-hover);
+  --color-on-primary-fill: var(--on-primary-fill);
   --color-route: var(--route);
   --color-route-casing: var(--route-casing);
-  --color-contour: var(--contour);
+  --color-elevation: var(--elevation);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-warning-fill: var(--warning-fill);
@@ -157,13 +176,18 @@
   --color-border-input: var(--border-input);
   --color-chart-secondary: var(--chart-secondary);
   --color-scrim: var(--scrim);
+  --color-cover-bg: var(--cover-bg);
+  --color-cover-line: var(--cover-line);
+  --color-cover-ink: var(--cover-ink);
+  --color-cover-route: var(--cover-route);
+  --color-cover-elevation: var(--cover-elevation);
 }
 
 @theme {
   --font-sans: var(--font-golos, 'Golos Text'), var(--font-golos-fallback);
-  /* `font-display`: headings, labels, metric numerals and the wordmark
-     (§4). Sofia Sans' default Cyrillic draws Bulgarian letterforms; the
-     Russian ones come from its `locl` feature, which the browser only
+  /* `font-display`: labels, eyebrows and section headings that aren't a ride
+     title (§4). Sofia Sans' default Cyrillic draws Bulgarian letterforms;
+     the Russian ones come from its `locl` feature, which the browser only
      applies because `<html lang="ru">` (apps/web's layout.tsx). Never
      override `lang` on an element set in this face. */
   --font-display:
@@ -171,15 +195,25 @@
     var(--font-display-fallback);
   --font-mono:
     var(--font-plex-mono, 'IBM Plex Mono'), var(--font-plex-mono-fallback);
+  /* `font-title` (ADR-024, new): ride titles and screen headings — the one
+     role ADR-021 gave to `font-display` that Unbounded takes over. */
+  --font-title:
+    var(--font-unbounded, 'Unbounded'), var(--font-unbounded-fallback);
+  /* `font-num` (ADR-024, new): large tabular metric numerals (route cover,
+     `MetricTile`). Sofia Sans Extra Condensed also needs `lang="ru"`'s
+     `locl` feature, same caveat as `font-display` above. */
+  --font-num:
+    var(--font-sofia-extra-condensed, 'Sofia Sans Extra Condensed'),
+    var(--font-num-fallback);
 
-  /* «Топокарта» (§5): everything is a 4px printed stamp. `md`/`lg` (menu
-     items, buttons, inputs, chips) are both 4px; `xl` (cards, dialogs) is
-     6px; `sm` 2px for small inset marks. `rounded-full` stays for avatars
-     and the wordmark ring only. */
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 2px);
+  /* «Ночной старт» (§5, ADR-024): pills and large radii, not a 4px stamp.
+     This scale backs the generic `rounded-*` utilities; components with a
+     specific radius in the mockup (buttons full, panels 2xl/3xl, cells xl)
+     set it directly rather than through this scale. */
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
 
   /* Elevation (§5): resting cards use a hairline border, no shadow — only
      overlays (popover/modal/sheet) get this one small, tight shadow. */

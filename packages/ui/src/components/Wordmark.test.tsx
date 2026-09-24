@@ -21,10 +21,10 @@ describe('Wordmark (CR-121)', () => {
     const { container } = render(<Wordmark />);
     expect(
       container.querySelector('svg path')?.getAttribute('class'),
-    ).toContain('fill-primary');
+    ).toContain('fill-brand');
     expect(
       container.querySelector('svg circle')?.getAttribute('class'),
-    ).toContain('fill-primary');
+    ).toContain('fill-brand');
     expect(container.textContent).not.toContain('.');
   });
 

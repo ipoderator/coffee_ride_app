@@ -1,9 +1,10 @@
 import { cn } from '../lib/cn';
 import { WORDMARK_TERMS } from '../terminology';
 
-// CR-121, replacing ADR-021's «coffee◦ride»: an elevation-profile mark in the
-// overprint colour (`primary`), then lowercase «кофе•райд» in Golos 800 in
-// ink (`text`), the dot a filled `primary` disc. Both SVGs are sized in `em`
+// CR-121, updated by ADR-024: an elevation-profile mark in the brand/graphics
+// ink (`brand`, not the AA-text `primary`), then lowercase «кофе•райд» in
+// Golos 800 in ink (`text`), the dot a filled `brand` disc. Both SVGs are
+// sized in `em`
 // so the whole logo scales with whatever text size the caller sets; an inline
 // SVG's bottom edge sits on the text baseline (`align-baseline`).
 //
@@ -27,7 +28,7 @@ export function Wordmark({ className }: { className?: string }) {
         >
           <path
             d="M0.4 20C0.4 17 2.6 14.2 5.8 14.1C8 14 9 14.8 10.6 14.4C13.4 13.7 15.6 7.8 20.6 7.6C23 7.5 24.2 8.8 25.8 8C28.8 6.5 31.4 0 35.8 0C38.2 0 40 1.8 40 4.2V19.2C40 19.6 39.6 20 39.2 20Z"
-            className="fill-primary"
+            className="fill-brand"
           />
         </svg>
         кофе
@@ -37,7 +38,7 @@ export function Wordmark({ className }: { className?: string }) {
           className="mx-[0.07em] inline-block h-[0.24em] w-[0.24em] shrink-0 translate-y-[-0.15em] self-baseline align-baseline"
           focusable="false"
         >
-          <circle cx="5" cy="5" r="5" className="fill-primary" />
+          <circle cx="5" cy="5" r="5" className="fill-brand" />
         </svg>
         райд
       </span>

@@ -398,7 +398,7 @@ describe('RideDetailView', () => {
     ).not.toBeNull();
     expect(
       chart.querySelector(
-        'path.stroke-contour[vector-effect="non-scaling-stroke"]',
+        'path.stroke-elevation[vector-effect="non-scaling-stroke"]',
       ),
     ).not.toBeNull();
   });
@@ -684,6 +684,10 @@ describe('RideDetailView', () => {
       expect(
         within(bar as HTMLElement).getByText('Осталось 6 мест'),
       ).toBeInTheDocument();
+      // ADR-024: a capacity fill bar reinforces the text, doesn't replace it.
+      expect(
+        within(bar as HTMLElement).getByRole('progressbar'),
+      ).toHaveAttribute('aria-valuenow', '70');
     });
 
     it("keeps a registered viewer's block in the flow, not in the fixed bar", async () => {

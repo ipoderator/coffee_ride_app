@@ -2603,3 +2603,86 @@ ports reset) on a fresh volume — bucket created, exit 0, re-run exit 0, then
 torn down with its volume; on the real stack `minio-init` exited 0 and
 `/health` → `s3: "ok"`; live avatar upload/download/delete → 201/200/204.
 Files: `docker-compose.yml`, `README.md`, KI-015.
+
+## 2026-09-24 — CR-130 — «Ночной старт» visual direction (ADR-024), Phase 1 + partial Phase 2
+
+Owner supplied a v2 mockup ("Ночной старт" — dark-by-default, a route-drawn
+cover on every ride, larger tabular numerals) and asked for it to be
+implemented. Confirmed explicitly with the owner before starting: this
+supersedes ADR-021 («Топокарта») wholesale — not just colour but shape too —
+and reverses two recent decisions on purpose: CR-124's locked brand hex
+(`#9033A1`/`#D79BE0` → `#82668C`/`#B8A0C1`) and CR-108's header-only organizer
+nav (a desktop sidebar returns, still fed by the ADR-009 registry). Recorded
+as **ADR-024**, which fully documents the decision and rationale — this entry
+covers only the "how"/"what changed".
+
+**Phase 1 (foundation) — done:**
+
+- `packages/ui/src/tokens.css`: `primary` (AA text role) split from new
+  `brand` (logo/route track/graphics) and `primary-fill`/`primary-fill-hover`/
+  `on-primary-fill` (button fill) — a single overprint ink no longer clears
+  AA text contrast at the new hue. `contour` renamed `elevation` (name only).
+  New `--cover-*` tokens for `RouteCover`'s theme-invariant dark "window"
+  (same pattern as the pre-existing `map-*` tokens, KI-057 unchanged). Radius
+  moved from one 4px "stamp" scale to pills/large radii set per component.
+- Two new fonts (`apps/web/src/app/layout.tsx`): Unbounded (`font-title` —
+  ride titles/headings) and Sofia Sans Extra Condensed (`font-num` — large
+  metric numerals); Sofia Sans Condensed narrows to labels/eyebrows only.
+- Dark is now the default theme (`apps/web/src/lib/theme/theme.ts`): an
+  empty `localStorage` resolves to dark, not `system`. `'system'` is now
+  stored as a literal value (not cleared) so an explicit "Система" choice
+  stays distinguishable from "never chosen".
+- `Button` (pill radius, `primary-fill` role, a real visible spinner while
+  `isLoading` — it previously only disabled with no visual indicator),
+  `MetricTile` (numerals move to `font-num`; new `variant="cell"` for a
+  raised metric cell, default tile unchanged), new `AvatarStack` (overlapping
+  avatars + `+N`), new `RouteCover` (a route-drawn SVG cover: decorative
+  isoline background picked deterministically per ride, the real route track
+  reprojected via a new `projectRoutePreviewToBox` — generalizes the existing
+  square-only `projectRoutePreview` — elevation-tinted decorative footer).
+  `Wordmark`/`app/icon.svg` move to `brand`.
+- `.claude/CLAUDE.md` "Brand color" and `docs/design.md` §1/§3/§4/§5/§6/§9
+  updated to match.
+
+**Phase 2 (screens) — partly done:**
+
+- Discovery (`/`): new "Заезды / Карта" tab switch (`DiscoveryTabs`) —
+  "Заезды" is a new `RouteCover`-card grid (`RideGrid`/`RideGridCard`,
+  fetches its own data, shares metric/status derivation with `RideLegendRow`
+  via new `lib/ride-metrics.ts` so the two views can't disagree); "Карта" is
+  the unchanged ADR-021/CR-118 map-first `DiscoveryList`. New
+  `discoveryStatusTerm` shows a derived "Мало мест" chip on an open ride with
+  ≤3 seats left, instead of (not alongside) the ordinary status label.
+- Ride detail (`/rides/[id]`): kept the real interactive `RouteMap` hero
+  (deliberately — replacing live map functionality with a static decorative
+  cover would be a regression, not called for once the existing map-first
+  architecture was understood); added a capacity fill bar next to the
+  existing "Осталось N мест" text (`role="progressbar"`, colour is
+  reinforcement, not the only signal); `GroupPicker` restyled to individually
+  bordered rounded rows instead of a divided flat list.
+- Organizer (`/organizer`): `CabinetShell` gained an optional
+  `sidebarNavItems` prop — a new `CabinetSidebar` renders on desktop when
+  passed (now: `/organizer/*` only, from the same `ORGANIZER_NAV_ITEMS`
+  registry `AppHeader` still reads); `/me/*` is unchanged (no prop passed).
+  `RideSummaryWidget`'s four KPIs now render as individual raised cells
+  (`MetricTile variant="cell"`) instead of one shared card — same real data,
+  no new numbers invented.
+
+**Not done yet** (tracked in `docs/tasks.md`'s CR-130 entry): organizer
+recent-registrations list and per-day bar chart (needs a data-availability
+check before deciding whether existing endpoints are enough or this needs a
+documented known-issue instead of a new API surface), mobile bottom tab bar,
+and a countdown-to-start timer in `RegistrationButton`'s registered block.
+
+Validation: `pnpm --filter ui test/typecheck/lint` and
+`pnpm --filter web test/typecheck/lint` all green throughout (ui 137/137,
+web 338/338 tests by the end of this entry); browser-automation checks
+against the local dev server confirmed dark-by-default renders correctly
+(`body` background `#121015`), the new brand purple shows on the Wordmark
+and headline numerals, the discovery grid/tab switch and ride-detail fill
+bar/`GroupPicker` render as intended, with no console errors.
+Files: see `docs/decisions.md` ADR-024's Rollback section for the full list;
+new files are under `packages/ui/src/components/` (`AvatarStack.*`) and
+`apps/web/src/features/participant/discovery/` (`RouteCover.*`, `RideGrid.tsx`,
+`RideGridCard.tsx`, `DiscoveryTabs.*`, `lib/ride-metrics.*`) plus
+`apps/web/src/components/cabinet/CabinetSidebar.tsx`.

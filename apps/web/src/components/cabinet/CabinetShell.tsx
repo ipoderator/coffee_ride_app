@@ -5,7 +5,9 @@ import { useEffect, type ReactNode } from 'react';
 import { CABINET_TERMS, ErrorState, Skeleton } from 'ui';
 import { CurrentUserContext } from '@/lib/auth/current-user-context';
 import { useSession } from '@/lib/auth/session-context';
+import type { CabinetNavItem } from '@/lib/cabinet/types';
 import { CabinetAccountBar } from './CabinetAccountBar';
+import { CabinetSidebar } from './CabinetSidebar';
 
 /**
  * Session gate for every `/me/*` and `/organizer/*` screen. Redirects to
@@ -23,8 +25,20 @@ import { CabinetAccountBar } from './CabinetAccountBar';
  * global `AppHeader` (which renders the same ADR-009 registries, so adding a
  * cabinet feature is still a descriptor and not a branch), and the session is
  * resolved once by `SessionProvider` for the header and this gate to share.
+ *
+ * ADR-024: `sidebarNavItems` is optional and additive — when a cabinet layout
+ * passes it (today: `/organizer/*`), a desktop `CabinetSidebar` renders next
+ * to `children` from the same ADR-009 registry `AppHeader` already reads;
+ * omitting it (still `/me/*`) keeps the pre-ADR-024 header-only layout
+ * exactly as it was.
  */
-export function CabinetShell({ children }: { children: ReactNode }) {
+export function CabinetShell({
+  children,
+  sidebarNavItems,
+}: {
+  children: ReactNode;
+  sidebarNavItems?: CabinetNavItem[];
+}) {
   const router = useRouter();
   const { status, user } = useSession();
 
@@ -60,7 +74,10 @@ export function CabinetShell({ children }: { children: ReactNode }) {
     <CurrentUserContext.Provider value={user}>
       <div className="mx-auto min-h-screen w-full max-w-5xl p-6">
         <CabinetAccountBar user={user} />
-        <main className="min-w-0">{children}</main>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          {sidebarNavItems ? <CabinetSidebar items={sidebarNavItems} /> : null}
+          <main className="min-w-0 flex-1">{children}</main>
+        </div>
       </div>
     </CurrentUserContext.Provider>
   );

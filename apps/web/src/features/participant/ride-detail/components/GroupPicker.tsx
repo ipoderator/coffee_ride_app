@@ -76,12 +76,12 @@ export function GroupPicker({
 }) {
   if (!onChange) {
     return (
-      <ul
-        id={id}
-        className="flex flex-col divide-y divide-border border-y border-border"
-      >
+      <ul id={id} className="flex flex-col gap-2">
         {groups.map((group) => (
-          <li key={group.id} className="flex min-h-11 items-center gap-3 py-2">
+          <li
+            key={group.id}
+            className="flex min-h-11 items-center gap-3 rounded-xl border border-border px-3 py-2"
+          >
             <GroupText
               group={group}
               isViewerGroup={group.id === viewerGroupId}
@@ -98,16 +98,17 @@ export function GroupPicker({
       <legend className="mb-2 font-display text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase">
         {legend}
       </legend>
-      <div className="flex flex-col divide-y divide-border border-y border-border">
+      <div className="flex flex-col gap-2">
         {groups.map((group) => {
           const checked = value === group.id;
           return (
             <label
               key={group.id}
               className={cn(
-                'flex min-h-11 cursor-pointer items-center gap-3 px-2 py-2 transition-colors',
-                'hover:bg-surface has-[:disabled]:cursor-not-allowed',
-                checked && 'bg-primary-tint hover:bg-primary-tint',
+                'flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 transition-colors',
+                'border-border hover:bg-surface has-[:disabled]:cursor-not-allowed',
+                checked &&
+                  'border-primary bg-primary-tint hover:bg-primary-tint',
               )}
             >
               <input

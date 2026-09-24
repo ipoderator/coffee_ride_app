@@ -238,7 +238,12 @@ one shell rendering from the feature registry (ADR-009), so this closes that gap
 rather than adding a second, parallel `OrganizerCabinetShell`. (CR-127: the
 shell also renders `CabinetAccountBar` — signed-in identity + «Выйти» — on
 every cabinet screen; sign-out goes through `lib/auth/use-logout.ts`, shared
-with `AppHeader`.) New
+with `AppHeader`.) CR-130 (ADR-024) added an optional `sidebarNavItems` prop:
+when a cabinet layout passes it, `CabinetShell` also renders a new
+`CabinetSidebar` (desktop-only) beside `children`, fed by the same ADR-009
+registry `AppHeader` reads for its own dropdown/mobile panel — today only
+`app/organizer/layout.tsx` passes it (`filterEnabled(ORGANIZER_NAV_ITEMS)`);
+`/me/*` omits it and keeps the CR-108 header-only layout unchanged. New
 `lib/cabinet/organizer-nav.ts` registry (one entry: `/organizer/profile`); new
 `app/organizer/{layout,page,profile/page}.tsx` (the bare `/organizer` route is a
 minimal stub, same reasoning as CR-013's `/me` stub — real dashboard content is

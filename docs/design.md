@@ -14,35 +14,40 @@ Implementation tasks: CR-063…CR-066 in `docs/tasks.md`.
 
 ## 1. Visual direction
 
-**«Топокарта» — a printed orienteering-map sheet** (ADR-021, 2026-09-23; replaces the
-earlier "calm, muted teal" direction and CR-107's "Quiet Instrument"). The interface is a
-planning tool people read outdoors, often on a phone, sometimes in bright sunlight or at
-6 a.m. before a ride. A printed map is exactly that kind of artefact: white paper, black
-ink, one overprint colour for the course, and a small, fixed set of map inks that each
-mean one thing.
+**«Ночной старт»** (ADR-024, 2026-09-24; replaces «Топокарта», ADR-021). The interface is
+for people who leave before dawn: a dark, low-glare surface by default, a route-drawn
+cover on every ride instead of a flat placeholder, and larger tabular numerals read at a
+glance in low light. Dark is the default theme now, not a preference the viewer has to
+find (§3).
 
 Rules:
 
-- **Paper and ink.** The page is white paper (`bg`), text and rules are black ink
-  (`text`, `frame`). Dark theme is the same sheet "under a head torch": neutral graphite,
-  never violet- or warm-tinted.
-- **One overprint colour — plum.** `primary`/`route` is used for exactly two things: the
-  ride's route line on a map and the primary action (filled button, focus ring, the
-  wordmark mark and dot, links). It is never decoration, never a second "brand" fill on cards,
-  badges or backgrounds. If a screen seems to need a second accent, it needs hierarchy
-  instead.
-- **The other inks carry meaning only**, as on a real map: brown `contour` = elevation
-  (elevation profile, gain), blue `info` = information, green `success` = confirmed/
-  published, yellow `warning-fill`/`warning` = caution (waitlist, closing registration,
-  degraded service). They are never used for ornament.
-- **Cards have no fill.** Content sits on the paper as hairline-separated rows/outlines
-  (`border`), the way a map legend does. `surface` (the sheet margin) is the one raised
-  plane — dialogs, the sticky mobile bar, hover/selected rows.
+- **Panels are genuinely raised, not paper.** `bg` is the page; `bg-raised` (panels,
+  header, tab bar) and `surface` (metric cells, the selected nav item) are distinct,
+  deeper tones — unlike ADR-021's "no card fill" rule.
+- **Three colour roles, not one overprint ink.** `primary` (AA text: links, focus ring,
+  the active tab) is a shade darker/lighter than the locked brand hex so body text still
+  clears AA; `brand` is the actual locked hex (`#82668C` light / `#B8A0C1` dark) for the
+  logo, the route track and graphic elements only; `primary-fill` is the button fill
+  (`#82668C` in both themes, white text). None of the three is decoration on cards,
+  badges or backgrounds beyond their stated role.
+- **The other inks carry meaning only**, unchanged in role from ADR-021: `elevation`
+  (renamed from `contour`) = elevation profile/gain, blue `info` = information, green
+  `success` = confirmed/published, yellow `warning-fill`/`warning` = caution (waitlist,
+  closing registration, degraded service). They are never used for ornament.
+- **Shape is pills and large radii**, not a 4px stamp (§5): buttons/chips are fully
+  rounded, panels/cards/the route cover use large radii, metric cells/inputs use a
+  medium radius.
+- **Every ride gets a drawn cover, not a placeholder.** `RouteCover` (`apps/web`) draws a
+  dark "window" — deliberately unaffected by the light/dark UI theme, like a photo —
+  from decorative isoline art plus the ride's own route track, on every card and the
+  ride-detail hero, whether or not the organizer uploaded a photo.
 - **Color never carries meaning alone** (`.claude/rules/frontend.md`): status, difficulty
   and errors always carry a text label and/or icon as well.
 - **Banned:** gradients, glow/neon, glass/blur/translucent panels, khaki/cream/"vintage
-  paper" tints, serif display faces, full-bleed saturated hero blocks. Photography (ride
-  cover images) provides the only other colour; the chrome stays printed.
+  paper" tints, serif display faces. Photography (ride cover images) and `RouteCover`'s
+  drawn art provide the interface's only other colour; the chrome itself stays to the
+  token palette.
 
 ### The one exception: destructive semantics
 
@@ -51,7 +56,7 @@ states are the deliberate exception, settled by the product owner on 2026-09-10 
 reviewing a muted-brick first draft and kept unchanged by ADR-021: **cancellation uses a
 genuinely bright red.** A cancelled ride is the one thing a participant must not scroll
 past, and a whisper-quiet cancellation badge is a missed-ride support ticket waiting to
-happen.
+happen. ADR-024 leaves this exception exactly as written.
 
 - `danger` is a saturated red — `#D42B20` light / `#FF5A4F` dark, both AA against their
   ground (5.04:1 on `#FFFFFF`, 6.05:1 on `#111315`);
@@ -97,83 +102,101 @@ via the Tailwind theme (`bg-surface`, `text-text-secondary`, `border-frame`, ...
 SDK colours (route line, markers) are read from the same custom properties at call time
 (`getCssColorVar`, §14).
 
-Token names from CR-063 are kept (ADR-021 changed values, not names —
-`.claude/rules/extensibility.md`); `surface`, `frame`, `primary-hover`, `primary-tint`,
-`route`, `route-casing`, `contour`, `warning-fill`, `on-warning-fill` and `info-tint` are
-additive. Contrast ratios below were computed (WCAG 2.1 relative luminance) against the
-theme's `bg`, with the value against `surface` in brackets where it matters; they meet AA
-(4.5:1 for text, 3:1 for UI component boundaries and graphics).
+Token names from CR-063 are kept where ADR-024 didn't call for a new role
+(`.claude/rules/extensibility.md`); `brand`, `primary-fill`, `primary-fill-hover` and
+`on-primary-fill` are new (ADR-024 §1 — a single overprint ink stopped clearing AA text
+contrast at the new hue); `contour` is renamed `elevation` (name only, same role). Every
+other additive CR-063/ADR-021 token (`surface`, `frame`, `primary-hover`, `primary-tint`,
+`route`, `route-casing`, `warning-fill`, `on-warning-fill`, `info-tint`) keeps its name.
+Contrast ratios below were computed (WCAG 2.1 relative luminance) against the theme's
+`bg`, with the value against `surface` in brackets where it matters; they meet AA (4.5:1
+for text, 3:1 for UI component boundaries and graphics).
 
-**Page vs card.** `bg` is the paper. `bg-raised` is deliberately the _same_ paper, not a
-tint: cards and form controls have no fill of their own and are separated by hairlines.
-`surface` (the sheet margin) is the one raised plane — dialogs, the sticky mobile bar,
-hover and selected rows, segmented-control tracks.
+**Page vs panel.** `bg` is the page. `bg-raised` (panels, header, tab bar) and `surface`
+(metric cells, the selected nav item) are genuinely different, deeper tones — unlike
+ADR-021's "no card fill" rule, where `bg-raised` equalled `bg`.
 
 ### Light theme
 
-| Token             | Hex       | Contrast                  | Use                                                            |
-| ----------------- | --------- | ------------------------- | -------------------------------------------------------------- |
-| `bg`              | `#FFFFFF` | —                         | Page background — the paper                                    |
-| `bg-raised`       | `#FFFFFF` | —                         | Cards, inputs, menus — same paper, no fill of their own        |
-| `surface`         | `#F3F4F1` | —                         | Sheet margin: dialogs, sticky bar, hover/selected rows         |
-| `text`            | `#15171A` | 17.96:1 (16.27)           | Primary text — the ink                                         |
-| `text-secondary`  | `#4B5157` | 8.03:1 (7.28)             | Labels, captions, metric labels                                |
-| `text-muted`      | `#676D74` | 5.23:1 (4.74)             | Least-important text; still AA                                 |
-| `frame`           | `#15171A` | 17.96:1                   | Ink rule: map frame, secondary-button outline, strong dividers |
-| `border`          | `#D3D6D9` | decorative                | Hairlines between rows, card outlines                          |
-| `border-input`    | `#858B92` | 3.44:1 (3.12)             | Form control boundaries (AA for UI components)                 |
-| `primary`         | `#9033A1` | 6.62:1 (5.99)             | Overprint: primary button, links, focus ring, wordmark marks   |
-| `primary-hover`   | `#772A85` | 8.55:1                    | Primary button hover                                           |
-| `on-primary`      | `#FFFFFF` | 6.62:1 on `primary`       | Text on primary fill                                           |
-| `primary-tint`    | `#F6EEF7` | `primary` on it 5.83:1    | Selected state behind overprint content (sparingly)            |
-| `route`           | `#9033A1` | 6.62:1                    | The ride's route line on a map (6px) — same value as `primary` |
-| `route-casing`    | `#FFFFFF` | route on it 6.62:1        | Casing under the route line                                    |
-| `contour`         | `#8C5419` | 6.18:1 (5.60)             | Elevation: profile chart, gain                                 |
-| `success`         | `#1D6F38` | 6.21:1 (5.62)             | Registration confirmed, published                              |
-| `warning`         | `#7A5300` | 6.85:1 (6.21)             | Warning **text**: waitlist, closing registration, degraded     |
-| `warning-fill`    | `#FFC94D` | —                         | Warning fill (badge/notice background)                         |
-| `on-warning-fill` | `#15171A` | 11.73:1 on `warning-fill` | Ink text on the warning fill                                   |
-| `info`            | `#0B65A6` | 6.13:1 (5.55)             | Neutral informational notes, ride updates                      |
-| `info-tint`       | `#E3F0FA` | `info` on it 5.29:1       | Info notice background                                         |
-| `danger`          | `#D42B20` | 5.04:1 (4.57)             | Cancellation, destructive action, validation error (unchanged) |
-| `on-danger`       | `#FFFFFF` | 5.04:1 on `danger`        | Text on a filled danger badge/button                           |
+| Token                | Hex       | Contrast              | Use                                                            |
+| -------------------- | --------- | --------------------- | -------------------------------------------------------------- |
+| `bg`                 | `#F3F1F5` | —                     | Page background                                                |
+| `bg-raised`          | `#FFFFFF` | —                     | Panels, header, tab bar                                        |
+| `surface`            | `#F8F6F9` | —                     | Metric cells, selected nav item                                |
+| `text`               | `#17141A` | 17.4:1                | Primary text — the ink                                         |
+| `text-secondary`     | `#413C47` | ~11:1                 | Labels, captions, metric labels                                |
+| `text-muted`         | `#5A5460` | ~7:1                  | Least-important text; still AA                                 |
+| `frame`              | `#17141A` | 17.4:1                | Ink rule: map frame, secondary-button outline, strong dividers |
+| `border`             | `#DDD7E1` | decorative            | Hairlines between rows, card outlines                          |
+| `border-input`       | `#A89CB0` | ~3.3:1                | Form control boundaries (AA for UI components)                 |
+| `primary`            | `#74597E` | 6.1:1                 | AA text role: links, focus ring, active tab                    |
+| `primary-hover`      | `#5F4869` | higher                | Primary text/link hover                                        |
+| `on-primary`         | `#FFFFFF` | on `primary`          | Text on a small `primary`-filled chip                          |
+| `primary-tint`       | `#EDE6F0` | `primary` on it, AA   | Selected state behind primary-role content (sparingly)         |
+| `brand`              | `#82668C` | ≥3:1 (graphics)       | Logo, route track, graphic elements only — not AA text         |
+| `primary-fill`       | `#82668C` | white on it ~5:1      | Primary button fill                                            |
+| `primary-fill-hover` | `#6C5376` | higher                | Primary button fill hover                                      |
+| `on-primary-fill`    | `#FFFFFF` | 5:1 on `primary-fill` | Text on the primary button fill                                |
+| `route`              | `#82668C` | graphics              | The ride's route line on a map (6px) — same value as `brand`   |
+| `route-casing`       | `#FFFFFF` | —                     | Casing under the route line                                    |
+| `elevation`          | `#94650F` | ~5.5:1                | Elevation: profile chart, gain (renamed from `contour`)        |
+| `success`            | `#1D6F38` | ~6:1                  | Registration confirmed, published                              |
+| `warning`            | `#7A5300` | ~6.5:1                | Warning **text**: waitlist, closing registration, degraded     |
+| `warning-fill`       | `#FFC94D` | —                     | Warning fill (badge/notice background)                         |
+| `on-warning-fill`    | `#17141A` | on `warning-fill`     | Ink text on the warning fill                                   |
+| `info`               | `#0B65A6` | ~6:1                  | Neutral informational notes, ride updates                      |
+| `info-tint`          | `#E3F0FA` | `info` on it          | Info notice background                                         |
+| `danger`             | `#D42B20` | 5.04:1                | Cancellation, destructive action, validation error (unchanged) |
+| `on-danger`          | `#FFFFFF` | on `danger`           | Text on a filled danger badge/button                           |
 
-### Dark theme — «sheet under a head torch»
+### Dark theme (the default — §1)
 
-| Token             | Hex       | Contrast                  | Use                                    |
-| ----------------- | --------- | ------------------------- | -------------------------------------- |
-| `bg`              | `#111315` | —                         | Page background — graphite, not violet |
-| `bg-raised`       | `#111315` | —                         | Same as `bg` (no card fill)            |
-| `surface`         | `#1A1D20` | —                         | Sheet margin                           |
-| `text`            | `#ECEDEA` | 15.84:1 (14.40)           | Primary text                           |
-| `text-secondary`  | `#B4B9BE` | 9.42:1 (8.56)             | Labels, captions                       |
-| `text-muted`      | `#8E959C` | 6.14:1 (5.59)             | Least-important text                   |
-| `frame`           | `#ECEDEA` | 15.84:1                   | Ink rule                               |
-| `border`          | `#343A40` | decorative                | Hairlines                              |
-| `border-input`    | `#6E767E` | 4.04:1 (3.67)             | Form control boundaries                |
-| `primary`         | `#D79BE0` | 8.56:1 (7.78)             | Overprint                              |
-| `primary-hover`   | `#E4B6EB` | 10.81:1                   | Primary button hover                   |
-| `on-primary`      | `#1C0F1E` | 8.50:1 on `primary`       | Text on primary fill                   |
-| `primary-tint`    | `#2C1F2F` | `primary` on it 7.18:1    | Selected state (sparingly)             |
-| `route`           | `#D79BE0` | 8.56:1                    | Route line — same value as `primary`   |
-| `route-casing`    | `#111315` | route on it 8.56:1        | Casing under the route line            |
-| `contour`         | `#D39B5F` | 7.65:1 (6.95)             | Elevation                              |
-| `success`         | `#62C483` | 8.64:1 (7.85)             | —                                      |
-| `warning`         | `#F0C04E` | 10.95:1 (9.96)            | Warning text                           |
-| `warning-fill`    | `#F0C04E` | —                         | Warning fill                           |
-| `on-warning-fill` | `#111315` | 10.95:1 on `warning-fill` | Text on the warning fill               |
-| `info`            | `#6DB4EE` | 8.35:1 (7.59)             | —                                      |
-| `info-tint`       | `#15293A` | `info` on it 6.68:1       | Info notice background                 |
-| `danger`          | `#FF5A4F` | 6.05:1 (5.50)             | Unchanged                              |
-| `on-danger`       | `#171614` | 5.88:1 on `danger`        | Text on a filled danger badge          |
+| Token                | Hex       | Contrast            | Use                                         |
+| -------------------- | --------- | ------------------- | ------------------------------------------- |
+| `bg`                 | `#121015` | —                   | Page background                             |
+| `bg-raised`          | `#1C1920` | —                   | Panels, header, tab bar                     |
+| `surface`            | `#25212A` | —                   | Metric cells, selected nav item             |
+| `text`               | `#F3F0F5` | ~15:1               | Primary text                                |
+| `text-secondary`     | `#C7C0CC` | ~10:1               | Labels, captions                            |
+| `text-muted`         | `#A39CA9` | ~6.5:1              | Least-important text                        |
+| `frame`              | `#F3F0F5` | ~15:1               | Ink rule                                    |
+| `border`             | `#2E2934` | decorative          | Hairlines                                   |
+| `border-input`       | `#4A4450` | ~3.3:1              | Form control boundaries                     |
+| `primary`            | `#B8A0C1` | ~7:1                | AA text role: links, focus ring, active tab |
+| `primary-hover`      | `#C7B3CF` | higher              | Primary text/link hover                     |
+| `on-primary`         | `#1C0F1E` | on `primary`        | Text on a small `primary`-filled chip       |
+| `primary-tint`       | `#2E2535` | `primary` on it, AA | Selected state (sparingly)                  |
+| `brand`              | `#B8A0C1` | ≥3:1 (graphics)     | Logo, route track, graphic elements         |
+| `primary-fill`       | `#82668C` | white on it ~5:1    | Primary button fill (same hex both themes)  |
+| `primary-fill-hover` | `#93779D` | higher              | Primary button fill hover                   |
+| `on-primary-fill`    | `#FFFFFF` | on `primary-fill`   | Text on the primary button fill             |
+| `route`              | `#B8A0C1` | graphics            | Route line — same value as `brand`          |
+| `route-casing`       | `#121015` | —                   | Casing under the route line                 |
+| `elevation`          | `#D9A441` | ~7:1                | Elevation (renamed from `contour`)          |
+| `success`            | `#62C483` | ~8:1                | —                                           |
+| `warning`            | `#F0C04E` | ~10:1               | Warning text                                |
+| `warning-fill`       | `#F0C04E` | —                   | Warning fill                                |
+| `on-warning-fill`    | `#121015` | on `warning-fill`   | Text on the warning fill                    |
+| `info`               | `#6DB4EE` | ~8:1                | —                                           |
+| `info-tint`          | `#15293A` | `info` on it        | Info notice background                      |
+| `danger`             | `#FF5A4F` | 6.05:1              | Unchanged                                   |
+| `on-danger`          | `#171614` | on `danger`         | Text on a filled danger badge               |
 
-Dark theme is not optional or "later": it is part of CR-063. An app used before dawn and
-after dusk needs it.
+`RouteCover`'s window (§1, new — `cover-bg` `#16131A`, `cover-line` `#2C2732`,
+`cover-ink` `#FFFFFF`, `cover-route` `#B8A0C1`, `cover-elevation` `#82668C`) is
+deliberately the same in both themes, like a photo — it has no `.dark` override, same
+pattern as the `map-*` tokens (§14).
+
+Dark theme is now the **default** (ADR-024 §4), not just present: an empty
+`localStorage` resolves to dark. It is part of CR-063/ADR-021's original "not optional or
+later" commitment, taken one step further.
 
 Since CR-110 the viewer can also choose explicitly — системная / светлая / тёмная, from
 the global header. Three states, not a two-way switch, so picking one does not
-permanently discard the "follow the OS" default. The choice is stored per browser
-(`localStorage`, key `coffee-ride-theme`) and applied by a pre-hydration script in
+permanently discard the "follow the OS" option. The choice is stored per browser
+(`localStorage`, key `coffee-ride-theme` — ADR-024: `'system'` is now stored as a literal
+value rather than clearing the key, so an explicit "Система" choice stays distinguishable
+from never having chosen at all) and applied by a pre-hydration script in
 `app/layout.tsx`, so there is no flash of the wrong theme on first paint; every storage
 access is guarded, since it throws outright in a private window with site data blocked.
 
@@ -186,17 +209,17 @@ Deleted by CR-119, together with both flags that gated their consumers
 and ride-detail rebuilds dropped the last call sites. The sticky mobile registration bar
 on `/rides/[id]` stays — it is the default now, a `surface` sheet with an ink rule.
 
-`scrim` (`rgb(21 23 26 / 55%)`, ink at 55%, same in both themes) stays: it is a wash
+`scrim` (`rgb(23 20 26 / 55%)`, ink at 55%, same in both themes) stays: it is a wash
 under text placed on a user-uploaded photo, needed for contrast whatever the photo is —
 a legibility device, not glass.
 
 ### Data visualization colors
 
 Charts use the map's own inks, never a categorical rainbow. The **elevation profile is
-`contour` brown** (40%→12% gradient fill + 2px stroke, CR-128), the colour elevation has on every
-topographic map. `chart-secondary` survives as a name (also the `food` route-point
-marker) and aliases `contour`. Difficulty and status are encoded by **label + position
-on a scale**, not by hue. The route line itself is `route` over `route-casing`, 6px.
+`elevation` ink** (40%→12% gradient fill + 2px stroke, CR-128; renamed from `contour`,
+ADR-024). `chart-secondary` survives as a name (also the `food` route-point marker) and
+aliases `elevation`. Difficulty and status are encoded by **label + position on a
+scale**, not by hue. The route line itself is `route` over `route-casing`, 6px.
 
 ---
 
@@ -205,18 +228,27 @@ on a scale**, not by hue. The route line itself is `route` over `route-casing`, 
 - **Body/UI: Golos Text** (Paratype) — a grotesque drawn for Russian text, with Cyrillic
   as a first-class script — over the system stack (`-apple-system, "Segoe UI", Roboto,
 sans-serif`). Utility class `font-sans` (the default).
-- **Display/labels/numerals: Sofia Sans Condensed** — headings (`h1`–`h3` by default,
-  `globals.css`), small uppercase labels, metric values and the wordmark. Utility class
-  `font-display`, token `--font-display`; fallback `"Arial Narrow"` then the body stack.
-  Loaded as a variable font via `next/font/google` with `subsets: ['cyrillic', 'latin']`.
+- **Labels/eyebrows: Sofia Sans Condensed** — small uppercase labels (`MetricTile`'s
+  `<dt>`, section eyebrows). Utility class `font-display`, token `--font-display`;
+  fallback `"Arial Narrow"` then the body stack. Loaded as a variable font via
+  `next/font/google` with `subsets: ['cyrillic', 'latin']`. Since ADR-024 it no longer
+  sets headings or metric numerals — see the two new faces below.
+- **Titles/headings: Unbounded** (ADR-024, new) — ride titles and screen headings
+  (`h1`–`h3` by default, `globals.css`). Utility class `font-title`, token `--font-title`.
+  Weights 500/600/700.
+- **Metric numerals: Sofia Sans Extra Condensed** (ADR-024, new) — the large tabular
+  numerals in `MetricTile` and the route cover. Utility class `font-num`, token
+  `--font-num`. Weights 700/800.
 - **Russian letterforms depend on `lang="ru"`.** Sofia Sans' default Cyrillic is drawn in
   the Bulgarian style (в/д/и/т look like b/g/u/m); the Russian forms come from its
   `locl` OpenType feature, which browsers apply only when the text's language is Russian.
   `<html lang="ru">` in `app/layout.tsx` guarantees that — never remove it and never set
-  another `lang` on an element rendered in `font-display` (verified in the browser for
-  CR-115: the same string renders Russian forms under `ru`, Bulgarian under `bg`).
-- **IBM Plex Mono** stays the utility face for hex values, IDs and other data scanned in
-  columns (`font-mono`).
+  another `lang` on an element rendered in `font-display`/`font-num` (verified in the
+  browser for CR-115: the same string renders Russian forms under `ru`, Bulgarian under
+  `bg`; Sofia Sans Extra Condensed shares the same family's `locl` dependency).
+- **IBM Plex Mono** stays the utility face for hex values, IDs, units and other data
+  scanned in columns (`font-mono`) — including a `MetricTile`'s unit suffix (ADR-024;
+  it previously inherited the numeral face).
 - Cyrillic coverage is a hard requirement: verify any added face renders Russian text
   (including `locl`-dependent forms) before adopting it.
 - **Numerals: `font-variant-numeric: tabular-nums` on every metric**, in `font-display`
@@ -227,30 +259,37 @@ sans-serif`). Utility class `font-sans` (the default).
   smaller than Golos at the same size; prefer the next step up for headings rather than a
   heavier weight.
 - **Weights:** Golos 400 body, 500 labels/UI, 600 emphasis. Golos 800 only for the wordmark.
-  Sofia Sans Condensed 600 for headings and metric values. All-caps only for small labels
-  (12px, letter-spacing ≈0.06em) in `font-display`.
-- **Line height:** 1.5 body, 1.2 headings and metric values.
-- **Wordmark (CR-121, supersedes ADR-021's «coffee◦ride»):** `packages/ui`'s `Wordmark` —
-  an elevation-profile mark (2:1, 0.8em tall, bottom on the baseline) in `primary`, then
-  lowercase «кофе•райд» in Golos 800 in ink (`text`), the dot a filled `primary` disc
-  (0.24em, centred on the x-height). Default size 1.8rem. Accessible name «Кофе Райд»
-  (`WORDMARK_TERMS`; the stylised glyphs are `aria-hidden`). The favicon
-  (`app/icon.svg`) is the profile alone, plum, with a dark-scheme variant.
+  Unbounded 500/600/700 for headings; Sofia Sans Extra Condensed 700/800 for metric
+  numerals. All-caps only for small labels (12px, letter-spacing ≈0.06em) in
+  `font-display`.
+- **Line height:** 1.5 body, ~1.15 headings/titles, 0.9–1 metric numerals.
+- **Wordmark (CR-121, updated by ADR-024):** `packages/ui`'s `Wordmark` — an
+  elevation-profile mark (2:1, 0.8em tall, bottom on the baseline) in `brand` (the
+  logo/graphics role, not the AA-text `primary`), then lowercase «кофе•райд» in Golos
+  800 in ink (`text`), the dot a filled `brand` disc (0.24em, centred on the x-height).
+  Default size 1.8rem. Accessible name «Кофе Райд» (`WORDMARK_TERMS`; the stylised
+  glyphs are `aria-hidden`). The favicon (`app/icon.svg`) is the profile alone, in
+  `brand`, with a dark-scheme variant.
 
 ---
 
 ## 5. Spacing, radius, elevation
 
 - **Spacing scale:** 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 px. Nothing off-scale.
-- **Radius — a printed stamp, not a pill:** 4px on buttons, inputs, chips/badges and menu
-  items (`rounded-md`/`rounded-lg` both resolve to 4px); 6px (`rounded-xl`) for cards,
-  dialogs and sheets; 2px (`rounded-sm`) for small inset marks. `rounded-full` only for
-  avatars and circular map marks.
-- **Rules instead of fills:** resting content is separated by `border` hairlines; a
-  1.5px `frame` (ink) rule is the strong line — map frame, secondary-button outline.
-- **Elevation:** no shadow on cards, ever. Overlays (menu popover, dialog, toast, sticky
-  bar) get the one small, tight `shadow-overlay`; nothing layered, nothing glowing.
-- **Buttons:** primary = filled `primary`/`on-primary` (hover `primary-hover`);
+- **Radius — pills and large radii, not a stamp (ADR-024):** buttons/chips/badges are
+  fully rounded (`rounded-full`); panels/cards/the route cover use large radii
+  (`rounded-2xl`/`rounded-3xl`); metric cells and inputs use a medium radius
+  (`rounded-xl`). Set directly per component rather than through one global `--radius`
+  scale, since the mockup intentionally varies radius by element type.
+- **Rules instead of fills where there's no panel:** resting content not inside a panel
+  is separated by `border` hairlines; a 1.5px `frame` (ink) rule is the strong line —
+  map frame, secondary-button outline. Panels themselves (§3's `bg-raised`/`surface`)
+  now carry a real background, unlike ADR-021.
+- **Elevation:** no shadow on resting cards. Overlays (menu popover, dialog, toast,
+  sticky bar) get the one small, tight `shadow-overlay`; nothing layered, nothing
+  glowing.
+- **Buttons:** primary = filled `primary-fill`/`on-primary-fill` (hover
+  `primary-fill-hover`), full pill radius, with a visible spinner while `isLoading`;
   secondary = 1.5px `frame` outline, no fill (hover `surface`); `danger` = danger
   outline + danger text; `danger-filled` = solid red, used by `ConfirmDialog`'s confirm
   button only.
@@ -272,18 +311,22 @@ in the product.
 The atom. Three parts, always in this order:
 
 ```
-ДИСТАНЦИЯ          ← label:  12px, 500, text-secondary, uppercase, 0.04em
-42,3 км            ← value:  24–30px, 600, text, tabular-nums
-                      unit:   inline, 0.6em of value size, 400, text-secondary
+ДИСТАНЦИЯ          ← label:  12px, font-display, text-secondary, uppercase, 0.06em
+42,3 км            ← value:  30–36px, font-num 800, text, tabular-nums
+                      unit:   inline, ~0.45em of value size, font-mono, text-secondary
 ```
 
 Rules:
 
-- unit is **never** bold and never the same size as the number;
+- unit is **never** bold, never the same size as the number, and set in `font-mono`
+  (ADR-024 — it no longer inherits the numeral face);
 - the value is the only element allowed to be visually loud in a tile;
 - a missing value renders as `—` (em dash), never `0` and never an empty box —
   "no elevation data" and "flat route" are different facts;
-- tiles never carry their own background color; separation comes from spacing.
+- the default tile carries no background of its own — separation comes from spacing;
+  `MetricTile`'s `variant="cell"` (ADR-024, additive) opts into a `surface`-filled,
+  `rounded-xl` cell for the route cover and the ride-detail headline grid, without
+  changing any existing call site's default.
 
 ### MetricRow
 
@@ -393,8 +436,9 @@ URL with no history behind it.
 **`packages/ui` (shared, both cabinets — must stay generic):**
 `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`,
 `FormField`, `Card`, `Badge`, `Tabs`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toast`,
-`Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `Pagination`, `MetricTile`,
-`MetricRow`, `StatusBadge`, `DifficultyScale`, `Wordmark`, `NavMenu`.
+`Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `AvatarStack` (ADR-024, new — overlapping
+avatars + `+N` overflow), `Pagination`, `MetricTile`, `MetricRow`, `StatusBadge`,
+`DifficultyScale`, `Wordmark`, `NavMenu`.
 
 `NavMenu` (CR-108) is the accessible dropdown the global header's sections, theme
 control and account menu are all built from — `aria-haspopup="menu"`/`aria-expanded`,
@@ -406,9 +450,11 @@ Per `.claude/rules/extensibility.md`: new props on these are **optional with def
 removing or repurposing a prop requires checking both cabinets first.
 
 **Feature-local (inside the feature module, not shared):**
-`RideCard`, `RideFilters`, `RideMap`, `ElevationProfile`, `StopList`, `ServiceList`,
-`RequirementList`, `RegistrationButton`, `ParticipantTable`, `WaitlistTable`,
-`UpdateComposer`, `ReviewForm`, `ReviewList`.
+`RideCard`, `RideFilters`, `RideMap`, `RouteCover` (ADR-024, new — a route-drawn cover
+built from `route-preview.ts`'s projection geometry, lives in
+`features/participant/discovery/components` and is reused from ride-detail),
+`ElevationProfile`, `StopList`, `ServiceList`, `RequirementList`, `RegistrationButton`,
+`ParticipantTable`, `WaitlistTable`, `UpdateComposer`, `ReviewForm`, `ReviewList`.
 
 `RideMap` and `ElevationProfile` consume `packages/maps-core` types only — never the 2GIS
 SDK (ADR-010).

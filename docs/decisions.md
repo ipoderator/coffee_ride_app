@@ -1072,3 +1072,117 @@ narrow inputs (this ride, this rider, this viewer) rather than "any user, any us
 If a real product need appears for viewing a profile independent of any shared ride
 (e.g. organizer-to-past-participant outreach), that is a new, separately-considered
 decision — not a quiet loosening of `resolveRiderAccess`.
+
+## ADR-024 — Visual direction: «Ночной старт» replaces «Топокарта»
+
+Status: Accepted (2026-09-24).
+
+### Context
+
+The product owner commissioned a second-round visual exploration ("Ночной старт" /
+"Night Start" — v2, the mockup is a real system: four key screens, components, states,
+night/day tokens, a rollout plan). It targets people who ride before dawn: dark by
+default, a route-drawn cover on every ride instead of a flat placeholder, larger
+tabular numerals. Approving it means superseding ADR-021 wholesale, not just its
+colour: «Топокарта»'s "printed stamp" 4px shape, map-first discovery and the
+CR-108 header-only organizer nav all changed too, each confirmed explicitly with the
+product owner rather than assumed from the mockup alone:
+
+- The mockup's colour (`#82668C`/`#B8A0C1`) replaces CR-124's locked
+  `#9033A1`/`#D79BE0` — a deliberate supersession of a same-day lock, not a drift.
+- Discovery returns to a card grid (the mockup's `RouteCover` grid); the map-first
+  view from ADR-021/CR-118 becomes a second tab rather than being deleted.
+- The organizer cabinet regains a sidebar; CR-108's header-registry navigation
+  (ADR-009) stays as the _data source_ (`ORGANIZER_NAV`), only its renderer changes.
+
+### Decision
+
+1. **Three colour roles instead of one overprint ink.** ADR-021 used a single
+   `primary`/`route` hex for text, focus, the primary button fill and the map route.
+   That collapses under the new hue: `#82668C` alone is only 4.4:1 on the light page
+   background — insufficient for AA body text. `primary` (links, focus ring, active
+   tab — AA text contrast, `#74597E` light / `#B8A0C1` dark) splits from the new
+   `brand` (logo, route track, graphic elements only — ≥3:1, `#82668C` light /
+   `#B8A0C1` dark) and the new `primary-fill`/`primary-fill-hover`/`on-primary-fill`
+   (button fill, `#82668C` in both themes, white text). `route`/`map-route`/
+   `map-marker-selected`/`map-route-casing` move to `brand`; the `.dark`-override gap
+   on the `map-*` tokens is unchanged (2GIS tiles still stay light in both UI themes,
+   KI-057 — this ADR does not revisit that).
+2. **`contour` is renamed `elevation`** (name and role unchanged: the elevation
+   profile's ink, `chart-secondary`'s alias) — purely a naming clarification, no new
+   meaning.
+3. **Shape changes from a 4px stamp to pills and large radii**: buttons and filter
+   chips are fully rounded (`rounded-full`); cards, panels and the route cover use
+   large radii (`rounded-2xl`/`rounded-3xl`); metric cells and inputs use
+   `rounded-xl`. `danger`/`danger-filled` semantics from ADR-021 are unchanged.
+4. **Dark is the default theme** when nothing is stored (`apps/web/src/lib/theme/
+theme.ts`'s empty-`localStorage` fallback becomes `dark` instead of `system`); the
+   three-state toggle (Система/Светлая/Тёмная) is unchanged — "Система" still tracks
+   `prefers-color-scheme` once chosen explicitly.
+5. **Two additive webfonts**: Unbounded (ride titles, screen headings — replaces
+   Sofia Sans Condensed in that role only) and Sofia Sans Extra Condensed (the large
+   tabular metric numerals in `MetricTile`/the route cover). Golos Text (body), Sofia
+   Sans Condensed (labels/eyebrows) and IBM Plex Mono (data/units/timestamps) are
+   unchanged.
+6. **Route cover replaces the flat placeholder.** A new `RouteCover` component draws
+   a dark "window" (unaffected by the UI theme, like a photo) from the ride's own
+   route/elevation data: a decorative isoline background, the actual track projected
+   with the existing `route-preview.ts` geometry, and an elevation silhouette footer
+   from the existing `elevation-profile.ts` pipeline — reusing, not duplicating, the
+   two SVG-generation utilities ADR-021's discovery/ride-detail work already built.
+7. **Discovery is a card grid again, map moves to its own tab.** A segmented
+   "Заезды/Карта" control replaces the map-first single view; "Заезды" is a
+   `RouteCover`-card grid, "Карта" is the existing map-first `DiscoveryList` view,
+   unchanged, just relocated behind the tab.
+8. **The organizer cabinet regains a desktop sidebar.** `ORGANIZER_NAV` (ADR-009's
+   registry) is still the only source of nav items — a new feature still registers
+   once and appears automatically — but `CabinetShell` renders it as a sidebar for
+   `/organizer/*` instead of only a header dropdown. The header dropdown pattern
+   stays for `/me/*` and for mobile (bottom tab bar replaces it there).
+9. **Token names for everything not called out above are kept** (`.claude/rules/
+extensibility.md`: contracts change additively) — `bg`, `bg-raised`, `surface`,
+   `text`, `text-secondary`, `text-muted`, `success`, `warning`, `danger`, `info`,
+   `border`, `border-input` keep their names, only their hex values move to the new
+   palette.
+
+### Rationale
+
+- **Why not keep `primary` as both text and fill colour, as ADR-021 did**: ADR-021's
+  single hex worked because `#9033A1` cleared AA at 7.4:1 on white. `#82668C` does
+  not; inventing three roles was the only way to keep both AA text and the exact
+  locked brand hex the product owner chose off the rendered mockup.
+- **Why the map-first view stays instead of being deleted**: CR-118…CR-120 built a
+  real map-pin/legend-row sync interaction; the mockup's card grid does not replace
+  that need, it answers a different one (browse quickly vs. see where). A tab keeps
+  both rather than re-litigating which one is "right".
+- **Why the sidebar returns as a `CabinetShell` render change, not a registry
+  change**: CR-108 removed the sidebar as a _layout_ choice, not because ADR-009's
+  registry pattern was wrong — reverting the render while keeping the registry means
+  no feature-module code needs to change to get a sidebar item back.
+
+### What this does NOT mean
+
+- It does not relax "colour never carries meaning alone" (§12) or any AA requirement
+  — the new three-role split exists specifically to keep AA, not loosen it.
+- It is not a second supersession of ADR-022/ADR-023 (pace groups, rider profiles) —
+  those stay exactly as decided, only their on-screen presentation changes.
+- The 2GIS basemap itself is not redesigned or made to follow a dark map style —
+  KI-057's light-tile constraint on the `map-*` tokens is unchanged.
+
+### Rollback
+
+Purely presentational plus one navigation-render change, no data/API impact: revert
+`packages/ui/src/tokens.css`, `apps/web/src/app/layout.tsx` (fonts), `apps/web/src/
+lib/theme/theme.ts` (default), `app/icon.svg`, `packages/ui`'s `Button`/
+`StatusBadge`/`MetricTile`/`Wordmark`, the new `RouteCover`/`AvatarStack` components,
+the discovery tab split, and `CabinetShell`'s sidebar render to their pre-CR-130
+versions. Token names are unchanged except the `contour`→`elevation` rename, so most
+consumers need no changes on the way back; that rename would need a mechanical
+reverse pass across every `*-elevation` Tailwind utility.
+
+### When to revisit
+
+If a dark 2GIS basemap style becomes available (KI-057's blocker), reconsider
+`map-*` tokens gaining a real `.dark` override. If the discovery tab split turns out
+to fragment usage (most people staying on one tab and never finding the other), the
+two views may need to merge into one screen instead of two tabs.

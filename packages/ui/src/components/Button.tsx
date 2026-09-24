@@ -11,17 +11,20 @@ import { cn } from '../lib/cn';
 // beyond) passes one from a Client Component — same reasoning `ErrorState` documented
 // (CR-066) for the same shape of component.
 const VARIANT_STYLES = {
-  // ADR-021 («Топокарта»): the one filled plum action — the overprint colour.
+  // ADR-024 («Ночной старт»): the filled action uses `primary-fill` (button
+  // fill), not `primary` (AA text/link/focus role) — the two split apart
+  // when the brand hue stopped clearing AA text contrast on its own.
   primary:
-    'bg-primary text-on-primary hover:bg-primary-hover disabled:hover:bg-primary',
-  // A 1.5px ink rule, no fill of its own (the paper shows through).
+    'bg-primary-fill text-on-primary-fill hover:bg-primary-fill-hover disabled:hover:bg-primary-fill',
+  // A 1.5px ink rule, no fill of its own (the page shows through).
   secondary:
     'border-[1.5px] border-frame bg-transparent text-text hover:bg-surface disabled:hover:bg-transparent',
   // CR-021 ("Cancel ride"): `docs/design.md` §1's one exception — `danger`
-  // (`#D42B20`/`#FF5A4F`). Since ADR-021 an in-page destructive action is an
-  // outline in danger red (text + border), not a fill: the fill is reserved
-  // for the moment of confirmation (`danger-filled`, `ConfirmDialog`), so the
-  // page never carries a solid red block before the user has chosen to act.
+  // (`#D42B20`/`#FF5A4F`), unchanged by ADR-024. An in-page destructive
+  // action is an outline in danger red (text + border), not a fill: the
+  // fill is reserved for the moment of confirmation (`danger-filled`,
+  // `ConfirmDialog`), so the page never carries a solid red block before the
+  // user has chosen to act.
   danger:
     'border-[1.5px] border-danger bg-transparent text-danger hover:bg-danger/10 disabled:hover:bg-transparent',
   // ADR-021: additive — the filled red confirm button inside `ConfirmDialog`.
@@ -37,7 +40,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   /** Duplicate-submit protection (`.claude/rules/frontend.md`'s Forms section):
    * disables the button and swaps in a busy state without the caller having to
-   * remember to also pass `disabled`. */
+   * remember to also pass `disabled`. ADR-024: now also renders a visible
+   * spinner (the mockup's Button sheet shows one) instead of only disabling —
+   * a busy state with no visual indicator besides the cursor was easy to miss. */
   isLoading?: boolean;
 }
 
@@ -57,9 +62,9 @@ export function Button({
       aria-busy={isLoading || undefined}
       className={cn(
         // Touch target 48px on mobile, 44px from `md` (docs/design.md §5);
-        // 4px "printed stamp" radius (§5); visible 2px focus ring offset 2
-        // (§12).
-        'inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-4 text-base font-medium transition-colors md:min-h-11',
+        // full pill radius, not a stamp (ADR-024 §3); visible 2px focus ring
+        // offset 2 (§12).
+        'inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-base font-medium transition-colors md:min-h-11',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         'disabled:cursor-not-allowed disabled:opacity-60',
         VARIANT_STYLES[variant],
@@ -67,6 +72,12 @@ export function Button({
       )}
       {...props}
     >
+      {isLoading ? (
+        <span
+          aria-hidden="true"
+          className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current/35 border-t-current"
+        />
+      ) : null}
       {children}
     </button>
   );

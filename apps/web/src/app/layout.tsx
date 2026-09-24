@@ -3,6 +3,8 @@ import {
   Golos_Text,
   IBM_Plex_Mono,
   Sofia_Sans_Condensed,
+  Sofia_Sans_Extra_Condensed,
+  Unbounded,
 } from 'next/font/google';
 import Script from 'next/script';
 import { ToastProvider } from 'ui';
@@ -28,13 +30,15 @@ const golosText = Golos_Text({
   display: 'swap',
 });
 
-// ADR-021 («Топокарта»): the display face — headings, labels, metric
-// numerals (`font-display`). Variable font, so no `weight` list.
-// Sofia Sans' default Cyrillic is the Bulgarian form set (в/д/и/т drawn
-// like b/g/u/m); the Russian forms come from its `locl` OpenType feature,
-// which browsers apply only when the text's language is Russian. That is
-// what `<html lang="ru">` below guarantees — do not remove it, and do not set
-// a different `lang` on any element rendered in this face.
+// ADR-024 («Ночной старт»): the display face — labels/eyebrows only now
+// (`font-display`; ride titles/headings moved to `font-title`/Unbounded
+// below). Variable font, so no `weight` list. Sofia Sans' default Cyrillic
+// is the Bulgarian form set (в/д/и/т drawn like b/g/u/m); the Russian forms
+// come from its `locl` OpenType feature, which browsers apply only when the
+// text's language is Russian. That is what `<html lang="ru">` below
+// guarantees — do not remove it, and do not set a different `lang` on any
+// element rendered in this face (same caveat applies to Sofia Sans Extra
+// Condensed below).
 const sofiaSansCondensed = Sofia_Sans_Condensed({
   subsets: ['cyrillic', 'latin'],
   variable: '--font-sofia-condensed',
@@ -45,6 +49,25 @@ const ibmPlexMono = IBM_Plex_Mono({
   subsets: ['cyrillic', 'latin'],
   weight: ['400', '500'],
   variable: '--font-plex-mono',
+  display: 'swap',
+});
+
+// ADR-024: `font-title` — ride titles and screen headings (`h1`/`h2`/`h3`,
+// `globals.css`). Weights 500/600/700 cover the mockup's clamp(34-58px) hero
+// through 21px card titles.
+const unbounded = Unbounded({
+  subsets: ['cyrillic', 'latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-unbounded',
+  display: 'swap',
+});
+
+// ADR-024: `font-num` — large tabular metric numerals (route cover,
+// `MetricTile`). Weights 700/800 cover the mockup's 30-44px numerals.
+const sofiaSansExtraCondensed = Sofia_Sans_Extra_Condensed({
+  subsets: ['cyrillic', 'latin'],
+  weight: ['700', '800'],
+  variable: '--font-sofia-extra-condensed',
   display: 'swap',
 });
 
@@ -67,7 +90,7 @@ export default function RootLayout({
     <html
       lang="ru"
       suppressHydrationWarning
-      className={`${golosText.variable} ${sofiaSansCondensed.variable} ${ibmPlexMono.variable}`}
+      className={`${golosText.variable} ${sofiaSansCondensed.variable} ${ibmPlexMono.variable} ${unbounded.variable} ${sofiaSansExtraCondensed.variable}`}
     >
       <head>
         <Script

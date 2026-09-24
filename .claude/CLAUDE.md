@@ -47,15 +47,19 @@ Do not replace the stack without an explicit architectural decision.
 
 ## Brand color
 
-"Фирменный цвет" (the brand color) is `#9033A1` — locked in by the project owner
-2026-09-24 (CR-124), measured directly off the rendered UI. It is `packages/ui/src/
-tokens.css`'s light-theme `--primary` (also `--route`/`--map-route`/
-`--map-marker-selected`: one overprint ink, not several shades of purple — ADR-021).
-The dark theme keeps its own lifted variant (`#D79BE0`, documented in `docs/design.md`
-§3) for contrast on a near-black background — not the same hex, same role. Do not
-introduce a new purple hex anywhere without updating `packages/ui/src/tokens.css` and
-`docs/design.md` §3 together; never hard-code this (or any) color literal in
-`apps/web`/`apps/api` source (`.claude/rules/frontend.md`).
+"Фирменный цвет" (the brand color) is `#82668C` — locked in by the project owner
+2026-09-24 (ADR-024, «Ночной старт», superseding CR-124's `#9033A1`), matching the
+"Ночной старт" v2 mockup. Unlike CR-124's single-role lock, ADR-024 splits the color
+into three roles in `packages/ui/src/tokens.css`: light-theme `--primary` (AA text/
+links/focus/active-tab, `#74597E` — a shade darker than the brand hex so body text
+clears AA on white) is now distinct from `--brand` (logo, route track, graphic
+elements — the actual `#82668C`, also `--route`/`--map-route`/`--map-marker-selected`)
+and `--primary-fill` (button fill, `#82668C` in both themes). The dark theme's
+`--primary` is `#B8A0C1` (documented in `docs/design.md` §3) for contrast on a
+near-black background — not the same hex, same role. Do not introduce a new purple
+hex anywhere without updating `packages/ui/src/tokens.css` and `docs/design.md` §3
+together; never hard-code this (or any) color literal in `apps/web`/`apps/api` source
+(`.claude/rules/frontend.md`).
 
 ## Domain entities
 

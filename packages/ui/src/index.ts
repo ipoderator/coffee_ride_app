@@ -30,6 +30,7 @@ export * from './components/Textarea';
 export * from './components/FormField';
 export * from './components/Card';
 export * from './components/Avatar';
+export * from './components/AvatarStack';
 export * from './components/Dialog';
 export * from './components/ConfirmDialog';
 export * from './components/Toast';

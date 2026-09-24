@@ -1,10 +1,17 @@
-// CR-110. `packages/ui`'s `tokens.css` has carried a full `.dark` palette
-// since CR-063, and `app/layout.tsx` has applied it from
-// `prefers-color-scheme` since — but with no way for a viewer to override
-// that. `docs/design.md` §3 calls dark theme "not optional or later" for an
-// app used before dawn and after dusk; the same reasoning applies to a rider
-// who wants the dark palette on a bright phone screen regardless of what the
-// OS is set to.
+// CR-110, revised by ADR-024 («Ночной старт»). `packages/ui`'s `tokens.css`
+// has carried a full `.dark` palette since CR-063, and `app/layout.tsx` has
+// applied it from `prefers-color-scheme` since — but with no way for a
+// viewer to override that. `docs/design.md` §3 calls dark theme "not
+// optional or later" for an app used before dawn and after dusk; the same
+// reasoning applies to a rider who wants the dark palette on a bright phone
+// screen regardless of what the OS is set to.
+//
+// ADR-024 §4: dark is now the default when nothing has been chosen yet — not
+// a proxy for `prefers-color-scheme`. That default must not be confused with
+// an explicit "Система" choice (which should keep tracking the OS), so
+// `'system'` is stored as a literal value instead of clearing the key: an
+// absent key means "never chosen" (→ dark); a stored `'system'` means
+// "explicitly follow the OS".
 
 export const THEME_PREFERENCES = ['system', 'light', 'dark'] as const;
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
@@ -38,11 +45,10 @@ export function applyTheme(preference: ThemePreference): void {
   document.documentElement.classList.toggle('dark', prefersDark);
 
   try {
-    if (preference === 'system') {
-      window.localStorage.removeItem(THEME_STORAGE_KEY);
-    } else {
-      window.localStorage.setItem(THEME_STORAGE_KEY, preference);
-    }
+    // `'system'` is stored explicitly (not cleared) so a real choice of
+    // "Система" stays distinguishable from never having chosen at all — see
+    // the module comment above.
+    window.localStorage.setItem(THEME_STORAGE_KEY, preference);
   } catch {
     // Storage unavailable — the class above still applied, so the choice
     // holds for this page view and simply does not survive a reload.
@@ -52,9 +58,11 @@ export function applyTheme(preference: ThemePreference): void {
 export function readStoredTheme(): ThemePreference {
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemePreference(stored) ? stored : 'system';
+    // No key at all → never chosen → the default is dark, not "система"
+    // (ADR-024 §4); a literal stored value always wins over that default.
+    return isThemePreference(stored) ? stored : 'dark';
   } catch {
-    return 'system';
+    return 'dark';
   }
 }
 
@@ -67,9 +75,9 @@ export function readStoredTheme(): ThemePreference {
 export const THEME_INIT_SCRIPT = `
   try {
     var stored = window.localStorage.getItem('${THEME_STORAGE_KEY}');
-    var dark = stored === 'dark' ||
-      (stored !== 'light' &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var dark = stored === 'system'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : stored !== 'light';
     if (dark) document.documentElement.classList.add('dark');
   } catch (e) {}
 `;

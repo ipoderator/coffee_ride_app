@@ -13,8 +13,9 @@ const PADDING_Y = 12;
 
 /**
  * `/rides/[id]`'s elevation profile (CR-028, `docs/design.md` §6 "Elevation
- * profile"): area chart, x = distance, y = elevation, `contour` brown (ADR-021: the
- * map's own elevation ink). CR-128: the fill is a 40%→12% vertical gradient over a
+ * profile"): area chart, x = distance, y = elevation, `elevation` ink (ADR-024,
+ * renamed from `contour` — the map's own elevation ink). CR-128: the fill is a
+ * 40%→12% vertical gradient over a
  * `border-input` ground line, with a 2px non-scaling stroke — the flat 15% fill and
  * 1.5px line (thinned further by `preserveAspectRatio="none"`) nearly vanished on
  * white paper. The y axis floors at the data's own minimum (not
@@ -107,12 +108,12 @@ export function ElevationProfileChart({
           <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
             <stop
               offset="0"
-              className="[stop-color:var(--contour)]"
+              className="[stop-color:var(--elevation)]"
               stopOpacity={0.4}
             />
             <stop
               offset="1"
-              className="[stop-color:var(--contour)]"
+              className="[stop-color:var(--elevation)]"
               stopOpacity={0.12}
             />
           </linearGradient>
@@ -129,7 +130,7 @@ export function ElevationProfileChart({
         />
         <path
           d={linePath}
-          className="fill-none stroke-contour"
+          className="fill-none stroke-elevation"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"

@@ -7,16 +7,11 @@ import {
   RIDE_STATUS_TERMS,
   StatusBadge,
   cn,
-  formatDistanceParts,
-  formatElevationParts,
-  formatGroupPaceParts,
-  formatPaceRangeParts,
   formatPrice,
   formatRideStartLine,
-  formatSpeedParts,
   formatStartPlace,
-  type MetricParts,
 } from 'ui';
+import { buildRideRowMetrics, ridesSeatsLabel } from '../lib/ride-metrics';
 import { RoutePreviewGlyph } from './RoutePreviewGlyph';
 
 // Value and unit never wrap apart (`docs/design.md` §7).
@@ -24,60 +19,6 @@ const NBSP = '\u00a0';
 
 const CHIP_CLASSNAME =
   'inline-flex items-center rounded-md border border-border px-2 py-0.5 text-xs leading-5 font-medium text-text-secondary';
-
-interface Metric {
-  key: string;
-  parts: MetricParts;
-  suffix?: string;
-  className?: string;
-}
-
-/**
- * `docs/design.md` §6's "first three" (distance → elevation → pace) as one
- * compact line. Pace comes from the pace groups when there are any (CR-117):
- * two or more → the range plus the group count, one → that group's pace;
- * otherwise the ride's own `paceKmh`. A missing value is left out, never `0`.
- */
-function rowMetrics(ride: PublicRideListItem): Metric[] {
-  const metrics: Metric[] = [];
-  if (ride.distanceKm !== null) {
-    metrics.push({
-      key: 'distance',
-      parts: formatDistanceParts(ride.distanceKm),
-    });
-  }
-  if (ride.elevationGainMeters !== null) {
-    metrics.push({
-      key: 'elevation',
-      parts: formatElevationParts(ride.elevationGainMeters),
-      // Elevation is the contour ink on every topographic map (§1).
-      className: 'text-contour',
-    });
-  }
-  if (ride.groups.length >= 2) {
-    metrics.push({
-      key: 'pace',
-      parts: formatPaceRangeParts(ride.groups.map((group) => group.paceKmh)),
-      suffix: RIDE_DISCOVERY_ROW_TERMS.groupsCount(ride.groups.length),
-    });
-  } else if (ride.groups.length === 1) {
-    metrics.push({
-      key: 'pace',
-      parts: formatGroupPaceParts(ride.groups[0]?.paceKmh),
-    });
-  } else if (ride.paceKmh !== null) {
-    metrics.push({ key: 'pace', parts: formatSpeedParts(ride.paceKmh) });
-  }
-  return metrics;
-}
-
-function seatsChip(ride: PublicRideListItem): string | null {
-  if (ride.participantLimit === null) return null;
-  const left = Math.max(0, ride.participantLimit - ride.registrationsCount);
-  return left === 0
-    ? RIDE_DISCOVERY_ROW_TERMS.noSeats
-    : RIDE_DISCOVERY_ROW_TERMS.seatsLeft(left);
-}
 
 /**
  * `/`'s ride row (CR-118, ADR-021 «Топокарта»): a map-legend entry, not a card —
@@ -113,8 +54,8 @@ export function RideLegendRow({
   const startLine = formatRideStartLine(new Date(ride.startsAt), {
     timeZone: ride.startTimezone,
   });
-  const metrics = rowMetrics(ride);
-  const seats = seatsChip(ride);
+  const metrics = buildRideRowMetrics(ride);
+  const seats = ridesSeatsLabel(ride);
   const startPlace = formatStartPlace(ride.startLabel);
   const startText = [
     startPlace

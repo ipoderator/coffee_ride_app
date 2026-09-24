@@ -81,28 +81,35 @@ export function RideSummaryWidget() {
   const { summary } = state;
 
   return (
-    <Card className="flex flex-col gap-4">
-      <h2 className="text-lg font-medium text-text">
+    <div className="col-span-full flex flex-col gap-3">
+      <h2 className="font-title text-lg font-medium text-text">
         {RIDE_SUMMARY_WIDGET_TERMS.title}
       </h2>
-      <MetricRow>
+      {/* ADR-024: each KPI is its own raised cell (mockup's `.kpis .panel`)
+          instead of one shared `Card` wrapping a plain `MetricRow` — the same
+          real summary data, a per-panel presentation. */}
+      <MetricRow className="grid-cols-2 md:grid-cols-4">
         <MetricTile
+          variant="cell"
           label={RIDE_SUMMARY_WIDGET_TERMS.totalRidesLabel}
           value={String(summary.totalRides)}
         />
         <MetricTile
+          variant="cell"
           label={RIDE_SUMMARY_WIDGET_TERMS.openRegistrationLabel}
           value={String(summary.openRegistrationRides)}
         />
         <MetricTile
+          variant="cell"
           label={RIDE_SUMMARY_WIDGET_TERMS.activeRegistrationsLabel}
           value={String(summary.activeRegistrations)}
         />
         <MetricTile
+          variant="cell"
           label={RIDE_SUMMARY_WIDGET_TERMS.waitlistedLabel}
           value={String(summary.waitlisted)}
         />
       </MetricRow>
-    </Card>
+    </div>
   );
 }

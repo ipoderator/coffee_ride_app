@@ -17,25 +17,47 @@ export interface MetricTileProps {
    * `12 из 20` ratio.
    */
   unit?: string;
+  /**
+   * ADR-024: `'cell'` renders the mockup's raised metric cell (`bg-surface`,
+   * rounded corners) — used on the route cover and the ride-detail headline
+   * grid. Default stays the original background-less tile (docs/design.md §6:
+   * "tiles never carry their own background colour; separation comes from
+   * spacing") for every other existing call site.
+   */
+  variant?: 'plain' | 'cell';
   className?: string;
 }
 
-export function MetricTile({ label, value, unit, className }: MetricTileProps) {
+export function MetricTile({
+  label,
+  value,
+  unit,
+  variant = 'plain',
+  className,
+}: MetricTileProps) {
   return (
     // `<dl>` for a single term/description pair, not a generic `<div>` — a screen
     // reader associates the label with its value the same way sighted layout does.
-    // No background/border here on purpose (docs/design.md §6: "tiles never carry
-    // their own background color; separation comes from spacing").
-    <dl className={cn('flex flex-col gap-1', className)}>
-      {/* ADR-021: label and value in the display face (Sofia Sans
-          Condensed), tabular figures kept (docs/design.md §4/§6). */}
+    <dl
+      className={cn(
+        'flex flex-col gap-1',
+        variant === 'cell' && 'rounded-xl bg-surface p-3',
+        className,
+      )}
+    >
+      {/* ADR-024: label stays in `font-display` (Sofia Sans Condensed); the
+          value moves to `font-num` (Sofia Sans Extra Condensed) — the large
+          tabular-numeral face the mockup uses for every metric. */}
       <dt className="font-display text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">
         {label}
       </dt>
-      <dd className="flex items-baseline gap-1 whitespace-nowrap font-display text-2xl leading-tight font-semibold tabular-nums text-text md:text-3xl">
+      <dd className="flex items-baseline gap-1 whitespace-nowrap font-num text-3xl leading-none font-extrabold tabular-nums text-text md:text-4xl">
         <span>{value}</span>
         {unit ? (
-          <span className="text-[0.6em] font-normal text-text-secondary">
+          // The mockup's unit suffix is set in the mono face, not the
+          // numeral face it follows — matches `docs/design.md` §7's existing
+          // "unit smaller and unemphasized" rule, just in `font-mono` now.
+          <span className="font-mono text-[0.45em] font-normal text-text-secondary">
             {unit}
           </span>
         ) : null}

@@ -1,13 +1,8 @@
 /**
  * CR-118: fits a ride's `routePreview` (`[lat, lng]` pairs, CR-116) into a
- * square SVG box for the legend row's little route glyph.
- *
- * - longitude is scaled by `cos(mean latitude)` so the shape keeps its real
- *   proportions (at Moscow's latitude a degree of longitude is ~0.56 of a
- *   degree of latitude — unscaled, every route would look stretched sideways);
- * - latitude grows northwards but SVG `y` grows downwards, so `y` is inverted;
- * - the longer side fills the box (minus `padding`), the shorter one is
- *   centred.
+ * square SVG box for the legend row's little route glyph. A thin wrapper over
+ * `projectRoutePreviewToBox` (ADR-024) — kept as its own name since every
+ * existing call site passes one `size`, not a width/height pair.
  *
  * Returns an SVG `points` attribute string, or `null` when there is nothing
  * drawable (fewer than two points, or every point in the same place).
@@ -15,6 +10,27 @@
 export function projectRoutePreview(
   points: ReadonlyArray<readonly [number, number]> | null,
   size = 32,
+  padding = 2,
+): string | null {
+  return projectRoutePreviewToBox(points, size, size, padding);
+}
+
+/**
+ * ADR-024: same projection as `projectRoutePreview`, but into an arbitrary
+ * `width` × `height` box (the route cover's 400×260 viewBox is not square) —
+ * the general case `projectRoutePreview` calls with `width === height`.
+ *
+ * - longitude is scaled by `cos(mean latitude)` so the shape keeps its real
+ *   proportions (at Moscow's latitude a degree of longitude is ~0.56 of a
+ *   degree of latitude — unscaled, every route would look stretched sideways);
+ * - latitude grows northwards but SVG `y` grows downwards, so `y` is inverted;
+ * - the route's own aspect ratio is fit to `width`/`height` (minus `padding`)
+ *   uniformly (no stretch), centred on whichever axis has slack.
+ */
+export function projectRoutePreviewToBox(
+  points: ReadonlyArray<readonly [number, number]> | null,
+  width: number,
+  height: number,
   padding = 2,
 ): string | null {
   if (!points || points.length < 2) return null;
@@ -34,15 +50,18 @@ export function projectRoutePreview(
     maxY = Math.max(maxY, lat);
   }
 
-  const width = maxX - minX;
-  const height = maxY - minY;
-  const span = Math.max(width, height);
-  if (span === 0) return null;
+  const lngSpan = maxX - minX;
+  const latSpan = maxY - minY;
+  if (lngSpan === 0 && latSpan === 0) return null;
 
-  const inner = size - padding * 2;
-  const scale = inner / span;
-  const offsetX = padding + (inner - width * scale) / 2;
-  const offsetY = padding + (inner - height * scale) / 2;
+  const innerWidth = width - padding * 2;
+  const innerHeight = height - padding * 2;
+  const scale = Math.min(
+    lngSpan === 0 ? Infinity : innerWidth / lngSpan,
+    latSpan === 0 ? Infinity : innerHeight / latSpan,
+  );
+  const offsetX = padding + (innerWidth - lngSpan * scale) / 2;
+  const offsetY = padding + (innerHeight - latSpan * scale) / 2;
 
   return points
     .map(([lat, lng]) => {

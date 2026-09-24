@@ -26,51 +26,58 @@ utilities), CR-050 (async notification delivery via Redis queue), CR-051
 2026-09-17 on reactive per-call handling that was already real, plus one missing
 test; see `.claude/context/known-issues.md` KI-041 for the reactive-vs-proactive
 `/health`-banner scoping decision) are all done. Post-MVP product work on top:
-the «Топокарта» visual direction (ADR-021), pace groups (`RideGroup`, ADR-022) and
-a rider list (CR-115…CR-120, 2026-09-23), CR-125 (2026-09-24): real
-first/last name on `User` and a per-ride participants-visibility toggle, and
-CR-126 (2026-09-24): the rider-profile card — `profileVisibility` (3-tier,
-ADR-023), a new `Bike` entity ("garage"), self-reported distance stats, and
-`GET /v1/rides/:id/riders/:registrationId/profile`/`.../avatar`, reachable
-from the riders list.
+pace groups (`RideGroup`, ADR-022) and a rider list (CR-115…CR-120,
+2026-09-23), CR-125 (2026-09-24): real first/last name on `User` and a
+per-ride participants-visibility toggle, CR-126 (2026-09-24): the
+rider-profile card — `profileVisibility` (3-tier, ADR-023), a new `Bike`
+entity ("garage"), self-reported distance stats, and `GET /v1/rides/:id/
+riders/:registrationId/profile`/`.../avatar`, reachable from the riders
+list — and CR-130 (in progress, 2026-09-24): the «Ночной старт» visual
+direction (ADR-024), replacing «Топокарта» (ADR-021).
 
 ## Current task
 
-None active. CR-121…CR-126 are committed (`42330fa`); CR-115…CR-120 as
-`3fe806b`/`c685310`. CR-127 (2026-09-24, uncommitted): visible sign-out in
-every cabinet — `CabinetShell` now renders `CabinetAccountBar` («Вы вошли
-как <имя> · <e-mail>» + «Выйти» → `/login`) above every `/me/*` and
-`/organizer/*` screen at every breakpoint; the header and the bar share one
-`useLogout(redirectTo)` hook (`apps/web/src/lib/auth/use-logout.ts`) that
-shows `logoutError` on failure and treats a `401` as already signed out.
-Follow-up fix: `LoginForm` now calls `useSession().refresh()` (which sets
-`loading` synchronously) — before, a login landed on `/me` and bounced back
-to `/login` because the shared session was still `anonymous`.
-CR-128 (2026-09-24, uncommitted): light-theme visibility — the elevation
-profile uses a 40%→12% `contour` gradient, 2px non-scaling stroke and a
-`border-input` ground line; `DifficultyScale`'s empty segments are hollow
-`border-input` outlines. No token changes.
-CR-129 (2026-09-24, uncommitted): `docker-compose.yml` gained a one-shot
-`minio-init` service that creates the `coffee-ride` bucket on a fresh volume.
-Full detail: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120» through
-«2026-09-24 — CR-129» entries, ADR-021, ADR-022, ADR-023.
+**CR-130 «Ночной старт» (ADR-024) — in progress, uncommitted.** Full plan:
+`.claude/plans/delightful-skipping-lovelace.md`. Phase 1 (foundation) done;
+Phase 2 (screens) partly done — see `docs/tasks.md`'s CR-130 entry and
+`.claude/context/current-task.md` for the exact checklist. Remaining before
+this task closes: organizer recent-registrations list + per-day bar chart
+(data-availability check first), mobile bottom tab bar, countdown timer in
+`RegistrationButton`'s registered state, then final `pnpm typecheck/lint/
+test` across the repo and a `docs/changelog.md` entry marking it done.
 
-**Visual direction: «Топокарта» (ADR-021).** The UI is a printed
-orienteering-map sheet: white paper / black ink, one plum overprint
-(`primary`/`route`, `#9033A1` light / `#D79BE0` dark — locked exact value,
-CR-124, `.claude/CLAUDE.md` "Brand color") used only for the route line
-and the primary action; meaning inks `contour` (elevation), `info`, `success`,
-`warning`; graphite dark theme. `bg-raised` equals `bg`; `surface` is the one
-raised plane. Sofia Sans Condensed is `font-display` (headings, labels,
-metrics) next to Golos Text — its Russian forms come from `locl`, so
-`<html lang="ru">` is load-bearing. 4px radius, no card shadows. `Button`
-`danger` is an outline; `danger-filled` (additive) is `ConfirmDialog`'s
-confirm. Wordmark «кофе•райд» (CR-121: plum elevation-profile mark + Golos 800, filled
-plum dot, 1.8rem; accessible name «Кофе Райд») + `app/icon.svg` = the mark. The
-CR-107 "Quiet Instrument" glass treatment is **retired**: `lib/glass.ts`,
-`--glass-*` tokens and `FEATURE_COVER_GLASS_PANEL` are deleted. The sticky
-mobile registration bar is now the **default** — `FEATURE_STICKY_REGISTRATION_CTA`
-is deleted too; no feature flag is currently in use.
+CR-121…CR-129 are committed (`9adb797`, `42330fa`, `3fe806b`, `c685310`).
+Full detail on those: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120»
+through «2026-09-24 — CR-129» entries, ADR-021 (superseded by ADR-024),
+ADR-022, ADR-023.
+
+**Visual direction: «Ночной старт» (ADR-024, 2026-09-24, replaces ADR-021's
+«Топокарта»).** Dark is the default theme. Three brand roles instead of one
+overprint ink: `primary` (AA text — links, focus ring, active tab, `#74597E`
+light / `#B8A0C1` dark), `brand` (logo, route track, graphics only —
+`#82668C` light / `#B8A0C1` dark, the actual locked hex per `.claude/
+CLAUDE.md` "Brand color"), `primary-fill` (button fill, `#82668C` both
+themes). `contour` renamed `elevation` (same role). `bg`/`bg-raised`/
+`surface` are now genuinely different tones (panels have a real background,
+unlike ADR-021's "no card fill" rule). Shape is pills/large radii, not a 4px
+stamp. Two new fonts: Unbounded (`font-title` — ride titles/headings) and
+Sofia Sans Extra Condensed (`font-num` — large metric numerals); Sofia Sans
+Condensed narrows to `font-display` (labels/eyebrows only). New `RouteCover`
+component draws a route-drawn dark "window" cover (isoline art + real route
+track + elevation-tinted footer) on every ride card/hero instead of a flat
+placeholder. Discovery gained a "Заезды/Карта" tab switch — a new
+`RouteCover`-grid view alongside the unchanged ADR-021/CR-118 map-first list.
+The organizer cabinet regained a desktop sidebar (`CabinetShell`'s new
+optional `sidebarNavItems` prop), reversing part of CR-108 — still fed by
+the same ADR-009 `ORGANIZER_NAV_ITEMS` registry, only the render changed.
+`Button` `danger` is an outline; `danger-filled` (additive) is
+`ConfirmDialog`'s confirm — unchanged by ADR-024. Wordmark «кофе•райд»
+(CR-121, updated by ADR-024: `brand`-coloured elevation-profile mark + Golos
+800, filled `brand` dot, 1.8rem; accessible name «Кофе Райд») + `app/icon.svg`
+= the mark. The CR-107 "Quiet Instrument" glass treatment is still
+**retired** (ADR-024 keeps the "no glass/blur" rule); the sticky mobile
+registration bar is still the default, restyled to the new panel/radius
+system.
 
 **Pace groups (ADR-022).** New domain entity `RideGroup` (table `ride_groups`,
 migration `0017_ride_groups`; the dev DB is at 18 migrations, `0000`–`0017`):

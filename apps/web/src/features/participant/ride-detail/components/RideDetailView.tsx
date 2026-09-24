@@ -134,7 +134,7 @@ function MapArea({
   );
 }
 
-/** «Профиль высоты» — `contour` brown (ADR-021), from the shared geometry fetch. */
+/** «Профиль высоты» — `elevation` ink (ADR-024, renamed from `contour`), from the shared geometry fetch. */
 function ElevationSection({
   status,
   points,
