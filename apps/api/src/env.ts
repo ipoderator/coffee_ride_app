@@ -77,6 +77,17 @@ const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.string().url().optional(),
   ),
+  // KI-014: overrides `max` for both auth rate-limit tiers (per-IP and
+  // per-account, `modules/auth/auth.routes.ts`); unset = the real default (5)
+  // and the window stays 1 minute. Exists only so repeated local/CI e2e runs
+  // (`apps/web/playwright.config.ts`) don't trip 429 on /v1/auth/register —
+  // counters can live in Redis and survive an API restart. `loadEnv()` below
+  // refuses to boot in production with it set at all
+  // (`.claude/rules/security.md`: auth endpoints stay aggressively limited).
+  AUTH_RATE_LIMIT_MAX: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().positive().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -154,6 +165,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
         return typeof value === 'string' && isPlaceholder(value);
       },
     ).map(({ message }) => message);
+
+    // Not a placeholder check (any value is a relaxation, including 5): the
+    // override is test/dev-only by design, so production must use the
+    // hard-coded tiers in auth.routes.ts unconditionally.
+    if (env.AUTH_RATE_LIMIT_MAX !== undefined) {
+      violations.push(
+        'AUTH_RATE_LIMIT_MAX is set — it is a test/dev-only override of the auth rate limit and must be unset in production.',
+      );
+    }
 
     if (violations.length > 0) {
       throw new Error(

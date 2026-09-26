@@ -33,6 +33,18 @@ as part of closing the issue, not as a periodic batch cleanup.
   same page (`/organizers/me`, `/rides/mine/summary`, `/rides/mine` again and
   the nearest ride's participants) — the dashboard now makes roughly
   `4 + selected rides` requests. Same fix applies.
+- Update 2026-09-26 (CR-132): the overview widget also reads the nearest
+  ride's waitlist, and the frame's «Участники» badge (`lib/organizer/
+nav-badges.ts`) re-reads `/rides/mine` + the nearest ride's participants
+  once per cabinet visit — on `/organizer` that duplicates the overview
+  widget's reads (≈ `7 + selected rides` requests). A shared client cache or
+  the same aggregate endpoint would remove the duplication.
+- Update 2026-09-26 (CR-133): duplication removed — `own-rides.ts`
+  de-duplicates concurrent identical GETs and the overview widget starts its
+  reads at mount, so `/organizer` makes 6 requests in production
+  (`auth/me`, `organizers/me`, `mine/summary`, `mine`, nearest ride's
+  participants + waitlist) plus one participants read per further selected
+  ride. What remains is the client-side aggregation itself.
 - Next action: if organizers with many concurrent rides appear, add a
   `GET /v1/rides/mine/registrations/activity` aggregate (sibling of
   `/mine/summary`, CR-103) and point the widget at it.
@@ -151,6 +163,12 @@ connection-level gap. Still open: an actual job enqueued through
 `notifications.service.ts` round-tripping through the `Worker` into a real
 `notifications` table row was not exercised this session — that's the
 remaining next action, not the connection itself.
+
+Update 2026-09-26 (CR-133): repeated local e2e runs tripping the 5/min auth
+limit is handled by the test/dev-only `AUTH_RATE_LIMIT_MAX` override
+(`apps/api/src/env.ts`, rejected in production); the Playwright-started API
+sets it, an already-running dev API needs it in the root `.env`. The Redis
+job round trip above is still the open part.
 
 ### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
 

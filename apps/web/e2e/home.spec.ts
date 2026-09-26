@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { RIDE_DISCOVERY_ROW_TERMS, RIDE_DISCOVERY_TERMS } from 'ui';
 
 // CR-080: rewritten. The old assertion checked for CR-002's bootstrap
 // placeholder copy ("Платформа собирается..."), which `/` stopped rendering
@@ -14,18 +15,41 @@ import { expect, test } from '@playwright/test';
 // `.claude/rules/testing.md`'s real critical-journey specs (discover+
 // register, organizer create+publish, view participants) are tracked
 // separately as CR-092, not this smoke check's job.
-test('home page loads the discovery screen end to end', async ({ page }) => {
+// CR-133 (KI-067): CR-130's «Заезды/Карта» tabs made the `RideGrid` the
+// default view on `/` and mount the map-view list only at `/?view=map`, so
+// the spec checks both views instead of waiting for a list that the default
+// view never renders.
+test('home page loads the default grid view end to end', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Заезды' }),
+    page.getByRole('heading', {
+      level: 1,
+      name: RIDE_DISCOVERY_TERMS.pageTitle,
+    }),
+  ).toBeVisible();
+
+  const main = page.getByRole('main');
+  const emptyState = main.getByText(RIDE_DISCOVERY_TERMS.emptyTitle);
+  const rideLink = main.locator('a[href^="/rides/"]').first();
+  await expect(emptyState.or(rideLink)).toBeVisible();
+});
+
+test('home page loads the map view end to end', async ({ page }) => {
+  await page.goto('/?view=map');
+
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: RIDE_DISCOVERY_TERMS.pageTitle,
+    }),
   ).toBeVisible();
 
   const listPanel = page.getByTestId('discovery-list-panel');
   await expect(listPanel).toBeVisible();
 
   // CR-118: the unfiltered empty state's copy («Топокарта» sheet wording).
-  const emptyState = listPanel.getByText('Заездов на этом листе нет');
+  const emptyState = listPanel.getByText(RIDE_DISCOVERY_ROW_TERMS.emptyTitle);
   const rideLink = listPanel.locator('a[href^="/rides/"]').first();
   await expect(emptyState.or(rideLink)).toBeVisible();
 });

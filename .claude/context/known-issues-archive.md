@@ -1199,3 +1199,19 @@ riders/:registrationId/avatar` streams a rider's avatar, gated by the same
 `GET /v1/users/:id`, no user id in the `/riders` payload (only an opaque
 `registrationId`, added additively). See `docs/decisions.md`'s new ADR and
 `docs/changelog.md`'s CR-126 entry for the full design.
+
+### KI-067 — `e2e/home.spec.ts` expects the map/list view on `/`, which defaults to the grid since CR-130
+
+- Status: open, discovered 2026-09-26 (CR-132's e2e run; unrelated to CR-132).
+- Problem: the spec (last changed in CR-118, `c685310`) opens `/` and waits
+  for `data-testid="discovery-list-panel"`, but CR-130's «Заезды/Карта» tabs
+  made the `RouteCover` grid the default and mount the list only at
+  `/?view=map` — the panel never appears and the test times out.
+- Impact: the e2e suite has one red test on `main`; the discovery screen
+  itself works (browser-checked; `critical-journeys.spec.ts` 3/3 green).
+- Workaround: run `critical-journeys.spec.ts` alone.
+- Next action: point the spec at `/?view=map` (or split it into a grid-view
+  and a map-view check). Also: back-to-back local e2e/fixture runs trip the
+  `/v1/auth/*` rate limit (KI-014) — rerun after a minute.
+- Resolution 2026-09-26 (CR-133): the spec checks the default grid on `/`
+  and the map-view list on `/?view=map`; e2e 5/5 against the dev stack.

@@ -7,6 +7,7 @@ import {
   cn,
   ErrorState,
   formatElapsedShort,
+  formatShortPersonName,
   PARTICIPANTS_TERMS,
   REGISTRATION_ACTIVITY_TERMS,
   Skeleton,
@@ -117,7 +118,12 @@ export function RegistrationActivityWidget() {
         ) : (
           <ul className="flex flex-col">
             {state.recent.map((entry) => (
-              <RecentRow key={entry.id} entry={entry} now={state.now} />
+              <RecentRow
+                key={entry.id}
+                entry={entry}
+                now={state.now}
+                showRide={spansSeveralRides(state.recent)}
+              />
             ))}
           </ul>
         )}
@@ -142,27 +148,67 @@ export function RegistrationActivityWidget() {
   );
 }
 
-function RecentRow({ entry, now }: { entry: ActivityEntry; now: Date }) {
-  const name = entry.displayName ?? PARTICIPANTS_TERMS.noNameFallback;
+/** Whether the listed entries belong to more than one ride — only then does
+ * a row need to name its ride (the mockup lists one ride's sign-ups). */
+function spansSeveralRides(entries: ActivityEntry[]): boolean {
+  return new Set(entries.map((entry) => entry.rideTitle)).size > 1;
+}
+
+// CR-132: the mockup's avatars are plain pastel discs in varied tints; these
+// are existing tokens (lilac/green/gold in the dark theme), picked stably per
+// registration so a row keeps its colour between visits.
+const AVATAR_TINTS = ['bg-brand', 'bg-success', 'bg-elevation'] as const;
+
+function avatarTint(id: string): string {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return AVATAR_TINTS[hash % AVATAR_TINTS.length]!;
+}
+
+/**
+ * CR-132 (mockup screen 4): «Анна К. · группа 1» on one line with the time
+ * at the right — a short name (the full one is a click away in the
+ * participant list), the pace group and, only when the feed spans several
+ * rides, the ride's title in the mono face.
+ */
+function RecentRow({
+  entry,
+  now,
+  showRide,
+}: {
+  entry: ActivityEntry;
+  now: Date;
+  showRide: boolean;
+}) {
+  const name =
+    formatShortPersonName(entry.displayName) ??
+    PARTICIPANTS_TERMS.noNameFallback;
+  const meta = [entry.groupName, showRide ? entry.rideTitle : null].filter(
+    (part): part is string => Boolean(part),
+  );
   return (
-    <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-border py-2 first:border-t-0">
+    <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-border py-3 first:border-t-0 first:pt-1">
       {/* Decorative: the name is right beside it, so the avatar's own
           `aria-label` would only make a screen reader read it twice. */}
       <span aria-hidden="true">
-        <Avatar name={entry.displayName} size="sm" />
+        <Avatar
+          name={entry.displayName}
+          size="sm"
+          className={cn('size-9 text-bg', avatarTint(entry.id))}
+        />
       </span>
-      <div className="min-w-0">
-        <p className="truncate text-sm text-text">
-          {name}
-          {entry.groupName && (
-            <span className="text-text-muted"> · {entry.groupName}</span>
-          )}
-        </p>
-        <p className="truncate text-xs text-text-muted">{entry.rideTitle}</p>
-      </div>
+      <p className="min-w-0 truncate">
+        <span className="text-base text-text">{name}</span>
+        {meta.map((part) => (
+          <span key={part} className="font-mono text-sm text-text-muted">
+            {' · '}
+            {part}
+          </span>
+        ))}
+      </p>
       <time
         dateTime={entry.createdAt.toISOString()}
-        className="font-mono text-xs text-text-muted tabular-nums"
+        className="font-mono text-sm text-text-muted tabular-nums"
       >
         {formatElapsedShort(entry.createdAt, now)}
       </time>
@@ -171,20 +217,20 @@ function RecentRow({ entry, now }: { entry: ActivityEntry; now: Date }) {
 }
 
 /**
- * The count is printed above every bar and each day carries a full sentence
- * for screen readers (`docs/design.md` §12: the bar height and the peak
- * day's highlight colour only reinforce the text, never replace it). Today's
- * weekday label is set in the body text colour so the week reads left to
- * right up to «now».
+ * CR-132 (mockup screen 4): bars only — no printed counts; each day carries
+ * a full sentence for screen readers (`docs/design.md` §12: the height and
+ * the peak day's highlight only reinforce that text), and a zero day keeps a
+ * short stub so the axis still reads as seven days. Today's weekday label is
+ * set in the body text colour so the week reads left to right up to «now».
  */
 function DayBars({ days }: { days: ActivityDay[] }) {
   const max = Math.max(1, ...days.map((day) => day.count));
   return (
-    <ol className="flex h-36 items-end gap-1.5">
+    <ol className="flex h-36 items-end gap-2">
       {days.map((day) => (
         <li
           key={day.key}
-          className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+          className="flex h-full flex-1 flex-col items-center justify-end gap-2"
         >
           <span className="sr-only">
             {REGISTRATION_ACTIVITY_TERMS.dayBar(
@@ -192,21 +238,17 @@ function DayBars({ days }: { days: ActivityDay[] }) {
               day.count,
             )}
           </span>
-          <span
-            aria-hidden="true"
-            className="font-num text-sm font-bold text-text-secondary tabular-nums"
-          >
-            {day.count}
-          </span>
           <span aria-hidden="true" className="flex w-full flex-1 items-end">
             <span
               className={cn(
-                'block w-full rounded-t-md rounded-b-sm',
+                'block w-full rounded-md',
                 day.isPeak ? 'bg-brand' : 'bg-primary-tint',
               )}
-              // A zero day keeps a 2px stub so the axis still reads as seven days.
               style={{
-                height: day.count === 0 ? '2px' : `${(day.count / max) * 100}%`,
+                height:
+                  day.count === 0
+                    ? '0.375rem'
+                    : `max(0.375rem, ${(day.count / max) * 100}%)`,
               }}
             />
           </span>

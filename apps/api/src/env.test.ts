@@ -75,4 +75,38 @@ describe('loadEnv', () => {
     expect(env.REDIS_URL).toBeUndefined();
     expect(env.S3_ENDPOINT).toBeUndefined();
   });
+
+  // KI-014: test/dev-only override of both auth rate-limit tiers.
+  it('leaves AUTH_RATE_LIMIT_MAX unset by default and coerces a valid value', () => {
+    expect(loadEnv(BASE_ENV_SOURCE).AUTH_RATE_LIMIT_MAX).toBeUndefined();
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, AUTH_RATE_LIMIT_MAX: '' })
+        .AUTH_RATE_LIMIT_MAX,
+    ).toBeUndefined();
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, AUTH_RATE_LIMIT_MAX: '1000' })
+        .AUTH_RATE_LIMIT_MAX,
+    ).toBe(1000);
+  });
+
+  it('rejects a non-positive or non-integer AUTH_RATE_LIMIT_MAX', () => {
+    for (const value of ['0', '-5', '2.5', 'lots']) {
+      expect(() =>
+        loadEnv({ ...BASE_ENV_SOURCE, AUTH_RATE_LIMIT_MAX: value }),
+      ).toThrow(/Invalid environment configuration: AUTH_RATE_LIMIT_MAX/);
+    }
+  });
+
+  it('refuses to boot in production with AUTH_RATE_LIMIT_MAX set at all', () => {
+    expect(() =>
+      loadEnv({
+        ...BASE_ENV_SOURCE,
+        NODE_ENV: 'production',
+        AUTH_SECRET: 'a-real-generated-secret',
+        WEB_ORIGIN: 'https://coffeeride.example',
+        DATABASE_URL: 'postgresql://prod-host:5432/coffee_ride',
+        AUTH_RATE_LIMIT_MAX: '5',
+      }),
+    ).toThrow(/Refusing to start in production[\s\S]*AUTH_RATE_LIMIT_MAX/);
+  });
 });

@@ -24,13 +24,11 @@ import {
 import {
   fetchNearestOwnRide,
   listAllRideParticipants,
+  listAllRideWaitlist,
+  registrationsInLastDay,
 } from '@/lib/organizer/own-rides';
 import { ApiError, getOwnOrganizerProfile, getOwnRideSummary } from '../api';
-import {
-  nearestRideValue,
-  registeredValue,
-  registrationsInLastDay,
-} from '../lib/overview';
+import { nearestRideValue, registeredValue } from '../lib/overview';
 
 type State =
   | { status: 'loading' }
@@ -43,6 +41,7 @@ type State =
       summary: OrganizerRideSummary;
       nearest: Ride | null;
       nearestParticipants: RideParticipantSummary[];
+      nearestWaitlisted: number;
     };
 
 /**
@@ -50,7 +49,9 @@ type State =
  * organizer's name, a time-of-day greeting, «Отправить обновление» for the
  * nearest ride — and the mockup's four KPI cells: Ближайший, Записано (on
  * the nearest ride, with the last day's gain), Лист ожидания (all rides),
- * Рейтинг. Existing endpoints only; «nearest» is `lib/organizer/own-rides`'s
+ * Рейтинг. CR-132: «Лист ожидания» is the nearest ride's own waitlist
+ * («на «Рассветный»», as in the mockup) — the all-rides total only when
+ * there is no nearest ride. Existing endpoints only; «nearest» is `lib/organizer/own-rides`'s
  * shared definition, the same one the sidebar's «Участники»/«Обновления»
  * resolve. Replaces CR-015's profile card and CR-103's ride-count cells on
  * this page (the profile stays one sidebar click away).
@@ -64,6 +65,15 @@ export function OrganizerOverviewWidget() {
     setState({ status: 'loading' });
 
     (async (): Promise<State> => {
+      // CR-133 (KI-066): every read starts at mount, not after the profile,
+      // so `/rides/mine` and the nearest ride's participants join the sidebar
+      // badge's and the activity widget's in-flight requests (`own-rides.ts`).
+      // Without a profile their results (or failures) are simply dropped.
+      const now = new Date();
+      const summaryRead = getOwnRideSummary();
+      const nearestRead = fetchNearestOwnRide(now);
+      summaryRead.catch(() => undefined);
+      nearestRead.catch(() => undefined);
       let profile: OrganizerProfileResponse;
       try {
         profile = await getOwnOrganizerProfile();
@@ -73,14 +83,16 @@ export function OrganizerOverviewWidget() {
         }
         throw error;
       }
-      const now = new Date();
       const [{ summary }, nearest] = await Promise.all([
-        getOwnRideSummary(),
-        fetchNearestOwnRide(now),
+        summaryRead,
+        nearestRead,
       ]);
-      const nearestParticipants = nearest
-        ? await listAllRideParticipants(nearest.id)
-        : [];
+      const [nearestParticipants, nearestWaitlist] = nearest
+        ? await Promise.all([
+            listAllRideParticipants(nearest.id),
+            listAllRideWaitlist(nearest.id),
+          ])
+        : [[], []];
       return {
         status: 'ready',
         now,
@@ -88,6 +100,7 @@ export function OrganizerOverviewWidget() {
         summary,
         nearest,
         nearestParticipants,
+        nearestWaitlisted: nearestWaitlist.length,
       };
     })()
       .then((next) => {
@@ -146,10 +159,18 @@ export function OrganizerOverviewWidget() {
     );
   }
 
-  const { now, profile, summary, nearest, nearestParticipants } = state;
+  const {
+    now,
+    profile,
+    summary,
+    nearest,
+    nearestParticipants,
+    nearestWaitlisted,
+  } = state;
   const rating = formatRatingParts(profile.rating, profile.reviewCount);
   const lastDay = registrationsInLastDay(nearestParticipants, now);
-  const cellClassName = 'rounded-2xl border border-border bg-bg-raised p-4';
+  const cellClassName =
+    'gap-2 rounded-2xl border border-border bg-bg-raised p-4 md:p-5';
 
   return (
     <div className="col-span-full flex flex-col gap-4">
@@ -175,6 +196,7 @@ export function OrganizerOverviewWidget() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricTile
+          size="lg"
           className={cellClassName}
           label={ORGANIZER_OVERVIEW_TERMS.nearestLabel}
           value={nearest ? nearestRideValue(nearest, now) : '—'}
@@ -188,6 +210,7 @@ export function OrganizerOverviewWidget() {
           noteTone={nearest ? 'success' : 'muted'}
         />
         <MetricTile
+          size="lg"
           className={cellClassName}
           label={ORGANIZER_OVERVIEW_TERMS.registeredLabel}
           value={
@@ -206,12 +229,18 @@ export function OrganizerOverviewWidget() {
           noteTone={nearest && lastDay > 0 ? 'success' : 'muted'}
         />
         <MetricTile
+          size="lg"
           className={cellClassName}
           label={ORGANIZER_OVERVIEW_TERMS.waitlistLabel}
-          value={String(summary.waitlisted)}
-          note={ORGANIZER_OVERVIEW_TERMS.waitlistAllRides}
+          value={String(nearest ? nearestWaitlisted : summary.waitlisted)}
+          note={
+            nearest
+              ? ORGANIZER_OVERVIEW_TERMS.waitlistForRide(nearest.title)
+              : ORGANIZER_OVERVIEW_TERMS.waitlistAllRides
+          }
         />
         <MetricTile
+          size="lg"
           className={cellClassName}
           label={ORGANIZER_OVERVIEW_TERMS.ratingLabel}
           value={rating.value}

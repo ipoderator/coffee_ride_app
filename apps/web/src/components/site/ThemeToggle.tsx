@@ -32,8 +32,15 @@ const LABELS: Record<ThemePreference, string> = {
  * is current, and that read has to happen in an effect — `localStorage` does
  * not exist during the server render, and seeding state from it directly would
  * make the server and client markup disagree.
+ *
+ * CR-132: split into a hook and the option list so the organizer header's
+ * account menu can list the same three options inline instead of nesting a
+ * second menu inside its own.
  */
-export function ThemeToggle() {
+export function useThemePreference(): [
+  ThemePreference,
+  (next: ThemePreference) => void,
+] {
   const [preference, setPreference] = useState<ThemePreference>('system');
 
   useEffect(() => {
@@ -55,15 +62,26 @@ export function ThemeToggle() {
     applyTheme(next);
   }
 
+  return [preference, choose];
+}
+
+/** The three theme options as `role="menuitem"` buttons, for any `NavMenu`. */
+export function ThemeMenuItems({
+  preference,
+  onChoose,
+}: {
+  preference: ThemePreference;
+  onChoose: (next: ThemePreference) => void;
+}) {
   return (
-    <NavMenu label={THEME_TERMS.menuLabel} icon={ICONS[preference]} labelHidden>
+    <>
       {THEME_PREFERENCES.map((option) => (
         <button
           key={option}
           type="button"
           role="menuitem"
           aria-current={option === preference ? 'true' : undefined}
-          onClick={() => choose(option)}
+          onClick={() => onChoose(option)}
           className={cn(
             NAV_MENU_ITEM_CLASSNAME,
             option === preference && 'bg-surface text-text',
@@ -73,6 +91,16 @@ export function ThemeToggle() {
           {LABELS[option]}
         </button>
       ))}
+    </>
+  );
+}
+
+export function ThemeToggle() {
+  const [preference, choose] = useThemePreference();
+
+  return (
+    <NavMenu label={THEME_TERMS.menuLabel} icon={ICONS[preference]} labelHidden>
+      <ThemeMenuItems preference={preference} onChoose={choose} />
     </NavMenu>
   );
 }

@@ -10,6 +10,7 @@ import Script from 'next/script';
 import { ToastProvider } from 'ui';
 import { AppHeader } from '@/components/site/AppHeader';
 import { BottomTabBar } from '@/components/site/BottomTabBar';
+import { SiteChrome } from '@/components/site/SiteChrome';
 import { filterEnabled } from '@/lib/cabinet/feature-flags';
 import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
 import { PARTICIPANT_NAV_ITEMS } from '@/lib/cabinet/participant-nav';
@@ -110,11 +111,18 @@ export default function RootLayout({
             the full width of the viewport, and caps its own inner nav instead. */}
         <SessionProvider>
           <ToastProvider>
-            <AppHeader
-              participantNavItems={filterEnabled(PARTICIPANT_NAV_ITEMS)}
-              organizerNavItems={filterEnabled(ORGANIZER_NAV_ITEMS)}
-            />
-            <div className="mx-auto w-full xl:max-w-300">{children}</div>
+            {/* CR-132: `SiteChrome` leaves both off on `/organizer/*`,
+                which draws its own header and frame. */}
+            <SiteChrome
+              header={
+                <AppHeader
+                  participantNavItems={filterEnabled(PARTICIPANT_NAV_ITEMS)}
+                  organizerNavItems={filterEnabled(ORGANIZER_NAV_ITEMS)}
+                />
+              }
+            >
+              {children}
+            </SiteChrome>
             {/* CR-130 (ADR-024): mobile-only, alongside `AppHeader`'s menu. */}
             <BottomTabBar />
           </ToastProvider>

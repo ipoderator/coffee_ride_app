@@ -3,6 +3,7 @@ import {
   countdownParts,
   formatDate,
   formatElapsedShort,
+  formatShortPersonName,
   formatShortStart,
   formatShortWeekday,
   formatDistance,
@@ -357,5 +358,20 @@ describe('formatShortStart (CR-131)', () => {
         timeZone: 'Europe/Moscow',
       }),
     ).toBe('вс 04.10 · 09:00');
+  });
+});
+
+describe('formatShortPersonName (CR-132)', () => {
+  it('shortens to the first name plus the last name initial', () => {
+    expect(formatShortPersonName('Анна Кузнецова')).toBe('Анна К.');
+    expect(formatShortPersonName('  Илья   Сергеевич  смирнов ')).toBe(
+      'Илья С.',
+    );
+  });
+
+  it('keeps a one-word name and returns null for a blank one', () => {
+    expect(formatShortPersonName('Марина')).toBe('Марина');
+    expect(formatShortPersonName('   ')).toBeNull();
+    expect(formatShortPersonName(null)).toBeNull();
   });
 });

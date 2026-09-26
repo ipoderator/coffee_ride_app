@@ -5,8 +5,12 @@ import { useEffect, type ReactNode } from 'react';
 import { CABINET_TERMS, ErrorState, Skeleton } from 'ui';
 import { CurrentUserContext } from '@/lib/auth/current-user-context';
 import { useSession } from '@/lib/auth/session-context';
-import type { CabinetNavItem } from '@/lib/cabinet/types';
+import type {
+  CabinetNavBadgeCounts,
+  CabinetNavItem,
+} from '@/lib/cabinet/types';
 import { CabinetAccountBar } from './CabinetAccountBar';
+import { CabinetSectionTabs } from './CabinetSectionTabs';
 import { CabinetSidebar } from './CabinetSidebar';
 
 /**
@@ -31,13 +35,21 @@ import { CabinetSidebar } from './CabinetSidebar';
  * to `children` from the same ADR-009 registry `AppHeader` already reads;
  * omitting it (still `/me/*`) keeps the pre-ADR-024 header-only layout
  * exactly as it was.
+ *
+ * CR-132 (mockup screen 4): with `sidebarNavItems` the shell is an app frame
+ * under the cabinet's own header (`OrganizerHeader`) — a full-height sidebar
+ * column (section pills below `lg`) and the page beside it, full width. No
+ * CR-127 account bar there: that header's account menu shows who is signed
+ * in and signs out. `navBadges` feeds the items' live counters.
  */
 export function CabinetShell({
   children,
   sidebarNavItems,
+  navBadges,
 }: {
   children: ReactNode;
   sidebarNavItems?: CabinetNavItem[];
+  navBadges?: CabinetNavBadgeCounts;
 }) {
   const router = useRouter();
   const { status, user } = useSession();
@@ -70,14 +82,30 @@ export function CabinetShell({
     );
   }
 
+  if (sidebarNavItems) {
+    return (
+      <CurrentUserContext.Provider value={user}>
+        {/* The row fills the viewport below the header (`OrganizerHeader`'s
+            4.25rem + its 1px border) so the sidebar's border runs to the
+            bottom, as in the mockup. */}
+        <div className="lg:flex lg:min-h-[calc(100dvh-4.25rem-1px)]">
+          <CabinetSidebar items={sidebarNavItems} badges={navBadges} />
+          <div className="min-w-0 flex-1">
+            <CabinetSectionTabs items={sidebarNavItems} badges={navBadges} />
+            <main className="mx-auto w-full max-w-6xl p-4 md:p-6">
+              {children}
+            </main>
+          </div>
+        </div>
+      </CurrentUserContext.Provider>
+    );
+  }
+
   return (
     <CurrentUserContext.Provider value={user}>
       <div className="mx-auto min-h-screen w-full max-w-5xl p-6">
         <CabinetAccountBar user={user} />
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-          {sidebarNavItems ? <CabinetSidebar items={sidebarNavItems} /> : null}
-          <main className="min-w-0 flex-1">{children}</main>
-        </div>
+        <main className="min-w-0">{children}</main>
       </div>
     </CurrentUserContext.Provider>
   );

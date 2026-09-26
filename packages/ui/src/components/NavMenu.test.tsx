@@ -120,4 +120,18 @@ describe('NavMenu', () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId('icon')).toBeInTheDocument();
   });
+
+  // CR-132: the organizer header's avatar trigger.
+  it('can drop the chevron and take extra trigger classes', () => {
+    const { container } = renderMenu({
+      hideChevron: true,
+      triggerClassName: 'avatar-trigger',
+      labelHidden: true,
+      icon: <span data-testid="icon" />,
+    });
+
+    const trigger = screen.getByRole('button', { name: 'Организатор' });
+    expect(trigger).toHaveClass('avatar-trigger');
+    expect(container.querySelector('svg')).toBeNull();
+  });
 });

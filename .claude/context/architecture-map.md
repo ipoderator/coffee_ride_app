@@ -254,7 +254,16 @@ registry order 10, replacing the retired `OrganizerProfileWidget`/
 (`listOwnRidesPage`, `listAllRideParticipants`) and the one "nearest ride"
 definition; `components/cabinet/NearestRideRedirect.tsx` behind the new
 `/organizer/{participants,updates}` routes and their registry items;
-`CabinetSidebar` gets a leading «Обзор» item from `app/organizer/layout.tsx`.)
+`CabinetSidebar` gets a leading «Обзор» item from `app/organizer/layout.tsx`.
+CR-132: `/organizer/*` is an app frame of its own — `components/site/
+SiteChrome.tsx` (root layout) leaves `AppHeader` and the 1200px cap off there;
+`app/organizer/layout.tsx` renders `components/cabinet/OrganizerCabinetFrame.
+tsx` = `OrganizerHeader` (wordmark, «Создать заезд», avatar account menu —
+replaces `CabinetAccountBar` in this cabinet) over `CabinetShell`'s sidebar
+frame (full-height `CabinetSidebar` at `lg`+, `CabinetSectionTabs` pill row
+below). Nav descriptors may name a live `badge` (`lib/cabinet/types.ts`),
+resolved by `lib/organizer/nav-badges.ts`. `/me/*` keeps `AppHeader` +
+`CabinetAccountBar`.)
 New
 `lib/cabinet/organizer-nav.ts` registry (one entry: `/organizer/profile`); new
 `app/organizer/{layout,page,profile/page}.tsx` (the bare `/organizer` route is a

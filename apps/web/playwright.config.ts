@@ -44,6 +44,15 @@ export default defineConfig({
           'postgresql://postgres:postgres@localhost:5432/coffee_ride',
         AUTH_SECRET: process.env.AUTH_SECRET ?? 'e2e-local-secret',
         WEB_ORIGIN: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+        // KI-014: critical-journeys.spec.ts alone makes 5 register + 5 login
+        // calls per run — exactly the auth tier's 5/min cap, and its counters
+        // can live in Redis across API restarts, so a second run within a
+        // minute got 429. Test/dev-only override (apps/api's loadEnv()
+        // rejects it in production). Only reaches an API this config starts:
+        // with reuseExistingServer, an already-running local dev API keeps
+        // its own env — set AUTH_RATE_LIMIT_MAX in the root .env for that
+        // (see .env.example).
+        AUTH_RATE_LIMIT_MAX: '1000',
       },
     },
     {

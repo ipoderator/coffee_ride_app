@@ -32,6 +32,11 @@ export interface MetricTileProps {
    */
   note?: string;
   noteTone?: 'muted' | 'success';
+  /**
+   * CR-132: `'lg'` sets the value a step larger — the organizer dashboard's
+   * KPI row (mockup screen 4), where the numbers are the screen's headline.
+   */
+  size?: 'md' | 'lg';
   className?: string;
 }
 
@@ -42,6 +47,7 @@ export function MetricTile({
   variant = 'plain',
   note,
   noteTone = 'muted',
+  size = 'md',
   className,
 }: MetricTileProps) {
   return (
@@ -60,7 +66,12 @@ export function MetricTile({
       <dt className="font-display text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">
         {label}
       </dt>
-      <dd className="flex items-baseline gap-1 whitespace-nowrap font-num text-3xl leading-none font-extrabold tabular-nums text-text md:text-4xl">
+      <dd
+        className={cn(
+          'flex items-baseline gap-1 whitespace-nowrap font-num leading-none font-extrabold tabular-nums text-text',
+          size === 'lg' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl',
+        )}
+      >
         <span>{value}</span>
         {unit ? (
           // The mockup's unit suffix is set in the mono face, not the

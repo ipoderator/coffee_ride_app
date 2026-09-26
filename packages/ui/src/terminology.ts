@@ -297,7 +297,6 @@ export const SITE_HEADER_TERMS = {
 export const BACK_LINK_TERMS = {
   toDiscovery: 'Ко всем заездам',
   toOrganizerRides: 'К моим заездам',
-  toOrganizerCabinet: 'В кабинет организатора',
   toParticipantCabinet: 'В личный кабинет',
   // CR-126: `/rides/[id]/riders/[registrationId]` back to the ride it was
   // opened from.
@@ -1294,6 +1293,8 @@ export const ORGANIZER_OVERVIEW_TERMS = {
   registeredNoRide: 'Нет ближайшего заезда',
   waitlistLabel: 'Лист ожидания',
   waitlistAllRides: 'По всем заездам',
+  // CR-132: the nearest ride's own waitlist, as in the mockup.
+  waitlistForRide: (title: string) => `на «${title}»`,
   ratingLabel: 'Рейтинг',
   ratingNoReviews: 'Пока нет отзывов',
   ratingReviews: formatReviewsCount,
@@ -1317,3 +1318,28 @@ export const ORGANIZER_NEAREST_RIDE_TERMS = {
 } as const;
 
 // --------------------------- end CR-131 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-132 (organizer cabinet frame per the «Ночной старт» mockup screen 4).
+// ---------------------------------------------------------------------------
+
+/** `/organizer/*`'s own header: wordmark, «Создать заезд», account menu. */
+export const ORGANIZER_HEADER_TERMS = {
+  navLabel: 'Кабинет организатора',
+  createRide: 'Создать заезд',
+  accountMenuLabel: 'Меню аккаунта',
+  allRidesLink: 'Все заезды',
+  participantCabinetLink: 'Кабинет участника',
+  logoutLink: 'Выйти',
+  logoutError: 'Не удалось выйти. Попробуйте ещё раз.',
+} as const;
+
+/** Live counters on cabinet nav items (`CabinetNavItem.badge`). */
+export const CABINET_NAV_BADGE_TERMS = {
+  // Screen-reader text after the item's label: «Участники, 3 новых за сутки».
+  newRegistrations: (count: number) =>
+    `${count} ${pluralRu(count, 'новая запись', 'новые записи', 'новых записей')} за сутки`,
+  sectionsLabel: 'Разделы кабинета',
+} as const;
+
+// --------------------------- end CR-132 block ------------------------------

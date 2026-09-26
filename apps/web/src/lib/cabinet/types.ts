@@ -26,7 +26,18 @@ export interface CabinetNavItem {
    * Optional so a feature that hasn't picked an icon yet still renders
    * (label-only), same as before this field existed. */
   icon?: CabinetIconName;
+  /** CR-132: a live counter shown beside the label (the mockup's «Участники
+   * 3»). A *name* for the same serialization reason as `icon`: the cabinet
+   * frame resolves it client-side (`@/lib/organizer/nav-badges.ts`) and
+   * shows nothing while it loads, fails, or is zero. */
+  badge?: CabinetNavBadge;
 }
+
+/** CR-132: the live counters a nav item can carry — see `CabinetNavItem.badge`. */
+export type CabinetNavBadge = 'newRegistrations';
+
+/** Resolved values per badge name; a missing name renders no badge. */
+export type CabinetNavBadgeCounts = Partial<Record<CabinetNavBadge, number>>;
 
 // CR-015: same registration-over-branching pattern as `CabinetNavItem`, for
 // dashboard widgets (`docs/design.md` §8: "Dashboard (widgets from the ADR-009

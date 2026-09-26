@@ -421,11 +421,23 @@ registry, the theme control (§3), and the account menu. A new screen registers 
 into its registry; it does not edit the header. `CabinetShell` remains, narrowed to
 the `/me/*` and `/organizer/*` session gate.
 
+Exception (CR-132, mockup screen 4): `/organizer/*` is an app frame of its own and
+does not show the global header. Its **organizer header** holds only the wordmark
+(→ `/`), a primary «+ Создать заезд» (icon-only below `sm`) and an avatar-initials
+account menu — who is signed in, «Все заезды», «Кабинет участника», the three theme
+options, «Выйти» — which replaces CR-127's «Вы вошли как … Выйти» bar there (`/me/*`
+keeps both). Under it, the sidebar is a full-height column with a right border
+(`lg`+) and becomes a horizontally scrolling row of section pills below `lg`. A nav
+descriptor may name a live `badge`; «Участники» carries the nearest ride's
+registrations in the last 24 hours (hidden at 0, a sentence for screen readers).
+
 Below `md` a **bottom tab bar** (CR-130, ADR-024 «нижние вкладки») adds five
 fixed destinations — Заезды (`/`), Карта (`/?view=map`), a filled «+ Создать» pill
 (`/organizer/rides/new`), Мои (`/me/rides`), Я (`/me`) — each an outline icon with a
 visible label. It sits alongside the header's disclosure panel, which still holds
-the full per-cabinet menus, the theme control and sign-out. It steps aside on
+the full per-cabinet menus, the theme control and sign-out — an owner decision
+(2026-09-26, CR-133): the two coexist, deliberately departing from ADR-024 §8's
+"replaces the dropdown", since the five tabs have no room for those. It steps aside on
 `/rides/[id]`, whose sticky registration bar owns that screen edge; `Toast` lifts
 above it via `--app-bottom-inset`.
 
@@ -433,10 +445,13 @@ The organizer dashboard (`/organizer`, CR-131 — mockup screen 4) opens with th
 organizer's name as an eyebrow, a time-of-day greeting and a secondary
 «Отправить обновление» (the nearest ride's updates); then four KPI cells —
 Ближайший (days to the start + a short start line), Записано (`N/M` on the nearest
-ride + «+N за сутки»), Лист ожидания (all rides), Рейтинг (+ review count); then
-«Новые записи» (the newest registrations across current rides, with group and
-elapsed time) and «Записи по дням» (the calendar week пн–вс, the busiest day
-highlighted; every bar carries its count as text). The "nearest ride" is one
+ride + «+N за сутки»), Лист ожидания (the nearest ride's, «на «Название»» — all
+rides only without one, CR-132), Рейтинг (+ review count), numerals one size up
+(`MetricTile size="lg"`); then «Новые записи» (the newest registrations across
+current rides — «Анна К. · группа 1» and the elapsed time; the ride's title only
+when the list spans several rides) and «Записи по дням» (the calendar week пн–вс,
+bars only, the busiest day highlighted in `brand`, a zero day a short stub; each
+day's count is a screen-reader sentence, CR-132). The "nearest ride" is one
 shared definition (`apps/web/src/lib/organizer/own-rides.ts`): the ride under
 way, else the soonest upcoming published one. The organizer sidebar lists «Обзор»,
 then the ADR-009 registry — Заезды, Участники, Обновления (both open the nearest
@@ -451,7 +466,10 @@ the bar reads as one line of type. Dropdown items (`NAV_MENU_ITEM_CLASSNAME`) st
 
 Every nested screen carries a labeled back link to its parent (CR-109) — an explicit
 destination, not browser history, since `/rides/[id]` is routinely opened from a shared
-URL with no history behind it.
+URL with no history behind it. A cabinet sidebar section itself (`/organizer/rides`,
+`/organizer/profile`, CR-133) is not nested — the sidebar is always on screen and its
+«Обзор» is the way back — so it carries no back link; screens below a section
+(`/organizer/rides/new`, `/organizer/rides/[id]/*`) keep theirs.
 
 ---
 
@@ -524,7 +542,8 @@ messages tied to the field, a pending state, and duplicate-submit protection.
 CR-108 replaced the cabinets' own nav (a bottom bar at base, a side column at `md`+)
 with the single global header described in §8. ADR-024/CR-130 brought two surfaces
 back, both fed from the same places: the organizer's desktop sidebar (`lg`+, ADR-009
-registry) and a site-wide bottom tab bar below `md` (§8).
+registry) and a site-wide bottom tab bar below `md` (§8). CR-132: below `lg` the
+organizer sidebar's items render as a scrolling pill row under the organizer header.
 
 Tables (participant lists) collapse to stacked cards below `md` — never a horizontally
 scrolling table on a phone.

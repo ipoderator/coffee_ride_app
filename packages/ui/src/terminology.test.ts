@@ -197,3 +197,23 @@ describe('CR-131 organizer overview terms', () => {
     expect(ORGANIZER_OVERVIEW_TERMS.registeredLastDay(3)).toBe('+3 за сутки');
   });
 });
+
+// CR-132.
+describe('CR-132 organizer frame terms', () => {
+  it('pluralizes the nav badge sentence and names the waitlist ride', async () => {
+    const { CABINET_NAV_BADGE_TERMS, ORGANIZER_OVERVIEW_TERMS } =
+      await import('./terminology');
+    expect(CABINET_NAV_BADGE_TERMS.newRegistrations(1)).toBe(
+      '1 новая запись за сутки',
+    );
+    expect(CABINET_NAV_BADGE_TERMS.newRegistrations(3)).toBe(
+      '3 новые записи за сутки',
+    );
+    expect(CABINET_NAV_BADGE_TERMS.newRegistrations(5)).toBe(
+      '5 новых записей за сутки',
+    );
+    expect(ORGANIZER_OVERVIEW_TERMS.waitlistForRide('Рассветный')).toBe(
+      'на «Рассветный»',
+    );
+  });
+});

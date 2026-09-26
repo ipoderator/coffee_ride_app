@@ -8,7 +8,8 @@ import { CabinetShell } from './CabinetShell';
 
 const replaceMock = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => ({ replace: replaceMock, push: vi.fn() }),
+  usePathname: () => '/organizer',
 }));
 
 vi.mock('@/lib/api/current-user', () => ({
@@ -114,6 +115,37 @@ describe('CabinetShell', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByLabelText('Загрузка личного кабинета…'),
+    ).toBeInTheDocument();
+  });
+
+  // CR-132: the organizer frame — its header owns identity and sign-out.
+  it('draws the sidebar frame without the account bar when given nav items', async () => {
+    getCurrentUserMock.mockResolvedValue({ user });
+
+    render(
+      <SessionProvider>
+        <CabinetShell
+          sidebarNavItems={[{ label: 'Обзор', href: '/organizer', order: 0 }]}
+        >
+          <p>Содержимое кабинета</p>
+        </CabinetShell>
+      </SessionProvider>,
+    );
+
+    expect(await screen.findByText('Содержимое кабинета')).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('navigation', { name: 'Разделы кабинета' }),
+    ).toHaveLength(2);
+    expect(
+      screen.queryByRole('region', { name: 'Текущий аккаунт' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the account bar on a cabinet without a sidebar', async () => {
+    getCurrentUserMock.mockResolvedValue({ user });
+    renderShell();
+    expect(
+      await screen.findByRole('region', { name: 'Текущий аккаунт' }),
     ).toBeInTheDocument();
   });
 });

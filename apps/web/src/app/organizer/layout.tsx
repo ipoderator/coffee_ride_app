@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CabinetShell } from '@/components/cabinet/CabinetShell';
+import { OrganizerCabinetFrame } from '@/components/cabinet/OrganizerCabinetFrame';
 import { filterEnabled } from '@/lib/cabinet/feature-flags';
 import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
 import type { CabinetNavItem } from '@/lib/cabinet/types';
@@ -22,6 +22,9 @@ import { ORGANIZER_NEAREST_RIDE_TERMS } from 'ui';
 // Not a registry entry: the cabinet root isn't a feature, and `AppHeader`'s
 // dropdown already renders its own fixed overview link ahead of the same
 // registry — a registry entry would show it there twice.
+// CR-132 (mockup screen 4): the cabinet is an app frame of its own —
+// `OrganizerCabinetFrame` draws its header and sidebar column; the shared
+// `AppHeader` is left off here by `SiteChrome` (root layout).
 const OVERVIEW_ITEM: CabinetNavItem = {
   label: ORGANIZER_NEAREST_RIDE_TERMS.overviewNavLabel,
   href: '/organizer',
@@ -35,10 +38,10 @@ export default function OrganizerCabinetLayout({
   children: ReactNode;
 }) {
   return (
-    <CabinetShell
-      sidebarNavItems={[OVERVIEW_ITEM, ...filterEnabled(ORGANIZER_NAV_ITEMS)]}
+    <OrganizerCabinetFrame
+      navItems={[OVERVIEW_ITEM, ...filterEnabled(ORGANIZER_NAV_ITEMS)]}
     >
       {children}
-    </CabinetShell>
+    </OrganizerCabinetFrame>
   );
 }

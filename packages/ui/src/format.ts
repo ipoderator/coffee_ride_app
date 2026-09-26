@@ -505,3 +505,22 @@ export function formatShortStart(
   const dayMonth = `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}`;
   return `${formatShortWeekday(date, { timeZone })} ${dayMonth} · ${formatTime(date, { timeZone })}`;
 }
+
+// ---------------------------------------------------------------------------
+// CR-132 (organizer cabinet frame per the «Ночной старт» mockup). Additive.
+// ---------------------------------------------------------------------------
+
+/**
+ * A person's name as a dense feed shows it — `Анна К.` (first word plus the
+ * last word's initial). A one-word name is returned as is; blank → `null`.
+ */
+export function formatShortPersonName(
+  name: string | null | undefined,
+): string | null {
+  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (parts.length === 0) return null;
+  const first = parts[0]!;
+  if (parts.length === 1) return first;
+  const last = parts[parts.length - 1]!;
+  return `${first} ${last[0]!.toUpperCase()}.`;
+}

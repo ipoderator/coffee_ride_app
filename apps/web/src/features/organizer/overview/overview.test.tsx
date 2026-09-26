@@ -4,6 +4,7 @@ import type { OrganizerProfileResponse, Ride } from 'types';
 import {
   fetchNearestOwnRide,
   listAllRideParticipants,
+  listAllRideWaitlist,
 } from '@/lib/organizer/own-rides';
 import { ApiError, getOwnOrganizerProfile, getOwnRideSummary } from './api';
 import { OrganizerOverviewWidget } from './components/OrganizerOverviewWidget';
@@ -25,6 +26,7 @@ vi.mock('@/lib/organizer/own-rides', async () => {
     ...actual,
     fetchNearestOwnRide: vi.fn(),
     listAllRideParticipants: vi.fn(),
+    listAllRideWaitlist: vi.fn(),
   };
 });
 
@@ -32,6 +34,7 @@ const profileMock = vi.mocked(getOwnOrganizerProfile);
 const summaryMock = vi.mocked(getOwnRideSummary);
 const nearestMock = vi.mocked(fetchNearestOwnRide);
 const participantsMock = vi.mocked(listAllRideParticipants);
+const waitlistMock = vi.mocked(listAllRideWaitlist);
 
 // Local 08:00 (the test runner's own zone) on Friday 2 October 2026.
 const NOW = new Date(2026, 9, 2, 8, 0);
@@ -85,6 +88,7 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
       summaryMock,
       nearestMock,
       participantsMock,
+      waitlistMock,
     ])
       mock.mockReset();
     profileMock.mockResolvedValue(PROFILE);
@@ -99,6 +103,7 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
     });
     nearestMock.mockResolvedValue(NEAREST);
     participantsMock.mockResolvedValue(participants(15, 3));
+    waitlistMock.mockResolvedValue(participants(2, 0));
   });
 
   it('renders the mockup head and KPI cells from real data', async () => {
@@ -118,7 +123,13 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
     expect(
       within(cell('Записано')).getByText('+3 за сутки'),
     ).toBeInTheDocument();
-    expect(within(cell('Лист ожидания')).getByText('4')).toBeInTheDocument();
+    // CR-132: the nearest ride's own waitlist, not the all-rides total (4).
+    expect(within(cell('Лист ожидания')).getByText('2')).toBeInTheDocument();
+    expect(
+      within(cell('Лист ожидания')).getByText(
+        'на «Тестовый заезд на выходные»',
+      ),
+    ).toBeInTheDocument();
     expect(within(cell('Рейтинг')).getByText('4,8')).toBeInTheDocument();
     expect(within(cell('Рейтинг')).getByText('32 отзыва')).toBeInTheDocument();
     expect(participantsMock).toHaveBeenCalledWith('ride-1');
@@ -135,7 +146,13 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
       screen.queryByRole('link', { name: 'Отправить обновление' }),
     ).not.toBeInTheDocument();
     expect(within(cell('Записано')).getByText('—')).toBeInTheDocument();
+    // Without a nearest ride the waitlist falls back to the all-rides total.
+    expect(within(cell('Лист ожидания')).getByText('4')).toBeInTheDocument();
+    expect(
+      within(cell('Лист ожидания')).getByText('По всем заездам'),
+    ).toBeInTheDocument();
     expect(participantsMock).not.toHaveBeenCalled();
+    expect(waitlistMock).not.toHaveBeenCalled();
   });
 
   it('offers to create a profile when there is none', async () => {
@@ -149,12 +166,31 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
         code: 'organizer_profile_not_found',
       }),
     );
+    // CR-133: the other reads start alongside the profile read; without a
+    // profile their failures must not turn into the error state.
+    summaryMock.mockRejectedValue(new Error('forbidden'));
+    nearestMock.mockRejectedValue(new Error('forbidden'));
     render(<OrganizerOverviewWidget />);
 
     expect(
       await screen.findByRole('link', { name: 'Создать профиль' }),
     ).toHaveAttribute('href', '/organizer/profile');
-    expect(summaryMock).not.toHaveBeenCalled();
+    expect(participantsMock).not.toHaveBeenCalled();
+  });
+
+  it('starts the ride reads without waiting for the profile (CR-133)', async () => {
+    let resolveProfile: (profile: OrganizerProfileResponse) => void = () => {};
+    profileMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveProfile = resolve;
+      }),
+    );
+    render(<OrganizerOverviewWidget />);
+
+    expect(nearestMock).toHaveBeenCalledTimes(1);
+    expect(summaryMock).toHaveBeenCalledTimes(1);
+    resolveProfile(PROFILE);
+    expect(await screen.findByText('Лист ожидания')).toBeInTheDocument();
   });
 
   it('shows an error with retry', async () => {

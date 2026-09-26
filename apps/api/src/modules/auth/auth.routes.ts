@@ -58,7 +58,9 @@ const meResponseSchema = z.object({
 // global `rateLimit` registration passes `app.redis` into the plugin), the
 // plugin's own in-memory store otherwise — either way, per-IP only. CR-058
 // pairs this with the independent per-account tier below.
-const AUTH_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
+// `max` is overridable by `env.AUTH_RATE_LIMIT_MAX` (KI-014, test/dev only —
+// `loadEnv()` rejects it in production); resolved per plugin instance below.
+const AUTH_RATE_LIMIT_DEFAULTS = { max: 5, timeWindow: '1 minute' };
 
 // Independent of AUTH_RATE_LIMIT above — a separate gate, not a combined
 // key (`.claude/rules/security.md`: "per IP and per account"). Same order of
@@ -67,7 +69,8 @@ const AUTH_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
 // "both dimensions exist." Only applies to register/login/forgot-password —
 // verify-email/reset-password operate on opaque single-use tokens, not an
 // account identifiable from the request body.
-const ACCOUNT_RATE_LIMIT = { max: 5, windowMs: 60_000 };
+// `max` shares the same `env.AUTH_RATE_LIMIT_MAX` override as the per-IP tier.
+const ACCOUNT_RATE_LIMIT_DEFAULTS = { max: 5, windowMs: 60_000 };
 
 function accountRateLimitKey(routeName: string, email: string) {
   return `auth-rl:account:${routeName}:${email}`;
@@ -88,6 +91,14 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
 ) => {
   const { env } = opts;
   const isProd = env.NODE_ENV === 'production';
+  const AUTH_RATE_LIMIT = {
+    ...AUTH_RATE_LIMIT_DEFAULTS,
+    max: env.AUTH_RATE_LIMIT_MAX ?? AUTH_RATE_LIMIT_DEFAULTS.max,
+  };
+  const ACCOUNT_RATE_LIMIT = {
+    ...ACCOUNT_RATE_LIMIT_DEFAULTS,
+    max: env.AUTH_RATE_LIMIT_MAX ?? ACCOUNT_RATE_LIMIT_DEFAULTS.max,
+  };
 
   // CR-058's per-account tier. Throws the same `AuthServiceError` convention
   // every other domain error in this module uses, so it flows through the

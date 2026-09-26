@@ -195,6 +195,29 @@ describe('POST /v1/auth/register', () => {
 
     await app.close();
   });
+
+  // KI-014: AUTH_RATE_LIMIT_MAX (test/dev only; rejected in production by
+  // `loadEnv()`) moves the per-IP tier's threshold. The per-account tier's
+  // override needs a live Redis (it fails open without one) — covered in the
+  // CR-058 live-Redis block at the end of this file.
+  it('AUTH_RATE_LIMIT_MAX overrides the per-IP auth tier threshold', async () => {
+    const customMax = 7;
+    const app = await buildApp({ ...testEnv, AUTH_RATE_LIMIT_MAX: customMax });
+
+    const statuses = [];
+    for (let i = 0; i < customMax + 1; i += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+      });
+      statuses.push(response.statusCode);
+    }
+    expect(statuses.filter((s) => s === 201).length).toBe(customMax);
+    expect(statuses.at(-1)).toBe(429);
+
+    await app.close();
+  });
 });
 
 describe('POST /v1/auth/verify-email', () => {
@@ -944,6 +967,40 @@ describe('CR-058: Redis-backed rate limiting (live Redis)', () => {
       // fired (`account-rate-limit.test.ts` already isolates that).
       expect(statuses.filter((s) => s === 401).length).toBe(5);
       expect(statuses.at(-1)).toBe(429);
+
+      await app.close();
+    },
+  );
+
+  // KI-014: AUTH_RATE_LIMIT_MAX also moves the per-account tier. One email
+  // from a distinct IP per attempt, so the per-IP tier can never be what
+  // trips — the 429 must be `account_rate_limited`.
+  it.skipIf(!testEnvWithRedis)(
+    'AUTH_RATE_LIMIT_MAX overrides the per-account auth tier threshold',
+    async () => {
+      const customMax = 7;
+      const app = await buildApp({
+        ...testEnvWithRedis!,
+        AUTH_RATE_LIMIT_MAX: customMax,
+      });
+
+      const email = uniqueEmail();
+      const responses = [];
+      for (let i = 0; i < customMax + 1; i += 1) {
+        responses.push(
+          await app.inject({
+            method: 'POST',
+            url: '/v1/auth/login',
+            remoteAddress: `10.0.0.${i + 1}`,
+            payload: { email, password: 'wrong-password-attempt' },
+          }),
+        );
+      }
+
+      const statuses = responses.map((r) => r.statusCode);
+      expect(statuses.filter((s) => s === 401).length).toBe(customMax);
+      expect(statuses.at(-1)).toBe(429);
+      expect(responses.at(-1)!.json().code).toBe('account_rate_limited');
 
       await app.close();
     },

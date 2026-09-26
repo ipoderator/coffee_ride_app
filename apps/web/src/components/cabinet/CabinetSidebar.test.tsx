@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CabinetNavItem } from '@/lib/cabinet/types';
+import { CabinetSectionTabs } from './CabinetSectionTabs';
 import { CabinetSidebar } from './CabinetSidebar';
 
 let pathname = '/organizer';
@@ -14,6 +15,7 @@ const ITEMS: CabinetNavItem[] = [
     href: '/organizer/participants',
     order: 30,
     icon: 'Users',
+    badge: 'newRegistrations',
   },
 ];
 
@@ -46,5 +48,36 @@ describe('CabinetSidebar active item (CR-131)', () => {
     pathname = '/organizer/profile';
     render(<CabinetSidebar items={ITEMS} />);
     expect(current()).toBeNull();
+  });
+});
+
+describe('cabinet nav badges (CR-132)', () => {
+  beforeEach(() => {
+    pathname = '/organizer';
+  });
+
+  it('shows the count on the badged item, with a sentence for screen readers', () => {
+    render(<CabinetSidebar items={ITEMS} badges={{ newRegistrations: 3 }} />);
+    const link = screen.getByRole('link', { name: /Участники/ });
+    expect(link).toHaveTextContent('3');
+    expect(link).toHaveAccessibleName('Участники, 3 новые записи за сутки');
+  });
+
+  it('shows no badge while the count is unknown or zero', () => {
+    const { rerender } = render(<CabinetSidebar items={ITEMS} />);
+    expect(screen.getByRole('link', { name: 'Участники' })).toBeTruthy();
+    rerender(<CabinetSidebar items={ITEMS} badges={{ newRegistrations: 0 }} />);
+    expect(screen.getByRole('link', { name: 'Участники' })).toBeTruthy();
+  });
+
+  it('carries the same items, active state and badge in the mobile strip', () => {
+    pathname = '/organizer/participants';
+    render(
+      <CabinetSectionTabs items={ITEMS} badges={{ newRegistrations: 5 }} />,
+    );
+    expect(current()).toContain('Участники');
+    expect(
+      screen.getByRole('link', { name: /5 новых записей за сутки/ }),
+    ).toBeTruthy();
   });
 });

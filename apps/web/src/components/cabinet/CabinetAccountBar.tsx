@@ -3,14 +3,8 @@
 import { LogOut } from 'lucide-react';
 import type { User } from 'types';
 import { Button, CABINET_TERMS, SITE_HEADER_TERMS } from 'ui';
+import { accountName } from '@/lib/auth/account-name';
 import { useLogout } from '@/lib/auth/use-logout';
-
-function accountName(user: User): string | null {
-  const fullName = [user.firstName, user.lastName]
-    .filter((part) => part && part.trim())
-    .join(' ');
-  return fullName || user.displayName?.trim() || null;
-}
 
 /**
  * CR-127: who is signed in plus a one-click «Выйти», on every cabinet screen

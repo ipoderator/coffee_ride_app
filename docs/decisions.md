@@ -1186,3 +1186,11 @@ If a dark 2GIS basemap style becomes available (KI-057's blocker), reconsider
 `map-*` tokens gaining a real `.dark` override. If the discovery tab split turns out
 to fragment usage (most people staying on one tab and never finding the other), the
 two views may need to merge into one screen instead of two tabs.
+
+### Amendment 2026-09-26 (CR-133, owner decision)
+
+Point 8's "bottom tab bar replaces [the header dropdown] there" is not adopted
+literally: on mobile the bottom tab bar and the shared header's disclosure panel
+coexist outside `/organizer/*` (which has its own header since CR-132). The five
+tabs have no room for the per-cabinet menus, the theme control or sign-out, and
+the panel is their only mobile route. Revisit only if those move to `/me`.

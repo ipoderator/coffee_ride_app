@@ -37,15 +37,16 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-130 «Ночной старт» (ADR-024) and CR-131 (organizer dashboard
-brought to the mockup's screen 4) are complete — CR-130 Phase 1 committed in
-`3f228ed`; the rest of CR-130 and all of CR-131 are done and verified but
-**uncommitted** as of 2026-09-26. See `docs/changelog.md`'s CR-130/CR-131
-entries. Open follow-ups: KI-066 (dashboard aggregates client-side); owner
-decision pending on whether the mobile tab bar should _replace_ the header's
-hamburger panel (ADR-024 §8's literal wording). Deliberately not built from
-the mockup: the organizer-specific header (CR-108 kept), a «Статистика» screen,
-the «Участники» count badge.
+None active. CR-132 (organizer cabinet frame) and CR-133 (its follow-ups:
+`home.spec.ts` grid + map views, in-flight read de-dup on `/organizer`,
+`AUTH_RATE_LIMIT_MAX` test/dev override for e2e, no back link on organizer
+sidebar sections) are done and verified but **uncommitted**; CR-130 and
+CR-131 are committed (`3f228ed`, `58950a5`). See `docs/changelog.md`'s
+CR-130…CR-133 entries. Owner decision 2026-09-26: the mobile tab bar and the
+shared header's hamburger panel coexist (ADR-024 amendment). Open follow-up:
+KI-066 (dashboard still aggregates client-side; the duplication is gone).
+Deliberately not built from the mockup: a «Статистика» screen. Next logical
+task: KI-064 (`/login?next=`).
 
 CR-121…CR-129 are committed (`9adb797`, `42330fa`, `3fe806b`, `c685310`).
 Full detail on those: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120»
@@ -70,7 +71,12 @@ placeholder. Discovery gained a "Заезды/Карта" tab switch — a new
 `RouteCover`-grid view alongside the unchanged ADR-021/CR-118 map-first list.
 The organizer cabinet regained a desktop sidebar (`CabinetShell`'s new
 optional `sidebarNavItems` prop), reversing part of CR-108 — still fed by
-the same ADR-009 `ORGANIZER_NAV_ITEMS` registry, only the render changed.
+the same ADR-009 `ORGANIZER_NAV_ITEMS` registry, only the render changed. CR-132 took the organizer cabinet the rest of the way to
+the mockup: its own header (wordmark, «+ Создать заезд», avatar account menu
+holding identity, theme and sign-out) instead of the shared `AppHeader` +
+CR-127 account bar, a full-height bordered sidebar column (a pill row below
+`lg`) and a live «Участники» badge (new registrations in 24 h on the nearest
+ride).
 `Button` `danger` is an outline; `danger-filled` (additive) is
 `ConfirmDialog`'s confirm — unchanged by ADR-024. Wordmark «кофе•райд»
 (CR-121, updated by ADR-024: `brand`-coloured elevation-profile mark + Golos

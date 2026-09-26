@@ -161,7 +161,7 @@ describe('RegistrationActivityWidget', () => {
     listOwnRidesMock.mockResolvedValue([ride()]);
     listAllRideParticipantsMock.mockResolvedValue([
       participant('a', '2026-09-26T11:52:00Z', {
-        displayName: 'Анна К.',
+        displayName: 'Анна Кузнецова',
         group: { id: 'g1', name: 'Группа 1', paceKmh: 25 },
       }),
       participant('b', '2026-09-26T10:00:00Z', { displayName: null }),
@@ -174,7 +174,30 @@ describe('RegistrationActivityWidget', () => {
     expect(screen.getByText('8 мин')).toBeTruthy();
     expect(screen.getByText('Без имени')).toBeTruthy();
     expect(screen.getByText('сегодня: 2 записи')).toBeTruthy();
+    // CR-132: one ride in the feed — rows don't repeat its title.
+    expect(screen.queryByText(/Рассветный интервальный/)).toBeNull();
     expect(listAllRideParticipantsMock).toHaveBeenCalledWith('ride-1');
+  });
+
+  it('names the ride on each row once the feed spans several rides (CR-132)', async () => {
+    listOwnRidesMock.mockResolvedValue([
+      ride(),
+      ride({
+        id: 'ride-2',
+        title: 'Вечерний',
+        startsAt: '2026-10-05T15:00:00.000Z',
+      }),
+    ]);
+    listAllRideParticipantsMock.mockImplementation(async (rideId) =>
+      rideId === 'ride-1'
+        ? [participant('a', '2026-09-26T11:52:00Z')]
+        : [participant('b', '2026-09-26T11:00:00Z')],
+    );
+
+    render(<RegistrationActivityWidget />);
+
+    expect(await screen.findByText('· Рассветный интервальный')).toBeTruthy();
+    expect(screen.getByText('· Вечерний')).toBeTruthy();
   });
 
   it('shows the empty copy when nobody has registered', async () => {

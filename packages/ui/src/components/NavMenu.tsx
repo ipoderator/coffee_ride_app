@@ -55,6 +55,11 @@ export interface NavMenuProps {
    * switch) and whose word would just crowd the bar — never for a section
    * whose meaning depends on reading it. */
   labelHidden?: boolean;
+  /** CR-132: drops the trigger's chevron — for a trigger whose icon is
+   * itself the affordance (the organizer header's avatar). */
+  hideChevron?: boolean;
+  /** CR-132: extra classes for the trigger button (merged last). */
+  triggerClassName?: string;
   className?: string;
 }
 
@@ -66,6 +71,8 @@ export function NavMenu({
   children,
   active = false,
   labelHidden = false,
+  hideChevron = false,
+  triggerClassName,
   className,
 }: NavMenuProps) {
   const [open, setOpen] = useState(false);
@@ -171,6 +178,7 @@ export function NavMenu({
         className={cn(
           NAV_BAR_ITEM_CLASSNAME,
           active ? 'text-text' : 'text-text-secondary hover:text-text',
+          triggerClassName,
         )}
       >
         {icon}
@@ -179,21 +187,23 @@ export function NavMenu({
             dependency, not this one's, and CR-106 deliberately kept icon
             resolution on the app side. One chevron is not worth making the
             shared package depend on an icon library. */}
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={cn(
-            'transition-transform motion-reduce:transition-none',
-            open && 'rotate-180',
-          )}
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        {!hideChevron && (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={cn(
+              'transition-transform motion-reduce:transition-none',
+              open && 'rotate-180',
+            )}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        )}
       </button>
       {open && (
         <div

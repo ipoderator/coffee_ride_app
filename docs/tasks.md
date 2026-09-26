@@ -1047,3 +1047,15 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       mockup KPI cells (Ближайший/Записано/Лист ожидания/Рейтинг), sidebar
       «Обзор» + «Участники»/«Обновления» (nearest ride), calendar-week chart
       with the peak day highlighted. Frontend only. See `docs/changelog.md`.
+- [x] CR-132 Organizer cabinet frame per the «Ночной старт» mockup
+      (screen 4) — done 2026-09-26: own organizer header (wordmark,
+      «+ Создать заезд», avatar account menu) instead of the shared header +
+      account bar on `/organizer/*`; full-height sidebar column (pill row
+      below `lg`); «Участники» badge (new registrations in 24 h on the nearest
+      ride); larger KPI numerals, nearest-ride waitlist, «Анна К. · группа 1»
+      rows, bars-only week chart. Frontend only. See `docs/changelog.md`.
+- [x] CR-133 CR-132 follow-ups — done 2026-09-26: `home.spec.ts` covers
+      grid + map views (KI-067); in-flight read de-dup on `/organizer`
+      (KI-066 duplication); `AUTH_RATE_LIMIT_MAX` test/dev override for e2e
+      (rejected in production); no back link on organizer sidebar sections;
+      tab bar + hamburger coexist (owner decision). See `docs/changelog.md`.
