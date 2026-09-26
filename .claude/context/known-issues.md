@@ -124,52 +124,6 @@ Problem: the lint rule forbidding direct 2GIS SDK imports outside `packages/maps
 does not exist yet.
 Next action: CR-056.
 
-### KI-014 — `apps/api`'s Redis client was never connected to a live Redis
-
-Status: open — narrowed, real consumer now exists. Discovered: 2026-09-12
-(CR-005).
-Problem: Docker's daemon did not come up in this environment (same issue as
-CR-004's Postgres validation), and unlike CR-004 there was no already-running
-local Redis to fall back to — installing one via Homebrew for this session was
-explicitly declined. `src/redis.ts` (`createRedisClient`) was therefore only
-typechecked/linted/built, never actually connected to a running Redis.
-Impact: low — the file is a thin, well-known-library wrapper (construct
-`ioredis.Redis` with a URL and `maxRetriesPerRequest`), and it isn't consumed
-by any running code path yet (ADR-004: no justified use until CR-050/CR-058).
-Still, "never actually connected" is a real gap, not a formality.
-Workaround: none needed yet — nothing calls this code.
-Next action: verify a real connection (e.g. `docker compose up redis` +
-`redis-cli ping`, or exercise it from whichever of CR-050/CR-058 consumes it
-first) before or during whichever CR wires this client into a real code path.
-Update 2026-09-16 (CR-050, "Async notification delivery via Redis queue"): this
-is now `apps/api`'s first real Redis consumer (`modules/notifications/queue.ts`
-— a `bullmq` producer/worker), same shape KI-015 hit with S3/CR-027. This
-session live-verified the _unreachable_-Redis behavior only (connection errors
-logged, boot never crashes, enqueue/shutdown calls are bounded and never hang
-— see `docs/changelog.md`'s CR-050 entry) — genuinely connecting to a live,
-reachable Redis and confirming a job round-trips through the worker into a real
-`notifications` row is still unverified and still blocked on this same
-Docker-unreachable constraint. Next action unchanged: the first session with a
-working Docker daemon (or an installed local Redis) should additionally confirm
-that live round trip, the way CR-004 did for Postgres.
-Update 2026-09-19: Docker Desktop worked in this session (see
-`docker-desktop-unavailable` memory — treat that as a point-in-time constraint,
-not permanent). `docker compose up -d redis` + the running `apps/api` dev
-server's own `/health` reported `redis: "ok"`; a standalone `ioredis`/`bullmq`
-script (`new Redis(REDIS_URL)`, `new Queue('notifications', {connection})`)
-also connected and reached `waitUntilReady()` against the real
-`redis:8-alpine` container with `--requirepass`. This closes the
-connection-level gap. Still open: an actual job enqueued through
-`notifications.service.ts` round-tripping through the `Worker` into a real
-`notifications` table row was not exercised this session — that's the
-remaining next action, not the connection itself.
-
-Update 2026-09-26 (CR-133): repeated local e2e runs tripping the 5/min auth
-limit is handled by the test/dev-only `AUTH_RATE_LIMIT_MAX` override
-(`apps/api/src/env.ts`, rejected in production); the Playwright-started API
-sets it, an already-running dev API needs it in the root `.env`. The Redis
-job round trip above is still the open part.
-
 ### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
 
 Status: open — now a real code path, still unverified. Discovered: 2026-09-12
@@ -865,6 +819,24 @@ Next action: an owner decision on the replacement S3-compatible image for CI
 and `docker-compose.yml` (a different MinIO distribution/tag that is still
 publicly pullable, or another S3-compatible server). Then update both files
 together (same pinned tag) and confirm a green `ci` run.
+
+### KI-069 — `/organizer/rides/[id]/edit` shows a non-owner the edit form and lifecycle buttons
+
+Status: open. Discovered: 2026-09-26 (CR-135, `e2e/access-control.spec.ts`).
+Problem: `EditRideForm` loads the ride through the public `GET /v1/rides/:id`
+(`apps/web/src/features/organizer/rides/api.ts` → `getRide`), which any
+signed-in user can read once the ride has left `draft`. So a participant, or
+another club's organizer, who types the URL gets the full form with «Закрыть
+регистрацию» / «Отменить заезд» etc. Only a draft shows «Заезд не найден».
+Impact: low. Not an authorization hole — every action is rejected server-side
+(`404 ride_not_found`) and the form shows its generic error; the e2e spec
+asserts the ride is unchanged afterwards. It is a confusing screen that looks
+like it grants control.
+Workaround: none needed for safety.
+Next action: have the edit screen confirm ownership before rendering (e.g.
+compare against the viewer's own rides, or a dedicated owner-only read) and
+show the not-found state otherwise. `access-control.spec.ts` already accepts
+either outcome, so it keeps passing after the fix.
 
 ## Resolved
 

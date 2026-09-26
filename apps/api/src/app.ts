@@ -109,8 +109,10 @@ export async function buildApp(env: Env) {
   // journey (`.claude/rules/resilience.md`) — only the shared-counter
   // protection is lost, same fail-open choice `lib/account-rate-limit.ts`
   // makes for the per-account tier.
+  // CR-135: `env.RATE_LIMIT_MAX` is the test/dev-only override (refused in
+  // production by `loadEnv()`).
   await app.register(rateLimit, {
-    max: 100,
+    max: env.RATE_LIMIT_MAX ?? 100,
     timeWindow: '1 minute',
     ...(app.redis ? { redis: app.redis } : {}),
     skipOnError: true,

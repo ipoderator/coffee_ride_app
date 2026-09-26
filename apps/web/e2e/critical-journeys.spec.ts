@@ -1,11 +1,5 @@
+import { expect, test } from '@playwright/test';
 import {
-  expect,
-  request as apiRequest,
-  test,
-  type Page,
-} from '@playwright/test';
-import {
-  AUTH_TERMS,
   PARTICIPANTS_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_CREATE_TERMS,
@@ -21,6 +15,7 @@ import {
   setDisplayName,
   uniqueEmail,
 } from './helpers/api-fixtures';
+import { loginViaUi, newIsolatedRequest } from './helpers/ui';
 
 // CR-092. The three critical journeys `.claude/rules/testing.md` names, which
 // `home.spec.ts`'s single-page smoke check deliberately doesn't cover.
@@ -32,27 +27,9 @@ import {
 // identity (no redundant re-login of an identity already sharing `page`'s
 // cookie jar) to stay at exactly 5 register calls and 5 login calls total
 // across the whole group, not more.
+// CR-135: `loginViaUi`/`newIsolatedRequest` moved to `./helpers/ui.ts`, shared
+// with the specs that extend these journeys.
 test.describe.configure({ mode: 'serial' });
-
-async function loginViaUi(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(AUTH_TERMS.emailLabel).fill(email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(password);
-  await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
-  // `LoginForm.handleSubmit` awaits the login fetch before its
-  // `router.replace('/me')` — without waiting for that navigation here, a
-  // subsequent `page.goto(...)` in the caller races it and can cancel the
-  // in-flight request, leaving no session cookie set at all.
-  await page.waitForURL('/me');
-}
-
-// A fresh, independent cookie jar — `apiRequest` (the module-level `APIRequest`,
-// distinct from the per-test `request`/`page.request` fixtures) is what can
-// create one. Used for a second actor (e.g. the organizer fixture in the
-// participant journey below) whose session must never leak into `page`'s own.
-function newIsolatedRequest() {
-  return apiRequest.newContext({ baseURL: 'http://localhost:3000' });
-}
 
 test('participant discovers a ride and registers for it', async ({ page }) => {
   // Fixture: an organizer, on a separate context so its session never touches
@@ -62,7 +39,13 @@ test('participant discovers a ride and registers for it', async ({ page }) => {
   await login(organizerRequest, organizer.email, organizer.password);
   await createOrganizerProfile(organizerRequest, 'Клуб для e2e-теста');
   const rideTitle = `E2E заезд ${Date.now()}`;
-  const { rideId } = await createPublishedRide(organizerRequest, rideTitle);
+  // CR-135: starts in an hour, not the fixtures' default two weeks. `/` lists
+  // upcoming rides by start time, one page at a time — every other e2e ride
+  // (a dozen+ per run, more on a reused local database) starts later, so
+  // this one stays on the first page however many of them exist.
+  const { rideId } = await createPublishedRide(organizerRequest, rideTitle, {
+    startsInMs: 60 * 60 * 1000,
+  });
   await organizerRequest.dispose();
 
   // Fixture: a registered/verified participant account (no UI verify-email

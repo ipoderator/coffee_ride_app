@@ -37,7 +37,16 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-134 (CI/production-build P0, 2026-09-26) is done, verified
+None active. CR-135 (2026-09-26, committed): seven new Playwright specs
+in `apps/web/e2e/` — waitlist promotion, pace groups, full lifecycle + cancel,
+access control, password reset, profile visibility, notifications (17/17 e2e
+green locally, with and without Redis). Adds a test/dev-only `RATE_LIMIT_MAX`
+(global rate limit, refused in production) and an e2e-only Postgres seed for
+reset tokens (`e2e/helpers/db-fixtures.ts`). Found KI-069 (edit screen shows
+lifecycle buttons to non-owners; server rejects them). Closed KI-014. CI still
+can't run any of it until KI-068 (MinIO image) is fixed.
+
+CR-134 (CI/production-build P0, 2026-09-26) is done, verified
 and committed: `turbo.json` passes `TEST_DATABASE_URL`/`RUN_LIVE_S3_TESTS`
 to `test` (CI's `pnpm test` was losing them — KI-050 resolved), `web`'s
 `API_INTERNAL_URL` is a required Docker build arg (images proxied to
@@ -620,11 +629,10 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
 - Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
   when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
   pre-CR-050 direct synchronous insert when it isn't. Live connection-level
-  Redis reachability was already confirmed as of 2026-09-19 (KI-014); this
-  session reconfirmed it via `GET /health` (`redis: "ok"`) — the specific
-  gap KI-014 still leaves open (an enqueued job actually round-tripping
-  through the `Worker` into a real `notifications` row) was not exercised
-  again this session.
+  Redis reachability was confirmed on 2026-09-19; the full round trip (an
+  enqueued job through the `Worker` into a real `notifications` row) was
+  exercised by CR-135's `e2e/notifications.spec.ts` against a Redis-backed
+  API (KI-014 resolved).
 - `GET /health` (CR-051): as of CR-120 the local MinIO container is stopped, so
   it reports `s3: "error"` (db/redis `ok`) and uploads are unavailable locally
   until `docker compose up minio` (KI-063). The endpoint's degraded-vs-error

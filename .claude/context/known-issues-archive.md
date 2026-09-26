@@ -1305,3 +1305,57 @@ stripped the same way — CI's live S3 test was silently skipping) added to
 wrong: CI runs `pnpm test` (Turbo), not `pnpm --filter api test`, so CI's api
 suite was failing too. `pnpm test` with `TEST_DATABASE_URL` exported: 5/5
 tasks, api 438 passed / 4 skipped.
+
+### KI-014 — `apps/api`'s Redis client was never connected to a live Redis
+
+Status: open — narrowed, real consumer now exists. Discovered: 2026-09-12
+(CR-005).
+Problem: Docker's daemon did not come up in this environment (same issue as
+CR-004's Postgres validation), and unlike CR-004 there was no already-running
+local Redis to fall back to — installing one via Homebrew for this session was
+explicitly declined. `src/redis.ts` (`createRedisClient`) was therefore only
+typechecked/linted/built, never actually connected to a running Redis.
+Impact: low — the file is a thin, well-known-library wrapper (construct
+`ioredis.Redis` with a URL and `maxRetriesPerRequest`), and it isn't consumed
+by any running code path yet (ADR-004: no justified use until CR-050/CR-058).
+Still, "never actually connected" is a real gap, not a formality.
+Workaround: none needed yet — nothing calls this code.
+Next action: verify a real connection (e.g. `docker compose up redis` +
+`redis-cli ping`, or exercise it from whichever of CR-050/CR-058 consumes it
+first) before or during whichever CR wires this client into a real code path.
+Update 2026-09-16 (CR-050, "Async notification delivery via Redis queue"): this
+is now `apps/api`'s first real Redis consumer (`modules/notifications/queue.ts`
+— a `bullmq` producer/worker), same shape KI-015 hit with S3/CR-027. This
+session live-verified the _unreachable_-Redis behavior only (connection errors
+logged, boot never crashes, enqueue/shutdown calls are bounded and never hang
+— see `docs/changelog.md`'s CR-050 entry) — genuinely connecting to a live,
+reachable Redis and confirming a job round-trips through the worker into a real
+`notifications` row is still unverified and still blocked on this same
+Docker-unreachable constraint. Next action unchanged: the first session with a
+working Docker daemon (or an installed local Redis) should additionally confirm
+that live round trip, the way CR-004 did for Postgres.
+Update 2026-09-19: Docker Desktop worked in this session (see
+`docker-desktop-unavailable` memory — treat that as a point-in-time constraint,
+not permanent). `docker compose up -d redis` + the running `apps/api` dev
+server's own `/health` reported `redis: "ok"`; a standalone `ioredis`/`bullmq`
+script (`new Redis(REDIS_URL)`, `new Queue('notifications', {connection})`)
+also connected and reached `waitUntilReady()` against the real
+`redis:8-alpine` container with `--requirepass`. This closes the
+connection-level gap. Still open: an actual job enqueued through
+`notifications.service.ts` round-tripping through the `Worker` into a real
+`notifications` table row was not exercised this session — that's the
+remaining next action, not the connection itself.
+
+Update 2026-09-26 (CR-133): repeated local e2e runs tripping the 5/min auth
+limit is handled by the test/dev-only `AUTH_RATE_LIMIT_MAX` override
+(`apps/api/src/env.ts`, rejected in production); the Playwright-started API
+sets it, an already-running dev API needs it in the root `.env`. The Redis
+job round trip above is still the open part.
+
+Resolution 2026-09-26 (CR-135): closed by the new `apps/web/e2e/
+notifications.spec.ts`, run against an `apps/api` with `REDIS_URL` set
+(`/health` → `redis: "ok"`): the organizer's ride update and the ride's
+cancellation go through `queue.add('ride_update' | 'ride_cancelled')`, the
+in-process `Worker` consumes them, and the resulting `notifications` rows show
+up in the participant's inbox — the job round trip this entry still had open.
+Passed with 1 worker and in parallel.

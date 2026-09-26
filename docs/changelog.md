@@ -821,3 +821,67 @@ Decisions: none. This fixes the documented ADR-018 topology and does not
 change it.
 Follow-up: first real GitHub Actions run of `ci` + `docker-smoke`; Caddy and
 `backup` are still unexercised (KI-045).
+
+## 2026-09-26 — CR-135 — Expanded critical E2E journeys
+
+Why: P1 from the owner. CR-092 covered only discover → register, create → publish
+and "view participants". Waitlist promotion, pace groups, the rest of the
+lifecycle, authorization, password reset, profile visibility and notifications
+had unit/integration coverage, but no browser journey.
+
+- **Seven new Playwright specs** (`apps/web/e2e/`, 14 new tests, all 17 green):
+  - `registration-waitlist`: cancel → the _first_ waitlisted rider is promoted,
+    the second stays queued, the canceller is offered the waitlist.
+  - `pace-groups`: no group → `422 group_required` + disabled button with the
+    hint; picking a group registers; «Сменить группу» persists across a reload.
+  - `ride-lifecycle`: draft (404 to the public) → published → open → closed →
+    started → finished through `EditRideForm`, then no action button remains;
+    cancel path with the native `confirm()` declined then accepted; the public
+    page shows the final status.
+  - `access-control`: a participant and another club's organizer each get
+    403/404 on PATCH/close/cancel/updates/groups and the participants/waitlist/
+    updates reads; the ride is unchanged afterwards; the participants screen
+    shows two error states. A co-rider's `/riders` and the public ride read
+    never contain another rider's email or phone.
+  - `password-reset`: «Забыли пароль?» → generic confirmation → reset page →
+    the link is single-use → the old password fails, the new one signs in; an
+    invalid token is rejected.
+  - `profile-visibility`: `open` / `co_participants` / `closed` set on
+    `/me/profile`, checked from a co-rider and a signed-in outsider.
+  - `notifications`: an update sent from the organizer's screen and the ride's
+    cancellation reach the inbox (polled — the Redis queue makes it async);
+    opening one clears its «Новое» after a reload, the other stays unread.
+- **Helpers**: `api-fixtures.ts` gains `createDraftRide`, `createRideGroup`,
+  `joinWaitlist`, `postRideUpdate`, `cancelRide`, `updateMe`, `unsafeRequest`
+  and options (`participantLimit`, `startsInMs`); `registerAndVerify` returns
+  `userId`, `registerForRide` returns `registrationId` and takes a `groupId`.
+  New `helpers/ui.ts` (`loginViaUi` and `newIsolatedRequest` moved out of
+  `critical-journeys.spec.ts`, `newSignedInActor`, `confirmInDialog`).
+- **`helpers/db-fixtures.ts`**: the one e2e fixture that writes to Postgres.
+  It seeds a password-reset token row, because no API returns the raw token
+  (always-204 forgot-password, hash-only storage). Test code only; `postgres`
+  is a new `apps/web` devDependency (same version as `packages/db`).
+- **`RATE_LIMIT_MAX`** (`apps/api/src/env.ts`, `app.ts`): a test/dev-only
+  override of the global 100/min/IP limit, set by `playwright.config.ts`.
+  Every e2e actor shares one localhost IP, and the bigger suite hit 429 on
+  `POST /v1/organizers/me`. Like `AUTH_RATE_LIMIT_MAX`, the API refuses to
+  start in production with it set. Two new `env.test.ts` cases.
+- **CR-092 discover test**: its ride now starts in an hour. `/` lists upcoming
+  rides by start time one page at a time, and a dozen+ new e2e rides per run
+  starting in two weeks pushed it off page 1.
+
+Files: `apps/web/e2e/**`, `apps/web/playwright.config.ts`,
+`apps/web/package.json`, `pnpm-lock.yaml`, `apps/api/src/{env.ts,env.test.ts,
+app.ts}`, `.env.example`.
+
+Validation: `playwright test` 17/17, twice in parallel against an API with no
+Redis, and against a Redis-backed API with 1 worker and in parallel. `turbo lint
+typecheck` for web + api: 17/17 tasks. api vitest: 440 passed / 4 skipped (two
+consecutive runs; one earlier run right after a Docker Desktop restart had 14
+failures in one file and did not reproduce).
+
+Decisions: none (the rate-limit override follows the CR-133 precedent).
+Follow-up: KI-069 (edit screen shows lifecycle buttons to non-owners).
+KI-014 resolved: the Redis-backed run exercised the queue → Worker →
+`notifications` row round trip. CI still can't run any of this until KI-068
+(MinIO image) is fixed.

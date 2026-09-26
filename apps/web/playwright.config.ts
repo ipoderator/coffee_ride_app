@@ -53,6 +53,9 @@ export default defineConfig({
         // its own env — set AUTH_RATE_LIMIT_MAX in the root .env for that
         // (see .env.example).
         AUTH_RATE_LIMIT_MAX: '1000',
+        // CR-135: the global 100/min/IP tier too — every e2e actor shares
+        // one localhost IP, and the expanded suite outgrew it.
+        RATE_LIMIT_MAX: '10000',
       },
     },
     {

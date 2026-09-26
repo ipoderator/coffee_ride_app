@@ -28,6 +28,10 @@ ceiling as `apps/web`).
 Library. `apps/web` also has Playwright for e2e (`playwright.config.ts` +
 `e2e/`), live-verified against a real `next dev` server but not wired into
 CI yet (KI-007/CR-080).
+CR-135: `e2e/` holds one spec per journey plus `e2e/helpers/` — `api-fixtures.ts`
+(state via `/api/v1/*`), `ui.ts` (UI login, extra signed-in browser actors),
+`db-fixtures.ts` (the only direct Postgres write: password-reset token seed,
+test code only — `apps/web` runtime still never touches the DB).
 
 `packages/db` exists (CR-004, 2026-09-12): Drizzle ORM (`postgres-js` driver) +
 `drizzle-kit`. Tooling only — **zero domain tables** (user picked this over

@@ -1064,3 +1064,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `API_INTERNAL_URL` is a required Docker build arg (images proxied to
       `localhost:4000`); production Docker smoke test `pnpm smoke:docker` /
       CI job `docker-smoke`. See `docs/changelog.md`.
+- [x] CR-135 Expanded critical E2E journeys (P1) — done 2026-09-26: seven
+      Playwright specs — waitlist promotion on cancel, pace-group choice/
+      change and `group_required`, full ride lifecycle + cancel, access
+      control (non-owner participant/organizer), password reset via UI,
+      profile visibility tiers, ride update/cancel notifications + mark read.
+      Test/dev-only `RATE_LIMIT_MAX`. See `docs/changelog.md`, KI-069.

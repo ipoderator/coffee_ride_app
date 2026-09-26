@@ -46,13 +46,14 @@ export async function registerAndVerify(
   request: APIRequestContext,
   email: string = uniqueEmail(),
   password: string = E2E_PASSWORD,
-): Promise<{ email: string; password: string }> {
+): Promise<{ email: string; password: string; userId: string }> {
   const register = await request.post('/api/v1/auth/register', {
     headers: UNSAFE_HEADERS,
     data: { email, password },
   });
   await assertOk(register, 'register');
-  const { verificationUrl } = (await register.json()) as {
+  const { user, verificationUrl } = (await register.json()) as {
+    user: { id: string };
     verificationUrl: string;
   };
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(
@@ -63,7 +64,7 @@ export async function registerAndVerify(
     data: { token },
   });
   await assertOk(verify, 'verify-email');
-  return { email, password };
+  return { email, password, userId: user.id };
 }
 
 /** Logs in on the given context — sets a session cookie in its cookie jar. */
@@ -100,10 +101,41 @@ export async function createOrganizerProfile(
 export async function createPublishedRide(
   request: APIRequestContext,
   title: string,
+  options: { participantLimit?: number; startsInMs?: number } = {},
 ): Promise<{ rideId: string }> {
-  const startsAt = new Date(
-    Date.now() + 14 * 24 * 60 * 60 * 1000,
-  ).toISOString();
+  const { rideId } = await createDraftRide(request, title, options.startsInMs);
+  if (options.participantLimit !== undefined) {
+    // Only a draft is editable (`RIDE_EDIT_TERMS.notEditable`).
+    const patched = await request.patch(`/api/v1/rides/${rideId}`, {
+      headers: UNSAFE_HEADERS,
+      data: { participantLimit: options.participantLimit },
+    });
+    await assertOk(patched, 'set participant limit');
+  }
+
+  const published = await request.post(`/api/v1/rides/${rideId}/publish`, {
+    headers: UNSAFE_HEADERS,
+  });
+  await assertOk(published, 'publish ride');
+  const opened = await request.post(
+    `/api/v1/rides/${rideId}/open-registration`,
+    { headers: UNSAFE_HEADERS },
+  );
+  await assertOk(opened, 'open registration');
+
+  return { rideId };
+}
+
+/**
+ * CR-135. A ride left in `draft` — for specs that drive the lifecycle
+ * themselves. Same organizer-session requirement as {@link createPublishedRide}.
+ */
+export async function createDraftRide(
+  request: APIRequestContext,
+  title: string,
+  startsInMs: number = 14 * 24 * 60 * 60 * 1000,
+): Promise<{ rideId: string }> {
+  const startsAt = new Date(Date.now() + startsInMs).toISOString();
 
   const created = await request.post('/api/v1/rides', {
     headers: UNSAFE_HEADERS,
@@ -116,29 +148,75 @@ export async function createPublishedRide(
   });
   await assertOk(created, 'create ride');
   const { ride } = (await created.json()) as { ride: { id: string } };
-
-  const published = await request.post(`/api/v1/rides/${ride.id}/publish`, {
-    headers: UNSAFE_HEADERS,
-  });
-  await assertOk(published, 'publish ride');
-  const opened = await request.post(
-    `/api/v1/rides/${ride.id}/open-registration`,
-    { headers: UNSAFE_HEADERS },
-  );
-  await assertOk(opened, 'open registration');
-
   return { rideId: ride.id };
+}
+
+/** CR-135. Organizer-only; returns the new pace group's id. */
+export async function createRideGroup(
+  request: APIRequestContext,
+  rideId: string,
+  name: string,
+  paceKmh: number,
+): Promise<{ groupId: string }> {
+  const response = await request.post(`/api/v1/rides/${rideId}/groups`, {
+    headers: UNSAFE_HEADERS,
+    data: { name, paceKmh },
+  });
+  await assertOk(response, 'create ride group');
+  const { group } = (await response.json()) as { group: { id: string } };
+  return { groupId: group.id };
 }
 
 /** Requires `request` to already carry a logged-in session. */
 export async function registerForRide(
   request: APIRequestContext,
   rideId: string,
-): Promise<void> {
+  groupId?: string,
+): Promise<{ registrationId: string }> {
   const response = await request.post(`/api/v1/rides/${rideId}/register`, {
     headers: UNSAFE_HEADERS,
+    ...(groupId ? { data: { groupId } } : {}),
   });
   await assertOk(response, 'register for ride');
+  const { registration } = (await response.json()) as {
+    registration: { id: string };
+  };
+  return { registrationId: registration.id };
+}
+
+/** CR-135. Requires `request` to already carry a logged-in session. */
+export async function joinWaitlist(
+  request: APIRequestContext,
+  rideId: string,
+): Promise<void> {
+  const response = await request.post(`/api/v1/rides/${rideId}/waitlist`, {
+    headers: UNSAFE_HEADERS,
+  });
+  await assertOk(response, 'join waitlist');
+}
+
+/** CR-135. Organizer-only; fans out a `ride_update` notification. */
+export async function postRideUpdate(
+  request: APIRequestContext,
+  rideId: string,
+  message: string,
+): Promise<void> {
+  const response = await request.post(`/api/v1/rides/${rideId}/updates`, {
+    headers: UNSAFE_HEADERS,
+    data: { message },
+  });
+  await assertOk(response, 'post ride update');
+}
+
+/** CR-135. Organizer-only; fans out a `ride_cancelled` notification. */
+export async function cancelRide(
+  request: APIRequestContext,
+  rideId: string,
+): Promise<void> {
+  const response = await request.post(`/api/v1/rides/${rideId}/cancel`, {
+    headers: UNSAFE_HEADERS,
+  });
+  await assertOk(response, 'cancel ride');
 }
 
 /** Requires `request` to already carry a logged-in session. */
@@ -146,9 +224,34 @@ export async function setDisplayName(
   request: APIRequestContext,
   displayName: string,
 ): Promise<void> {
+  await updateMe(request, { displayName });
+}
+
+/** CR-135. `PATCH /v1/users/me` with any profile fields. */
+export async function updateMe(
+  request: APIRequestContext,
+  data: Record<string, unknown>,
+): Promise<void> {
   const response = await request.patch('/api/v1/users/me', {
     headers: UNSAFE_HEADERS,
-    data: { displayName },
+    data,
   });
-  await assertOk(response, 'set display name');
+  await assertOk(response, 'update profile');
+}
+
+/**
+ * CR-135. Raw unsafe-method call for specs asserting a *rejection* — carries
+ * the CSRF `Origin` header, so a 403/404 is the server's authorization answer,
+ * not the CSRF check's.
+ */
+export function unsafeRequest(
+  request: APIRequestContext,
+  method: 'post' | 'patch' | 'delete',
+  url: string,
+  data?: unknown,
+): Promise<APIResponse> {
+  return request[method](url, {
+    headers: UNSAFE_HEADERS,
+    ...(data === undefined ? {} : { data }),
+  });
 }

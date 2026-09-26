@@ -109,4 +109,31 @@ describe('loadEnv', () => {
       }),
     ).toThrow(/Refusing to start in production[\s\S]*AUTH_RATE_LIMIT_MAX/);
   });
+
+  // CR-135: the same override for the global tier.
+  it('leaves RATE_LIMIT_MAX unset by default and coerces a valid value', () => {
+    expect(loadEnv(BASE_ENV_SOURCE).RATE_LIMIT_MAX).toBeUndefined();
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, RATE_LIMIT_MAX: '' }).RATE_LIMIT_MAX,
+    ).toBeUndefined();
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, RATE_LIMIT_MAX: '10000' }).RATE_LIMIT_MAX,
+    ).toBe(10000);
+    expect(() => loadEnv({ ...BASE_ENV_SOURCE, RATE_LIMIT_MAX: '0' })).toThrow(
+      /Invalid environment configuration: RATE_LIMIT_MAX/,
+    );
+  });
+
+  it('refuses to boot in production with RATE_LIMIT_MAX set at all', () => {
+    expect(() =>
+      loadEnv({
+        ...BASE_ENV_SOURCE,
+        NODE_ENV: 'production',
+        AUTH_SECRET: 'a-real-generated-secret',
+        WEB_ORIGIN: 'https://coffeeride.example',
+        DATABASE_URL: 'postgresql://prod-host:5432/coffee_ride',
+        RATE_LIMIT_MAX: '100',
+      }),
+    ).toThrow(/Refusing to start in production[\s\S]*RATE_LIMIT_MAX/);
+  });
 });

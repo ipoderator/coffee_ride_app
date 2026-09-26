@@ -88,6 +88,13 @@ const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.coerce.number().int().positive().optional(),
   ),
+  // CR-135: the same kind of override for the lenient global tier (`app.ts`,
+  // 100/min per IP) — the e2e suite drives every actor from one localhost IP
+  // and outgrew it. Same production refusal as AUTH_RATE_LIMIT_MAX above.
+  RATE_LIMIT_MAX: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().positive().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -172,6 +179,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     if (env.AUTH_RATE_LIMIT_MAX !== undefined) {
       violations.push(
         'AUTH_RATE_LIMIT_MAX is set — it is a test/dev-only override of the auth rate limit and must be unset in production.',
+      );
+    }
+    if (env.RATE_LIMIT_MAX !== undefined) {
+      violations.push(
+        'RATE_LIMIT_MAX is set — it is a test/dev-only override of the global rate limit and must be unset in production.',
       );
     }
 
