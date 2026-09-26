@@ -6,7 +6,8 @@
   "exports": {
     "./tsconfig/node-library.json": "./tsconfig/node-library.json",
     "./eslint/node-library": "./eslint/node-library.js",
-    "./vitest/node-library": "./vitest/node-library.js"
+    "./vitest/node-library": "./vitest/node-library.js",
+    "./vitest/coverage": "./vitest/coverage.js"
   },
   "scripts": {
     "lint": "eslint ."

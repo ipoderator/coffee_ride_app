@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+    # labeled/unlabeled: the coverage gate reads the
+    # `coverage-decrease-approved` label (CR-136), so adding or removing it
+    # has to re-run the job.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -81,6 +85,9 @@ jobs:
       # comment for why S3_* alone isn't a safe enough signal (a local .env
       # has them configured for MinIO whether or not MinIO is running).
       RUN_LIVE_S3_TESTS: '1'
+      # CR-137: queue.live.test.ts — the notification queue's happy path
+      # against the `redis` service above (the unit tests mock ioredis).
+      RUN_LIVE_REDIS_TESTS: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -129,8 +136,39 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
+      # CR-136. Same suites as `pnpm test`, with v8 coverage; each package
+      # writes coverage/ (html, lcov, json-summary).
+      - name: Test (with coverage)
+        run: pnpm test:coverage
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            apps/*/coverage/
+            packages/*/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # CR-136. Fails when any package total or gated API module drops below
+      # coverage-baseline.json; the table goes to the job summary. On a PR the
+      # base branch's baseline is a floor too, so lowering the file in the
+      # same PR doesn't pass — unless the PR carries the
+      # `coverage-decrease-approved` label (e.g. well-tested code removed).
+      - name: Coverage gate
+        env:
+          COVERAGE_ALLOW_DECREASE: ${{ contains(github.event.pull_request.labels.*.name, 'coverage-decrease-approved') }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            base="$RUNNER_TEMP/coverage-baseline.base.json"
+            git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+            git show FETCH_HEAD:coverage-baseline.json > "$base" 2>/dev/null || rm -f "$base"
+            pnpm coverage:check --base "$base"
+          else
+            pnpm coverage:check
+          fi
 
       - name: Build
         run: pnpm build

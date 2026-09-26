@@ -1,0 +1,102 @@
+{
+  "$comment": "CR-136 coverage floor, checked by scripts/coverage-check.mjs. Only raise it (pnpm coverage:baseline); lowering needs --allow-decrease and a docs/changelog.md entry saying why. Scopes gate critical modules separately so a drop there can't hide in the package total.",
+  "tolerance": 0.1,
+  "packages": {
+    "apps/api": {
+      "total": {
+        "lines": 91.89,
+        "statements": 90.73,
+        "functions": 95.69,
+        "branches": 79.3
+      },
+      "scopes": {
+        "src/modules/auth/": {
+          "lines": 95.59,
+          "statements": 95.06,
+          "functions": 97.05,
+          "branches": 80.35
+        },
+        "src/modules/registrations/": {
+          "lines": 92.83,
+          "statements": 92.63,
+          "functions": 93.44,
+          "branches": 83.33
+        },
+        "src/modules/rides/": {
+          "lines": 93.94,
+          "statements": 92.25,
+          "functions": 99.4,
+          "branches": 82.71
+        },
+        "src/modules/organizers/": {
+          "lines": 83.21,
+          "statements": 80.4,
+          "functions": 83.87,
+          "branches": 55.76
+        },
+        "src/modules/users/": {
+          "lines": 87.8,
+          "statements": 86.47,
+          "functions": 94.11,
+          "branches": 64.51
+        },
+        "src/modules/notifications/": {
+          "lines": 83.97,
+          "statements": 83.33,
+          "functions": 97.61,
+          "branches": 61.4
+        },
+        "src/modules/reviews/": {
+          "lines": 85.33,
+          "statements": 84.41,
+          "functions": 86.66,
+          "branches": 61.9
+        },
+        "src/plugins/": {
+          "lines": 95.29,
+          "statements": 94.56,
+          "functions": 100,
+          "branches": 88.88
+        },
+        "src/lib/": {
+          "lines": 94.21,
+          "statements": 93.75,
+          "functions": 93.93,
+          "branches": 85.24
+        }
+      }
+    },
+    "apps/web": {
+      "total": {
+        "lines": 74.28,
+        "statements": 72.29,
+        "functions": 71.32,
+        "branches": 72.88
+      }
+    },
+    "packages/ui": {
+      "total": {
+        "lines": 91.96,
+        "statements": 92.32,
+        "functions": 85.6,
+        "branches": 89.45
+      }
+    },
+    "packages/maps-2gis": {
+      "total": {
+        "lines": 94.49,
+        "statements": 92.85,
+        "functions": 86.95,
+        "branches": 84.35
+      }
+    },
+    "packages/resilience": {
+      "total": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 92.59
+      }
+    }
+  }
+}

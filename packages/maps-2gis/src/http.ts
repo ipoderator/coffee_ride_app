@@ -30,6 +30,10 @@ export async function fetchJson(
         try {
           response = await fetch(url, { ...init, signal });
         } catch (cause) {
+          // CR-137: our own timeout aborted the request — let the abort
+          // reach callWithResilience as-is so it's classified (and
+          // reported below) as a timeout, not a generic failure.
+          if (signal.aborted) throw cause;
           throw new MapProviderError('2GIS request failed.', { cause });
         }
 

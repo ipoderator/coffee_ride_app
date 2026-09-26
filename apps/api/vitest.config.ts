@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { coverageConfig } from 'config/vitest/coverage';
 import { nodeLibraryVitestConfig } from 'config/vitest/node-library';
 
 // `fileParallelism: false` (apps/api only — `packages/maps-2gis` stays on the
@@ -21,5 +22,8 @@ export default defineConfig({
   test: {
     ...nodeLibraryVitestConfig().test,
     fileParallelism: false,
+    // server.ts is the process entry point (listen + signal handlers); every
+    // test builds the app through app.ts instead.
+    coverage: coverageConfig({ exclude: ['src/server.ts'] }),
   },
 });

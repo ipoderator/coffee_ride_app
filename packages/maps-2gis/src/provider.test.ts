@@ -276,3 +276,165 @@ describe('failure modes (.claude/rules/resilience.md)', () => {
     await expect(provider.geocode('x')).rejects.toThrow(MapProviderError);
   });
 });
+
+// CR-137. The mocks above reject `fetch` outright; these let the request
+// actually hang, so the adapter's own timeout has to cut it off.
+describe('a hung 2GIS request', () => {
+  function stubHangingFetch() {
+    const fetchMock = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<never>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(init.signal?.reason),
+          );
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  const ROUTE_REQUEST = {
+    points: [
+      { lat: 55.75, lng: 37.6 },
+      { lat: 55.76, lng: 37.61 },
+    ],
+    profile: 'cycling' as const,
+  };
+
+  it('times out into MapProviderError after one bounded retry', async () => {
+    const fetchMock = stubHangingFetch();
+    const provider = create2GisMapProvider({ apiKey: 'k', timeoutMs: 30 });
+
+    const started = Date.now();
+    await expect(provider.getRoute(ROUTE_REQUEST)).rejects.toMatchObject({
+      name: 'MapProviderError',
+      code: 'unavailable',
+      message: expect.stringMatching(/timed out after 30ms/),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it('opens the circuit after repeated timeouts and then fails without calling 2GIS', async () => {
+    const fetchMock = stubHangingFetch();
+    const provider = create2GisMapProvider({ apiKey: 'k', timeoutMs: 10 });
+
+    // Five failed calls (each with its retry) reach the breaker threshold.
+    for (let i = 0; i < 5; i += 1) {
+      await expect(provider.geocode('Москва')).rejects.toThrow(
+        MapProviderError,
+      );
+    }
+    const callsBeforeOpen = fetchMock.mock.calls.length;
+
+    await expect(provider.getRoute(ROUTE_REQUEST)).rejects.toMatchObject({
+      name: 'MapProviderError',
+      message: '2GIS is temporarily unavailable.',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(callsBeforeOpen);
+  });
+});
+
+// CR-137. Valid JSON in a shape the adapter doesn't know (an API change, a
+// proxy's error page as JSON, a partial answer) must come out as a
+// MapProviderError the callers already handle — never a raw TypeError that
+// turns into a 500.
+describe('a well-formed but unexpected 2GIS response', () => {
+  const ROUTE_REQUEST = {
+    points: [
+      { lat: 1, lng: 2 },
+      { lat: 3, lng: 4 },
+    ],
+    profile: 'cycling' as const,
+  };
+
+  it.each([
+    ['result is an object, not a list', { result: {} }],
+    ['a string body', 'Service temporarily unavailable'],
+    [
+      'maneuvers is not a list',
+      [{ total_distance: 1, total_duration: 1, maneuvers: {} }],
+    ],
+    [
+      'distance is not a number',
+      [
+        {
+          total_distance: '1200',
+          total_duration: 300,
+          maneuvers: [
+            {
+              outcoming_path: {
+                geometry: [{ selection: 'LINESTRING(2 1, 4 3)' }],
+              },
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      'geometry is not a list',
+      [
+        {
+          total_distance: 1,
+          total_duration: 1,
+          maneuvers: [{ outcoming_path: { geometry: 'LINESTRING(2 1, 4 3)' } }],
+        },
+      ],
+    ],
+  ])('getRoute: %s → MapProviderError unavailable', async (_label, body) => {
+    mockFetchOnce({ json: async () => body });
+
+    const provider = create2GisMapProvider(config);
+    await expect(provider.getRoute(ROUTE_REQUEST)).rejects.toMatchObject({
+      name: 'MapProviderError',
+      code: 'unavailable',
+    });
+  });
+
+  it.each<[string, Parameters<typeof mockFetchOnce>[0]]>([
+    [
+      '204 No Content (null body)',
+      { status: 204, json: async () => undefined },
+    ],
+    [
+      'items is an object, not a list',
+      { json: async () => ({ result: { items: {} } }) },
+    ],
+    [
+      'a point with non-numeric coordinates',
+      {
+        json: async () => ({
+          result: {
+            items: [{ full_name: 'x', point: { lat: '55', lon: null } }],
+          },
+        }),
+      },
+    ],
+  ])('geocode: %s never throws a TypeError', async (_label, response) => {
+    mockFetchOnce(response);
+
+    const provider = create2GisMapProvider(config);
+    const outcome = await provider.geocode('x').then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    );
+    if ('error' in outcome) {
+      expect(outcome.error).toBeInstanceOf(MapProviderError);
+    } else {
+      // A result may only ever contain real coordinates.
+      for (const item of outcome.value) {
+        expect(Number.isFinite(item.point.lat)).toBe(true);
+        expect(Number.isFinite(item.point.lng)).toBe(true);
+      }
+    }
+  });
+
+  it('reverseGeocode: a 204 No Content answer is "nothing here", not a crash', async () => {
+    mockFetchOnce({ status: 204, json: async () => undefined });
+
+    const provider = create2GisMapProvider(config);
+    await expect(
+      provider.reverseGeocode({ lat: 55.75, lng: 37.6 }),
+    ).resolves.toBeNull();
+  });
+});

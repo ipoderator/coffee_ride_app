@@ -885,3 +885,132 @@ Follow-up: KI-069 (edit screen shows lifecycle buttons to non-owners).
 KI-014 resolved: the Redis-backed run exercised the queue → Worker →
 `notifications` row round trip. CI still can't run any of this until KI-068
 (MinIO image) is fixed.
+
+## 2026-09-26 — CR-136 — Test coverage control
+
+Summary: coverage is now measured and can't silently drop. Every package
+with a Vitest suite runs it with v8 coverage, the current numbers are
+committed as a baseline, and CI fails a change that falls below it. There
+is deliberately no fixed 80% target: the floor only rises, module by module,
+API and critical modules first.
+
+- **Measurement**: `@vitest/coverage-v8@5.0.0` in `apps/api`, `apps/web`,
+  `packages/ui`, `packages/maps-2gis`, `packages/resilience`; shared options
+  in `packages/config/vitest/coverage.js` (`src/**` including files no test
+  loads, tests/`test-support`/`.d.ts` excluded, `apps/api/src/server.ts`
+  excluded as the process entry). Reporters: text-summary, json-summary,
+  html, lcov into each package's `coverage/`. Coverage is only collected by
+  the new `test:coverage` scripts/turbo task (`pnpm test:coverage`);
+  `pnpm test` is unchanged.
+- **Baseline** (`coverage-baseline.json`, measured with the CI environment —
+  Postgres, Redis, MinIO, `RUN_LIVE_S3_TESTS=1`): lines/statements/
+  functions/branches — api 91.08/89.94/94.60/78.67, web 74.28/72.29/71.32/
+  72.88, ui 91.96/92.32/85.60/89.45, maps-2gis 93.78/92.68/85.00/81.11,
+  resilience 100/100/100/92.59. `apps/api` is also gated per module (auth,
+  registrations, rides, organizers, users, notifications, reviews, plugins,
+  lib) so a drop in one can't hide in the total; weakest today:
+  notifications (branches 50.94), organizers (55.77), reviews (61.90).
+- **Gate** (`scripts/coverage-check.mjs`, `pnpm coverage:check`): fails when
+  any metric is more than 0.1 pp under its floor (web varies by ~0.05
+  between identical runs; api is exact), prints a Markdown table.
+  `pnpm coverage:baseline` (`--update`) raises the floors and refuses to lower one
+  without `--allow-decrease`. `--base <file>` makes the base branch's
+  baseline a floor too, so a PR can't pass by editing the file.
+- **CI** (`ci.yml`): `Test` → `Test (with coverage)`, then the `coverage`
+  artifact upload (html + lcov, 14 days, even on failure) and `Coverage gate`
+  (table in the job summary; on PRs also against the base branch's baseline,
+  overridden by the `coverage-decrease-approved` label — hence the new
+  `labeled`/`unlabeled` PR triggers).
+- ESLint configs (web, ui, node-library) now ignore generated `coverage/`.
+
+Files: `packages/config/{package.json,vitest/coverage.js,eslint/
+node-library.js}`, the five `vitest.config.*` and `package.json`s,
+`apps/web/eslint.config.mjs`, `packages/ui/eslint.config.mjs`, `turbo.json`,
+root `package.json`, `pnpm-lock.yaml`, `coverage-baseline.json`,
+`scripts/coverage-check.mjs`, `.github/workflows/ci.yml`,
+`.claude/rules/testing.md`.
+
+Validation: `pnpm test:coverage` 5/5 twice (api 441 passed / 3 skipped, web
+391, ui 152, maps-2gis 30, resilience 15); `coverage:check` passes on the
+second run; the gate exits 1 against a stricter `--base` file and 0 with
+`COVERAGE_ALLOW_DECREASE=1`; `--update` keeps a floor it would lower. `turbo
+lint typecheck` 17/17 with no warnings, `lint:root`, `format:check` clean.
+The CI side is untested on GitHub: the `ci` job still dies on KI-068.
+
+Decisions: none (tooling; policy lives in `.claude/rules/testing.md`).
+Follow-up: KI-070 (two ride-detail tests depend on the shell's MapGL key);
+raise the notifications/organizers/reviews floors with targeted tests.
+
+## 2026-09-26 — CR-137 — Files and external integrations: failure and contract scenarios
+
+Summary: scenario tests for S3/MinIO, Redis and 2GIS, which found and fixed
+two real defects: a Redis outage stalled every API request for seconds, and
+an unexpected 2GIS response body crashed route building with a 500.
+
+- **Redis outage stalled everything (fixed).** Against a Redis on a closed
+  port, `GET /v1/rides` took 5 s, register 10.5 s, login > 12 s: the global
+  rate limiter runs a command on `app.redis` for every request, and ioredis
+  queued it through reconnect attempts. The producer connection
+  (`modules/notifications/queue.ts`) now has `enableOfflineQueue: false` and
+  `commandTimeout: 500`; `add()` rejects at once while not connected; an
+  `onReady` hook waits (≤ 2 s, cut short by a connection error) for the first
+  connect so requests right after boot are still rate-limited (CR-058's live
+  tests caught that window). Now 11–52 ms per request with Redis down. The
+  worker connection is unchanged.
+- **2GIS unexpected shapes (fixed).** `route.ts`/`geocode.ts` cast the JSON
+  body and crashed on e.g. `{ result: {} }`, a non-list `maneuvers`/`items`,
+  or `null` (a 204) for geocode — a raw `TypeError` → 500 from
+  `POST /v1/rides/:id/route/build`. Bodies are now narrowed from `unknown`
+  (`packages/maps-2gis/src/shape.ts`); anything off-shape is
+  `MapProviderError('unavailable')` → 503 `route_builder_unavailable`
+  (deliberately not `no_route`); geocode items without numeric coordinates
+  are dropped. Also `http.ts`: a real timeout was reported as "request
+  failed" because the abort was wrapped before `callWithResilience` saw it;
+  it now reads "timed out after N ms".
+- **New scenarios**: `file-storage.live.test.ts` (MinIO, over HTTP: GPX
+  upload → object → download → replace deletes old object → delete; cover
+  upload → object → GET → delete); `degraded-dependencies.test.ts` (S3 and
+  Redis at a closed port: `/health` degraded within its timeout, 503
+  `route_storage_unavailable`/`cover_storage_unavailable`, ride edit/publish
+  and sign-up → publish → register still succeed, each step < 2 s);
+  `queue.live.test.ts` (live Redis: registration reaches the inbox via the
+  worker); adapter tests for a genuinely hung request (timeout, one retry,
+  breaker opens) and eight malformed bodies; API tests for malformed/timeout
+  → 503; web test for the `route_builder_unavailable` message.
+- **2GIS contract**: `provider.contract.test.ts` (geocode, reverse geocode,
+  a road-following cycling route with altitudes, invalid key → 401/403),
+  opt-in via `RUN_2GIS_CONTRACT_TESTS=1`; `.github/workflows/maps-contract.yml`
+  runs it manually or weekly in the protected `maps-2gis-contract`
+  environment, never on PRs, and skips with a notice while the secret is
+  missing. Not run live: this machine can't reach the 2GIS API (KI-056) —
+  every call timed out, now with the correct message.
+- UI and `/health`: `apps/web` still never polls `/health` (KI-041); the chain
+  is covered as dependency down → `/health` reports it → API answers the
+  documented 503 code → the existing web tests render «Загрузка недоступна»
+  for exactly those codes.
+- CI sets `RUN_LIVE_REDIS_TESTS=1`; `turbo.json` passes it and
+  `RUN_2GIS_CONTRACT_TESTS` to `test`/`test:coverage`. New helper
+  `apps/api/src/test-support/app-fixtures.ts`.
+- Coverage baseline raised (api total lines 91.08 → 91.89, notifications
+  74.42 → 83.97, maps-2gis branches 81.11 → 84.35); web left unchanged, its
+  change was run-to-run noise.
+
+Files: `apps/api/src/{degraded-dependencies.test.ts,test-support/
+app-fixtures.ts,modules/rides/{file-storage.live.test.ts,
+route-builder.routes.test.ts},modules/notifications/{queue.ts,queue.test.ts,
+queue.live.test.ts}}`, `packages/maps-2gis/src/{shape.ts,route.ts,
+geocode.ts,http.ts,provider.test.ts,provider.contract.test.ts}`,
+`apps/web/src/features/organizer/route/route-builder.test.tsx`,
+`.github/workflows/{ci.yml,maps-contract.yml}`, `turbo.json`,
+`coverage-baseline.json`, `.claude/rules/{resilience.md,testing.md}`.
+
+Validation: `pnpm test:coverage` 5/5 with Postgres/Redis/MinIO and the live
+flags (api 459 passed, 0 skipped; maps-2gis 41 + 4 contract skipped; web
+392; ui 152; resilience 15), coverage gate passes; the new API tests fail on
+the old code (500; journey timeout) and pass on the new; live Redis suites
+twice in a row; `turbo lint typecheck` 17/17, `format:check` clean. The 2GIS
+contract test and both workflows are untested on GitHub (KI-056, KI-068).
+
+Decisions: none recorded as ADR (resilience rules extended in
+`.claude/rules/resilience.md`). Follow-up: KI-071 (notifications dropped
+while Redis is down), set up the `maps-2gis-contract` environment + secret.

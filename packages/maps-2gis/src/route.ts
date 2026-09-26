@@ -4,6 +4,7 @@ import type { TwoGisProviderConfig } from './config.js';
 import { DEFAULT_ROUTING_BASE_URL, DEFAULT_TIMEOUT_MS } from './config.js';
 import { MapProviderError } from './errors.js';
 import { fetchJson } from './http.js';
+import { isRecord, optionalList, unexpectedShape } from './shape.js';
 
 // 2GIS Routing API (https://docs.2gis.com/en/api/navigation/routing/overview),
 // `POST {routingBaseUrl}/global`. Field names verified 2026-09-19 against a
@@ -19,30 +20,27 @@ const PROFILE_TO_TRANSPORT: Record<RouteRequest['profile'], string> = {
   walking: 'walking',
 };
 
-interface GeometrySegment {
-  selection: string;
-}
-
-interface Maneuver {
-  outcoming_path?: {
-    geometry?: GeometrySegment[];
-  };
-}
-
-interface RoutingResponseItem {
-  distance?: number;
-  total_distance?: number;
-  duration?: number;
-  total_duration?: number;
-  maneuvers?: Maneuver[];
-}
-
-type RoutingResponse =
-  RoutingResponseItem[] | { result?: RoutingResponseItem[] } | null;
-
-function extractItems(body: RoutingResponse): RoutingResponseItem[] {
+// Known shapes: a bare list of route items, `{ result: [...] }`, or `null`
+// (204 No Content — no route). Anything else is unexpected (CR-137).
+function extractItems(body: unknown): unknown[] {
   if (body === null) return [];
-  return Array.isArray(body) ? body : (body.result ?? []);
+  if (Array.isArray(body)) return body;
+  if (isRecord(body) && Array.isArray(body.result)) return body.result;
+  throw unexpectedShape('no route list');
+}
+
+// `distance`/`total_distance` (and the same for duration): absent is "no
+// usable route", present but not a finite number is a malformed answer.
+function readMetric(
+  item: Record<string, unknown>,
+  keys: [string, string],
+): number | undefined {
+  const value = item[keys[0]] ?? item[keys[1]];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw unexpectedShape(`${keys[1]} is not a number`);
+  }
+  return value;
 }
 
 // Parses 2GIS's `"LINESTRING(lon lat, lon lat, ...)"` WKT string (note:
@@ -81,11 +79,21 @@ function dedupeConsecutive(points: LatLngAlt[]): LatLngAlt[] {
   });
 }
 
-function extractGeometry(item: RoutingResponseItem): LatLngAlt[] {
-  const points =
-    item.maneuvers
-      ?.flatMap((maneuver) => maneuver.outcoming_path?.geometry ?? [])
-      .flatMap((segment) => parseWktLineString(segment.selection)) ?? [];
+function extractGeometry(item: Record<string, unknown>): LatLngAlt[] {
+  const points = optionalList(item.maneuvers, 'maneuvers')
+    .flatMap((maneuver) => {
+      const path = isRecord(maneuver) ? maneuver.outcoming_path : undefined;
+      return optionalList(
+        isRecord(path) ? path.geometry : undefined,
+        'outcoming_path.geometry',
+      );
+    })
+    // A segment without a WKT string contributes nothing, like a WKT with
+    // no coordinates; too little geometry overall is `no_route` below.
+    .flatMap((segment) => {
+      const selection = isRecord(segment) ? segment.selection : undefined;
+      return typeof selection === 'string' ? parseWktLineString(selection) : [];
+    });
   return dedupeConsecutive(points);
 }
 
@@ -111,7 +119,7 @@ export function createGetRoute(
       need_altitudes: true,
     };
 
-    const body = (await fetchJson(
+    const body = await fetchJson(
       url.toString(),
       {
         method: 'POST',
@@ -120,11 +128,16 @@ export function createGetRoute(
       },
       timeoutMs,
       breaker,
-    )) as RoutingResponse;
+    );
 
     const [route] = extractItems(body);
-    const distanceMeters = route?.distance ?? route?.total_distance;
-    const durationSeconds = route?.duration ?? route?.total_duration;
+    if (route !== undefined && !isRecord(route)) {
+      throw unexpectedShape('route item is not an object');
+    }
+    const distanceMeters =
+      route && readMetric(route, ['distance', 'total_distance']);
+    const durationSeconds =
+      route && readMetric(route, ['duration', 'total_duration']);
 
     if (
       route === undefined ||

@@ -37,7 +37,26 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-135 (2026-09-26, committed): seven new Playwright specs
+None active. CR-137 (2026-09-26, committed): failure/contract scenarios
+for S3, Redis and 2GIS. Fixed: a Redis outage stalled every API request
+5–12 s (producer connection now fails fast, `onReady` waits for the first
+connect); an unexpected 2GIS body crashed route building with a 500 (adapter
+narrows `unknown`, off-shape → 503). New: live MinIO file round trip over
+HTTP, S3/Redis-down journey test, live Redis queue test, opt-in 2GIS
+contract test + `maps-contract.yml` (needs the `maps-2gis-contract`
+environment secret). Found KI-071 (notifications dropped while Redis is
+down). Coverage baseline raised.
+
+CR-136 (2026-09-26, committed): test coverage control —
+`pnpm test:coverage` (v8, five Vitest packages), committed floor
+`coverage-baseline.json` (package totals + every `apps/api` module; api lines
+91.08 / branches 78.67, web 74.28 / 72.88), gate `pnpm coverage:check`
+(`scripts/coverage-check.mjs`, 0.1 pp tolerance, `--base` for PRs, raise with
+`pnpm coverage:baseline`). CI runs it, uploads the `coverage` artifact and
+fails on a drop; policy in `.claude/rules/testing.md`. Weakest API modules:
+notifications, organizers, reviews (branches 51–62%). Found KI-070.
+
+CR-135 (2026-09-26, committed): seven new Playwright specs
 in `apps/web/e2e/` — waitlist promotion, pace groups, full lifecycle + cancel,
 access control, password reset, profile visibility, notifications (17/17 e2e
 green locally, with and without Redis). Adds a test/dev-only `RATE_LIMIT_MAX`
@@ -844,4 +863,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-24 (CR-126)
+2026-09-26 (CR-136)

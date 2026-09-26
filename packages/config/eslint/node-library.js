@@ -44,7 +44,7 @@ const NO_2GIS_SDK_IMPORTS = {
 /**
  * @param {{ ignores?: string[], allowMapsSdkImports?: boolean }} [options]
  *   `ignores`: extra glob patterns to ignore, on top of the always-ignored
- *   `dist/**` and `node_modules/**`. `allowMapsSdkImports`: set by
+ *   `dist/**`, `node_modules/**` and `coverage/**`. `allowMapsSdkImports`: set by
  *   `packages/maps-2gis` itself — the one caller exempt from
  *   `NO_2GIS_SDK_IMPORTS` above.
  */
@@ -53,7 +53,7 @@ export function nodeLibraryConfig(options = {}) {
 
   return tseslint.config(
     {
-      ignores: ['dist/**', 'node_modules/**', ...ignores],
+      ignores: ['dist/**', 'node_modules/**', 'coverage/**', ...ignores],
     },
     js.configs.recommended,
     ...tseslint.configs.recommended,

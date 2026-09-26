@@ -1070,3 +1070,19 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       control (non-owner participant/organizer), password reset via UI,
       profile visibility tiers, ride update/cancel notifications + mark read.
       Test/dev-only `RATE_LIMIT_MAX`. See `docs/changelog.md`, KI-069.
+- [x] CR-136 Test coverage control (P1) — done 2026-09-26: Vitest v8
+      coverage in all five Vitest packages (`pnpm test:coverage`);
+      committed `coverage-baseline.json` (package totals + every `apps/api`
+      module) checked by `scripts/coverage-check.mjs`; CI runs tests with
+      coverage, uploads the `coverage` artifact, writes the table to the job
+      summary and fails on a drop (PRs also against the base branch's
+      baseline; `coverage-decrease-approved` label to override). No fixed
+      80% gate. See `docs/changelog.md`, `.claude/rules/testing.md`, KI-070.
+- [x] CR-137 Files and external integrations (P2) — done 2026-09-26: live
+      MinIO GPX/cover round trip over HTTP; S3/Redis-down scenarios
+      (`/health` + 503 codes + critical journey timing); Redis producer now
+      fails fast (an outage stalled every request 5–12 s); 2GIS adapter
+      rejects unexpected response shapes as `MapProviderError` (was a raw
+      `TypeError` → 500) and reports real timeouts as such; live Redis queue
+      test; opt-in 2GIS contract test + protected `maps-contract.yml`. See
+      `docs/changelog.md`, KI-071.

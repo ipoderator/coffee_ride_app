@@ -12,7 +12,8 @@
     "start": "node dist/server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1131.0",
@@ -42,6 +43,7 @@
     "@eslint/js": "^9.0.0",
     "@types/node": "^24.13.4",
     "@types/sax": "^1.2.7",
+    "@vitest/coverage-v8": "5.0.0",
     "config": "workspace:*",
     "esbuild": "^0.28.2",
     "eslint": "^9.0.0",

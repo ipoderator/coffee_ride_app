@@ -800,6 +800,23 @@ arg** (Next bakes rewrites into `routes-manifest.json`), set literally in
 `build`/`dev` env. `turbo.json`'s `test` env passes `TEST_DATABASE_URL` and
 `RUN_LIVE_S3_TESTS` through (separate from `DATABASE_URL`).
 
+CR-136 (coverage): `packages/config/vitest/coverage.js` is the shared v8
+coverage fragment every Vitest config spreads in (collected only by the
+`test:coverage` script/turbo task, output in each package's `coverage/`).
+Root `coverage-baseline.json` is the committed floor and root
+`scripts/coverage-check.mjs` (`pnpm coverage:check` / `coverage:baseline`)
+the gate CI runs after `pnpm test:coverage` — see `.claude/rules/testing.md`.
+
+CR-137: `packages/maps-2gis/src/shape.ts` holds the response-narrowing
+helpers `route.ts`/`geocode.ts` parse 2GIS bodies with. `apps/api`'s Redis
+producer connection (`app.redis`, created in `modules/notifications/queue.ts`)
+fails fast (no offline queue, 500 ms command timeout; an `onReady` hook waits
+≤ 2 s for the first connect); the BullMQ worker connection keeps ioredis
+defaults. `apps/api/src/test-support/app-fixtures.ts` holds journey helpers
+for the integration suites. `.github/workflows/maps-contract.yml` is a second
+workflow (manual/weekly, protected `maps-2gis-contract` environment) for the
+live 2GIS contract test.
+
 ## Target structure
 
 apps/

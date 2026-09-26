@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { coverageConfig } from 'config/vitest/coverage';
 
 // apps/web's own config, not the packages/config node-library fragment:
 // component tests need jsdom + a React plugin, a different shape entirely
@@ -23,5 +24,6 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    coverage: coverageConfig(),
   },
 });

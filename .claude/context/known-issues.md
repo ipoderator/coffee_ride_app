@@ -838,6 +838,43 @@ compare against the viewer's own rides, or a dedicated owner-only read) and
 show the not-found state otherwise. `access-control.spec.ts` already accepts
 either outcome, so it keeps passing after the fix.
 
+### KI-070 — Two `ride-detail` unit tests fail when the shell has a real MapGL key
+
+Status: open. Discovered: 2026-09-26 (CR-136, measuring the coverage baseline).
+Problem: `apps/web/src/features/participant/ride-detail/ride-detail.test.tsx`
+("start-location map panel…", "route map placeholder and elevation profile…")
+expect the degraded map placeholder because "no MapGL key in the test env".
+`createMapRenderer()` reads `process.env.NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, so
+running Vitest from a shell that exported the local `.env` (which has a real
+key) makes it try the real `@2gis/mapgl` render in jsdom; the placeholder then
+shows up only after `findByText`'s 1 s timeout.
+Impact: low. CI sets no such key and `pnpm test` from a plain shell passes;
+only a developer who sources `.env` first sees two failures.
+Workaround: `unset NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` before running the suite.
+Next action: make the tests own that precondition —
+`vi.stubEnv('NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY', '')` (or mock
+`@/lib/maps/create-map-renderer` to return `null`) in that file.
+
+### KI-071 — With Redis configured but down, queued notifications are dropped
+
+Status: open. Discovered: 2026-09-26 (CR-137, `degraded-dependencies.test.ts`).
+Problem: every `notifications.service.ts` producer (`registration_confirmed`,
+`ride_update`, `ride_cancelled`, verification and password-reset emails)
+calls `queue.add()` when a queue exists and falls back to the direct
+insert/send only when `REDIS_URL` is unset. When Redis is configured but
+unreachable, `add()` rejects (now at once — CR-137), the error is logged and
+swallowed, and that notification is never created. The triggering action
+still succeeds, as `.claude/rules/resilience.md` requires.
+Impact: medium. During a Redis outage riders get no in-app confirmation,
+update or cancellation notice, and nobody gets verification/reset emails
+(a user can re-request those).
+Workaround: none; restoring Redis only affects later notifications.
+Next action: decide the fallback (product/resilience call, not made here):
+e.g. write the in-app row directly when enqueue fails before reaching Redis
+(safe: nothing was queued) and keep emails queued-only; an enqueue that
+timed out may still have landed in Redis, so falling back after a timeout
+risks duplicates.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

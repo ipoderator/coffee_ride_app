@@ -1,0 +1,64 @@
+name: 2GIS contract
+
+# CR-137. Runs packages/maps-2gis/src/provider.contract.test.ts against the
+# real 2GIS Geocoder/Routing APIs. Deliberately NOT on pull_request/push: the
+# key must never be exposed to PR code, and every run spends quota. Manual
+# runs plus a weekly check that 2GIS still answers in the shape the adapter
+# parses.
+#
+# The key lives only in the `maps-2gis-contract` GitHub environment (Settings →
+# Environments): secret MAPS_2GIS_API_KEY, restricted to the `main` branch,
+# optionally with required reviewers. Until that secret exists the job
+# reports "skipped" instead of failing.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maps-contract
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: maps-2gis-contract
+    env:
+      MAPS_2GIS_API_KEY: ${{ secrets.MAPS_2GIS_API_KEY }}
+      RUN_2GIS_CONTRACT_TESTS: '1'
+    steps:
+      - name: Check the key is configured
+        id: key
+        run: |
+          if [ -z "$MAPS_2GIS_API_KEY" ]; then
+            echo "::notice::MAPS_2GIS_API_KEY is not set in the maps-2gis-contract environment — contract test skipped."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.key.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
+
+      - if: steps.key.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - if: steps.key.outputs.present == 'true'
+        name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.key.outputs.present == 'true'
+        name: 2GIS contract test
+        run: pnpm --filter maps-2gis exec vitest run src/provider.contract.test.ts

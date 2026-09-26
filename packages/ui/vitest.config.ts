@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { coverageConfig } from 'config/vitest/coverage';
 
 // Package-local config, not `config/vitest/node-library` (CR-064's original choice) —
 // CR-065 added real components, and rendering/asserting on them needs jsdom + a React
@@ -14,5 +15,6 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
+    coverage: coverageConfig(),
   },
 });

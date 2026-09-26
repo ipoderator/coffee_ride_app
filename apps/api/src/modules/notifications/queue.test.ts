@@ -55,8 +55,16 @@ vi.mock('bullmq', () => {
 });
 
 const redisDisconnectMock = vi.fn();
+const redisConstructorOptions: unknown[] = [];
+let redisStatus = 'ready';
 vi.mock('ioredis', () => {
   class MockRedis {
+    constructor(_url: string, options: unknown) {
+      redisConstructorOptions.push(options);
+    }
+    get status() {
+      return redisStatus;
+    }
     on() {
       return this;
     }
@@ -117,6 +125,8 @@ describe('registerNotificationQueue', () => {
     workerCloseMock.mockReset();
     workerCloseMock.mockResolvedValue(undefined);
     redisDisconnectMock.mockReset();
+    redisConstructorOptions.length = 0;
+    redisStatus = 'ready';
     processNotificationJobMock.mockReset();
     capturedProcessor = undefined;
     capturedFailedHandler = undefined;
@@ -235,6 +245,44 @@ describe('registerNotificationQueue', () => {
       queueHandle.add('registration_confirmed', { userId: 'u1', rideId: 'r1' }),
     ).rejects.toThrow(/circuit open/);
     expect(queueAddMock).toHaveBeenCalledTimes(5);
+  });
+
+  // CR-137: the producer is also `app.redis` (rate limiter, /health), so it
+  // must fail fast while Redis is down; the worker keeps waiting.
+  it('makes the producer connection fail fast and leaves the worker connection waiting', () => {
+    const app = createFakeApp();
+    const env = loadEnv({
+      ...BASE_ENV_SOURCE,
+      REDIS_URL: 'redis://localhost:6379',
+    });
+
+    registerNotificationQueue(app, env);
+
+    const [producer, consumer] = redisConstructorOptions;
+    expect(producer).toMatchObject({
+      enableOfflineQueue: false,
+      commandTimeout: expect.any(Number),
+    });
+    expect(consumer).toMatchObject({ maxRetriesPerRequest: null });
+    expect(consumer).not.toHaveProperty('enableOfflineQueue');
+  });
+
+  it('rejects an enqueue at once while Redis is not connected, without calling BullMQ', async () => {
+    const app = createFakeApp();
+    const env = loadEnv({
+      ...BASE_ENV_SOURCE,
+      REDIS_URL: 'redis://localhost:6379',
+    });
+    registerNotificationQueue(app, env);
+    const queueHandle = app.notificationQueue as {
+      add: (name: string, data: unknown) => Promise<void>;
+    };
+    redisStatus = 'reconnecting';
+
+    await expect(
+      queueHandle.add('registration_confirmed', { userId: 'u1', rideId: 'r1' }),
+    ).rejects.toThrow(/not connected/);
+    expect(queueAddMock).not.toHaveBeenCalled();
   });
 
   it('closes the worker, queue, and both Redis connections on shutdown', async () => {

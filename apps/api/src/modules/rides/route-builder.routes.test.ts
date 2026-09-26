@@ -337,6 +337,50 @@ describe('POST /v1/rides/:id/route/build', () => {
     await app.close();
   });
 
+  // CR-137: a 200 whose JSON the adapter doesn't recognize used to escape as
+  // a raw TypeError → 500. It is an unavailable provider, not "no road path".
+  it.each([
+    ['a non-list result', { result: {} }],
+    [
+      'a non-list maneuvers field',
+      [{ total_distance: 1000, total_duration: 100, maneuvers: {} }],
+    ],
+  ])(
+    'answers 503 route_builder_unavailable for %s — and stores nothing',
+    async (_label, body) => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      stub2Gis({ body });
+
+      const response = await build(app, rawToken, rideId);
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json().code).toBe('route_builder_unavailable');
+      expect(s3Store.size).toBe(0);
+      await app.close();
+    },
+  );
+
+  it('answers 503 route_builder_unavailable when the 2GIS request times out', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken, rideId } = await registerAndLogin(app);
+    const timeout = new DOMException(
+      'The operation timed out.',
+      'TimeoutError',
+    );
+    const fetchMock = vi.fn().mockRejectedValue(timeout);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await build(app, rawToken, rideId);
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json().code).toBe('route_builder_unavailable');
+    // One bounded retry, never more (routing is a read — safe to repeat).
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(s3Store.size).toBe(0);
+    await app.close();
+  });
+
   it('answers 503 route_builder_unavailable when no 2GIS key is configured', async () => {
     const app = await buildApp(testEnvNoMaps);
     const { rawToken, rideId } = await registerAndLogin(app);

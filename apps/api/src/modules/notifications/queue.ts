@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import type { FastifyInstance } from 'fastify';
 import { Queue, Worker, type Job } from 'bullmq';
 import { CircuitBreaker } from 'resilience';
@@ -63,6 +64,22 @@ const ENQUEUE_BREAKER_COOLDOWN_MS = 30_000;
 // Same "graceful close can hang against an unreachable Redis" reasoning as
 // `ENQUEUE_TIMEOUT_MS` — see `onClose` below.
 const CLOSE_TIMEOUT_MS = 3000;
+// CR-137. The producer connection is also `app.redis`: the global rate
+// limiter runs a command on it for EVERY request, plus `/health` and the
+// per-account auth limit. With ioredis's defaults a command issued while
+// Redis is unreachable waits in the offline queue through several reconnect
+// attempts — measured against a closed port: `GET /v1/rides` 5 s, register
+// 10 s, login > 12 s, i.e. a Redis outage stalled every journey. So the
+// producer fails fast instead: no offline queue (a command while
+// disconnected rejects at once, and every consumer already fails open), and
+// a per-command timeout for a connected-but-hung Redis. The worker
+// connection keeps the defaults — it waits on blocking commands by design.
+const PRODUCER_COMMAND_TIMEOUT_MS = 500;
+// Without the offline queue, a request served before the first connect
+// completes would skip rate limiting (it fails open). So startup waits for
+// the producer's `ready` — bounded, and cut short by the first connection
+// error, so an API whose Redis is down still boots.
+const PRODUCER_READY_TIMEOUT_MS = 2000;
 
 /**
  * CR-050 ("Async notification delivery via Redis queue"). First real consumer
@@ -87,7 +104,10 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
     return;
   }
 
-  const producerConnection = createRedisClient(env.REDIS_URL);
+  const producerConnection = createRedisClient(env.REDIS_URL, {
+    enableOfflineQueue: false,
+    commandTimeout: PRODUCER_COMMAND_TIMEOUT_MS,
+  });
   producerConnection.on('error', (err) => {
     app.log.error(
       { err },
@@ -156,6 +176,14 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
           'Notification queue is temporarily unavailable (circuit open).',
         );
       }
+      // CR-137: BullMQ's add() first awaits the connection's `ready`, so a
+      // known-down Redis would still cost the full ENQUEUE_TIMEOUT_MS here.
+      if (producerConnection.status !== 'ready') {
+        enqueueBreaker.recordFailure();
+        throw new Error(
+          'Notification queue is unavailable (Redis not connected).',
+        );
+      }
       try {
         await raceTimeout(
           queue.add(name, data, {
@@ -175,6 +203,19 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
         throw err;
       }
     },
+  });
+
+  app.addHook('onReady', async () => {
+    if (producerConnection.status === 'ready') return;
+    await raceTimeout(
+      once(producerConnection, 'ready'),
+      PRODUCER_READY_TIMEOUT_MS,
+    ).catch((err: unknown) => {
+      app.log.warn(
+        { err },
+        'Redis is not connected at startup: rate limits fail open and notifications are not queued until it is.',
+      );
+    });
   });
 
   app.addHook('onClose', async () => {

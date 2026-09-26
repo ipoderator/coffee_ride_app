@@ -209,6 +209,38 @@ describe('RouteBuilder', () => {
     expect(getRouteGeometryMock).not.toHaveBeenCalled();
   });
 
+  // CR-137: what the API answers when 2GIS is down, times out, returns an
+  // unexpected body, or no server key is configured
+  // (`route-builder.routes.test.ts`).
+  it('says routing is temporarily unavailable on a route_builder_unavailable answer, keeping the points', async () => {
+    buildRouteMock.mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Route builder unavailable',
+        status: 503,
+        detail: 'Route building is temporarily unavailable.',
+        instance: '/v1/rides/ride-1/route/build',
+        code: 'route_builder_unavailable',
+      }),
+    );
+    await renderBuilder();
+    clickMap({ lat: 55.75, lng: 37.6 });
+    clickMap({ lat: 55.76, lng: 37.6 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Построить маршрут' }));
+
+    expect(
+      await screen.findByText(
+        'Построение маршрута временно недоступно. Попробуйте позже.',
+      ),
+    ).toBeInTheDocument();
+    expect(getRouteGeometryMock).not.toHaveBeenCalled();
+    // The organizer can retry without placing the points again.
+    expect(
+      screen.getByRole('button', { name: 'Построить маршрут' }),
+    ).toBeEnabled();
+  });
+
   it('shows the stored route line on open when the ride already has one', async () => {
     await renderBuilder({ hasRoute: true });
 

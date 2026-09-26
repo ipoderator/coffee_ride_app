@@ -76,6 +76,16 @@ would remove the atomicity guarantee that actually protects correctness.
   dependencies (DB, Redis, S3) without dying if one is degraded.
 - The frontend must handle a degraded API response (e.g. maps unavailable, uploads
   unavailable) with a clear partial-failure UI state, not a blank screen or crash.
+- A Redis connection that request handling touches (`app.redis`: rate limiting,
+  `/health`, enqueueing) fails fast — no offline queue, a per-command timeout —
+  so a Redis outage never stalls unrelated requests (CR-137; before, every
+  request waited seconds on reconnects).
+  `apps/api/src/degraded-dependencies.test.ts` runs the critical journey with
+  S3/Redis pointed at a closed port and bounds each step's time; extend it when
+  a new feature depends on either.
+- Parse external response bodies as `unknown` and narrow them; an unexpected
+  shape is the integration's own "unavailable" error, never a raw `TypeError`
+  (CR-137, `packages/maps-2gis/src/shape.ts`).
 
 ## What NOT to do
 
