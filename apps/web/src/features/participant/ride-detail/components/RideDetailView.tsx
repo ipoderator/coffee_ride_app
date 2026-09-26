@@ -525,6 +525,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
           groups={groups}
           selectedGroupId={selectedGroupId}
           startLine={startLine}
+          startsAt={ride.startsAt}
           startPointLabel={startPointLabel}
           groupPickerId={canPickGroup ? GROUP_PICKER_ID : undefined}
           onChange={(registration) => {

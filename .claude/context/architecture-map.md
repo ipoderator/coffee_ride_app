@@ -243,7 +243,19 @@ when a cabinet layout passes it, `CabinetShell` also renders a new
 `CabinetSidebar` (desktop-only) beside `children`, fed by the same ADR-009
 registry `AppHeader` reads for its own dropdown/mobile panel — today only
 `app/organizer/layout.tsx` passes it (`filterEnabled(ORGANIZER_NAV_ITEMS)`);
-`/me/*` omits it and keeps the CR-108 header-only layout unchanged. New
+`/me/*` omits it and keeps the CR-108 header-only layout unchanged. (CR-130
+also added `features/organizer/activity/` — the `/organizer` «Новые записи»/
+«Записи по дням» widget, registry order 30 — and `components/site/
+BottomTabBar.tsx`, the site-wide mobile tab bar mounted in `app/layout.tsx`
+next to `AppHeader`, fixed destinations rather than a registry. CR-131:
+`features/organizer/overview/` — the dashboard's greeting + KPI widget,
+registry order 10, replacing the retired `OrganizerProfileWidget`/
+`RideSummaryWidget`; `lib/organizer/own-rides.ts` — shared organizer reads
+(`listOwnRidesPage`, `listAllRideParticipants`) and the one "nearest ride"
+definition; `components/cabinet/NearestRideRedirect.tsx` behind the new
+`/organizer/{participants,updates}` routes and their registry items;
+`CabinetSidebar` gets a leading «Обзор» item from `app/organizer/layout.tsx`.)
+New
 `lib/cabinet/organizer-nav.ts` registry (one entry: `/organizer/profile`); new
 `app/organizer/{layout,page,profile/page}.tsx` (the bare `/organizer` route is a
 minimal stub, same reasoning as CR-013's `/me` stub — real dashboard content is

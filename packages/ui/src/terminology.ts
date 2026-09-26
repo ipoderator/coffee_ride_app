@@ -454,16 +454,12 @@ export const ORGANIZER_TERMS = {
   emailVerificationRequired:
     'Подтвердите email, чтобы создать профиль организатора. Ссылка для подтверждения была отправлена при регистрации.',
   loadError: 'Не удалось загрузить профиль организатора.',
-  // CR-015: `/organizer` dashboard widget summarizing the same
-  // `OrganizerProfile` this feature module owns (`OrganizerProfileWidget`) —
-  // distinct copy from the `/organizer/profile` form above since it's a
-  // read-only card, not a form.
-  dashboardWidgetTitle: 'Профиль организатора',
+  // CR-015: the dashboard's no-profile state (since CR-131, shown by
+  // `OrganizerOverviewWidget` in place of the retired profile card).
   dashboardWidgetEmptyTitle: 'Профиль организатора ещё не создан',
   dashboardWidgetEmptyDescription:
     'Создайте профиль, чтобы публиковать заезды под своим именем.',
   dashboardWidgetCreateLink: 'Создать профиль',
-  dashboardWidgetEditLink: 'Редактировать',
   // CR-043 ("Organizer rating summary"): shown on `/organizer/profile` alongside
   // the form, read-only — same "no reviews yet" missing-value handling as
   // `formatRatingParts`.
@@ -564,22 +560,6 @@ export const RIDE_LIST_TERMS = {
   emptyTitle: 'Пока нет ни одного заезда',
   emptyDescription: 'Создайте первый заезд, чтобы он появился здесь.',
   summaryStartLabel: 'Старт',
-} as const;
-
-/**
- * CR-103 (`/impeccable critique` P1 — "organizer dashboard has no glanceable
- * status"): `/organizer` dashboard widget summarizing `GET /v1/rides/mine/summary`
- * across every ride the caller organizes — `MetricTile`/`MetricRow` (§6), same
- * primitive `docs/design.md`'s own metric system already establishes, applied to a
- * ride/registration/waitlist count instead of one ride's own distance/elevation/pace.
- */
-export const RIDE_SUMMARY_WIDGET_TERMS = {
-  title: 'Мои заезды',
-  loadError: 'Не удалось загрузить сводку по заездам.',
-  totalRidesLabel: 'Всего заездов',
-  openRegistrationLabel: 'Открыта регистрация',
-  activeRegistrationsLabel: 'Зарегистрировано',
-  waitlistedLabel: 'В листе ожидания',
 } as const;
 
 /** `/organizer/rides/[id]/edit` (CR-018, `docs/design.md` §8 "Edit draft"). Every
@@ -1244,3 +1224,96 @@ export const RIDE_DISCOVERY_ROW_TERMS = {
 } as const;
 
 // --------------------------- end CR-118 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-130 («Ночной старт», ADR-024): organizer registration activity, the
+// registered viewer's start countdown, and the mobile bottom tab bar.
+// ---------------------------------------------------------------------------
+
+/** `/organizer`'s «Новые записи» feed and «Записи по дням» chart (CR-130). */
+export const REGISTRATION_ACTIVITY_TERMS = {
+  recentTitle: 'Новые записи',
+  perDayTitle: 'Записи по дням',
+  // CR-131: a calendar week (пн–вс), as in the mockup — not a rolling 7 days.
+  perDayPeriod: 'эта неделя',
+  recentEmpty: 'На ближайшие заезды пока никто не записался.',
+  loadError: 'Не удалось загрузить записи на заезды.',
+  // The chart's text equivalent (`docs/design.md` §12 — colour/shape never
+  // carry meaning alone): one sentence per day for screen readers.
+  dayBar: (weekday: string, count: number) =>
+    `${weekday}: ${count} ${pluralRu(count, 'запись', 'записи', 'записей')}`,
+  today: 'сегодня',
+} as const;
+
+/** The «Вы зарегистрированы» block's countdown to the ride's start (CR-130). */
+export const START_COUNTDOWN_TERMS = {
+  title: 'До старта',
+  days: (count: number) => pluralRu(count, 'день', 'дня', 'дней'),
+  hours: (count: number) => pluralRu(count, 'час', 'часа', 'часов'),
+  minutes: (count: number) => pluralRu(count, 'минута', 'минуты', 'минут'),
+} as const;
+
+/** Mobile-only bottom tab bar (CR-130, ADR-024 mockup «нижние вкладки»). */
+export const BOTTOM_TAB_BAR_TERMS = {
+  navLabel: 'Быстрая навигация',
+  rides: 'Заезды',
+  map: 'Карта',
+  create: 'Создать',
+  mine: 'Мои',
+  me: 'Я',
+} as const;
+
+// --------------------------- end CR-130 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-131 (organizer dashboard brought to the «Ночной старт» mockup).
+// ---------------------------------------------------------------------------
+
+/** Time-of-day greeting for the viewer's local `hour` (0–23). */
+function greetingFor(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 18) return 'Добрый день';
+  if (hour >= 18 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+/** `/organizer`'s header and KPI cells (CR-131). */
+export const ORGANIZER_OVERVIEW_TERMS = {
+  greeting: greetingFor,
+  sendUpdate: 'Отправить обновление',
+  loadError: 'Не удалось загрузить сводку кабинета.',
+  nearestLabel: 'Ближайший',
+  // «2 дн» / «5 ч» until the start; «< 1 ч» inside the last hour.
+  nearestInDays: (days: number) => `${days}\u00a0дн`,
+  nearestInHours: (hours: number) => `${hours}\u00a0ч`,
+  nearestUnderHour: '< 1\u00a0ч',
+  nearestStarted: 'Идёт',
+  nearestNone: 'Нет запланированных заездов',
+  registeredLabel: 'Записано',
+  registeredLastDay: (count: number) => `+${count} за сутки`,
+  registeredNoRide: 'Нет ближайшего заезда',
+  waitlistLabel: 'Лист ожидания',
+  waitlistAllRides: 'По всем заездам',
+  ratingLabel: 'Рейтинг',
+  ratingNoReviews: 'Пока нет отзывов',
+  ratingReviews: formatReviewsCount,
+} as const;
+
+/**
+ * The sidebar's «Обзор» item and the «Участники»/«Обновления» items that open
+ * the nearest ride's pages (CR-131, `/organizer/participants`,
+ * `/organizer/updates`).
+ */
+export const ORGANIZER_NEAREST_RIDE_TERMS = {
+  overviewNavLabel: 'Обзор',
+  participantsNavLabel: 'Участники',
+  updatesNavLabel: 'Обновления',
+  opening: 'Открываем ближайший заезд…',
+  loadError: 'Не удалось найти ближайший заезд.',
+  noRideTitle: 'Нет ближайшего заезда',
+  noRideDescription:
+    'Участники и обновления открываются для ближайшего опубликованного заезда. Опубликуйте заезд — и он появится здесь.',
+  allRidesLink: 'Все заезды',
+} as const;
+
+// --------------------------- end CR-131 block ------------------------------

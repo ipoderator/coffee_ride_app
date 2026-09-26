@@ -50,3 +50,24 @@ describe('MetricTile', () => {
     expect(container.querySelector('dd')).toBeInTheDocument();
   });
 });
+
+describe('MetricTile note (CR-131)', () => {
+  it('renders the note as a second description of the same term', () => {
+    render(<MetricTile label="Записано" value="15/20" note="+3 за сутки" />);
+    const note = screen.getByText('+3 за сутки');
+    expect(note.tagName).toBe('DD');
+    expect(note.className).toContain('text-text-secondary');
+  });
+
+  it('tints a success note', () => {
+    render(
+      <MetricTile
+        label="Ближайший"
+        value="2 дн"
+        note="вс"
+        noteTone="success"
+      />,
+    );
+    expect(screen.getByText('вс').className).toContain('text-success');
+  });
+});

@@ -13,6 +13,14 @@ vi.mock('../api', async () => {
   };
 });
 
+let search = '';
+
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(search),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/',
+}));
+
 vi.mock('@/lib/maps/create-map-renderer', () => ({
   createMapRenderer: () => null,
 }));
@@ -56,6 +64,8 @@ const RIDE: PublicRideListItem = {
 };
 
 beforeEach(() => {
+  search = '';
+  window.history.replaceState(null, '', '/');
   listPublicRidesMock.mockReset();
   listPublicRidesMock.mockResolvedValue({ items: [RIDE], nextCursor: null });
 });
@@ -85,5 +95,28 @@ describe('DiscoveryTabs', () => {
       'aria-selected',
       'true',
     );
+  });
+
+  it('opens on the map tab for ?view=map (CR-130, the tab bar link)', async () => {
+    search = 'view=map';
+    render(<DiscoveryTabs />);
+    await waitFor(() => {
+      expect(screen.getByTestId('discovery-map-panel')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('tab', { name: 'Карта' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('mirrors the chosen tab into the URL (CR-130)', async () => {
+    render(<DiscoveryTabs />);
+    await screen.findByText('Тестовый заезд на выходные');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
+    expect(window.location.search).toBe('?view=map');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Заезды' }));
+    expect(window.location.search).toBe('');
   });
 });

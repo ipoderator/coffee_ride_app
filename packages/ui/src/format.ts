@@ -371,13 +371,8 @@ export function formatRideStartLine(
 ): string {
   if (date === undefined || date === null) return EM_DASH;
   const timeZone = options.timeZone ?? 'UTC';
-  const weekdayName = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-  }).format(date);
-  const weekday = SHORT_WEEKDAYS[WEEKDAY_INDEX[weekdayName] ?? 0];
   return [
-    `${weekday} ${formatDate(date, options)}`,
+    `${formatShortWeekday(date, { timeZone })} ${formatDate(date, options)}`,
     formatTime(date, { timeZone }),
     formatTimeZoneHint(date, timeZone),
   ].join(' · ');
@@ -436,4 +431,77 @@ export function formatPaceRangeParts(paces: readonly number[]): MetricParts {
       ? compactSpeed(min)
       : `${compactSpeed(min)}–${compactSpeed(max)}`;
   return { value, unit: 'км/ч' };
+}
+
+// ---------------------------------------------------------------------------
+// CR-130 («Ночной старт», ADR-024): organizer activity feed/chart and the
+// registered viewer's start countdown. Additive only.
+// ---------------------------------------------------------------------------
+
+/** Short lower-case Russian weekday of `date` as seen in `timeZone` — `пн`. */
+export function formatShortWeekday(
+  date: Date,
+  options: FormatTimeOptions = {},
+): string {
+  const weekdayName = new Intl.DateTimeFormat('en-US', {
+    timeZone: options.timeZone ?? 'UTC',
+    weekday: 'short',
+  }).format(date);
+  return SHORT_WEEKDAYS[WEEKDAY_INDEX[weekdayName] ?? 0] ?? SHORT_WEEKDAYS[0];
+}
+
+/**
+ * Compact time elapsed since `date`, for an activity feed — `сейчас`,
+ * `8 мин`, `2 ч`, `3 дн`. Abbreviated units need no plural agreement, which
+ * is why a feed uses them instead of «8 минут назад». A future `date` (clock
+ * skew) reads as `сейчас`, never a negative number.
+ */
+export function formatElapsedShort(date: Date, now: Date = new Date()): string {
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
+  if (minutes < 1) return 'сейчас';
+  if (minutes < 60) return `${minutes}${NBSP}мин`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}${NBSP}ч`;
+  return `${Math.floor(hours / 24)}${NBSP}дн`;
+}
+
+export interface CountdownParts {
+  days: number;
+  hours: number;
+  minutes: number;
+}
+
+/**
+ * Whole days/hours/minutes from `now` until `target`, rounded down; all
+ * zero once `target` has passed. The label for each part comes from
+ * `START_COUNTDOWN_TERMS` (plural agreement lives with the terminology).
+ */
+export function countdownParts(
+  target: Date,
+  now: Date = new Date(),
+): CountdownParts {
+  const totalMinutes = Math.max(
+    0,
+    Math.floor((target.getTime() - now.getTime()) / 60_000),
+  );
+  return {
+    days: Math.floor(totalMinutes / 1440),
+    hours: Math.floor((totalMinutes % 1440) / 60),
+    minutes: totalMinutes % 60,
+  };
+}
+
+/**
+ * CR-131: a compact start line for a dense KPI cell — `вс 04.10 · 09:00` (no
+ * zone hint: the cell sits next to the ride it describes; the full line with
+ * the zone is {@link formatRideStartLine}).
+ */
+export function formatShortStart(
+  date: Date,
+  options: FormatTimeOptions = {},
+): string {
+  const timeZone = options.timeZone ?? 'UTC';
+  const { day, month } = partsInZone(date, timeZone);
+  const dayMonth = `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}`;
+  return `${formatShortWeekday(date, { timeZone })} ${dayMonth} · ${formatTime(date, { timeZone })}`;
 }

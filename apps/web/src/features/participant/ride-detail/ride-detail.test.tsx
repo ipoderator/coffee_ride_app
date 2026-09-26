@@ -1037,6 +1037,46 @@ describe('RideDetailView', () => {
       expect(screen.getAllByText('Кофейня «Зерно»').length).toBeGreaterThan(1);
     });
 
+    it('counts down days/hours/minutes to the start (CR-130)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 2 days, 14 h, 37 min before baseRide's 2027-05-01T05:00Z start.
+      vi.setSystemTime(new Date('2027-04-28T14:23:00.000Z'));
+      try {
+        getRideDetailMock.mockResolvedValue(
+          baseDetailResponse({
+            ride: { ...baseRide, status: 'registration_open' },
+            viewerRegistration: activeRegistration(),
+          }),
+        );
+
+        render(<RideDetailView rideId="ride-1" />);
+
+        const timer = await screen.findByRole('timer');
+        expect(within(timer).getByText('2')).toBeInTheDocument();
+        expect(within(timer).getByText('дня')).toBeInTheDocument();
+        expect(within(timer).getByText('14')).toBeInTheDocument();
+        expect(within(timer).getByText('часов')).toBeInTheDocument();
+        expect(within(timer).getByText('37')).toBeInTheDocument();
+        expect(within(timer).getByText('минут')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows no countdown once the ride has started (CR-130)', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'started' },
+          viewerRegistration: activeRegistration(),
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByRole('heading', { name: 'Вы зарегистрированы' });
+      expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    });
+
     it('changes group via PATCH', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({

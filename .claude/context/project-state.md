@@ -32,19 +32,20 @@ per-ride participants-visibility toggle, CR-126 (2026-09-24): the
 rider-profile card — `profileVisibility` (3-tier, ADR-023), a new `Bike`
 entity ("garage"), self-reported distance stats, and `GET /v1/rides/:id/
 riders/:registrationId/profile`/`.../avatar`, reachable from the riders
-list — and CR-130 (in progress, 2026-09-24): the «Ночной старт» visual
-direction (ADR-024), replacing «Топокарта» (ADR-021).
+list — and CR-130 (done 2026-09-26): the «Ночной старт» visual direction
+(ADR-024), replacing «Топокарта» (ADR-021).
 
 ## Current task
 
-**CR-130 «Ночной старт» (ADR-024) — in progress, uncommitted.** Full plan:
-`.claude/plans/delightful-skipping-lovelace.md`. Phase 1 (foundation) done;
-Phase 2 (screens) partly done — see `docs/tasks.md`'s CR-130 entry and
-`.claude/context/current-task.md` for the exact checklist. Remaining before
-this task closes: organizer recent-registrations list + per-day bar chart
-(data-availability check first), mobile bottom tab bar, countdown timer in
-`RegistrationButton`'s registered state, then final `pnpm typecheck/lint/
-test` across the repo and a `docs/changelog.md` entry marking it done.
+None active. CR-130 «Ночной старт» (ADR-024) and CR-131 (organizer dashboard
+brought to the mockup's screen 4) are complete — CR-130 Phase 1 committed in
+`3f228ed`; the rest of CR-130 and all of CR-131 are done and verified but
+**uncommitted** as of 2026-09-26. See `docs/changelog.md`'s CR-130/CR-131
+entries. Open follow-ups: KI-066 (dashboard aggregates client-side); owner
+decision pending on whether the mobile tab bar should _replace_ the header's
+hamburger panel (ADR-024 §8's literal wording). Deliberately not built from
+the mockup: the organizer-specific header (CR-108 kept), a «Статистика» screen,
+the «Участники» count badge.
 
 CR-121…CR-129 are committed (`9adb797`, `42330fa`, `3fe806b`, `c685310`).
 Full detail on those: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120»

@@ -1032,16 +1032,18 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-129 Auto-create the MinIO bucket in local infra — done 2026-09-24:
       one-shot `minio-init` compose service (`mc mb --ignore-existing`).
       See `docs/changelog.md`, KI-015.
-- [ ] CR-130 «Ночной старт» visual direction (ADR-024, replaces ADR-021) —
-      in progress 2026-09-24. Phase 1 (foundation) done: new brand roles
+- [x] CR-130 «Ночной старт» visual direction (ADR-024, replaces ADR-021) —
+      done 2026-09-26. Phase 1 (foundation): new brand roles
       (`primary`/`brand`/`primary-fill`), `contour`→`elevation` rename, dark
-      theme now the default, two new fonts (Unbounded, Sofia Sans Extra
-      Condensed), pill/large-radius shape, new `RouteCover`/`AvatarStack`
-      components. Phase 2 (screens) partly done: discovery «Заезды/Карта»
-      tabs + `RouteCover` grid, ride-detail capacity fill-bar + `GroupPicker`
-      restyle, organizer desktop sidebar (`CabinetShell`'s new
-      `sidebarNavItems`, still ADR-009-registry-fed) + per-cell KPI panel.
-      Remaining: organizer recent-registrations list + per-day bar chart
-      (pending a data-availability check), mobile bottom tab bar, and a
-      countdown timer in `RegistrationButton`'s registered state. See
-      `docs/changelog.md`, ADR-024, `.claude/context/current-task.md`.
+      theme by default, Unbounded + Sofia Sans Extra Condensed, pill/large
+      radii, `RouteCover`/`AvatarStack`. Phase 2 (screens): discovery
+      «Заезды/Карта» tabs (URL-synced `?view=map`) + `RouteCover` grid;
+      ride-detail capacity fill-bar, `GroupPicker` restyle, start countdown;
+      organizer desktop sidebar, per-cell KPIs, «Новые записи» feed and
+      «Записи по дням» chart (existing endpoints only, KI-066); mobile bottom
+      tab bar. See `docs/changelog.md`, ADR-024.
+- [x] CR-131 Organizer dashboard brought to the «Ночной старт» mockup
+      (screen 4) — done 2026-09-26: greeting head + «Отправить обновление»,
+      mockup KPI cells (Ближайший/Записано/Лист ожидания/Рейтинг), sidebar
+      «Обзор» + «Участники»/«Обновления» (nearest ride), calendar-week chart
+      with the peak day highlighted. Frontend only. See `docs/changelog.md`.

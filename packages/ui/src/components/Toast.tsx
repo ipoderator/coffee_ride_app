@@ -72,10 +72,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* `aria-live="polite"`/`role="status"`: acknowledges a completed action without
           interrupting whatever the viewer is doing next — same non-interrupting
           reasoning as `ErrorState`'s degraded (`variant="inline"`) case. */}
+      {/* `--app-bottom-inset`: set by an app's bottom-edge chrome (apps/web's
+          mobile tab bar, CR-130) so a toast lands above it, not under it. */}
       <div
         role="status"
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:items-end sm:px-6"
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+var(--app-bottom-inset,0px))] z-50 md:bottom-4 flex flex-col items-center gap-2 px-4 sm:items-end sm:px-6"
       >
         {toasts.map((toast) => (
           <div

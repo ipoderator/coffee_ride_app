@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countdownParts,
   formatDate,
+  formatElapsedShort,
+  formatShortStart,
+  formatShortWeekday,
   formatDistance,
   formatDistanceParts,
   formatDuration,
@@ -294,5 +298,64 @@ describe('formatStartPlace', () => {
     );
     expect(formatStartPlace(' старт ')).toBeNull();
     expect(formatStartPlace(null, '  ')).toBeNull();
+  });
+});
+
+describe('formatShortWeekday (CR-130)', () => {
+  it('reads the weekday in the given zone', () => {
+    // 2026-09-27 22:30 UTC is already Monday in Moscow.
+    const date = new Date('2026-09-27T22:30:00Z');
+    expect(formatShortWeekday(date)).toBe('вс');
+    expect(formatShortWeekday(date, { timeZone: 'Europe/Moscow' })).toBe('пн');
+  });
+});
+
+describe('formatElapsedShort (CR-130)', () => {
+  const now = new Date('2026-09-26T12:00:00Z');
+  const ago = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
+
+  it('buckets into сейчас / мин / ч / дн', () => {
+    expect(formatElapsedShort(ago(0), now)).toBe('сейчас');
+    expect(formatElapsedShort(ago(8), now)).toBe(`8${NBSP}мин`);
+    expect(formatElapsedShort(ago(125), now)).toBe(`2${NBSP}ч`);
+    expect(formatElapsedShort(ago(3 * 1440 + 5), now)).toBe(`3${NBSP}дн`);
+  });
+
+  it('treats a future date as сейчас, never negative', () => {
+    expect(formatElapsedShort(ago(-10), now)).toBe('сейчас');
+  });
+});
+
+describe('countdownParts (CR-130)', () => {
+  const now = new Date('2026-09-26T12:00:00Z');
+
+  it('splits whole days/hours/minutes, rounding down', () => {
+    const target = new Date(
+      now.getTime() + ((2 * 24 + 14) * 60 + 37) * 60_000 + 59_000,
+    );
+    expect(countdownParts(target, now)).toEqual({
+      days: 2,
+      hours: 14,
+      minutes: 37,
+    });
+  });
+
+  it('is all zero once the target has passed', () => {
+    expect(countdownParts(new Date('2026-09-26T11:00:00Z'), now)).toEqual({
+      days: 0,
+      hours: 0,
+      minutes: 0,
+    });
+  });
+});
+
+describe('formatShortStart (CR-131)', () => {
+  it('is weekday, zero-padded dd.mm and time in the zone', () => {
+    // 06:00 UTC = 09:00 Moscow, Sunday 4 October 2026.
+    expect(
+      formatShortStart(new Date('2026-10-04T06:00:00Z'), {
+        timeZone: 'Europe/Moscow',
+      }),
+    ).toBe('вс 04.10 · 09:00');
   });
 });

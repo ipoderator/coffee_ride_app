@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { CabinetShell } from '@/components/cabinet/CabinetShell';
 import { filterEnabled } from '@/lib/cabinet/feature-flags';
 import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
+import type { CabinetNavItem } from '@/lib/cabinet/types';
+import { ORGANIZER_NEAREST_RIDE_TERMS } from 'ui';
 
 // Session gate for every `/organizer/*` screen (`docs/design.md` §8), same
 // mechanics as `app/me/layout.tsx` — see `CabinetShell`. Organizer capability
@@ -16,13 +18,26 @@ import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
 // by the same `ORGANIZER_NAV_ITEMS` registry `AppHeader` still reads for its
 // own dropdown/mobile panel — a Server Component filters it here, same as
 // `app/layout.tsx` does, since `filterEnabled` needs server-only env vars.
+// CR-131 (mockup screen 4): the sidebar opens with «Обзор» → `/organizer`.
+// Not a registry entry: the cabinet root isn't a feature, and `AppHeader`'s
+// dropdown already renders its own fixed overview link ahead of the same
+// registry — a registry entry would show it there twice.
+const OVERVIEW_ITEM: CabinetNavItem = {
+  label: ORGANIZER_NEAREST_RIDE_TERMS.overviewNavLabel,
+  href: '/organizer',
+  order: 0,
+  icon: 'House',
+};
+
 export default function OrganizerCabinetLayout({
   children,
 }: {
   children: ReactNode;
 }) {
   return (
-    <CabinetShell sidebarNavItems={filterEnabled(ORGANIZER_NAV_ITEMS)}>
+    <CabinetShell
+      sidebarNavItems={[OVERVIEW_ITEM, ...filterEnabled(ORGANIZER_NAV_ITEMS)]}
+    >
       {children}
     </CabinetShell>
   );

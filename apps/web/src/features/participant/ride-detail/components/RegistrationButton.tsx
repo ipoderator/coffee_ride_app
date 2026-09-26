@@ -31,6 +31,7 @@ import {
   registerForRide,
 } from '../api';
 import { GroupPicker } from './GroupPicker';
+import { StartCountdown } from './StartCountdown';
 
 /**
  * API error `code` → the message this screen shows. Group codes (CR-117) get
@@ -85,6 +86,7 @@ export function RegistrationButton({
   groups = [],
   selectedGroupId = null,
   startLine,
+  startsAt,
   startPointLabel = null,
   groupPickerId,
   onChange,
@@ -100,6 +102,9 @@ export function RegistrationButton({
   selectedGroupId?: string | null;
   /** Formatted start date/time line for the registered block. */
   startLine: string;
+  /** CR-130: the ride's start instant, for the registered block's countdown.
+   * Omitted → no countdown. */
+  startsAt?: string;
   startPointLabel?: string | null;
   /** DOM id of the page's group picker, for the «Выберите группу» hint link. */
   groupPickerId?: string;
@@ -249,6 +254,10 @@ export function RegistrationButton({
     const canChangeGroup =
       hasGroups && rideStatus !== 'finished' && rideStatus !== 'cancelled';
     const showPicker = canChangeGroup && (mustPickGroup || isChangingGroup);
+    const showsCountdown =
+      rideStatus !== 'started' &&
+      rideStatus !== 'finished' &&
+      rideStatus !== 'cancelled';
 
     return (
       <section
@@ -262,6 +271,7 @@ export function RegistrationButton({
           <CircleCheck className="size-5 shrink-0" aria-hidden="true" />
           {RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle}
         </h2>
+        {startsAt && showsCountdown && <StartCountdown startsAt={startsAt} />}
         <dl className="flex flex-col gap-1 text-sm">
           <div className="flex gap-2">
             <dt className="w-16 shrink-0 text-text-secondary">

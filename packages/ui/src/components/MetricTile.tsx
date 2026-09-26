@@ -25,6 +25,13 @@ export interface MetricTileProps {
    * spacing") for every other existing call site.
    */
   variant?: 'plain' | 'cell';
+  /**
+   * CR-131: an optional one-line note under the value (the mockup's KPI
+   * cells — «вс 04.10 · 09:00», «+3 за сутки»), in the mono face. `'success'`
+   * tints it for a positive/near-term fact; the default is muted.
+   */
+  note?: string;
+  noteTone?: 'muted' | 'success';
   className?: string;
 }
 
@@ -33,6 +40,8 @@ export function MetricTile({
   value,
   unit,
   variant = 'plain',
+  note,
+  noteTone = 'muted',
   className,
 }: MetricTileProps) {
   return (
@@ -62,6 +71,16 @@ export function MetricTile({
           </span>
         ) : null}
       </dd>
+      {note ? (
+        <dd
+          className={cn(
+            'truncate font-mono text-xs',
+            noteTone === 'success' ? 'text-success' : 'text-text-secondary',
+          )}
+        >
+          {note}
+        </dd>
+      ) : null}
     </dl>
   );
 }

@@ -46,6 +46,27 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
 }
 
+/**
+ * CR-131: the same classes for a link styled as a button (`next/link` in
+ * `apps/web` — `packages/ui` stays router-agnostic, so it can't render the
+ * link itself). Additive; `Button` builds its own classes from this too.
+ */
+export function buttonClassName(
+  variant: ButtonVariant = 'primary',
+  className?: string,
+): string {
+  return cn(
+    // Touch target 48px on mobile, 44px from `md` (docs/design.md §5);
+    // full pill radius, not a stamp (ADR-024 §3); visible 2px focus ring
+    // offset 2 (§12).
+    'inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-base font-medium transition-colors md:min-h-11',
+    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+    'disabled:cursor-not-allowed disabled:opacity-60',
+    VARIANT_STYLES[variant],
+    className,
+  );
+}
+
 export function Button({
   variant = 'primary',
   isLoading = false,
@@ -60,16 +81,7 @@ export function Button({
       type={type}
       disabled={disabled || isLoading}
       aria-busy={isLoading || undefined}
-      className={cn(
-        // Touch target 48px on mobile, 44px from `md` (docs/design.md §5);
-        // full pill radius, not a stamp (ADR-024 §3); visible 2px focus ring
-        // offset 2 (§12).
-        'inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-base font-medium transition-colors md:min-h-11',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-        'disabled:cursor-not-allowed disabled:opacity-60',
-        VARIANT_STYLES[variant],
-        className,
-      )}
+      className={buttonClassName(variant, className)}
       {...props}
     >
       {isLoading ? (

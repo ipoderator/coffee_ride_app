@@ -168,3 +168,32 @@ describe('CR-119 ride detail terms', () => {
     );
   });
 });
+
+// CR-130 («Ночной старт»).
+describe('CR-130 activity/countdown terms', () => {
+  it('pluralizes day-bar labels and countdown units', async () => {
+    const { REGISTRATION_ACTIVITY_TERMS, START_COUNTDOWN_TERMS } =
+      await import('./terminology');
+    expect(REGISTRATION_ACTIVITY_TERMS.dayBar('пн', 1)).toBe('пн: 1 запись');
+    expect(REGISTRATION_ACTIVITY_TERMS.dayBar('вт', 3)).toBe('вт: 3 записи');
+    expect(REGISTRATION_ACTIVITY_TERMS.dayBar('ср', 0)).toBe('ср: 0 записей');
+    expect(START_COUNTDOWN_TERMS.days(2)).toBe('дня');
+    expect(START_COUNTDOWN_TERMS.days(5)).toBe('дней');
+    expect(START_COUNTDOWN_TERMS.hours(21)).toBe('час');
+    expect(START_COUNTDOWN_TERMS.minutes(37)).toBe('минут');
+    expect(START_COUNTDOWN_TERMS.minutes(1)).toBe('минута');
+  });
+});
+
+// CR-131.
+describe('CR-131 organizer overview terms', () => {
+  it('greets by time of day and pluralizes reviews', async () => {
+    const { ORGANIZER_OVERVIEW_TERMS } = await import('./terminology');
+    expect(ORGANIZER_OVERVIEW_TERMS.greeting(7)).toBe('Доброе утро');
+    expect(ORGANIZER_OVERVIEW_TERMS.greeting(14)).toBe('Добрый день');
+    expect(ORGANIZER_OVERVIEW_TERMS.greeting(20)).toBe('Добрый вечер');
+    expect(ORGANIZER_OVERVIEW_TERMS.greeting(2)).toBe('Доброй ночи');
+    expect(ORGANIZER_OVERVIEW_TERMS.ratingReviews(32)).toBe('32 отзыва');
+    expect(ORGANIZER_OVERVIEW_TERMS.registeredLastDay(3)).toBe('+3 за сутки');
+  });
+});

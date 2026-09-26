@@ -2686,3 +2686,123 @@ new files are under `packages/ui/src/components/` (`AvatarStack.*`) and
 `apps/web/src/features/participant/discovery/` (`RouteCover.*`, `RideGrid.tsx`,
 `RideGridCard.tsx`, `DiscoveryTabs.*`, `lib/ride-metrics.*`) plus
 `apps/web/src/components/cabinet/CabinetSidebar.tsx`.
+
+## 2026-09-26 — CR-130 — «Ночной старт» Phase 2 completed (organizer activity, countdown, mobile tab bar)
+
+Closes CR-130 (ADR-024). Picks up exactly where the 2026-09-24 checkpoint
+entry above stopped; everything listed there as "Not done yet" is now built.
+
+- **Organizer «Новые записи» + «Записи по дням».** Data-availability check
+  first, as the plan required: `GET /v1/rides/:id/participants` already
+  returns `createdAt` (and `group`) per registration, so no new API surface.
+  New feature module `apps/web/src/features/organizer/activity/` (ADR-009:
+  its own `api.ts`, not an import from `features/organizer/rides`) —
+  `RegistrationActivityWidget`, registered as `organizerRegistrationActivityWidget`
+  (order 30) in `lib/cabinet/organizer-widgets.ts`. It lists the caller's rides
+  (`/v1/rides/mine`), keeps those that can hold registrations inside the
+  7-day window (`selectActivityRides`: not draft/cancelled, starting no
+  earlier than the window; soonest first; at most 10), fetches each ride's
+  participants (following `nextCursor`, ≤3 pages of 100), and aggregates
+  client-side: the 5 newest registrations (avatar initials, name, group,
+  ride, `formatElapsedShort` — «8 мин»/«2 ч»/«3 дн») and per-day counts in
+  the viewer's own time zone (today highlighted; every bar prints its count
+  and carries an sr-only sentence, `docs/design.md` §12). The fan-out cost is
+  recorded as KI-066.
+- **Start countdown.** New `StartCountdown` (ride-detail feature): three
+  raised cells, days/hours/minutes to `ride.startsAt`, 30 s client tick,
+  `role="timer"` (implicitly not live — no announcement every tick).
+  `RegistrationButton` gained an optional `startsAt` prop and shows it at the
+  top of the «Вы зарегистрированы» block, except for a
+  started/finished/cancelled ride or once the start has passed.
+- **Mobile bottom tab bar.** New `components/site/BottomTabBar.tsx`, mounted in
+  `app/layout.tsx`, `md:hidden`: Заезды / Карта / «+ Создать» (filled pill) /
+  Мои / Я, every icon with a visible label (CR-106's "never icon-only").
+  Hidden on `/rides/[id]`, where the sticky «Записаться» bar owns the bottom
+  edge (mockup screen 2 has no tab bar either). A spacer keeps it from
+  covering page ends; it publishes `--app-bottom-inset`, which `packages/ui`'s
+  `Toast` now adds to its bottom offset (additive, default `0px`).
+  **Deviation from ADR-024 §8's wording**, flagged for the owner: the ADR says
+  the tab bar _replaces_ the header dropdown on mobile; it was built to sit
+  _alongside_ the header's hamburger panel instead, because that panel is
+  the only mobile route to the organizer menu, the theme control and
+  sign-out, none of which fit the mockup's five tabs. Removing the hamburger
+  is a one-line follow-up if the owner prefers the ADR's literal reading.
+- **Discovery tabs are URL-synced.** `DiscoveryTabs` reads `?view=map`
+  (`useSearchParams`) so the tab bar's «Карта» link opens the map; a tab
+  click writes the URL with `history.replaceState` (Next keeps
+  `useSearchParams` in sync, no server round trip). `app/(public)/page.tsx`
+  wraps it in `<Suspense>` (required for `useSearchParams` on a static
+  route); `BottomTabBar` does the same with a no-search-params fallback so it
+  is still in the prerendered HTML.
+- `packages/ui`: `formatShortWeekday` (now also used by `formatRideStartLine`,
+  behaviour unchanged), `formatElapsedShort`, `countdownParts`;
+  `REGISTRATION_ACTIVITY_TERMS`, `START_COUNTDOWN_TERMS`,
+  `BOTTOM_TAB_BAR_TERMS`. All additive.
+
+Validation: `pnpm typecheck` and `pnpm lint` green repo-wide; tests — ui
+143/143, web 360/360 (new: `activity.test.tsx`, `BottomTabBar.test.tsx`,
+countdown and `?view=map` cases), api 434 passed/3 skipped. The api suite
+first failed wholesale: the disposable test DB (`coffee_ride`, Docker
+Compose postgres) was one migration behind (`0019`); applying it fixed that —
+environment, not a regression (this change touches no API code).
+`pnpm --filter web build` passes (all routes still static where they were).
+Browser-automation check against the dev server with a temporary organizer,
+ride and three registered riders created through the API (deleted from the dev
+DB afterwards): dashboard feed/chart in dark and light at 1280px and 390px,
+countdown on the ride page (2 дня / 14 часов / 23 минуты), no tab bar on the
+ride page, «Карта»/«Заезды» tab-bar links switching the discovery view and URL;
+no console errors.
+
+## 2026-09-26 — CR-131 — Organizer dashboard brought to the «Ночной старт» mockup (screen 4)
+
+A side-by-side check of `/organizer` against the ADR-024 mockup (after CR-130)
+found the head, KPI set and sidebar still off. Owner decisions: build every
+"no backend change" item; sidebar «Участники»/«Обновления» open the **nearest
+ride's** pages; no «Статистика» item; the shared site header stays (CR-108 is
+not reversed for `/organizer/*`). Frontend only — no API or schema change.
+
+- **Head + KPIs** — new `features/organizer/overview/` (`OrganizerOverviewWidget`,
+  registry order 10): the organizer's name as eyebrow, a time-of-day greeting
+  (`ORGANIZER_OVERVIEW_TERMS.greeting`), a secondary «Отправить обновление» to
+  the nearest ride's updates; four cells — Ближайший («2 дн»/«5 ч»/«< 1 ч»/«Идёт»
+  - `formatShortStart` «вс 04.10 · 09:00»), Записано (`N/M` on the nearest ride +
+    «+N за сутки»), Лист ожидания (CR-103's all-rides total, «По всем заездам» —
+    the mockup names one ride; per-ride waitlists would cost a request per ride),
+    Рейтинг (CR-043's aggregate + «N отзывов»). No profile → the «Создать профиль»
+    empty state CR-015's card used to show. `MetricTile` gained an optional
+    `note`/`noteTone` (additive); `Button`'s classes are now exported as
+    `buttonClassName` for links styled as buttons (additive).
+- **Retired from the dashboard**: CR-015's `OrganizerProfileWidget` and CR-103's
+  `RideSummaryWidget` (and their tests, `getOwnRideSummary` in
+  `features/organizer/rides/api.ts`, `RIDE_SUMMARY_WIDGET_TERMS`,
+  `ORGANIZER_TERMS.dashboardWidgetTitle/EditLink`) — replaced by the overview
+  widget; the profile is still one sidebar click away. The visible
+  «Кабинет организатора» title became a screen-reader-only `h1` (the greeting
+  is the visual head, as in the mockup).
+- **Nearest ride** — one shared definition, `lib/organizer/own-rides.ts`
+  (`pickNearestRide`: the `started` ride, else the soonest published one still
+  ahead), plus the shared organizer reads the activity widget used to own
+  (`listOwnRidesPage`, `listAllRideParticipants`; `features/organizer/
+activity/api.ts` removed).
+- **Sidebar** — «Обзор» (`/organizer`, not a registry entry: `AppHeader`'s
+  dropdown already renders its own overview link) leads; new registry items
+  «Участники» (`/organizer/participants`, order 30) and «Обновления»
+  (`/organizer/updates`, order 40) render `NearestRideRedirect`, which
+  `router.replace`s to the nearest ride's page or shows an empty state linking
+  to all rides. «Профиль организатора» moved to order 90 (last). The sidebar is
+  a raised panel; an item stays lit on its sub-pages, except the root.
+  The mockup's live count badge on «Участники» was not built — registry items
+  are static server-built data.
+- **«Записи по дням»** — the calendar week пн–вс («эта неделя»), the busiest day
+  highlighted in `brand` (was: rolling 7 days, today highlighted); today's
+  weekday label is set in the body colour. Counts stay printed above bars.
+
+Validation: `pnpm --filter web --filter ui typecheck/lint` clean; tests ui
+147/147, web 369/369 (new: `overview.test.tsx`, `own-rides.test.ts`,
+`CabinetSidebar.test.tsx`, `NearestRideRedirect.test.tsx`, calendar-week/peak
+cases, `MetricTile` note, `formatShortStart`, greeting terms). Browser check
+against the dev server (restarted with a clean `.next` — the deleted widget's
+stale module graph made `/` return 500 until then) with temporary API-created
+data, since deleted: dashboard in dark/light at 1280px and 390px, «Обзор»
+active on `/organizer`, sidebar «Участники»/«Обновления» landing on the nearest
+ride's pages; no console errors.

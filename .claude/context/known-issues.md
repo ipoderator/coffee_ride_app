@@ -17,6 +17,26 @@ as part of closing the issue, not as a periodic batch cleanup.
 
 ## Open
 
+### KI-066 — Organizer registration activity is aggregated client-side from per-ride requests
+
+- Status: open (accepted limitation), discovered 2026-09-26 (CR-130).
+- Problem: `/organizer`'s «Новые записи»/«Записи по дням» widget
+  (`features/organizer/activity/`) has no aggregate endpoint to read, so it
+  calls `GET /v1/rides/mine` and then `GET /v1/rides/:id/participants` once
+  per selected ride (≤10 rides, ≤3 pages each), aggregating in the browser.
+  CR-130's scope was frontend-only, so no new API surface was added.
+- Impact: up to ~11 requests per dashboard load for a busy organizer; rides
+  beyond the 10 soonest in the window are not counted; an organizer with
+  more than 100 rides only sees the newest 100 considered.
+- Workaround: none needed at current scale.
+- Update 2026-09-26 (CR-131): the overview widget adds its own reads on the
+  same page (`/organizers/me`, `/rides/mine/summary`, `/rides/mine` again and
+  the nearest ride's participants) — the dashboard now makes roughly
+  `4 + selected rides` requests. Same fix applies.
+- Next action: if organizers with many concurrent rides appear, add a
+  `GET /v1/rides/mine/registrations/activity` aggregate (sibling of
+  `/mine/summary`, CR-103) and point the widget at it.
+
 ### KI-065 — `participantsVisible` can't be changed after publish
 
 Status: open. Discovered 2026-09-24 (CR-125).

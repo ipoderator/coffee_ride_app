@@ -391,7 +391,7 @@ Public / participant:
 
 | Route                                                | Screen                   | Notes                                                                                          |
 | ---------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `/`                                                  | Discovery                | List + map toggle; filters. Mobile default = list                                              |
+| `/`                                                  | Discovery                | «Заезды» (route-cover grid) / «Карта» tabs, `?view=map` (ADR-024, CR-130); filters             |
 | `/rides/[id]`                                        | Ride detail              | Cover, metrics, route + profile, stops, services, requirements, organizer, registration action |
 | `/login` `/register`                                 | Auth                     |                                                                                                |
 | `/forgot-password` `/reset-password` `/verify-email` | Auth flows               | CR-059, CR-060                                                                                 |
@@ -405,6 +405,8 @@ Organizer cabinet:
 | Route                                | Screen                                        |
 | ------------------------------------ | --------------------------------------------- |
 | `/organizer`                         | Dashboard (widgets from the ADR-009 registry) |
+| `/organizer/participants`            | → nearest ride's participants (CR-131)        |
+| `/organizer/updates`                 | → nearest ride's updates (CR-131)             |
 | `/organizer/rides`                   | My rides, grouped by status                   |
 | `/organizer/rides/new`               | Create ride                                   |
 | `/organizer/rides/[id]/edit`         | Edit draft                                    |
@@ -418,6 +420,28 @@ discovery link, one dropdown per cabinet built from that cabinet's ADR-009 featu
 registry, the theme control (§3), and the account menu. A new screen registers itself
 into its registry; it does not edit the header. `CabinetShell` remains, narrowed to
 the `/me/*` and `/organizer/*` session gate.
+
+Below `md` a **bottom tab bar** (CR-130, ADR-024 «нижние вкладки») adds five
+fixed destinations — Заезды (`/`), Карта (`/?view=map`), a filled «+ Создать» pill
+(`/organizer/rides/new`), Мои (`/me/rides`), Я (`/me`) — each an outline icon with a
+visible label. It sits alongside the header's disclosure panel, which still holds
+the full per-cabinet menus, the theme control and sign-out. It steps aside on
+`/rides/[id]`, whose sticky registration bar owns that screen edge; `Toast` lifts
+above it via `--app-bottom-inset`.
+
+The organizer dashboard (`/organizer`, CR-131 — mockup screen 4) opens with the
+organizer's name as an eyebrow, a time-of-day greeting and a secondary
+«Отправить обновление» (the nearest ride's updates); then four KPI cells —
+Ближайший (days to the start + a short start line), Записано (`N/M` on the nearest
+ride + «+N за сутки»), Лист ожидания (all rides), Рейтинг (+ review count); then
+«Новые записи» (the newest registrations across current rides, with group and
+elapsed time) and «Записи по дням» (the calendar week пн–вс, the busiest day
+highlighted; every bar carries its count as text). The "nearest ride" is one
+shared definition (`apps/web/src/lib/organizer/own-rides.ts`): the ride under
+way, else the soonest upcoming published one. The organizer sidebar lists «Обзор»,
+then the ADR-009 registry — Заезды, Участники, Обновления (both open the nearest
+ride's page; an empty state when there is none), Профиль организатора. The registered viewer's block on `/rides/[id]`
+opens with a days/hours/minutes countdown to the start («До старта»).
 
 Every top-level item in the bar — plain link or dropdown trigger — shares one type
 style, `packages/ui`'s `NAV_BAR_ITEM_CLASSNAME` (CR-122): Golos 600, 16px, tracking
@@ -498,8 +522,9 @@ messages tied to the field, a pending state, and duplicate-submit protection.
 | `xl`       | ≥ 1280 | Max content width 1200px, centered                                            |
 
 CR-108 replaced the cabinets' own nav (a bottom bar at base, a side column at `md`+)
-with the single global header described in §8 — there is no longer a per-cabinet
-navigation surface to break at a breakpoint.
+with the single global header described in §8. ADR-024/CR-130 brought two surfaces
+back, both fed from the same places: the organizer's desktop sidebar (`lg`+, ADR-009
+registry) and a site-wide bottom tab bar below `md` (§8).
 
 Tables (participant lists) collapse to stacked cards below `md` — never a horizontally
 scrolling table on a phone.
