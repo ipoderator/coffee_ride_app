@@ -1059,3 +1059,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (KI-066 duplication); `AUTH_RATE_LIMIT_MAX` test/dev override for e2e
       (rejected in production); no back link on organizer sidebar sections;
       tab bar + hamburger coexist (owner decision). See `docs/changelog.md`.
+- [x] CR-134 CI/production-build P0 — done 2026-09-26: `turbo.json` passes
+      `TEST_DATABASE_URL` (+ `RUN_LIVE_S3_TESTS`) to `test` (KI-050); `web`'s
+      `API_INTERNAL_URL` is a required Docker build arg (images proxied to
+      `localhost:4000`); production Docker smoke test `pnpm smoke:docker` /
+      CI job `docker-smoke`. See `docs/changelog.md`.

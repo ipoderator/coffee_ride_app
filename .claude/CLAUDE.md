@@ -128,6 +128,8 @@ as any other Claude skill — no need to invoke them by name):
 - `map-provider-change` — adding/swapping a map provider behind the adapter (ADR-010).
 - `security-review` — systematic walkthrough of `.claude/rules/security.md`.
 - `adr` — recording an architectural decision the way this project already does it.
+- `commit-push` — `/commit-push`: review, secret-check, commit and push finished work
+  (`.claude/rules/git.md`).
 
 These are procedures, not replacements for the underlying rules files — read the linked
 rules file in full for anything the skill doesn't cover.

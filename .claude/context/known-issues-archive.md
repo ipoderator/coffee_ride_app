@@ -1215,3 +1215,93 @@ riders/:registrationId/avatar` streams a rider's avatar, gated by the same
   `/v1/auth/*` rate limit (KI-014) — rerun after a minute.
 - Resolution 2026-09-26 (CR-133): the spec checks the default grid on `/`
   and the map-view list on `/?view=map`; e2e 5/5 against the dev stack.
+
+### KI-043 — CR-074's two Dockerfiles have never had a real `docker build` run against them
+
+Status: open. Discovered: 2026-09-17 (CR-074).
+Problem: same root cause as KI-019 — the Docker daemon does not come up in this
+environment (`docker info` confirmed still unreachable this session). CR-074 added
+`apps/web/Dockerfile` and `apps/api/Dockerfile`, both multi-stage with a non-root
+runtime user, but neither has had an actual `docker build`/`docker run` executed
+against it.
+Impact: medium — the Dockerfiles are new and unexercised as container images
+specifically (as opposed to the underlying mechanics they depend on, which were
+verified directly on the host — see Workaround). A mistake specific to the
+containerized environment (a missing system package, a base-image path/permission
+issue, a COPY that only looks right) would not be caught until the first real build.
+Workaround: could not build the images, so instead verified the pieces a Docker
+build would exercise, directly on the host, and did not just assume they'd work:
+(1) added `output: 'standalone'` to `apps/web/next.config.ts` and ran a real `pnpm
+--filter web build`, then inspected the actual `.next/standalone` output shape
+(confirmed the `apps/web/server.js` entry path and that `.next/static`/`public`
+need copying separately — both now match what the Dockerfile actually does); (2)
+for `apps/api`, ran the exact `pnpm --filter=api deploy --prod` command the
+Dockerfile's builder stage runs, then ran `node dist/server.js` from inside that
+pruned output directory against this environment's real local Postgres — `GET
+/health` responded `200`, proving the pruned, production-only `node_modules`
+(no devDependencies) is actually sufficient and argon2's native binding still
+resolves correctly from within it.
+Update 2026-09-22: the Docker daemon is reachable this session (`docker info`
+succeeds, `docker compose up -d` brings up postgres/redis/minio healthy — same
+daemon used for CR-097 live verification). Ran `docker build -f apps/api/
+Dockerfile .`; it fails before any of this repo's own build steps run, while
+resolving the `node:24-alpine` base image: BuildKit (and, tried as a fallback,
+the legacy `DOCKER_BUILDKIT=0` engine) cannot resolve DNS for
+`production.cloudfront.docker.com` (Docker Hub's blob-storage CDN) from inside
+Docker Desktop's own Linux VM — confirmed reproducible (3/3 attempts) with
+`docker run --rm redis:8-alpine getent hosts production.cloudfront.docker.com`
+(`rc=2`), while `registry-1.docker.io` and `google.com` resolve fine from the
+same container — so this is one specific domain blocked at the network/DNS
+level this sandbox sits behind, the same class of restriction already tracked
+as KI-055 for `unisender.ru`, not a general Docker/network outage. Already-cached
+base images (`postgres:17-alpine`, `redis:8-alpine`, `quay.io/minio/
+minio:...`) pull/run fine since no new blob fetch through that CDN is needed;
+`node:24-alpine` (and likely any other not-yet-cached Docker Hub image) is not
+cached locally and cannot be pulled. `apps/web`'s Dockerfile was not attempted
+separately — it depends on the same `node:24-alpine` base and would fail
+identically at the same step.
+Next action: unchanged in substance — still needs a session where this specific
+CDN domain resolves (or `node:24-alpine`/`docker/dockerfile:1` are pre-pulled
+some other way, e.g. `docker save`/`docker load` from a machine that can reach
+it) before `docker build` can be exercised at all here. Not a code fix; no
+Dockerfile change is implicated by this failure.
+Resolution 2026-09-26 (CR-134): all three images (`api`, `web`, `migrate`) now
+really build and run — `deploy/smoke/run.sh` builds them from
+`docker-compose.prod.yml`, applies migrations, and gets `200 {"items":[],
+"nextCursor":null}` for `GET /api/v1/rides` through `web`. The first real run
+found one real Docker-specific bug (web proxied to `localhost:4000`, fixed in
+CR-134). The CDN block itself persists here: base images were pulled from
+Google's Docker Hub mirror and retagged locally (`docker pull mirror.gcr.io/
+library/node:24-alpine && docker tag … node:24-alpine`, same for
+`docker/dockerfile:1`). CI's `docker-smoke` job pulls from Docker Hub directly.
+
+### KI-050 — `turbo.json`'s `test` task doesn't pass through `TEST_DATABASE_URL`
+
+Status: open. Discovered: 2026-09-20 (CR-097 session), while running the full
+monorepo check sweep (`pnpm turbo test`) after CR-095/KI-049 added
+`TEST_DATABASE_URL` as the variable `apps/api`'s test suite actually reads.
+Problem: `turbo.json`'s `test` task declares an explicit `env` allowlist
+(`NEXT_PUBLIC_*`, `API_PORT`, `DATABASE_URL`, `REDIS_URL`, `S3_*`,
+`AUTH_SECRET`, `MAPS_2GIS_API_KEY`) for cache-hashing purposes;
+`TEST_DATABASE_URL` was never added to it when CR-095 introduced the
+variable, so Turborepo strips it from the child process's environment even
+when it's exported in the parent shell. A plain `pnpm turbo test` therefore
+fails 15/25 `apps/api` test files with "TEST_DATABASE_URL is required" — not
+a real regression, just an invocation that silently loses the variable it
+needs.
+Impact: low — `pnpm --filter api test` (what this repo's CI actually runs,
+`.github/workflows/ci.yml`, with `TEST_DATABASE_URL` set as a real job-level
+env var rather than routed through `pnpm turbo test`'s env-passthrough) is
+unaffected; only a plain top-level `pnpm turbo test` invocation hits this.
+Workaround: run `pnpm --filter api test` (or `pnpm --filter api exec vitest
+run`) with `TEST_DATABASE_URL` exported directly, not through `pnpm turbo
+test`.
+Next action: add `TEST_DATABASE_URL` to `turbo.json`'s `test` task `env`
+array — a one-line config fix, not attempted this session (found during
+CR-097's own validation sweep, unrelated to that ticket's actual scope).
+Resolution 2026-09-26 (CR-134): `TEST_DATABASE_URL` (and `RUN_LIVE_S3_TESTS`,
+stripped the same way — CI's live S3 test was silently skipping) added to
+`turbo.json`'s `test` env; `DATABASE_URL` untouched. The Impact line above was
+wrong: CI runs `pnpm test` (Turbo), not `pnpm --filter api test`, so CI's api
+suite was failing too. `pnpm test` with `TEST_DATABASE_URL` exported: 5/5
+tasks, api 438 passed / 4 skipped.

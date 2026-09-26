@@ -783,6 +783,19 @@ instance. `DiscoveryMap` carried this same exposure since CR-098 without ever
 hitting it in a prior live check; the fix lives once in the adapter, so both
 callers are covered without their own effect code changing.
 
+CR-134 (deploy verification): `deploy/smoke/` holds a production Docker smoke
+test — `docker-compose.smoke.yml` is an overlay on `docker-compose.prod.yml`
+(own project `coffeeride-smoke`; adds a throwaway `postgres`, disables `caddy`/
+`backup` via an unused profile, pins `api` env literally), `smoke.env` feeds
+interpolation, `run.sh` builds `api`/`web`/`migrate`, migrates, asserts `api`
+publishes no host port and `GET /api/v1/rides` through `web` returns 200 with
+`{ items }`. Run as `pnpm smoke:docker` and as CI's separate `docker-smoke`
+job. `web`'s proxy target `API_INTERNAL_URL` is a required Docker **build
+arg** (Next bakes rewrites into `routes-manifest.json`), set literally in
+`docker-compose.prod.yml`'s `web.build.args`; it is also in `turbo.json`'s
+`build`/`dev` env. `turbo.json`'s `test` env passes `TEST_DATABASE_URL` and
+`RUN_LIVE_S3_TESTS` through (separate from `DATABASE_URL`).
+
 ## Target structure
 
 apps/

@@ -77,7 +77,15 @@ This builds and starts `caddy`, `web`, and `api` (the `migrate` service stays ou
 plain `up` — see step 2). `caddy` is the only container publishing host ports (`80`/
 `443`); `api` publishes none at all and is reachable only from `web` over the internal
 Compose network (ADR-018 §2) — `apps/web/next.config.ts`'s own `/api/v1/*` rewrite is
-the one place that routing happens.
+the one place that routing happens. Its target (`API_INTERNAL_URL=http://api:4000`) is a
+`web` **build arg**, not a runtime env var (CR-134): Next resolves rewrites at `next
+build`, so changing it means rebuilding the `web` image (`--build`), never just editing
+the container environment.
+
+Before a release, `pnpm smoke:docker` (`deploy/smoke/run.sh`, also CI's `docker-smoke`
+job) builds these same images from this same file, runs them with a throwaway Postgres
+(Caddy/backup disabled), and requires `GET /api/v1/rides` through `web` to return `200`
+and `api` to publish no host port.
 
 ## 4. Verify
 

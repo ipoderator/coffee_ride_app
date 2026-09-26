@@ -14,6 +14,7 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "test:e2e": "turbo test:e2e",
+    "smoke:docker": "bash deploy/smoke/run.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "infra:up": "docker compose up -d",

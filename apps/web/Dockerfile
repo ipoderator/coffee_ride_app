@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # CR-074. Build context is the monorepo root:
-#   docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY=... .
+#   docker build -f apps/web/Dockerfile --build-arg API_INTERNAL_URL=http://api:4000 \
+#     --build-arg NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY=... .
 #
 # Three stages: `deps` (install once, cache-friendly), `builder` (compile the
 # Next.js standalone output), `runner` (the actual runtime image — no
@@ -38,6 +39,15 @@ COPY . .
 # `.claude/rules/maps.md` and `.env.example`).
 ARG NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY
 ENV NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY=$NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY
+# CR-134. next.config.ts's `/api/v1/*` rewrite destination is resolved here,
+# at `next build`, and written into routes-manifest.json — the standalone
+# server never re-reads it, so setting API_INTERNAL_URL on the running
+# container has no effect. Required, not defaulted: an image built without it
+# silently proxied every API call to localhost:4000 inside this container.
+ARG API_INTERNAL_URL
+RUN test -n "$API_INTERNAL_URL" \
+    || (echo 'API_INTERNAL_URL build arg is required (e.g. http://api:4000)' >&2 && exit 1)
+ENV API_INTERNAL_URL=$API_INTERNAL_URL
 ENV NODE_ENV=production
 RUN pnpm --filter web build
 

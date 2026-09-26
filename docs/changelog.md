@@ -771,3 +771,53 @@ Decisions: ADR-024 amendment (tab bar and hamburger coexist).
 Follow-up: KI-066's aggregate endpoint; `/me/*` sidebar sections still carry
 «В личный кабинет» back links (same reasoning would drop them — not done here,
 the participant cabinet keeps the shared header).
+
+## 2026-09-26 — CR-134 — CI test env fix + production Docker smoke test
+
+Summary: P0 for CI and the production build.
+
+- **`pnpm test` lost `TEST_DATABASE_URL` (KI-050)** — `turbo.json`'s `test` task
+  has a strict env allowlist, so Turbo stripped it and 15+ `apps/api` test files
+  failed with "TEST_DATABASE_URL is required". CI runs `pnpm test` too, so the
+  CI api suite was failing (KI-050 had wrongly said CI was unaffected). Added
+  `TEST_DATABASE_URL`, and `RUN_LIVE_S3_TESTS`, which was stripped the same way
+  and made CI's live S3 test skip silently. `DATABASE_URL` is unchanged and
+  still separate (KI-049).
+- **Web images proxied the API to `localhost:4000`** — Next resolves
+  `rewrites()` at `next build` and writes the destination into
+  `routes-manifest.json`. `docker-compose.prod.yml` set `API_INTERNAL_URL` only
+  as a runtime env var, which the standalone server ignores, so every
+  `/api/v1/*` call from a deployed `web` got a 500 (`ECONNREFUSED`). The value
+  is now a `web` build arg (`http://api:4000`, set literally). `apps/web/
+Dockerfile` refuses to build without it, and the runtime env entry is gone.
+  `turbo.json`'s `build`/`dev` env now includes `API_INTERNAL_URL` because it
+  changes build output.
+- **Production Docker smoke test** — `deploy/smoke/run.sh` (`pnpm
+smoke:docker`, new CI job `docker-smoke`) layers `deploy/smoke/
+docker-compose.smoke.yml` on the real `docker-compose.prod.yml`. The overlay
+  uses its own project `coffeeride-smoke`, adds a throwaway Postgres, disables
+  Caddy/backup and pins `api` env literally so CI's job env can't leak in.
+  The script builds `api`/`web`/`migrate`, runs the migration, asserts that
+  `api` publishes no host port, and requires `GET http://web:3000/api/v1/rides`
+  from inside the network to return 200 with an `{ items }` body. On failure
+  it prints container logs. It always tears everything down.
+
+Files: `turbo.json`, `package.json`, `.github/workflows/ci.yml`,
+`apps/web/Dockerfile`, `apps/web/next.config.ts` (comment),
+`docker-compose.prod.yml`, `deploy/smoke/{run.sh,docker-compose.smoke.yml,
+smoke.env}`, `docs/deployment.md`.
+
+Validation: `pnpm test` (Turbo, `TEST_DATABASE_URL` exported) passes 5/5
+tasks: api 438 passed / 4 skipped, web 391, ui 152, maps-2gis 30, resilience 15. The smoke test **fails** against the pre-fix Dockerfile/compose (500,
+`Failed to proxy http://localhost:4000/v1/rides`) and **passes** with the fix
+(`200 {"items":[],"nextCursor":null}`), with no containers or volumes left
+behind. A `web` build without the arg fails with a clear message.
+`format:check`, `lint:root` and web typecheck are clean. This was the first
+real `docker build` of all three images (KI-043 resolved). Locally the base
+images came from `mirror.gcr.io`, because Docker Hub's CDN doesn't resolve
+from Docker Desktop's VM here.
+
+Decisions: none. This fixes the documented ADR-018 topology and does not
+change it.
+Follow-up: first real GitHub Actions run of `ci` + `docker-smoke`; Caddy and
+`backup` are still unexercised (KI-045).

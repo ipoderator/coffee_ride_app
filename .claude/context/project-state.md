@@ -37,16 +37,17 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-132 (organizer cabinet frame) and CR-133 (its follow-ups:
-`home.spec.ts` grid + map views, in-flight read de-dup on `/organizer`,
-`AUTH_RATE_LIMIT_MAX` test/dev override for e2e, no back link on organizer
-sidebar sections) are done and verified but **uncommitted**; CR-130 and
-CR-131 are committed (`3f228ed`, `58950a5`). See `docs/changelog.md`'s
-CR-130…CR-133 entries. Owner decision 2026-09-26: the mobile tab bar and the
-shared header's hamburger panel coexist (ADR-024 amendment). Open follow-up:
-KI-066 (dashboard still aggregates client-side; the duplication is gone).
-Deliberately not built from the mockup: a «Статистика» screen. Next logical
-task: KI-064 (`/login?next=`).
+None active. CR-134 (CI/production-build P0, 2026-09-26) is done, verified
+and committed: `turbo.json` passes `TEST_DATABASE_URL`/`RUN_LIVE_S3_TESTS`
+to `test` (CI's `pnpm test` was losing them — KI-050 resolved), `web`'s
+`API_INTERNAL_URL` is a required Docker build arg (images proxied to
+`localhost:4000` before), and `deploy/smoke/run.sh` (`pnpm smoke:docker`, CI job
+`docker-smoke`) guards it. Not yet proven on a real GitHub Actions run.
+CR-130…CR-133 are committed (`3f228ed`, `58950a5`, `765129a`). Owner decision
+2026-09-26: the mobile tab bar and the shared header's hamburger panel coexist
+(ADR-024 amendment). Open follow-up: KI-066 (dashboard still aggregates
+client-side). Deliberately not built from the mockup: a «Статистика» screen.
+Next logical task: KI-064 (`/login?next=`).
 
 CR-121…CR-129 are committed (`9adb797`, `42330fa`, `3fe806b`, `c685310`).
 Full detail on those: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120»
@@ -193,8 +194,8 @@ own operator's responsibility. `apps/web/Dockerfile` and `apps/api/Dockerfile` (
 new) plus a root `.dockerignore` give both apps real multi-stage, non-root-user
 container images — `apps/web` via Next's `output: 'standalone'` trace,
 `apps/api` via ADR-017's esbuild bundle pruned to a production-only `node_modules`
-through `pnpm --filter=api deploy --prod`. Neither image has had an actual
-`docker build` run against it yet, same root cause as the compose file (KI-043).
+through `pnpm --filter=api deploy --prod`. Both images (plus `migrate`) really
+build and run as of CR-134 (KI-043 resolved) — see the smoke test below.
 `docker-compose.prod.yml` + `deploy/Caddyfile` (CR-075, ADR-018, new) put both
 images behind one public origin: Caddy terminates TLS (automatic ACME) and
 reverse-proxies to `web` only — `apps/web`'s own `next.config.ts` rewrite already
@@ -206,10 +207,13 @@ reliably failed before the fix, confirmed live) so it's safe under concurrent
 invocation; `packages/db/Dockerfile` + `docker-compose.prod.yml`'s `migrate`
 service (gated behind the `migrate` Compose profile — absent from a plain
 `docker compose up`) give it an explicit deploy-step home, never wired into any
-service's boot. None of this has been run end to end via a real `docker build`/
-`docker compose up` (KI-045, same root cause as KI-019/KI-043; Caddy's ACME also
-needs real public DNS, unverifiable in any sandbox) — the migration fix itself
-was still live-verified, just on the host directly rather than in a container.
+service's boot. CR-134: `deploy/smoke/run.sh` (`pnpm smoke:docker`, CI job
+`docker-smoke`) runs this manifest end to end minus Caddy/backup — builds the
+images, migrates a throwaway Postgres, asserts `api` publishes no port and `GET
+/api/v1/rides` through `web` returns 200. Its first run caught a real bug: Next
+bakes the rewrite target at build, so `web` proxied to `localhost:4000`;
+`API_INTERNAL_URL` is now a required `web` build arg. Caddy (ACME/TLS, Caddy →
+web hop) and `backup` stay unverified (KI-045) — they need a real host.
 
 **apps/web**: Next.js 15 + React 19 + TS 6.0.3, Tailwind v4 + shadcn/ui, real design
 tokens/typography/Russian formatting from `docs/design.md` via `packages/ui` — the
@@ -547,12 +551,11 @@ items:
 - Deployment artifacts now exist (`apps/web/Dockerfile`, `apps/api/Dockerfile`,
   root `.dockerignore` from CR-074; `docker-compose.prod.yml` + `deploy/Caddyfile`
   from CR-075; `packages/db/Dockerfile` + the `migrate` service from CR-076) but
-  none has been exercised by a real `docker build`/`docker compose up`/`docker
-compose run` (KI-043, KI-045) — Docker's daemon is unreachable throughout this
-  environment, same root cause as the never-booted dev `docker-compose.yml` and
-  the still-unverified Redis/S3/Postgres-via-compose gaps (KI-001,
-  KI-014, KI-015, KI-019). Caddy's automatic TLS additionally needs real
-  public DNS, unverifiable in any sandbox regardless of Docker access. KI-002
+  all three images now build and run in the CR-134 smoke test (KI-043
+  resolved); only Caddy and `backup` remain unexercised (KI-045). Locally,
+  Docker Hub's blob CDN doesn't resolve from Docker Desktop's VM — base images
+  come from `mirror.gcr.io` retagged (see the archived KI-043). Caddy's
+  automatic TLS additionally needs real public DNS. KI-002
   itself (migration execution during deploy) is resolved — the migration
   script's own concurrency-safety was proven live on the host; only the
   container-build step around it is unverified.

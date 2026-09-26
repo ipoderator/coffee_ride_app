@@ -53,11 +53,15 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY: ${NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY}
+        # Internal-only — Caddy is the only public entry point (ADR-018 §2).
+        # CR-134: a build arg, not runtime `environment:` — Next bakes the
+        # rewrite target into the image at `next build` (apps/web/Dockerfile).
+        # Literal, not `${VAR}`: it's this file's own topology, not config.
+        # Guarded by deploy/smoke/run.sh (`pnpm smoke:docker`).
+        API_INTERNAL_URL: http://api:4000
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      # Internal-only — Caddy is the only public entry point (ADR-018 §2).
-      API_INTERNAL_URL: http://api:4000
     depends_on:
       - api
     deploy:

@@ -1,65 +1,49 @@
 # Current task
 
-**CR-133 — CR-132 follow-ups: e2e home spec, dashboard read de-dup, auth rate limit for e2e, organizer back links, tab-bar decision**
+**CR-134 — CI/production-build P0: Turbo test env + production Docker smoke test**
 
-(CR-132 is complete and recorded in `docs/changelog.md`/`docs/tasks.md`; still
-uncommitted together with this task.)
+Status: complete, committed and pushed via `/commit-push`. CR-133 was committed in `765129a`.
 
 ## Goal
 
-Close the follow-ups CR-132's run reported.
+Make `pnpm test` (and CI) actually receive `TEST_DATABASE_URL`. Add a Docker
+production smoke test that catches web → api proxy misrouting.
 
 ## Requirements / acceptance criteria
 
-- [x] KI-067: `apps/web/e2e/home.spec.ts` checks the default grid view on `/`
-      and the map view on `/?view=map`.
-- [x] KI-066 (duplication part): concurrent identical organizer-cabinet GETs
-      (`/rides/mine`, a ride's participants/waitlist) share one request —
-      in-flight de-dup in `lib/organizer/own-rides.ts`, no TTL cache (no
-      staleness after mutations). Aggregate endpoint stays the next action.
-- [x] KI-014 note: optional `AUTH_RATE_LIMIT_MAX` (apps/api env, rejected in
-      production) raises both auth tiers; Playwright's API server sets it so
-      back-to-back e2e runs don't hit 429.
-- [x] `/organizer/rides`, `/organizer/profile`: no «В кабинет организатора»
-      back link (sidebar sections, not nested screens); design §8 rule refined;
-      unused `BACK_LINK_TERMS.toOrganizerCabinet` removed.
-- [x] Owner decision: mobile bottom tab bar and the shared header's hamburger
-      panel coexist — design §8 + ADR-024 amendment.
-- [x] participantLimit "not saved": not an app bug — `POST /v1/rides` accepts
-      only title/bicycleType/startsAt/startTimezone (CR-017); capacity is a
-      `PATCH` on the draft; unknown keys are stripped by Zod.
+- [x] `turbo.json` `test` env passes `TEST_DATABASE_URL` through without
+      replacing `DATABASE_URL` (KI-050). Also passes `RUN_LIVE_S3_TESTS`,
+      which was stripped the same way.
+- [x] Smoke test builds the API and Web images and runs them on one Docker
+      network.
+- [x] API publishes no host port, and the test asserts it.
+- [x] `GET /api/v1/rides` through Web returns 200. The test also checks for an
+      `{ items }` body, so a non-API 200 can't pass.
+- [x] Fix the bug the smoke test guards against: web proxied to
+      `localhost:4000` because Next bakes rewrites at build time.
+      `API_INTERNAL_URL` is now a required build arg.
+- [x] The smoke test runs in CI as the `docker-smoke` job.
 
-## Planned files
+## Files
 
-- `apps/web/e2e/home.spec.ts`
-- `apps/web/src/lib/organizer/own-rides.ts` (+test) — subagent
-- `apps/api/src/env.ts`, `modules/auth/auth.routes.ts` (+tests),
-  `apps/web/playwright.config.ts`, `.env.example` — subagent
-- `apps/web/src/app/organizer/{rides,profile}/page.tsx`, `packages/ui/src/terminology.ts`
-- docs: design §8, decisions (ADR-024 amendment), changelog, tasks, known-issues,
-  project-state
+`turbo.json`, `package.json`, `.github/workflows/ci.yml`, `apps/web/Dockerfile`,
+`apps/web/next.config.ts`, `docker-compose.prod.yml`,
+`deploy/smoke/{run.sh,docker-compose.smoke.yml,smoke.env}`,
+`docs/deployment.md`, context/docs updates.
 
-## Progress
+## Validation
 
-- [x] own items (e2e spec, back links, decision docs)
-- [x] subagent work reviewed (overview widget fixed on top: it awaited the
-      profile before its ride reads, so it missed the shared requests)
-- [x] validation
-- [x] docs
+- `pnpm test` with `TEST_DATABASE_URL` exported: 5/5 tasks (api 438 passed /
+  4 skipped).
+- Smoke test before the fix: FAIL (500, `Failed to proxy
+http://localhost:4000/v1/rides`). After the fix: OK (`200
+{"items":[],"nextCursor":null}`). Teardown leaves nothing behind.
+- A web build without `API_INTERNAL_URL` fails with a clear message.
+- `format:check`, `lint:root` and web typecheck are clean.
 
-## Validation results
+## Discovered issues
 
-- web 391/391, ui 152/152; api `env` + `auth.routes` 49/49 with live Redis
-  (subagent: full api suite 438 passed / 4 skipped on rerun — first run hit an
-  FK violation in `auth.routes.test.ts`'s `DELETE FROM users` from a parallel
-  test file's rides; not reproduced).
-- web/ui/api typecheck + lint clean; prettier clean on touched files.
-- e2e 5/5 against the dev stack.
-- Live `/organizer` request count (temporary spec, deleted): `/rides/mine` ×1,
-  nearest participants ×1, waitlist ×1; `organizers/me`/`mine/summary` ×2 only
-  from dev StrictMode.
-
-## Final result
-
-Done; docs updated (changelog, tasks, design §8, ADR-024 amendment,
-known-issues: KI-067 archived, KI-066/KI-014 updated, project-state).
+- Docker Hub's blob CDN (`production.cloudfront.docker.com`) doesn't resolve
+  from Docker Desktop's VM on this machine. Workaround: pull from
+  `mirror.gcr.io` and retag (archived KI-043).
+- The CI jobs have not run on real GitHub Actions yet.

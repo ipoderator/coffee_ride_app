@@ -144,3 +144,18 @@ jobs:
 
       - name: E2E tests
         run: pnpm test:e2e
+
+  # CR-134. Builds the real production images (docker-compose.prod.yml) and
+  # requires GET /api/v1/rides through `web` to reach `api` over the Compose
+  # network — guards the web → api proxy target, which is baked in at
+  # `next build` and once pointed at localhost:4000 inside the web container.
+  # Separate job: needs no Node/pnpm setup or the `ci` job's host-port
+  # services, and runs in parallel with it.
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Production Docker smoke test
+        run: bash deploy/smoke/run.sh

@@ -22,6 +22,9 @@ try {
 // the browser only ever calls same-origin `/api/v1/...` paths (ADR-013:
 // single origin, no CORS) and Next rewrites them to `apps/api` — in dev/this
 // deploy, `API_INTERNAL_URL` (server-only; never exposed to the browser).
+// CR-134: read at `next build`, not at runtime — the destination is baked
+// into routes-manifest.json, so a Docker image needs it as a build arg
+// (apps/web/Dockerfile), never only as a container env var.
 const API_INTERNAL_URL =
   process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 

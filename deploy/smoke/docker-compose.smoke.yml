@@ -1,0 +1,77 @@
+# CR-134. Production smoke test overlay — never deployed. Layered on top of
+# the real production manifest so the test exercises exactly what a deploy
+# would build and run (the `web`/`api` images, their build args, the
+# `api`-has-no-`ports:` topology, `web`'s API proxy target), not a parallel
+# copy that could drift from it:
+#
+#   docker compose -f docker-compose.prod.yml \
+#     -f deploy/smoke/docker-compose.smoke.yml --env-file deploy/smoke/smoke.env ...
+#
+# Driven end to end by deploy/smoke/run.sh (`pnpm smoke:docker`, CI's
+# `docker-smoke` job) — read that file for the actual checks.
+#
+# Paths in an override file resolve against the first file's directory (the
+# repo root), so this file deliberately contains none.
+
+# Separate project: docker-compose.yml's local-dev stack is project
+# `coffeeride` and also has a `postgres` service — sharing the name would
+# collide with (or tear down) a developer's running dev database.
+name: coffeeride-smoke
+
+services:
+  # Neither is needed to prove web → api proxying, and caddy would publish
+  # 80/443 on the host. A profile nobody activates removes a service from a
+  # plain `up` without editing the production file.
+  caddy:
+    profiles: ['smoke-disabled']
+  backup:
+    profiles: ['smoke-disabled']
+
+  # Production deliberately has no database service (ADR-018); the smoke run
+  # needs a disposable one so GET /v1/rides touches a real, migrated schema.
+  # No `ports:` — reachable only over the smoke project's own network.
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: coffee_ride_smoke
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d coffee_ride_smoke']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coffee_ride_smoke
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Literal values, not `${VAR}`: the production file interpolates from the
+  # caller's shell first, and CI's job env (DATABASE_URL/S3_* pointing at
+  # localhost) would otherwise leak in and trip loadEnv()'s production
+  # placeholder checks. Values must pass those checks: non-localhost
+  # WEB_ORIGIN, non-placeholder AUTH_SECRET. Redis/S3/2GIS stay unset — a
+  # supported degraded mode, and GET /v1/rides needs none of them.
+  api:
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/coffee_ride_smoke
+      REDIS_URL: ''
+      S3_ENDPOINT: ''
+      S3_REGION: ''
+      S3_ACCESS_KEY_ID: ''
+      S3_SECRET_ACCESS_KEY: ''
+      S3_BUCKET: ''
+      AUTH_SECRET: smoke-test-only-secret-never-used-in-production
+      WEB_ORIGIN: https://smoke.invalid
+      MAPS_2GIS_API_KEY: ''
+      ERROR_REPORTING_WEBHOOK_URL: ''
+    depends_on:
+      postgres:
+        condition: service_healthy
