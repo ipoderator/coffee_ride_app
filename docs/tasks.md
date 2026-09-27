@@ -1137,3 +1137,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (`lib/auth/next-path.ts`, open-redirect protection); ride «Зарегистрироваться»
       401 and riders/rider-profile sign-in links pass the ride path; register
       success card links to `/login` keeping it. See `docs/changelog.md`.
+- [x] CR-142 Notification fallback while Redis is down (KI-071) — done
+      2026-09-27: a job the queue provably never accepted
+      (`NotificationQueueUnavailableError`) is delivered directly — in-app
+      notifications and the verification email; the password-reset email stays
+      queued-only (timing oracle). See `docs/changelog.md`.

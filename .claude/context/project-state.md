@@ -37,7 +37,14 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-141 (2026-09-27, committed): KI-064 closed — an anonymous
+None active. CR-142 (2026-09-27, not committed yet): KI-071 closed — with Redis
+configured but down, a notification job the queue provably never accepted
+(`NotificationQueueUnavailableError`: circuit open / connection not ready) is
+delivered directly: in-app notifications and the verification email. A timed-out
+enqueue is still only logged (may have landed — no duplicates); the password-reset
+email stays queued-only (would be a `/forgot-password` timing oracle).
+
+CR-141 (2026-09-27, committed): KI-064 closed — an anonymous
 «Зарегистрироваться» (or a riders sign-in link) now goes to
 `/login?next=/rides/:id` and returns to the ride after sign-in, also via
 `/register`. `next` is validated in one place (`apps/web/src/lib/auth/
@@ -58,9 +65,8 @@ fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plu
 `docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task (after CR-141): KI-071 (needs a product decision on the
-notification fallback) or KI-069/KI-070 (small)
-(`/login?next=`, critique P0 of the participant journey).
+Next logical task (after CR-142): KI-069/KI-070 (small), then KI-045/KI-001
+(production compose/Caddy never run end to end).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a
 separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly

@@ -1432,3 +1432,35 @@ cancellation go through `queue.add('ride_update' | 'ride_cancelled')`, the
 in-process `Worker` consumes them, and the resulting `notifications` rows show
 up in the participant's inbox — the job round trip this entry still had open.
 Passed with 1 worker and in parallel.
+
+### KI-071 — With Redis configured but down, queued notifications are dropped
+
+Status: resolved 2026-09-27 (CR-142). Discovered: 2026-09-26 (CR-137, `degraded-dependencies.test.ts`).
+Problem: every `notifications.service.ts` producer (`registration_confirmed`,
+`ride_update`, `ride_cancelled`, verification and password-reset emails)
+calls `queue.add()` when a queue exists and falls back to the direct
+insert/send only when `REDIS_URL` is unset. When Redis is configured but
+unreachable, `add()` rejects (now at once — CR-137), the error is logged and
+swallowed, and that notification is never created. The triggering action
+still succeeds, as `.claude/rules/resilience.md` requires.
+Impact: medium. During a Redis outage riders get no in-app confirmation,
+update or cancellation notice, and nobody gets verification/reset emails
+(a user can re-request those).
+Workaround: none; restoring Redis only affects later notifications.
+Next action: decide the fallback (product/resilience call, not made here):
+e.g. write the in-app row directly when enqueue fails before reaching Redis
+(safe: nothing was queued) and keep emails queued-only; an enqueue that
+timed out may still have landed in Redis, so falling back after a timeout
+risks duplicates.
+
+Resolution 2026-09-27 (CR-142): the queue's `add()` now throws
+`NotificationQueueUnavailableError` when it rejects before reaching Redis
+(circuit open, connection not `ready`); producers then deliver directly —
+in-app rows (`registration_confirmed`, `ride_update`, `ride_cancelled`) and the
+verification email (no resend endpoint exists; `/register` already answers 409
+for a taken email, so no new oracle). Any other enqueue failure (timeout,
+error mid-command) may have reached Redis and is still only logged, to avoid
+duplicates. The password-reset email stays queued-only: a direct send only for
+real accounts would make `/forgot-password` latency an account-existence
+oracle. `degraded-dependencies.test.ts` now asserts the rider's inbox has the
+confirmation with Redis on a closed port.

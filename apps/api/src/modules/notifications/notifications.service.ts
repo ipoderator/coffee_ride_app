@@ -130,6 +130,47 @@ export interface NotificationQueue {
   add(name: NotificationJobName, data: NotificationJobData): Promise<void>;
 }
 
+// KI-071: thrown by `NotificationQueue.add()` only when it rejected before
+// sending anything to Redis (circuit open, connection not ready), so the job
+// certainly was not queued and delivering it directly cannot duplicate it.
+// Any other enqueue failure (a timeout, a connection lost mid-command) may
+// still have landed in Redis — producers log it and do not fall back.
+export class NotificationQueueUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotificationQueueUnavailableError';
+  }
+}
+
+/**
+ * Enqueues when a queue is configured, otherwise delivers directly (CR-050).
+ * With `fallbackWhenUnavailable`, a job the queue provably never accepted is
+ * delivered directly too (KI-071) — during a Redis outage the notification is
+ * then created the same way a Redis-less deployment creates it.
+ */
+async function enqueueOrDeliver(
+  queue: NotificationQueue | null,
+  enqueue: (queue: NotificationQueue) => Promise<void>,
+  deliver: () => Promise<void>,
+  fallbackWhenUnavailable: boolean,
+): Promise<void> {
+  if (!queue) {
+    await deliver();
+    return;
+  }
+  try {
+    await enqueue(queue);
+  } catch (err) {
+    if (
+      !fallbackWhenUnavailable ||
+      !(err instanceof NotificationQueueUnavailableError)
+    ) {
+      throw err;
+    }
+    await deliver();
+  }
+}
+
 function toRideUpdate(row: typeof rideUpdates.$inferSelect): RideUpdate {
   return {
     id: row.id,
@@ -205,7 +246,9 @@ async function insertRegistrationConfirmedNotification(
  * the actual insert happens in the worker, outside this request entirely. If
  * not (this environment — KI-014), falls back to the same direct synchronous
  * insert this function always did before CR-050, so behavior (and every
- * existing test) is unchanged with no Redis present. Either way, a failure
+ * existing test) is unchanged with no Redis present. KI-071: the same direct
+ * insert runs when a configured queue is unavailable (see
+ * {@link NotificationQueueUnavailableError}). Either way, a failure
  * here is logged and swallowed, never rethrown — the caller's
  * registration/promotion already succeeded and must stay that way.
  */
@@ -217,11 +260,12 @@ export async function createRegistrationConfirmedNotification(
   rideId: string,
 ): Promise<void> {
   try {
-    if (queue) {
-      await queue.add('registration_confirmed', { userId, rideId });
-    } else {
-      await insertRegistrationConfirmedNotification(db, userId, rideId);
-    }
+    await enqueueOrDeliver(
+      queue,
+      (q) => q.add('registration_confirmed', { userId, rideId }),
+      () => insertRegistrationConfirmedNotification(db, userId, rideId),
+      true,
+    );
   } catch (err) {
     logger.error(
       { err, userId, rideId },
@@ -277,15 +321,15 @@ async function notifyActiveRegistrants(
   rideUpdateId: string | null,
 ): Promise<void> {
   try {
-    if (queue) {
-      if (type === 'ride_update') {
-        await queue.add('ride_update', { rideId, rideUpdateId: rideUpdateId! });
-      } else {
-        await queue.add('ride_cancelled', { rideId });
-      }
-    } else {
-      await insertActiveRegistrantNotifications(db, rideId, type, rideUpdateId);
-    }
+    await enqueueOrDeliver(
+      queue,
+      (q) =>
+        type === 'ride_update'
+          ? q.add('ride_update', { rideId, rideUpdateId: rideUpdateId! })
+          : q.add('ride_cancelled', { rideId }),
+      () => insertActiveRegistrantNotifications(db, rideId, type, rideUpdateId),
+      true,
+    );
   } catch (err) {
     logger.error(
       { err, rideId, type },
@@ -359,6 +403,11 @@ async function sendEmail(
  * non-critical side effect" split as {@link createRegistrationConfirmedNotification}.
  * `.claude/rules/security.md`: never logs the token (embedded in `verifyUrl`)
  * or the recipient's email address — the error log carries only `{ err }`.
+ *
+ * KI-071: sent directly when the queue is unavailable — there is no resend
+ * endpoint, so a dropped email would leave the account unverifiable, and
+ * `/register` already answers 409 for a taken email, so the extra latency
+ * reveals nothing about which accounts exist.
  */
 export async function sendVerificationEmail(
   logger: NotificationLogger,
@@ -368,15 +417,13 @@ export async function sendVerificationEmail(
   verifyUrl: string,
 ): Promise<void> {
   try {
-    if (queue) {
-      await queue.add('verification_email', { email, verifyUrl });
-    } else {
-      await sendEmail(
-        emailProvider,
-        email,
-        verificationEmailContent(verifyUrl),
-      );
-    }
+    await enqueueOrDeliver(
+      queue,
+      (q) => q.add('verification_email', { email, verifyUrl }),
+      () =>
+        sendEmail(emailProvider, email, verificationEmailContent(verifyUrl)),
+      true,
+    );
   } catch (err) {
     logger.error({ err }, 'Failed to send verification email');
   }
@@ -388,6 +435,11 @@ export async function sendVerificationEmail(
  * reports `userFound: true` — `.claude/rules/security.md`'s no-enumeration
  * requirement is enforced by the route's response staying identical either
  * way (always `204`), not by anything in this function.
+ *
+ * KI-071: deliberately no direct-send fallback while the queue is
+ * unavailable. A provider round trip made only for real accounts would turn
+ * `/forgot-password`'s response time into an account-existence oracle; the
+ * user can request another link once Redis is back.
  */
 export async function sendPasswordResetEmail(
   logger: NotificationLogger,
@@ -397,15 +449,13 @@ export async function sendPasswordResetEmail(
   resetUrl: string,
 ): Promise<void> {
   try {
-    if (queue) {
-      await queue.add('password_reset_email', { email, resetUrl });
-    } else {
-      await sendEmail(
-        emailProvider,
-        email,
-        passwordResetEmailContent(resetUrl),
-      );
-    }
+    await enqueueOrDeliver(
+      queue,
+      (q) => q.add('password_reset_email', { email, resetUrl }),
+      () =>
+        sendEmail(emailProvider, email, passwordResetEmailContent(resetUrl)),
+      false,
+    );
   } catch (err) {
     logger.error({ err }, 'Failed to send password reset email');
   }

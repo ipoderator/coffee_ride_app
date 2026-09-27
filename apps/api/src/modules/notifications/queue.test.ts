@@ -83,6 +83,8 @@ vi.mock('./notifications.service.js', async (importOriginal) => {
 });
 
 const { registerNotificationQueue } = await import('./queue.js');
+const { NotificationQueueUnavailableError } =
+  await import('./notifications.service.js');
 const { loadEnv } = await import('../../env.js');
 
 const BASE_ENV_SOURCE = {
@@ -229,13 +231,17 @@ describe('registerNotificationQueue', () => {
     };
 
     // Default failureThreshold is 5 (see queue.ts) — five failing calls trips it.
+    // KI-071: these reached BullMQ, so they are not "unavailable" — the job may
+    // be in Redis and the producer must not deliver it directly.
     for (let i = 0; i < 5; i++) {
-      await expect(
-        queueHandle.add('registration_confirmed', {
-          userId: 'u1',
-          rideId: 'r1',
-        }),
-      ).rejects.toThrow();
+      const rejection = queueHandle.add('registration_confirmed', {
+        userId: 'u1',
+        rideId: 'r1',
+      });
+      await expect(rejection).rejects.toThrow('connection unavailable');
+      await expect(rejection).rejects.not.toBeInstanceOf(
+        NotificationQueueUnavailableError,
+      );
     }
     expect(queueAddMock).toHaveBeenCalledTimes(5);
 
@@ -244,6 +250,9 @@ describe('registerNotificationQueue', () => {
     await expect(
       queueHandle.add('registration_confirmed', { userId: 'u1', rideId: 'r1' }),
     ).rejects.toThrow(/circuit open/);
+    await expect(
+      queueHandle.add('registration_confirmed', { userId: 'u1', rideId: 'r1' }),
+    ).rejects.toBeInstanceOf(NotificationQueueUnavailableError);
     expect(queueAddMock).toHaveBeenCalledTimes(5);
   });
 
@@ -282,6 +291,9 @@ describe('registerNotificationQueue', () => {
     await expect(
       queueHandle.add('registration_confirmed', { userId: 'u1', rideId: 'r1' }),
     ).rejects.toThrow(/not connected/);
+    await expect(
+      queueHandle.add('registration_confirmed', { userId: 'u1', rideId: 'r1' }),
+    ).rejects.toBeInstanceOf(NotificationQueueUnavailableError);
     expect(queueAddMock).not.toHaveBeenCalled();
   });
 

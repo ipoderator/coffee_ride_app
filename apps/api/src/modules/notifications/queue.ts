@@ -6,6 +6,7 @@ import { createRedisClient, type RedisClient } from '../../redis.js';
 import { raceTimeout } from '../../lib/race-timeout.js';
 import type { Env } from '../../env.js';
 import {
+  NotificationQueueUnavailableError,
   processNotificationJob,
   type NotificationJobData,
   type NotificationJobName,
@@ -171,8 +172,10 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
 
   app.decorate('notificationQueue', {
     async add(name: NotificationJobName, data: NotificationJobData) {
+      // KI-071: both pre-flight rejections below happen before anything is
+      // sent to Redis, so the producer may deliver the job directly instead.
       if (!enqueueBreaker.canAttempt()) {
-        throw new Error(
+        throw new NotificationQueueUnavailableError(
           'Notification queue is temporarily unavailable (circuit open).',
         );
       }
@@ -180,7 +183,7 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
       // known-down Redis would still cost the full ENQUEUE_TIMEOUT_MS here.
       if (producerConnection.status !== 'ready') {
         enqueueBreaker.recordFailure();
-        throw new Error(
+        throw new NotificationQueueUnavailableError(
           'Notification queue is unavailable (Redis not connected).',
         );
       }

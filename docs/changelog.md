@@ -1290,3 +1290,42 @@ back on the ride → registered) passed against the local dev stack — it left 
 e2e organizer, ride and participant in the dev database.
 
 Decisions: none. Follow-up: KI-064 resolved and archived.
+
+## 2026-09-27 — CR-142 — Notifications no longer dropped while Redis is down (KI-071)
+
+Summary: with `REDIS_URL` configured but Redis unreachable, every notification
+producer used to log the failed enqueue and drop the notification. A job the
+queue provably never accepted is now delivered directly, exactly as a
+Redis-less deployment delivers it.
+
+- `notifications.service.ts`: new `NotificationQueueUnavailableError` and one
+  `enqueueOrDeliver` helper shared by all producers. The fallback runs only on
+  that error — thrown by `queue.ts`'s `add()` for its two pre-flight rejections
+  (circuit open, producer connection not `ready`), before anything is sent to
+  Redis, so it cannot duplicate a job. A timeout or mid-command error may have
+  landed in Redis: still logged only.
+- Covered: in-app `registration_confirmed`, `ride_update`, `ride_cancelled`;
+  the verification email (there is no resend endpoint, and `/register` already
+  answers 409 for a taken email, so the extra latency reveals nothing).
+- Not covered, deliberately: the password-reset email. Sending it directly only
+  for real accounts would make `/forgot-password` latency an account-existence
+  oracle (`.claude/rules/security.md`); the user can re-request once Redis is
+  back.
+- Everything stays log-and-swallow; the triggering action never fails.
+
+Files: `apps/api/src/modules/notifications/{notifications.service,queue}.ts`,
+`notifications.service.test.ts` (new), `queue.test.ts`,
+`apps/api/src/degraded-dependencies.test.ts`, `.claude/rules/resilience.md`.
+
+Validation: new service suite (6 cases: direct insert/fan-out/verification on
+unavailable, no fallback on a timeout, failing direct insert swallowed, reset
+email never sent directly); `queue.test.ts` asserts which rejections carry the
+error class; `degraded-dependencies.test.ts` (real Postgres, Redis on a closed
+port) now checks the rider's inbox has the confirmation — it fails with the old
+`queue.ts`. apps/api notifications/registrations/auth/rides + degraded suites
+331/331, live Redis queue suite passed, typecheck/lint/format clean. Coverage
+baseline not regenerated (new tests only add coverage).
+
+Decisions: the fallback policy above (resolves KI-071's open product/resilience
+question). No schema, API contract or dependency change. Follow-up: KI-071
+resolved and archived.

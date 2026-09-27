@@ -1,54 +1,45 @@
 # Current task
 
-**CR-141 — Return to the ride after sign-in: `/login?next=` (KI-064)**
+**CR-142 — Notification fallback while Redis is down (KI-071)**
 
-Status: complete, committed.
+Status: complete, not committed.
 
 ## Goal
 
-An anonymous visitor who presses «Зарегистрироваться» (or a riders-list sign-in link) on
-a ride lands back on that ride after signing in — including via «Нет аккаунта?» →
-`/register` → «Войти». Critique P0 of the participant journey (discover → register).
+With `REDIS_URL` configured but Redis unreachable, notifications are no longer
+silently dropped: a job that provably never reached Redis is delivered directly,
+the same way the no-Redis configuration already does.
 
-## Requirements / acceptance criteria
+## Decision (product/resilience call, made in this task)
 
-- [x] One validator, `apps/web/src/lib/auth/next-path.ts`: accepts only a same-origin
-      relative path (`/…`), rejects absolute URLs, protocol-relative `//host`,
-      backslashes, control characters, overlong values and auth pages themselves
-      (`/login`, `/register`) — open-redirect protection. Builds `/login?next=…` /
-      `/register?next=…` hrefs.
-- [x] `/login` and `/register` pages read `searchParams.next` server-side, validate it,
-      pass it to the forms; `LoginForm` redirects to it after success (fallback `/me`).
-- [x] `LoginForm` ↔ `RegisterForm` cross-links keep `next`; `RegisterForm`'s success
-      card gets a «Войти» link that keeps it.
-- [x] Ride page sign-in points pass `next`: `RegistrationButton` 401 →
-      `/login?next=/rides/:id`, `RidersSection` link, `RiderProfileCard` link.
-- [x] Unit tests: validator cases; login redirect to `next`/fallback/rejected value;
-      ride-detail 401 push target. E2E: anonymous register click → login → back on ride.
-- [x] Docs: KI-064 resolved/archived, changelog, tasks, project-state.
+- The queue's `add()` throws `NotificationQueueUnavailableError` only when it
+  rejected **before** touching Redis (circuit open, connection not `ready`) — the
+  job certainly was not queued, so direct delivery cannot duplicate it.
+- Any other enqueue failure (timeout, error mid-command) may have landed in Redis:
+  log only, no fallback (a duplicate is worse than the known, logged gap).
+- Fallback applies to in-app rows (`registration_confirmed`, `ride_update`,
+  `ride_cancelled`) and the verification email (there is no resend endpoint, and
+  `/register` already answers 409 for a taken email, so send latency reveals
+  nothing new).
+- The password-reset email stays queued-only: a direct Unisender send only for
+  real accounts would make `/forgot-password`'s latency an account-existence
+  oracle; the user can re-request once Redis is back.
 
-## Out of scope (noted)
+## Acceptance criteria
 
-- Header «Войти»/«Регистрация» and `CabinetShell`'s anonymous redirect keep landing on
-  `/me` — same mechanism would apply, but that changes behaviour beyond KI-064.
-- Email-verification link can't carry `next` (would change the email/API contract).
+- [x] `queue.ts` throws `NotificationQueueUnavailableError` for circuit-open and
+      not-connected; other failures unchanged.
+- [x] Producers fall back per the decision above; everything still log-and-swallow.
+- [x] Unit tests: fallback on unavailable, no fallback on other errors, reset email
+      never sent directly; queue.test asserts the error class.
+- [x] `degraded-dependencies.test.ts`: with Redis down, the rider's inbox has the
+      `registration_confirmed` notification.
+- [x] Typecheck/lint/tests pass; docs (KI-071 archived, changelog, tasks, state).
 
-## Previous task
+## Progress / validation
 
-CR-140 (SeaweedFS replaces MinIO, KI-068) — complete; `ci` fully green on `b5d144f`
-(run `36323215724`). Its `project-state.md` note shipped with this task's commit.
-
-## Progress
-
-## Validation results
-
-- `next-path.test.ts` 23/23; login/register/ride-detail/rider-profile unit tests updated
-  and added; web 420/420, ui 152/152; web+ui typecheck, lint; format clean.
-- `e2e/login-return.spec.ts` passed against the local dev stack (left one e2e organizer,
-  ride and participant in the dev DB).
-- Not run locally: full e2e suite, `next build` (would clobber the running dev server's
-  `.next`) — CI covers both.
-
-## Discovered issues
-
-## Final result
+- Service/queue/degraded tests + registrations/auth/rides suites: 331/331
+  (TEST_DATABASE_URL from `.env`); live Redis notification suites 33/33.
+- Mutation check: degraded test fails with the old plain-`Error` queue.ts.
+- apps/api typecheck, eslint, prettier clean.
+- Docs: KI-071 archived, changelog, tasks, project-state, resilience.md.

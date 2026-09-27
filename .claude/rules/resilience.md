@@ -46,7 +46,12 @@ and outside the critical transaction:
 - the triggering action (e.g. registration) commits first;
 - the side effect (e.g. sending a confirmation) is queued (Redis) and processed separately;
 - a failure in the queued job must be retried/logged, and must never roll back or block the
-  action that triggered it.
+  action that triggered it;
+- if the queue itself is down, deliver directly only when the job provably never
+  reached Redis (`NotificationQueueUnavailableError`, CR-142) — an enqueue that timed
+  out may still land, so it is logged, not retried inline. A side effect whose direct
+  delivery would leak information (the password-reset email's latency) stays
+  queued-only.
 
 This is what actually satisfies "an error in one area shouldn't take down everything" —
 not a separate deployable service.

@@ -810,26 +810,6 @@ Next action: make the tests own that precondition —
 `vi.stubEnv('NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY', '')` (or mock
 `@/lib/maps/create-map-renderer` to return `null`) in that file.
 
-### KI-071 — With Redis configured but down, queued notifications are dropped
-
-Status: open. Discovered: 2026-09-26 (CR-137, `degraded-dependencies.test.ts`).
-Problem: every `notifications.service.ts` producer (`registration_confirmed`,
-`ride_update`, `ride_cancelled`, verification and password-reset emails)
-calls `queue.add()` when a queue exists and falls back to the direct
-insert/send only when `REDIS_URL` is unset. When Redis is configured but
-unreachable, `add()` rejects (now at once — CR-137), the error is logged and
-swallowed, and that notification is never created. The triggering action
-still succeeds, as `.claude/rules/resilience.md` requires.
-Impact: medium. During a Redis outage riders get no in-app confirmation,
-update or cancellation notice, and nobody gets verification/reset emails
-(a user can re-request those).
-Workaround: none; restoring Redis only affects later notifications.
-Next action: decide the fallback (product/resilience call, not made here):
-e.g. write the in-app row directly when enqueue fails before reaching Redis
-(safe: nothing was queued) and keep emails queued-only; an enqueue that
-timed out may still have landed in Redis, so falling back after a timeout
-risks duplicates.
-
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

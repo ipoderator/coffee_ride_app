@@ -182,9 +182,10 @@ describe('Redis unreachable', () => {
     expect(ms).toBeLessThan(3000);
   });
 
-  // Rate limiting (global + per-account) fails open and notification
-  // enqueueing is bounded and swallowed, so the critical journey — sign up,
-  // publish, register — still completes, each step without a stall.
+  // Rate limiting (global + per-account) fails open and a notification the
+  // queue never accepted is inserted directly (KI-071), so the critical
+  // journey — sign up, publish, register — still completes, each step without
+  // a stall, and the rider still gets the confirmation.
   // Regression: before CR-137 every request waited on ioredis's offline
   // queue here — list rides 5 s, register 10 s, login > 12 s.
   it('sign-up, ride publishing and registration still succeed', async () => {
@@ -236,6 +237,19 @@ describe('Redis unreachable', () => {
     });
     expect(participants.statusCode).toBe(200);
     expect(participants.json().items).toHaveLength(1);
+
+    const inbox = await app.inject({
+      method: 'GET',
+      url: '/v1/notifications/mine',
+      cookies: { session: rider },
+    });
+    expect(inbox.statusCode).toBe(200);
+    expect(inbox.json().items).toEqual([
+      expect.objectContaining({
+        type: 'registration_confirmed',
+        ride: expect.objectContaining({ id: rideId }),
+      }),
+    ]);
 
     for (const { name, ms } of steps) {
       expect(ms, `${name} took ${Math.round(ms)}ms`).toBeLessThan(2000);
