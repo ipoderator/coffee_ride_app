@@ -1223,3 +1223,28 @@ the push.
 
 Decisions: ADR-025. Follow-up: close KI-068 after the first `ci` run passes service
 start; expect that run to surface whatever broke unnoticed since 2026-09-19.
+
+## 2026-09-27 — CR-140 follow-up — first real CI run: web tests pinned to one time zone
+
+Summary: the first `ci` run after CR-140 (`36322844930`) initialized the SeaweedFS
+service and passed install, migrations, bucket creation, format, both lint steps
+and typecheck — the first time since 2026-09-19. KI-068 resolved and archived.
+It then surfaced one test that had only ever run on Moscow machines:
+`overview.test.tsx` freezes a _local_ 08:00 as "now" (for the «Доброе утро»
+greeting), so the «Ближайший» countdown to a fixed UTC start was «2 дн» in MSK and
+«1 дн» on the UTC runner. The widget is right (whole elapsed days); the suite was
+zone-dependent. `apps/web/vitest.config.mts` now sets `process.env.TZ =
+'Europe/Moscow'` before workers spawn, so dev and CI agree; web suite 392/392
+with the shell at UTC, America/Los_Angeles and Asia/Vladivostok.
+
+`docker-smoke` failed inside `next build` with a `next/font` Google Fonts error
+(`Cannot read properties of null (reading '1')` — the fetched CSS lacked an
+expected `src: url(...)`). No font, dependency or Dockerfile change since its last
+green run (`ce7050d`), and Google Fonts returns all five families correctly now, so
+it is treated as transient and re-checked by the next run rather than "fixed".
+
+Files: `apps/web/vitest.config.mts`, `.claude/context/{known-issues,known-issues-
+archive,project-state}.md`, `docs/tasks.md`.
+
+Decisions: none. Follow-up: if `docker-smoke`'s font fetch fails again, make the
+production build independent of Google Fonts at build time (self-host the files).

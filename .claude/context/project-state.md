@@ -37,16 +37,18 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-CR-140 (2026-09-27, committed and pushed; CI result pending): local and CI S3 moved
+CR-140 (2026-09-27, committed and pushed; KI-068 resolved): local and CI S3 moved
 from MinIO to SeaweedFS (`ghcr.io/chrislusf/seaweedfs:4.47`, ADR-025) to fix
 KI-068. Important context: GitHub `ci` has not run a single step since
 2026-09-19 (CR-080) — the MinIO service container never started — so CR-081…
-CR-139 were validated locally only. The first `ci` run after pushing CR-140 is
-the real check and may surface failures that accumulated unnoticed; KI-068
-closes once that run gets past service start. Local dev: `docker compose up -d`
+CR-139 were validated locally only. The first `ci` run after it (`36322844930`)
+got past service start and through Typecheck; it surfaced one time-zone-
+dependent web test (fixed: `apps/web/vitest.config.mts` pins
+`TZ=Europe/Moscow`) and a `docker-smoke` `next/font` fetch error with no
+related change (treated as transient; watch the next run). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task: push CR-140 and triage the first real `ci` run; then KI-064
+Next logical task: confirm a fully green `ci` run; then KI-064
 (`/login?next=`, critique P0 of the participant journey).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a

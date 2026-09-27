@@ -3,6 +3,12 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { coverageConfig } from 'config/vitest/coverage';
 
+// CR-140: one time zone for every run. Several component tests freeze a
+// local wall-clock "now" (greetings, countdowns), so results depended on the
+// runner's zone — green on a Moscow dev machine, red on UTC CI. Set here,
+// before workers spawn, so they inherit it; overrides whatever TZ the shell has.
+process.env.TZ = 'Europe/Moscow';
+
 // apps/web's own config, not the packages/config node-library fragment:
 // component tests need jsdom + a React plugin, a different shape entirely
 // from the plain-Node packages that fragment targets (CR-008).

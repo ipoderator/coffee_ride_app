@@ -790,37 +790,6 @@ Next action: next logical task — pass a validated same-origin relative `next`
 path to `/login` (and on to `/register`), redirect there after a successful
 sign-in, and reject absolute/external URLs (open-redirect protection).
 
-### KI-068 — CI's MinIO service image can't be pulled; the `ci` job fails before any step
-
-Status: fix implemented locally 2026-09-27 (CR-140), awaiting the first GitHub
-`ci` run. Discovered: 2026-09-26 (CR-134), on the first GitHub Actions run
-after the push (`36255640987`). The previous run (`36248404732`, CR-132/133)
-failed the same way, so this predates CR-134.
-Problem: `docker pull quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` returns
-`unauthorized: access to the requested resource is not authorized` on the
-runner. The `ci` job dies while starting service containers, before checkout,
-so no lint/typecheck/test/build/e2e step runs at all. Locally it still works
-only because the image is cached (`docker-compose.yml` pins the same tag).
-The new `docker-smoke` job needs no MinIO and passed on the same run.
-Impact: high. CI gives no signal on lint, typecheck, tests or e2e until this
-is fixed.
-Workaround: none in CI. Locally, keep the cached image; don't `docker rmi` it.
-Next action: an owner decision on the replacement S3-compatible image for CI
-and `docker-compose.yml` (a different MinIO distribution/tag that is still
-publicly pullable, or another S3-compatible server). Then update both files
-together (same pinned tag) and confirm a green `ci` run.
-Update 2026-09-27 (CR-140): the root cause is wider than the pull error — every
-`main` run since CR-080 (2026-09-19) failed at service start: until ~09-24 the
-image pulled but stayed `unhealthy` (GitHub `services:` can't pass MinIO's
-required `server /data`), then the image vanished. So CI has run no
-lint/typecheck/test/e2e step for ~20 pushes. Owner chose SeaweedFS (ADR-025):
-`ghcr.io/chrislusf/seaweedfs:4.47` in `ci.yml`, `load-test.yml` and
-`docker-compose.yml`; its default `mini` CMD serves S3 as a plain service
-container, `/healthz` is the health check. Verified locally (live S3 suites,
-`/health`, degraded-dependencies test). Remaining: the first GitHub `ci` run
-after push — close this entry once the job gets past service start, and treat
-whatever the ~9 days of unchecked commits then surface as their own issues.
-
 ### KI-069 — `/organizer/rides/[id]/edit` shows a non-owner the edit form and lifecycle buttons
 
 Status: open. Discovered: 2026-09-26 (CR-135, `e2e/access-control.spec.ts`).
