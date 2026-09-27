@@ -114,11 +114,10 @@ for (const kind of ['participant', 'other organizer'] as const) {
 
     // The edit screen. KI-069 (resolved): it loads through the public ride
     // read, but the response's `isOwner` now makes a non-owner see the
-    // not-found state instead of the form/lifecycle buttons.
+    // not-found state instead of the form/lifecycle buttons. `notFoundTitle`
+    // renders as a `<p>`, not a heading (same locator `rides.test.tsx` uses).
     await page.goto(`/organizer/rides/${fixture.rideId}/edit`);
-    await expect(
-      page.getByRole('heading', { name: RIDE_EDIT_TERMS.notFoundTitle }),
-    ).toBeVisible();
+    await expect(page.getByText(RIDE_EDIT_TERMS.notFoundTitle)).toBeVisible();
     await expect(
       page.getByRole('button', { name: RIDE_EDIT_TERMS.closeRegistration }),
     ).toHaveCount(0);

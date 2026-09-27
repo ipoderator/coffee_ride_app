@@ -775,6 +775,31 @@ Workaround: none needed.
 Next action: decide whether 0.5 is a real rule; if so, add it to the shared Zod
 schema (one source for client and server), otherwise drop the client-only step.
 
+### KI-072 — Dependabot's dev-dependencies group bundles TypeScript 7.0, which breaks CI
+
+Status: open. Discovered: 2026-09-27, PR #24 (`chore(deps-dev)`, 13 dev-dependency
+updates in one group).
+Problem: the group bumped `typescript` `6.0.3 → 7.0.2` alongside 12 unrelated
+updates (eslint, prettier, turbo, vitest, etc.). Two things break under TS 7:
+`typescript-eslint@8.70.0` refuses to run at all (`Error: typescript-eslint does
+not support TS 7.0`, a hard check in its own code, not a lint rule — [tracking
+issue](https://github.com/typescript-eslint/typescript-eslint/issues/10940)),
+which fails `ci`'s `Lint (root config)` step; separately,
+`docker-smoke`'s `apps/web` image fails `next build` — Next.js 15's
+`next.config.ts` loader throws `Cannot read properties of undefined (reading
+'fileExists')` under the new compiler, unrelated to anything in this repo's
+config.
+Impact: none to `main` — the PR was never merged. Blocks only this one grouped
+update; every other dependency in it (eslint 10, prettier, turbo, vitest 5.0.1,
+etc.) is unaffected on its own.
+Workaround: PR #24 closed 2026-09-27 without merging.
+Next action: once `typescript-eslint` (and Next.js's config loader) support
+TS 7, or Dependabot proposes the group again with a newer compatible
+`typescript-eslint`, re-run `docker-smoke` + `Lint (root config)` before
+merging. If this recurs, consider excluding `typescript` from the
+`dev-dependencies` group in `.github/dependabot.yml` so a single incompatible
+major doesn't block the other 12 updates.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this
