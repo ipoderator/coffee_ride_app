@@ -151,6 +151,53 @@ export async function createDraftRide(
   return { rideId: ride.id };
 }
 
+/**
+ * CR-138. Like {@link createDraftRide}/{@link createPublishedRide} but with
+ * an absolute `startsAt` instead of an offset from real `Date.now()` — a
+ * visual-regression screenshot needs the rendered date/countdown text to be
+ * the exact same string on every run, which a "N ms from whenever the suite
+ * happens to execute" offset can't guarantee (it can drift across a
+ * day/hour boundary depending on wall-clock timing).
+ */
+export async function createPublishedRideAt(
+  request: APIRequestContext,
+  title: string,
+  startsAt: string,
+  options: { participantLimit?: number } = {},
+): Promise<{ rideId: string }> {
+  const created = await request.post('/api/v1/rides', {
+    headers: UNSAFE_HEADERS,
+    data: {
+      title,
+      bicycleType: 'gravel',
+      startsAt,
+      startTimezone: 'Europe/Moscow',
+    },
+  });
+  await assertOk(created, 'create ride');
+  const { ride } = (await created.json()) as { ride: { id: string } };
+
+  if (options.participantLimit !== undefined) {
+    const patched = await request.patch(`/api/v1/rides/${ride.id}`, {
+      headers: UNSAFE_HEADERS,
+      data: { participantLimit: options.participantLimit },
+    });
+    await assertOk(patched, 'set participant limit');
+  }
+
+  const published = await request.post(`/api/v1/rides/${ride.id}/publish`, {
+    headers: UNSAFE_HEADERS,
+  });
+  await assertOk(published, 'publish ride');
+  const opened = await request.post(
+    `/api/v1/rides/${ride.id}/open-registration`,
+    { headers: UNSAFE_HEADERS },
+  );
+  await assertOk(opened, 'open registration');
+
+  return { rideId: ride.id };
+}
+
 /** CR-135. Organizer-only; returns the new pace group's id. */
 export async function createRideGroup(
   request: APIRequestContext,

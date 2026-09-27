@@ -1014,3 +1014,160 @@ contract test and both workflows are untested on GitHub (KI-056, KI-068).
 Decisions: none recorded as ADR (resilience rules extended in
 `.claude/rules/resilience.md`). Follow-up: KI-071 (notifications dropped
 while Redis is down), set up the `maps-2gis-contract` environment + secret.
+
+## 2026-09-27 — CR-138 — Visual and adaptive checks
+
+Summary: seven new Playwright specs covering areas that were previously
+untested or only manually audited (CR-044's "Responsive UI" left no
+automated artifact) — GPX/media upload flows, route points/stops CRUD,
+discovery filters/empty/error states, mobile-cabinet breakpoints,
+light/dark/system themes, and the first pixel-diff visual-regression
+baselines in this repo.
+
+- **Functional**: `gpx-route.spec.ts` (upload/replace/delete + real
+  `gpx_invalid` + mocked `route_storage_unavailable`); `media-uploads.spec.ts`
+  (organizer + participant avatar, ride cover — upload/replace/delete +
+  storage-unavailable); `route-points-stops.spec.ts` (add/edit/delete for
+  both sections); `discovery-states.spec.ts` (unfiltered/filtered empty
+  states and an API-failure-then-retry, all mocked via `page.route` for
+  determinism against a shared dev/CI database); `mobile-cabinets.spec.ts`
+  (organizer sidebar/`CabinetSectionTabs` at `lg`, participant hamburger/
+  `BottomTabBar` at `md`); `themes.spec.ts` (light/dark/system → the `.dark`
+  class, plus a light/dark screenshot pair).
+- **Visual regression**: `visual-regression.spec.ts` — discovery grid, map,
+  a ride card, the ride-detail page (registration is inline there, no
+  separate route), and the organizer dashboard, each via `toHaveScreenshot`.
+  New `mobile` Playwright project (`devices['Pixel 5']` — already
+  Chromium-based, so CI's Chromium-only browser install still covers it),
+  scoped by `testMatch` to only the specs that need it so the rest of the
+  suite still runs once.
+- **Determinism traps found and fixed** (documented in
+  `.claude/rules/testing.md` "Visual regression" so the next spec doesn't
+  repeat them): `GET /v1/rides` sorts soonest-first and pages at 20/max 100
+  (`clampLimit`) — a freshly seeded ride can be pages deep on a database with
+  other fixtures, so discovery screenshots proxy the real request
+  (`route.fetch`) and filter its `items` down to just the seeded ride rather
+  than trusting an unfiltered page; `AppHeader` renders a signed-in viewer's
+  own (random-UUID) email as visible text, so public-screen fixtures are
+  seeded through an isolated `APIRequestContext` instead of `page.request`,
+  keeping `page` itself anonymous (the organizer dashboard has no such
+  option and masks its account-avatar trigger instead); a start countdown,
+  an hour-keyed greeting and a per-day chart all read the browser's own
+  clock, frozen with `page.clock.install` against a ride created at a fixed
+  absolute `startsAt` (new `createPublishedRideAt` fixture) rather than an
+  offset from real `Date.now()`. No map-tile flakiness to fight: CI never
+  sets `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, so `RouteMap`/`DiscoveryMap`
+  always render their static placeholder there.
+- **Baselines generated to match CI**, not on a developer machine: ran the
+  new specs with `--update-snapshots` inside
+  `mcr.microsoft.com/playwright:v1.63.0-jammy` (matching the installed
+  `@playwright/test` version and CI's `ubuntu-latest`), repo copied in
+  (never bind-mounted, so the container's own `pnpm install` never touches
+  host `node_modules`), pointed at the host's docker-compose Postgres/Redis/
+  MinIO via `host.docker.internal`, `.env` deleted from the copy so nothing
+  but explicit env vars (matching `ci.yml`, including an empty
+  `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`) could leak in. Verified stable by
+  re-running the same 16 tests without `--update-snapshots` before copying
+  the 12 resulting `*-linux.png` files out and deleting the container.
+- **CI**: `playwright.config.ts` adds `expect.toHaveScreenshot`
+  (`maxDiffPixelRatio: 0.02`, `animations: 'disabled'`) and an `html`
+  reporter alongside `list`; `ci.yml` uploads `playwright-report/` +
+  `test-results/` as an artifact on every e2e run (previously nothing was
+  uploaded for a failed e2e run at all).
+
+Files: `apps/web/e2e/{gpx-route,media-uploads,route-points-stops,
+discovery-states,mobile-cabinets,themes,visual-regression}.spec.ts`,
+`apps/web/e2e/helpers/{mock,fixtures,theme}.ts`, `apps/web/e2e/helpers/
+api-fixtures.ts` (new `createPublishedRideAt`), `apps/web/e2e/{themes,
+visual-regression}.spec.ts-snapshots/` (12 PNGs), `apps/web/
+playwright.config.ts`, `.github/workflows/ci.yml`, `.claude/rules/
+testing.md`, `.claude/skills/run-dev/SKILL.md` (new — starting the local
+dev stack, unrelated to this ticket's own scope but written up the same
+session after manually verifying the app).
+
+Validation: every new spec run repeatedly in isolation and in combination
+with the existing 9 specs against a live local stack (Postgres/Redis/MinIO
+via docker-compose, migrations applied) — stable, no regressions; the 12
+visual baselines generated and verified stable (two consecutive clean runs)
+inside the CI-matching Docker container; `pnpm --filter web typecheck`,
+`pnpm --filter web lint`, `pnpm format:check` all clean.
+
+Decisions: none recorded as ADR. Known limitation: a transient CPU-
+contention timeout was observed exactly once, under a combined ~50-test
+local parallel run on a loaded laptop (not reproducible in isolation) —
+CI's existing `retries: 2` already covers this class of flake, so no
+additional handling was added.
+
+## 2026-09-27 — CR-139 — Load testing suite (P3)
+
+Summary: a separate k6 suite (`load/`) for the six load/concurrency scenarios
+`docs/tasks.md` scoped out of the CI gate — registration/waitlist races, rate
+limiting, bulk listing, large GPX uploads, and p95/p99 latency. Manual
+(`pnpm load:test`) or nightly (`.github/workflows/load-test.yml`), never on
+`pull_request`/`push`, same precedent as `maps-contract.yml`.
+
+- **Chose k6 over Artillery**: plain JS scenarios (matches the rest of the
+  repo), built-in `checks`/`thresholds` that fail the run's exit code on a
+  violated invariant instead of just printing a report, and executors
+  (`per-vu-iterations`, `shared-iterations`) that model "N users hit the same
+  endpoint at the same instant" directly. Not an ADR — a testing-tool choice,
+  not a production architecture change.
+- **Six scenarios** (`load/k6/scenarios/`, shared REST helpers in
+  `load/k6/lib/api.js` ported from `apps/web/e2e/helpers/api-fixtures.ts`'s
+  register/verify/login/organizer/ride-lifecycle flow):
+  - `last-slot-registration.js` / `waitlist-promotion-race.js`: exact-count
+    and FIFO-order invariants via thresholds — capacity is a correctness
+    property here, not a performance budget, so these fail the run the same
+    way a broken Vitest assertion would.
+  - `rate-limiting.js`: the real 5/min-per-IP auth tier and 100/min global
+    tier (`.claude/rules/security.md`) actually reject beyond threshold
+    under a genuine concurrent burst, not just a mocked-clock unit test.
+  - `bulk-ride-list.js` / `api-latency.js`: `GET /v1/rides` cursor pagination
+    stays correct under concurrent readers against a database with many
+    rides; p95/p99 baseline for a discovery/detail/health read mix.
+  - `gpx-large-route.js`: a near-10 MB, many-trkpt GPX uploads within a
+    bound; an over-limit file is rejected fast (`400 gpx_file_too_large`);
+    `GET /health` latency stays low from a separate VU throughout the
+    upload — the actual claim ADR-015's streaming SAX parser makes, not just
+    "does the upload finish."
+- **One target-config split**: `AUTH_RATE_LIMIT_MAX`/`RATE_LIMIT_MAX` are
+  read once at `apps/api` boot. `rate-limiting.js` needs the real defaults to
+  prove they fire; every other scenario needs both raised (same values
+  `playwright.config.ts`'s e2e `webServer` already uses) so creating several
+  accounts/rides or a sustained read burst from one IP doesn't trip the same
+  limiter for the wrong reason. `load-test.yml` runs this as two jobs, each
+  booting its own Postgres/Redis/MinIO/`apps/api` — `rate-limit-check`
+  (defaults) and `load` (raised).
+- **Live-verified**, not just written: installed k6 locally, migrated a
+  disposable scratch Postgres database (never `coffee_ride_dev`) and ran two
+  real local `apps/api` instances (one per target config) against it, at
+  reduced scale. All six scenarios passed every threshold: last-slot race
+  (capacity 3 / 3 extra attempts — exactly 3 succeeded, exactly 3 got
+  `ride_full`, zero other errors); waitlist race (capacity 3 / 5 waiting —
+  the oldest 3 promoted FIFO, the newest 2 left waiting, ride re-filled to
+  exactly capacity, no duplicate promotion); rate limiting (exactly 5
+  `401`/5 `429` on login, exactly 100 `200`/10 `429` globally); bulk list
+  and API latency well under their p95/p99 budgets; GPX upload accepted,
+  oversized upload rejected in ~60 ms, concurrent `/health` p95 ~12 ms
+  throughout. Scratch database and both scratch API processes torn down
+  afterward; the developer's own running dev instance (`:4000`,
+  `coffee_ride_dev`) was never touched.
+- Root `eslint.config.mjs` ignores `load/**` (k6's `k6/*` import
+  specifiers and runtime aren't something a Node ESLint config resolves or
+  needs to, same reasoning as the existing `apps/**`/`packages/**` ignores).
+  New root script `load:test`.
+
+Files: `load/{README.md,run-all.sh,k6/lib/{config.js,api.js},k6/scenarios/
+{last-slot-registration.js,waitlist-promotion-race.js,rate-limiting.js,
+bulk-ride-list.js,gpx-large-route.js,api-latency.js}}`,
+`.github/workflows/load-test.yml`, `eslint.config.mjs`, `package.json`,
+`.claude/rules/testing.md`, `docs/tasks.md`.
+
+Validation: `pnpm format`/`pnpm lint:root` clean; all six k6 scenarios run
+live end to end (above) against real local `apps/api` instances on a
+disposable database; `.github/workflows/load-test.yml` YAML-parsed
+successfully. Not run on GitHub Actions itself (needs a real push/dispatch
+to verify job wiring, same standing gap `maps-contract.yml` still has).
+
+Decisions: none recorded as ADR (tooling choice, not an architecture
+change). Follow-up: none currently open for this ticket.

@@ -23,10 +23,24 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: 'list',
+  // CR-138. `html` (never auto-opened) alongside the existing `list` console
+  // output — needed so a failing screenshot's actual/expected/diff images
+  // and traces are inspectable from CI's uploaded artifact, not just from a
+  // local re-run.
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
+  },
+  // CR-138. `maxDiffPixelRatio` tolerates sub-pixel anti-aliasing noise
+  // without hiding a real layout/color regression; `animations: 'disabled'`
+  // freezes CSS transitions/animations so a screenshot never lands mid
+  // transition. Baselines must be generated on the same OS/browser build as
+  // CI (`ubuntu-latest`, this pinned `@playwright/test` version) — see
+  // `.claude/rules/testing.md` "Visual regression" for the Docker command,
+  // never `--update-snapshots` run natively on a developer's machine.
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: 'disabled' },
   },
   webServer: [
     {
@@ -65,5 +79,20 @@ export default defineConfig({
       timeout: 60_000,
     },
   ],
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // CR-138. A second, mobile-viewport pass — scoped via `testMatch` to only
+    // the specs that actually assert responsive/visual behavior at this
+    // width, so every other spec still runs exactly once (desktop only)
+    // instead of the whole suite silently doubling. `devices['Pixel 5']`
+    // rather than an iPhone preset: CI's "Install Playwright browsers" step
+    // installs Chromium only (`ci.yml`), and unlike the iPhone presets,
+    // `Pixel 5` already defaults to the `chromium` engine — no second
+    // browser download needed just for a mobile viewport.
+    {
+      name: 'mobile',
+      use: { ...devices['Pixel 5'] },
+      testMatch: ['mobile-cabinets.spec.ts', 'visual-regression.spec.ts'],
+    },
+  ],
 });

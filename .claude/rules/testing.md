@@ -79,6 +79,93 @@ Opt-in suites that hit real services — each skips itself unless its flag is se
 CI's `ci` job sets the S3 and Redis flags; a new flag must also go into
 `turbo.json`'s `test`/`test:coverage` env or turbo drops it (KI-050).
 
+## Load testing (CR-139)
+
+A separate k6 suite (`load/`, `load/README.md`) — manual or nightly
+(`.github/workflows/load-test.yml`, `workflow_dispatch` + nightly cron), never part of
+the `pull_request`/`push` `ci` job: parallel registration for the last open slot,
+the waitlist-promotion race, rate limiting under concurrent load, bulk ride-list
+retrieval, large GPX files/long routes, and API p95/p99 response times. These need a
+real running `apps/api` under genuine concurrency, which Vitest/Playwright's
+single-request-at-a-time style can't exercise meaningfully — they are correctness/
+performance checks against a live target, not a substitute for the unit/integration
+coverage above (registration/waitlist correctness is still covered there with mocked
+concurrency at the DB-transaction level).
+
+Two of the six scenarios enforce exact-count invariants (capacity never exceeded,
+every freed slot promotes exactly one FIFO waitlist entry) via k6 thresholds that fail
+the run's exit code — a regression here should be treated as seriously as a failing
+Vitest assertion, not just a "nice to know" perf number.
+
+## Visual regression and adaptive checks (CR-138)
+
+`apps/web/e2e/visual-regression.spec.ts` (`toHaveScreenshot`, chromium + mobile
+projects) covers five key screens: discovery grid/map, a ride card, the ride
+detail page (registration is inline there — there is no separate route),
+and the organizer dashboard. `themes.spec.ts`'s own `visual baseline` block
+covers light/dark. `mobile-cabinets.spec.ts` covers the organizer sidebar/
+`CabinetSectionTabs` (`lg`) and participant hamburger/`BottomTabBar` (`md`)
+breakpoints — functionally (element visibility), not by screenshot.
+
+- **Second Playwright project**: `mobile` (`devices['Pixel 5']`), scoped via
+  per-project `testMatch` to only the specs that assert something at that
+  width — every other spec still runs exactly once (desktop). Pixel 5, not
+  an iPhone preset: it already defaults to the `chromium` engine, so CI's
+  Chromium-only `playwright install` step doesn't need a second browser.
+- **`expect.toHaveScreenshot` options** (`playwright.config.ts`):
+  `maxDiffPixelRatio: 0.02` (tolerates anti-aliasing noise, not a real
+  regression) and `animations: 'disabled'`.
+- **Baselines must be generated to match CI** (`ubuntu-latest`, the pinned
+  `@playwright/test` version), never by running Playwright natively on a
+  developer's Mac/Windows machine — font rendering and anti-aliasing differ
+  enough to make every comparison fail. Regenerate via Docker:
+  ```
+  docker run --rm -v "$PWD":/work -w /work/apps/web \
+    mcr.microsoft.com/playwright:v<version>-jammy \
+    npx playwright test --update-snapshots
+  ```
+  (`<version>` = the installed `@playwright/test` version, `apps/web/package.json`).
+  Commit the resulting `e2e/*.spec.ts-snapshots/` directories — they are
+  baselines, not build output, so they are never gitignored.
+- **No map tiles to fight with**: CI never sets
+  `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` (same reasoning as the coverage note
+  below), so `RouteMap`/`DiscoveryMap` always render their static, provider-
+  free placeholder in every screenshot here — never a live, network-dependent
+  2GIS render. A local run with a real key configured (`.env`) will
+  legitimately produce different screenshots for exactly that reason; that's
+  a local-environment mismatch, not a real regression.
+- **A signed-in viewer's own email is not deterministic**: `registerAndVerify`
+  mints a random-UUID email per call, and the shared `AppHeader` renders it as
+  visible text once authenticated. Seed fixtures for a _public_ screen
+  (discovery, ride detail) through an isolated `APIRequestContext`
+  (`e2e/helpers/ui.ts`'s `newIsolatedRequest`), never `page.request` — the
+  page itself then stays anonymous and shows the fixed "Войти"/"Регистрация"
+  links. A screen that requires a session to view at all (the organizer
+  dashboard) has no such option; mask the account-menu trigger instead
+  (`toHaveScreenshot`'s `mask` option) rather than fighting the email.
+- **Discovery list mocking**: `GET /v1/rides` sorts soonest-first and defaults
+  to a page of 20 (`rides.service.ts`'s `listPublicRides`) — on a database
+  that already has other rides (any shared dev DB, or a CI run with earlier
+  specs' fixtures), a freshly seeded ride can be several pages deep, or sort
+  behind a `startsAt` far enough in the future to never appear at all. The
+  discovery screenshots proxy the real request through
+  (`route.fetch({ url })`, raising `limit` to the API's own max of 100) and
+  filter its `items` down to the one ride the test created — real,
+  correctly-shaped API data, but deterministic regardless of what else is in
+  the database.
+- **Relative-to-now content**: a start countdown, an organizer greeting keyed
+  off the hour, and a per-day registration chart are all computed from the
+  browser's own clock. Freeze it with `page.clock.install({ time })` _before_
+  `page.goto`, paired with a ride created at a fixed absolute `startsAt`
+  (`e2e/helpers/api-fixtures.ts`'s `createPublishedRideAt`) rather than an
+  offset from real `Date.now()` — otherwise the rendered text drifts
+  depending on what day/hour the suite happens to run.
+- **`page.route` for error/empty states**: `e2e/helpers/mock.ts`'s
+  `mockApiError` is the one shared pattern for provoking a state a real
+  backend won't produce on demand (an upload's `*_storage_unavailable`, a
+  500 from the ride list) — every other spec still drives the real API/DB
+  stack, which stays the default.
+
 ## Coverage (CR-136)
 
 `pnpm test:coverage` runs every Vitest suite with v8 coverage (shared options:

@@ -1086,3 +1086,42 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `TypeError` → 500) and reports real timeouts as such; live Redis queue
       test; opt-in 2GIS contract test + protected `maps-contract.yml`. See
       `docs/changelog.md`, KI-071.
+- [x] CR-138 Visual and adaptive checks (P2) — done 2026-09-27: GPX upload/
+      replace/delete + its real/degraded error states; avatar (organizer +
+      participant) and ride-cover upload/replace/delete + degraded state;
+      route points/stops add/edit/delete; discovery filters, empty
+      (unfiltered/filtered) and API-error states via `page.route`; organizer
+      cabinet sidebar/tabs (`lg`) and participant hamburger/`BottomTabBar`
+      (`md`) breakpoints; light/dark/system theme; pixel-diff baselines
+      (`toHaveScreenshot`) for discovery grid/map, a ride card, ride detail +
+      inline registration, and the organizer dashboard, across a new
+      `mobile` (Pixel 5) Playwright project. See `docs/changelog.md`,
+      `.claude/rules/testing.md`.
+- [x] CR-139 Load testing (P3) — done 2026-09-27: `load/` — a k6 suite,
+      deliberately not part of the Vitest/Playwright CI gate
+      (`.claude/rules/testing.md`), manual (`pnpm load:test`) or nightly
+      (`.github/workflows/load-test.yml`, `workflow_dispatch` + nightly cron).
+      Six scenarios: `last-slot-registration.js`/`waitlist-promotion-race.js`
+      assert exact-count/FIFO invariants via k6 thresholds (capacity never
+      exceeded, every freed slot promotes exactly one entry, no duplicates);
+      `rate-limiting.js` confirms the real 5/min-per-IP auth and 100/min
+      global limits actually reject beyond threshold; `bulk-ride-list.js` and
+      `api-latency.js` check pagination correctness and p95/p99 latency under
+      concurrent reads; `gpx-large-route.js` uploads a near-10 MB/many-point
+      GPX within a bound, confirms an over-limit file is rejected fast, and
+      confirms the streaming parser doesn't stall concurrent `/health` calls
+      (ADR-015). Two target configs needed (`load/README.md`): the
+      rate-limiting scenario needs the real default limits, every other
+      scenario needs `AUTH_RATE_LIMIT_MAX`/`RATE_LIMIT_MAX` raised (same
+      test/dev-only override `playwright.config.ts`'s e2e webServer already
+      uses) so setup/bulk operations don't trip the same limiter for the
+      wrong reason — the CI workflow runs these as two separate jobs, each
+      with its own `apps/api` instance. Live-verified all six scenarios
+      against two real local `apps/api` instances on a disposable scratch
+      database (not `coffee_ride_dev`): last-slot race (3 capacity/3 extra —
+      exactly 3 succeeded, exactly 3 got `ride_full`), waitlist race (3
+      capacity/5 waiting — exactly the oldest 3 promoted FIFO, 2 left
+      waiting, ride re-filled to capacity), rate limiting (exactly 5/5
+      login 401/429, exactly 100/10 global 200/429), bulk list, GPX
+      upload/oversized-rejection/health-during-upload, and API latency all
+      passed their thresholds. See `docs/changelog.md`.

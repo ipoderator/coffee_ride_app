@@ -1,0 +1,213 @@
+name: Load tests
+
+# CR-139 (P3). k6 suite exercising registration/waitlist races, rate
+# limiting, bulk listing, large GPX uploads, and API p95/p99 latency against
+# a real running apps/api. Deliberately NOT on pull_request/push — same
+# reasoning as maps-contract.yml: real concurrency runs are slow and noisy
+# for a PR gate. Manual runs plus a nightly check.
+#
+# Two jobs because AUTH_RATE_LIMIT_MAX/RATE_LIMIT_MAX are read once at server
+# boot: rate-limit-check needs the real default limits to prove they fire;
+# load needs them raised so setup (creating several accounts/rides) and
+# sustained read bursts don't trip the same limiter for the wrong reason —
+# see load/README.md.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Nightly, 02:00 UTC.
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-test
+  cancel-in-progress: false
+
+jobs:
+  rate-limit-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: coffee_ride
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d coffee_ride"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+    env:
+      NODE_ENV: test
+      API_PORT: '4000'
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/coffee_ride
+      REDIS_URL: redis://localhost:6379
+      AUTH_SECRET: ci-only-secret-not-for-production
+      WEB_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run database migrations
+        run: pnpm --filter db db:migrate
+      - name: Start apps/api (default rate limits)
+        run: |
+          pnpm --filter api exec tsx src/server.ts &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/health && break
+            sleep 1
+          done
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+      - name: rate-limiting.js
+        run: k6 run --summary-export=rate-limit-summary.json load/k6/scenarios/rate-limiting.js
+        env:
+          BASE_URL: http://localhost:4000
+      - name: Upload summary
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-rate-limit-summary
+          path: rate-limit-summary.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: coffee_ride
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d coffee_ride"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+      minio:
+        image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+        env:
+          MINIO_ROOT_USER: minio
+          MINIO_ROOT_PASSWORD: minio12345
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      API_PORT: '4000'
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/coffee_ride
+      REDIS_URL: redis://localhost:6379
+      AUTH_SECRET: ci-only-secret-not-for-production
+      WEB_ORIGIN: http://localhost:3000
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: minio
+      S3_SECRET_ACCESS_KEY: minio12345
+      S3_BUCKET: coffee-ride-load
+      # Test/dev-only overrides (apps/api/src/env.ts refuses them in
+      # production) — see load/README.md for why every scenario except
+      # rate-limiting.js needs these raised. Same values
+      # playwright.config.ts's e2e webServer already uses.
+      AUTH_RATE_LIMIT_MAX: '1000'
+      RATE_LIMIT_MAX: '10000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run database migrations
+        run: pnpm --filter db db:migrate
+      - name: Create MinIO bucket
+        run: |
+          aws --endpoint-url http://localhost:9000 s3 mb s3://coffee-ride-load
+        env:
+          AWS_ACCESS_KEY_ID: minio
+          AWS_SECRET_ACCESS_KEY: minio12345
+          AWS_DEFAULT_REGION: us-east-1
+      - name: Start apps/api (rate limits raised)
+        run: |
+          pnpm --filter api exec tsx src/server.ts &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/health && break
+            sleep 1
+          done
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+      - name: last-slot-registration.js
+        if: ${{ !cancelled() }}
+        run: k6 run --summary-export=last-slot-summary.json load/k6/scenarios/last-slot-registration.js
+        env:
+          BASE_URL: http://localhost:4000
+      - name: waitlist-promotion-race.js
+        if: ${{ !cancelled() }}
+        run: k6 run --summary-export=waitlist-summary.json load/k6/scenarios/waitlist-promotion-race.js
+        env:
+          BASE_URL: http://localhost:4000
+      - name: bulk-ride-list.js
+        if: ${{ !cancelled() }}
+        run: k6 run --summary-export=bulk-list-summary.json load/k6/scenarios/bulk-ride-list.js
+        env:
+          BASE_URL: http://localhost:4000
+      - name: gpx-large-route.js
+        if: ${{ !cancelled() }}
+        run: k6 run --summary-export=gpx-summary.json load/k6/scenarios/gpx-large-route.js
+        env:
+          BASE_URL: http://localhost:4000
+      - name: api-latency.js
+        if: ${{ !cancelled() }}
+        run: k6 run --summary-export=latency-summary.json load/k6/scenarios/api-latency.js
+        env:
+          BASE_URL: http://localhost:4000
+      - name: Upload summaries
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-summaries
+          path: |
+            last-slot-summary.json
+            waitlist-summary.json
+            bulk-list-summary.json
+            gpx-summary.json
+            latency-summary.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -130,6 +130,8 @@ as any other Claude skill — no need to invoke them by name):
 - `adr` — recording an architectural decision the way this project already does it.
 - `commit-push` — `/commit-push`: review, secret-check, commit and push finished work
   (`.claude/rules/git.md`).
+- `run-dev` — start the local dev stack (`apps/api` + `apps/web` via `pnpm dev`)
+  for manual testing/verification.
 
 These are procedures, not replacements for the underlying rules files — read the linked
 rules file in full for anything the skill doesn't cover.

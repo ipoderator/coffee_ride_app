@@ -34,6 +34,11 @@ export default tseslint.config(
       '**/test-results/**',
       'apps/**',
       'packages/**',
+      // CR-139: k6 scripts (load/k6/**) import from 'k6/*' module specifiers
+      // and run under k6's own JS runtime, not Node — no ESLint config here
+      // resolves or type-checks either of those, same reasoning as the two
+      // ignores above.
+      'load/**',
     ],
   },
   js.configs.recommended,

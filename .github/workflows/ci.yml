@@ -183,6 +183,20 @@ jobs:
       - name: E2E tests
         run: pnpm test:e2e
 
+      # CR-138. Previously nothing was uploaded for a failed e2e run at all —
+      # a failing `toHaveScreenshot` (or any other e2e failure) had no way to
+      # inspect what actually rendered/diffed without reproducing locally.
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # CR-134. Builds the real production images (docker-compose.prod.yml) and
   # requires GET /api/v1/rides through `web` to reach `api` over the Compose
   # network — guards the web → api proxy target, which is baked in at

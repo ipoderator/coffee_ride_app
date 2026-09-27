@@ -1,78 +1,72 @@
 # Current task
 
-**CR-137 — Files and external integrations: failure/contract scenarios (P2)**
+**CR-139 — Load testing (P3)**
 
-Status: complete, committed (together with CR-136 — see `docs/changelog.md`).
+Status: complete, committed.
 
 ## Goal
 
-Scenario coverage for the external dependencies: S3/MinIO file round trips,
-what happens when S3/Redis are down (what `/health` reports and what the UI
-gets), 2GIS failures, and a live 2GIS contract test for a protected CI run.
-
-## Scope decision
-
-`apps/web` deliberately never calls `GET /health` (KI-041: reactive per-call
-degraded states, no proactive banner without a `docs/design.md` spec). So
-"UI reaction to S3/Redis errors in /health" is tested as a chain: dependency
-down → `/health` reports it → the API answers the documented 503 codes / keeps
-critical journeys working → the web components render the degraded notice for
-exactly those codes.
+A separate manual/nightly k6 suite (never part of the Vitest/Playwright CI gate) for the
+load/concurrency scenarios out of Vitest/Playwright's reach: parallel registration for
+the last open slot, the waitlist-promotion race, rate limiting under concurrent load,
+bulk ride-list retrieval, large GPX files/long routes, and API p95/p99 response times.
 
 ## Requirements / acceptance criteria
 
-- [x] Live MinIO (gated `RUN_LIVE_S3_TESTS=1`), over HTTP through `buildApp`:
-      GPX upload → object in bucket → download bytes equal → replace deletes
-      the old object → delete removes it; cover upload → object → GET → delete.
-- [x] S3 unreachable: `/health` s3=`error`/`degraded` (200, bounded time);
-      GPX/cover uploads 503 `route_storage_unavailable`/`cover_storage_unavailable`;
-      ride reads still 200.
-- [x] Redis unreachable: `/health` redis=`error`; register/login/ride create/
-      registration still succeed (fail-open rate limit, enqueue never blocks).
-- [x] 2GIS adapter: a real hung request times out (bounded attempts), the
-      breaker then short-circuits; malformed-but-valid-JSON bodies become
-      `MapProviderError`, never a raw `TypeError`; API answers 503 for them.
-- [x] Missing key: API (exists) + web route builder shows the
-      `route_builder_unavailable` message (new test).
-- [x] Contract test `provider.contract.test.ts` (gated
-      `RUN_2GIS_CONTRACT_TESTS=1` + key) and a `workflow_dispatch`/schedule
-      workflow bound to a protected GitHub environment; never on PRs.
-- [x] lint, typecheck, format, tests, coverage gate (baseline raised).
+- [x] `load/k6/lib/{config.js,api.js}` — shared HTTP helpers ported from
+      `apps/web/e2e/helpers/api-fixtures.ts`'s register/verify/login/organizer/
+      ride-lifecycle flow.
+- [x] `load/k6/scenarios/last-slot-registration.js` — exact-count capacity invariant.
+- [x] `load/k6/scenarios/waitlist-promotion-race.js` — exact-count + FIFO-order
+      promotion invariant.
+- [x] `load/k6/scenarios/rate-limiting.js` — per-IP auth (5/min) and global (100/min)
+      limits actually reject beyond threshold.
+- [x] `load/k6/scenarios/bulk-ride-list.js` — cursor pagination correctness + latency
+      under concurrent readers.
+- [x] `load/k6/scenarios/gpx-large-route.js` — near-10 MB upload bound, oversized
+      rejection, `/health` latency unaffected during upload (ADR-015).
+- [x] `load/k6/scenarios/api-latency.js` — p95/p99 baseline for a mixed read load.
+- [x] `load/run-all.sh` + `load/README.md`.
+- [x] `.github/workflows/load-test.yml` — `workflow_dispatch` + nightly cron, two jobs
+      (default limits for `rate-limiting.js`, raised limits for the rest).
+- [x] `eslint.config.mjs` — ignore `load/**` (k6's own runtime/module specifiers).
+- [x] `package.json` — `load:test` script.
+- [x] `.claude/rules/testing.md` — Load testing subsection.
+- [x] `docs/tasks.md` — CR-139 entry.
+- [x] `docs/changelog.md` — append entry.
 
-## Planned files
+## Implementation progress
 
-- `apps/api/src/test-support/app-fixtures.ts` (new, shared helpers)
-- `apps/api/src/modules/rides/file-storage.live.test.ts` (new)
-- `apps/api/src/degraded-dependencies.test.ts` (new)
-- `packages/maps-2gis/src/{route.ts,geocode.ts,provider.test.ts,provider.contract.test.ts}`
-- `apps/api/src/modules/rides/route-builder.routes.test.ts`
-- `apps/web/src/features/organizer/route/route-builder.test.tsx`
-- `.github/workflows/maps-contract.yml`, `turbo.json` (env passthrough)
-- docs/context
+All done.
 
-## Progress
+## Validation results
 
-All items done — see `docs/changelog.md` (CR-137).
-
-## Validation
-
-- `pnpm test:coverage` 5/5 with Postgres/Redis/MinIO, `RUN_LIVE_S3_TESTS=1`,
-  `RUN_LIVE_REDIS_TESTS=1`: api 459 passed / 0 skipped, maps-2gis 41 (+4
-  contract skipped), web 392, ui 152, resilience 15; coverage gate passes
-  after raising the baseline (web untouched — noise).
-- Regressions proven: the old `route.ts` → the two new API tests get 500; the
-  old `queue.ts` → the Redis journey test times out.
-- `turbo lint typecheck` 17/17, `format:check` clean.
-- 2GIS contract test run locally: every call times out (KI-056 egress);
-  the gate/skip path verified.
+- `pnpm format`/`pnpm lint:root`: clean.
+- Live-verified, not just written: installed k6 locally; migrated a disposable scratch
+  Postgres database (`coffee_ride_loadtest_scratch`, never `coffee_ride_dev`); ran two
+  real local `apps/api` instances against it — one with `AUTH_RATE_LIMIT_MAX`/
+  `RATE_LIMIT_MAX` raised (everything but rate-limiting.js), one with the real defaults
+  (rate-limiting.js only), same split `load/README.md` documents. All six scenarios
+  passed every threshold at reduced scale: last-slot race (capacity 3/3 extra — exactly
+  3 succeeded, exactly 3 `ride_full`); waitlist race (capacity 3/waitlist 5 — oldest 3
+  promoted FIFO, newest 2 left waiting, ride re-filled to exactly capacity); rate
+  limiting (exactly 5/5 login 401/429, exactly 100/10 global 200/429); bulk list and
+  API latency well under their p95/p99 budgets; GPX upload accepted, oversized upload
+  rejected in ~60 ms, concurrent `/health` p95 ~12 ms throughout the upload.
+- Found and fixed one real bug during this validation: `uniqueEmail()` referenced
+  k6's `__ITER`, which is undefined inside `setup()`/`teardown()` (where most accounts
+  in this suite are created) — threw `ReferenceError` immediately. Replaced with an
+  in-module counter + timestamp + random, no `__VU`/`__ITER` dependency.
+- Scratch database and both scratch `apps/api` processes torn down afterward; the
+  developer's own running dev instance (`:4000`, `coffee_ride_dev`) was never touched
+  or restarted.
+- `.github/workflows/load-test.yml` YAML-parsed successfully; not run on GitHub Actions
+  itself (needs a real push/dispatch to verify job wiring — same standing gap
+  `maps-contract.yml` still has).
 
 ## Discovered issues
 
-- Fixed: Redis outage stalled every request; 2GIS off-shape body → 500;
-  timeout misreported as "request failed".
-- KI-071: notifications dropped while Redis is down (needs a decision).
-- Not verifiable here: GitHub runs (KI-068), live 2GIS (KI-056).
-
-## Final result
-
-Done; committed together with CR-136.
+- None outstanding for this ticket. `docs/changelog.md` had no CR-138 entry yet when
+  this task started (a concurrent session was still finishing that ticket's review) —
+  resolved on its own once that session appended its entry; this file previously
+  tracked CR-138 as "in progress," now superseded by that session's own completion.

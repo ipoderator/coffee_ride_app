@@ -37,7 +37,40 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-137 (2026-09-26, committed): failure/contract scenarios
+None active. CR-139 (2026-09-27, committed): load testing (P3) — a
+separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly
+(`.github/workflows/load-test.yml`), deliberately outside the Vitest/
+Playwright CI gate: exact-count/FIFO invariants for the last-slot
+registration race and waitlist-promotion race (k6 thresholds fail the run,
+same seriousness as a broken Vitest assertion), the real 5/min-per-IP auth
+and 100/min global rate limits actually rejecting under a genuine burst,
+bulk ride-list pagination + p95/p99 latency under concurrent reads, and a
+near-10 MB/many-point GPX upload confirming ADR-015's streaming parser
+doesn't stall concurrent `/health` calls. Two target configs needed
+(`load/README.md`): `rate-limiting.js` needs the real default limits,
+every other scenario needs `AUTH_RATE_LIMIT_MAX`/`RATE_LIMIT_MAX` raised
+(same values `playwright.config.ts`'s e2e already uses) — the nightly
+workflow runs these as two separate jobs/`apps/api` instances. Live-verified
+all six scenarios against two real local `apps/api` instances on a
+disposable scratch database (never `coffee_ride_dev`), then torn down.
+
+CR-138 (2026-09-27, committed): visual and adaptive checks —
+seven new Playwright specs (GPX/avatar/cover upload flows, route points/
+stops CRUD, discovery filters/empty/error states, mobile-cabinet
+breakpoints, light/dark/system themes) plus this repo's first pixel-diff
+visual-regression suite (`visual-regression.spec.ts`: discovery grid/map, a
+ride card, ride detail + inline registration, organizer dashboard) across a
+new `mobile` (Pixel 5) Playwright project. Baselines generated inside
+`mcr.microsoft.com/playwright:v1.63.0-jammy` (matching CI's `ubuntu-latest`
+
+- installed Playwright version), never on a developer machine — see
+  `.claude/rules/testing.md` "Visual regression" for the determinism traps
+  found along the way (shared-DB pagination, a signed-in viewer's own email
+  rendered in the header, relative-to-now widgets) and how each was fixed.
+  New project skill `.claude/skills/run-dev/SKILL.md` (starting the local dev
+  stack) written the same session, unrelated to this ticket's own scope.
+
+CR-137 (2026-09-26, committed): failure/contract scenarios
 for S3, Redis and 2GIS. Fixed: a Redis outage stalled every API request
 5–12 s (producer connection now fails fast, `onReady` waits for the first
 connect); an unexpected 2GIS body crashed route building with a 500 (adapter
@@ -863,4 +896,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-26 (CR-136)
+2026-09-27 (CR-139)
