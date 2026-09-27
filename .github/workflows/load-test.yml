@@ -84,7 +84,7 @@ jobs:
           BASE_URL: http://localhost:4000
       - name: Upload summary
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: load-test-rate-limit-summary
           path: rate-limit-summary.json
@@ -201,7 +201,7 @@ jobs:
           BASE_URL: http://localhost:4000
       - name: Upload summaries
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: load-test-summaries
           path: |
