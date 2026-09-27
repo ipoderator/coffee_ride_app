@@ -8,7 +8,7 @@
 # Next.js standalone output), `runner` (the actual runtime image — no
 # devDependencies, no source, no pnpm store, non-root user).
 
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 
@@ -57,7 +57,7 @@ RUN pnpm --filter web build
 # auto-detects the workspace root from the lockfile. `.next/static` and
 # `public` are deliberately left out of that trace (Next's own documented
 # standalone caveat) and are copied separately below.
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs
 WORKDIR /app
 ENV NODE_ENV=production
