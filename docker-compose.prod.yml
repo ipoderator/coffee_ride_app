@@ -130,7 +130,7 @@ services:
   # loops on BACKUP_INTERVAL_SECONDS (default: daily); a failed run logs and
   # retries next interval rather than crash-looping the container.
   backup:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
