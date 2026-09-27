@@ -47,10 +47,10 @@ const user: User = {
   distanceYearKm: null,
 };
 
-function renderForm() {
+function renderForm(next?: string | null) {
   return render(
     <SessionProvider>
-      <LoginForm />
+      <LoginForm next={next} />
     </SessionProvider>,
   );
 }
@@ -125,6 +125,36 @@ describe('LoginForm', () => {
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/me'));
+  });
+
+  // CR-141 (KI-064): the ride that sent the visitor to sign in.
+  it('returns to the `next` path on success', async () => {
+    loginMock.mockResolvedValue({ user });
+
+    renderForm('/rides/ride-1');
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    await waitFor(() =>
+      expect(replaceMock).toHaveBeenCalledWith('/rides/ride-1'),
+    );
+  });
+
+  it('ignores an off-site `next` and lands on /me (no open redirect)', async () => {
+    loginMock.mockResolvedValue({ user });
+
+    renderForm('//evil.example/rides');
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/me'));
+    expect(replaceMock).not.toHaveBeenCalledWith('//evil.example/rides');
+  });
+
+  it('keeps `next` on the link to /register', () => {
+    renderForm('/rides/ride-1');
+
+    expect(
+      screen.getByRole('link', { name: 'Нет аккаунта? Зарегистрироваться' }),
+    ).toHaveAttribute('href', '/register?next=%2Frides%2Fride-1');
   });
 
   // Regression (CR-127): the shared session stayed `anonymous` after a

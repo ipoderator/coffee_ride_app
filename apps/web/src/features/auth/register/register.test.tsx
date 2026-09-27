@@ -191,4 +191,39 @@ describe('RegisterForm', () => {
       screen.queryByText(/Только для этого окружения/),
     ).not.toBeInTheDocument();
   });
+
+  // CR-141 (KI-064): registering doesn't sign in, so `next` is handed on to
+  // /login — from the form and from the success card.
+  it('keeps `next` on the links to /login', async () => {
+    registerAccountMock.mockResolvedValue({
+      user: {
+        id: '1',
+        email: 'rider@example.com',
+        emailVerified: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        displayName: null,
+        firstName: null,
+        lastName: null,
+        phone: null,
+        bio: null,
+        avatarUrl: null,
+        profileVisibility: 'co_participants',
+        distanceWeekKm: null,
+        distanceMonthKm: null,
+        distanceYearKm: null,
+      },
+    });
+
+    render(<RegisterForm next="/rides/ride-1" />);
+    expect(
+      screen.getByRole('link', { name: 'Уже есть аккаунт? Войти' }),
+    ).toHaveAttribute('href', '/login?next=%2Frides%2Fride-1');
+
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+    await screen.findByText('Аккаунт создан');
+    expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute(
+      'href',
+      '/login?next=%2Frides%2Fride-1',
+    );
+  });
 });

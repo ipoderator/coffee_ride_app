@@ -188,6 +188,9 @@ export const AUTH_TERMS = {
     'Проверьте почту, чтобы подтвердить адрес и активировать аккаунт.',
   registerSuccessDevNote:
     'Только для этого окружения — ссылка для подтверждения:',
+  // CR-141: the success card's own way on — signing in right away works
+  // before the email is confirmed, and keeps any `?next=` return target.
+  registerSuccessLoginLink: 'Войти',
   emailAlreadyRegistered: 'Аккаунт с таким email уже существует.',
   genericError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
   loginTitle: 'Вход',

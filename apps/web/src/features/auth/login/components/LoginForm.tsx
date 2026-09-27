@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
+import {
+  DEFAULT_AFTER_LOGIN,
+  registerHref,
+  safeNextPath,
+} from '@/lib/auth/next-path';
 import { useSession } from '@/lib/auth/session-context';
 import { ApiError, login, loginRequestSchema } from '../api';
 
@@ -19,8 +24,11 @@ interface FieldErrors {
  * password and an unknown email both render the exact same generic message
  * — this form never learns (or shows) which case it was, only the API does
  * that server-side (`invalid_credentials`, identical body either way).
+ *
+ * CR-141: `next` (the page already validated it; re-checked right before
+ * navigating) is where a successful sign-in returns to, `/me` otherwise.
  */
-export function LoginForm() {
+export function LoginForm({ next = null }: { next?: string | null } = {}) {
   const router = useRouter();
   const { refresh } = useSession();
   const [email, setEmail] = useState('');
@@ -55,7 +63,7 @@ export function LoginForm() {
     try {
       await login(parsed.data);
       refresh();
-      router.replace('/me');
+      router.replace(safeNextPath(next) ?? DEFAULT_AFTER_LOGIN);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.problem.code === 'invalid_credentials') {
@@ -133,7 +141,10 @@ export function LoginForm() {
           >
             {AUTH_TERMS.forgotPasswordLink}
           </Link>
-          <Link href="/register" className="text-primary hover:underline">
+          <Link
+            href={registerHref(next)}
+            className="text-primary hover:underline"
+          >
             {AUTH_TERMS.registerLink}
           </Link>
         </div>

@@ -1132,3 +1132,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       S3 suites green locally; GitHub `ci` gets past service start again (run
       `36322844930`). Follow-up: web Vitest pinned to `Europe/Moscow`. See
       `docs/changelog.md`.
+- [x] CR-141 Return to the ride after sign-in (KI-064, critique P0) — done
+      2026-09-27: validated `?next=` on `/login`/`/register`
+      (`lib/auth/next-path.ts`, open-redirect protection); ride «Зарегистрироваться»
+      401 and riders/rider-profile sign-in links pass the ride path; register
+      success card links to `/login` keeping it. See `docs/changelog.md`.

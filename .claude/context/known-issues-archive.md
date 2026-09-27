@@ -1200,6 +1200,27 @@ riders/:registrationId/avatar` streams a rider's avatar, gated by the same
 `registrationId`, added additively). See `docs/decisions.md`'s new ADR and
 `docs/changelog.md`'s CR-126 entry for the full design.
 
+### KI-064 — Critique P0: `/login` has no `?next=`, so an anonymous «Зарегистрироваться» loses the ride
+
+Status: open. Discovered: 2026-09-23 (P0 of the `/impeccable critique apps/web`
+run, 21/40, that led to CR-115); still open after CR-115…CR-120.
+Problem: on `/rides/[id]` an anonymous visitor's «Зарегистрироваться»
+(`RegistrationButton`'s `router.push('/login')` on 401) and the «Участники»
+sign-in link (`RidersSection`, a plain `href="/login"`) send them to `/login`
+without any return target; after signing in they do not come back to the ride they wanted to join.
+Impact: high for the core participant journey (discover → register) — the
+registration intent is dropped at the one point the product most needs it.
+Workaround: the visitor navigates back to the ride by hand.
+Next action: next logical task — pass a validated same-origin relative `next`
+path to `/login` (and on to `/register`), redirect there after a successful
+sign-in, and reject absolute/external URLs (open-redirect protection).
+Resolution 2026-09-27 (CR-141): `/login` and `/register` take a validated `?next=`
+(`apps/web/src/lib/auth/next-path.ts`: same-origin relative paths only); the
+ride's «Зарегистрироваться» 401, the riders-list and rider-profile sign-in links
+pass `/rides/:id[/riders/:registrationId]`; `LoginForm` returns there after
+sign-in; `/register` hands it back to `/login` (form link + success card).
+Regression: `e2e/login-return.spec.ts` + unit tests.
+
 ### KI-068 — CI's MinIO service image can't be pulled; the `ci` job fails before any step
 
 Status: fix implemented locally 2026-09-27 (CR-140), awaiting the first GitHub

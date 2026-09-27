@@ -30,6 +30,7 @@ import {
   leaveRideWaitlist,
   registerForRide,
 } from '../api';
+import { loginHref } from '@/lib/auth/next-path';
 import { GroupPicker } from './GroupPicker';
 import { StartCountdown } from './StartCountdown';
 
@@ -144,7 +145,8 @@ export function RegistrationButton({
       await action();
     } catch (err) {
       if (isUnauthorized(err)) {
-        router.push('/login');
+        // CR-141 (KI-064): come back to this ride after signing in.
+        router.push(loginHref(`/rides/${rideId}`));
         return;
       }
       if (closeDialog) setConfirmAction(null);

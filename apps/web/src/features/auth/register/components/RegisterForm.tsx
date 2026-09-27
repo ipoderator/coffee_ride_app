@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
+import { loginHref } from '@/lib/auth/next-path';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
 
 interface FieldErrors {
@@ -30,8 +31,11 @@ function toVerifyEmailWebPath(verificationUrl: string): string | null {
  * pending state, server-error handling, duplicate-submit protection, and a
  * real success state. `docs/design.md` §10: this is the form's loading/error/
  * success set — there is no "empty"/"degraded" state for a create-account form.
+ *
+ * CR-141: registering doesn't sign in, so `next` (a return target, e.g. the
+ * ride that sent the visitor here) is only handed on to `/login`.
  */
-export function RegisterForm() {
+export function RegisterForm({ next = null }: { next?: string | null } = {}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -64,6 +68,12 @@ export function RegisterForm() {
             </Link>
           </p>
         )}
+        <Link
+          href={loginHref(next)}
+          className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+        >
+          {AUTH_TERMS.registerSuccessLoginLink}
+        </Link>
       </Card>
     );
   }
@@ -168,7 +178,10 @@ export function RegisterForm() {
             : AUTH_TERMS.registerSubmit}
         </Button>
 
-        <Link href="/login" className="text-sm text-primary hover:underline">
+        <Link
+          href={loginHref(next)}
+          className="text-sm text-primary hover:underline"
+        >
           {AUTH_TERMS.loginLink}
         </Link>
       </form>

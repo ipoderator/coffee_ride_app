@@ -775,21 +775,6 @@ Workaround: none needed.
 Next action: decide whether 0.5 is a real rule; if so, add it to the shared Zod
 schema (one source for client and server), otherwise drop the client-only step.
 
-### KI-064 — Critique P0: `/login` has no `?next=`, so an anonymous «Зарегистрироваться» loses the ride
-
-Status: open. Discovered: 2026-09-23 (P0 of the `/impeccable critique apps/web`
-run, 21/40, that led to CR-115); still open after CR-115…CR-120.
-Problem: on `/rides/[id]` an anonymous visitor's «Зарегистрироваться»
-(`RegistrationButton`'s `router.push('/login')` on 401) and the «Участники»
-sign-in link (`RidersSection`, a plain `href="/login"`) send them to `/login`
-without any return target; after signing in they do not come back to the ride they wanted to join.
-Impact: high for the core participant journey (discover → register) — the
-registration intent is dropped at the one point the product most needs it.
-Workaround: the visitor navigates back to the ride by hand.
-Next action: next logical task — pass a validated same-origin relative `next`
-path to `/login` (and on to `/register`), redirect there after a successful
-sign-in, and reject absolute/external URLs (open-redirect protection).
-
 ### KI-069 — `/organizer/rides/[id]/edit` shows a non-owner the edit form and lifecycle buttons
 
 Status: open. Discovered: 2026-09-26 (CR-135, `e2e/access-control.spec.ts`).

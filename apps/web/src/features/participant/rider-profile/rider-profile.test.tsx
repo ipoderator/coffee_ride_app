@@ -129,7 +129,7 @@ describe('RiderProfileCard (CR-126)', () => {
       await screen.findByRole('link', {
         name: 'Войдите, чтобы увидеть список',
       }),
-    ).toHaveAttribute('href', '/login');
+    ).toHaveAttribute('href', '/login?next=%2Frides%2Fride-1%2Friders%2Freg-1');
   });
 
   it('shows a retryable generic error for any other failure, and recovers on retry', async () => {

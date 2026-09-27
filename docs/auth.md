@@ -25,6 +25,11 @@ else's, using the same login.
   other trust-sensitive actions.
 - **Login**: email + password → session. Generic error on failure (no account
   enumeration).
+- **Return target (CR-141)**: `/login?next=<path>` returns there after a successful
+  sign-in (default `/me`); `/register?next=` hands it on to `/login`. `next` must be a
+  same-origin relative path — absolute/protocol-relative URLs, backslashes, control
+  characters and `/login`/`/register` themselves are dropped (open-redirect
+  protection, `apps/web/src/lib/auth/next-path.ts`, the one place it is validated).
 - **Logout**: invalidates the current session.
 - **Password reset**: request by email → single-use, time-limited token → set new
   password. Same generic response whether or not the email exists.

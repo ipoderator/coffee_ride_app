@@ -37,6 +37,14 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+None active. CR-141 (2026-09-27, committed): KI-064 closed — an anonymous
+«Зарегистрироваться» (or a riders sign-in link) now goes to
+`/login?next=/rides/:id` and returns to the ride after sign-in, also via
+`/register`. `next` is validated in one place (`apps/web/src/lib/auth/
+next-path.ts`, same-origin relative paths only). Header «Войти» and the
+cabinet's anonymous redirect still land on `/me` (deliberately out of scope);
+the email-verification link can't carry `next`.
+
 CR-140 (2026-09-27, committed and pushed; KI-068 resolved): local and CI S3 moved
 from MinIO to SeaweedFS (`ghcr.io/chrislusf/seaweedfs:4.47`, ADR-025) to fix
 KI-068. Important context: GitHub `ci` has not run a single step since
@@ -45,10 +53,13 @@ CR-139 were validated locally only. The first `ci` run after it (`36322844930`)
 got past service start and through Typecheck; it surfaced one time-zone-
 dependent web test (fixed: `apps/web/vitest.config.mts` pins
 `TZ=Europe/Moscow`) and a `docker-smoke` `next/font` fetch error with no
-related change (treated as transient; watch the next run). Local dev: `docker compose up -d`
+related change (transient: the next run, `36323215724` on `b5d144f`, was
+fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plus
+`docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task: confirm a fully green `ci` run; then KI-064
+Next logical task (after CR-141): KI-071 (needs a product decision on the
+notification fallback) or KI-069/KI-070 (small)
 (`/login?next=`, critique P0 of the participant journey).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a
@@ -122,7 +133,7 @@ CR-130…CR-133 are committed (`3f228ed`, `58950a5`, `765129a`). Owner decision
 2026-09-26: the mobile tab bar and the shared header's hamburger panel coexist
 (ADR-024 amendment). Open follow-up: KI-066 (dashboard still aggregates
 client-side). Deliberately not built from the mockup: a «Статистика» screen.
-Next logical task: KI-064 (`/login?next=`).
+Next logical task: done in CR-141 (KI-064).
 
 CR-121…CR-129 are committed (`9adb797`, `42330fa`, `3fe806b`, `c685310`).
 Full detail on those: `docs/changelog.md`'s «2026-09-23 — CR-115…CR-120»

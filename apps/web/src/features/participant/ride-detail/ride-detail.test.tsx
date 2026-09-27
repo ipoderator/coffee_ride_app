@@ -32,8 +32,9 @@ import {
 // `RegistrationButton` calls `useRouter()` (redirect-to-login on a 401) — same
 // mocking precedent as `features/auth/login/login.test.tsx`, RTL's `render()` doesn't
 // mount a real Next.js App Router.
+const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 // CR-119: `RidersSection` reads the shared session (`SessionProvider` in the
@@ -204,6 +205,7 @@ describe('RideDetailView', () => {
     getRideReviewsMock.mockReset();
     getRideReviewsMock.mockResolvedValue({ items: [], nextCursor: null });
     registerForRideMock.mockReset();
+    pushMock.mockReset();
     cancelRideRegistrationMock.mockReset();
     changeRegistrationGroupMock.mockReset();
     joinRideWaitlistMock.mockReset();
@@ -583,6 +585,28 @@ describe('RideDetailView', () => {
         await screen.findByText('Вы зарегистрированы на заезд.'),
       ).toBeInTheDocument();
       expect(registerForRideMock).toHaveBeenCalledWith('ride-1');
+    });
+
+    // CR-141 (KI-064): an anonymous «Зарегистрироваться» must not lose the ride.
+    it('sends an anonymous viewer to sign in with this ride as the return target', async () => {
+      registerForRideMock.mockRejectedValue(groupProblem('unauthorized', 401));
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByText('Зарегистрироваться'));
+
+      await waitFor(() =>
+        expect(pushMock).toHaveBeenCalledWith('/login?next=%2Frides%2Fride-1'),
+      );
     });
 
     it('requires confirmation before cancelling, and does not call the API until confirmed', async () => {
@@ -1195,7 +1219,7 @@ describe('RideDetailView', () => {
         await screen.findByRole('link', {
           name: 'Войдите, чтобы увидеть список',
         }),
-      ).toHaveAttribute('href', '/login');
+      ).toHaveAttribute('href', '/login?next=%2Frides%2Fride-1');
       expect(screen.getByText('14 участников')).toBeInTheDocument();
       expect(getRideRidersMock).not.toHaveBeenCalled();
     });

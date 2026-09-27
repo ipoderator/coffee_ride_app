@@ -11,6 +11,7 @@ import {
   RIDE_DETAIL_RIDERS_TERMS,
   Skeleton,
 } from 'ui';
+import { loginHref } from '@/lib/auth/next-path';
 import { useSession } from '@/lib/auth/session-context';
 import { ApiError, getRideRiders } from '../api';
 
@@ -127,7 +128,7 @@ function RiderNames({
  * caller with `403 riders_hidden`, shown as a neutral notice instead of the
  * sign-in prompt — the count on the page above this section is unaffected.
  *
- * `/login` has no `?next=` redirect support yet, so the link is a plain one.
+ * CR-141: the sign-in link returns to this ride (`/login?next=`).
  */
 export function RidersSection({
   rideId,
@@ -230,7 +231,7 @@ export function RidersSection({
       {status === 'anonymous' && registrationsCount > 0 && (
         <p className="text-sm text-text-secondary">
           <Link
-            href="/login"
+            href={loginHref(`/rides/${rideId}`)}
             className="font-medium text-primary underline decoration-1 underline-offset-2 hover:text-primary-hover"
           >
             {RIDE_DETAIL_RIDERS_TERMS.signInPrompt}

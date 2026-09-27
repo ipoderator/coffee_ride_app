@@ -1248,3 +1248,45 @@ archive,project-state}.md`, `docs/tasks.md`.
 
 Decisions: none. Follow-up: if `docker-smoke`'s font fetch fails again, make the
 production build independent of Google Fonts at build time (self-host the files).
+
+## 2026-09-27 — CR-141 — Return to the ride after sign-in (`/login?next=`, KI-064)
+
+Summary: closes the P0 of the 2026-09-23 UI critique. An anonymous visitor's
+«Зарегистрироваться» on `/rides/[id]` (and the «Участники» / rider-profile sign-in
+links) sent them to a bare `/login`; after signing in they landed on `/me` and the
+registration intent was lost. They now go to `/login?next=/rides/:id` and come back
+to the ride; «Нет аккаунта?» → `/register?next=` hands it on to `/login` (form link
+and a new «Войти» link on the success card — registering doesn't sign in, but an
+unverified account can sign in and register for a ride right away).
+
+- `apps/web/src/lib/auth/next-path.ts` — the one validator (`safeNextPath`) and
+  href builders (`loginHref`/`registerHref`). Open-redirect protection: only a
+  same-origin relative path survives; absolute and protocol-relative URLs,
+  backslashes, control characters (tab/newline can smuggle `//host` past a naive
+  check), >512 chars and `/login`/`/register` themselves (checked after URL
+  normalization, so `/rides/../login` is caught) are dropped. Applied twice: the
+  page validates `searchParams.next` server-side, `LoginForm` re-checks right before
+  `router.replace`.
+- `/login`/`/register` pages are now `async` and read `searchParams` (Next 15
+  Promise form, same as `/verify-email`); forms take an optional `next` prop.
+- `RegistrationButton` (401), `RidersSection`, `RiderProfileCard` pass the ride /
+  rider-profile path. `AUTH_TERMS.registerSuccessLoginLink` added (additive).
+- Out of scope, unchanged: header «Войти»/«Регистрация» and `CabinetShell`'s
+  anonymous redirect still land on `/me`; the email-verification link can't carry
+  `next` (email/API contract).
+
+Files: `apps/web/src/lib/auth/next-path{,.test}.ts`, `apps/web/src/app/(public)/
+{login,register}/page.tsx`, `features/auth/{login,register}` (forms + tests),
+`features/participant/ride-detail/components/{RegistrationButton,RidersSection}.tsx`,
+`features/participant/rider-profile/components/RiderProfileCard.tsx` (+ tests),
+`apps/web/e2e/login-return.spec.ts`, `packages/ui/src/terminology.ts`,
+`docs/auth.md`.
+
+Validation: validator 23 cases; login returns to `next` / ignores `//evil.example` /
+keeps it on the register link; register keeps it on both login links; ride-detail
+401 pushes `/login?next=%2Frides%2Fride-1`. Web 420/420, ui 152/152, typecheck,
+lint, format clean. `e2e/login-return.spec.ts` (ride → register click → login →
+back on the ride → registered) passed against the local dev stack — it left one
+e2e organizer, ride and participant in the dev database.
+
+Decisions: none. Follow-up: KI-064 resolved and archived.

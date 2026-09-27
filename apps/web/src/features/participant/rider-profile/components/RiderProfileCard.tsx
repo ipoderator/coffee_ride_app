@@ -16,6 +16,7 @@ import {
   Skeleton,
 } from 'ui';
 import { apiAssetUrl } from '@/lib/api/asset-url';
+import { loginHref } from '@/lib/auth/next-path';
 import { ApiError, getRiderProfile } from '../api';
 
 type ProfileStatus =
@@ -97,7 +98,7 @@ export function RiderProfileCard({
       {status === 'unauthorized' && (
         <p className="text-sm text-text-secondary">
           <Link
-            href="/login"
+            href={loginHref(`/rides/${rideId}/riders/${registrationId}`)}
             className="font-medium text-primary underline decoration-1 underline-offset-2 hover:text-primary-hover"
           >
             {RIDE_DETAIL_RIDERS_TERMS.signInPrompt}
