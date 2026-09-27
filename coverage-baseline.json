@@ -4,10 +4,10 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 91.89,
-        "statements": 90.73,
-        "functions": 95.69,
-        "branches": 79.3
+        "lines": 92.14,
+        "statements": 90.98,
+        "functions": 95.78,
+        "branches": 79.63
       },
       "scopes": {
         "src/modules/auth/": {
@@ -41,10 +41,10 @@
           "branches": 64.51
         },
         "src/modules/notifications/": {
-          "lines": 83.97,
-          "statements": 83.33,
-          "functions": 97.61,
-          "branches": 61.4
+          "lines": 87.3,
+          "statements": 86.59,
+          "functions": 98.07,
+          "branches": 67.27
         },
         "src/modules/reviews/": {
           "lines": 85.33,
@@ -68,24 +68,24 @@
     },
     "apps/web": {
       "total": {
-        "lines": 74.28,
-        "statements": 72.29,
-        "functions": 71.32,
-        "branches": 72.88
+        "lines": 74.7,
+        "statements": 72.76,
+        "functions": 71.66,
+        "branches": 73.8
       }
     },
     "packages/ui": {
       "total": {
-        "lines": 91.96,
-        "statements": 92.32,
-        "functions": 85.6,
-        "branches": 89.45
+        "lines": 92.03,
+        "statements": 92.38,
+        "functions": 85.82,
+        "branches": 89.83
       }
     },
     "packages/maps-2gis": {
       "total": {
-        "lines": 94.49,
-        "statements": 92.85,
+        "lines": 94.9,
+        "statements": 93.22,
         "functions": 86.95,
         "branches": 84.35
       }

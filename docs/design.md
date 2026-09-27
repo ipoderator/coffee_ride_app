@@ -40,8 +40,9 @@ Rules:
   medium radius.
 - **Every ride gets a drawn cover, not a placeholder.** `RouteCover` (`apps/web`) draws a
   dark "window" — deliberately unaffected by the light/dark UI theme, like a photo —
-  from decorative isoline art plus the ride's own route track, on every card and the
-  ride-detail hero, whether or not the organizer uploaded a photo.
+  from decorative isoline art plus the ride's own route track, on every grid card,
+  whether or not the organizer uploaded a photo. Since CR-144 the cover carries only the
+  track and the status chip — no text over the art (§6 "Ride grid card").
 - **Color never carries meaning alone** (`.claude/rules/frontend.md`): status, difficulty
   and errors always carry a text label and/or icon as well.
 - **Banned:** gradients, glow/neon, glass/blur/translucent panels, khaki/cream/"vintage
@@ -337,6 +338,33 @@ Rules:
 - On a ride card, show the first **three**; the detail page shows the full row plus
   difficulty and bike type.
 
+### Ride grid card (CR-144, «B2»)
+
+`/`'s «Заезды» grid (`RideGridCard`). Chosen by the product owner from three mockups
+after the ADR-024 card read as cluttered — every fact was stacked over the route art.
+
+- **Cover** (`RouteCover`, fixed 160px): route track + status chip only. No route →
+  a quiet «Маршрут пока не загружен» caption. The chip sits in a `dark` token scope
+  so its tone ink stays legible on the always-dark cover in the light theme.
+- **Panel** (`bg-raised`, theme-aware), top to bottom: start line → title (Unbounded,
+  clamped to two lines and always two lines tall, so a grid row's metrics/seats/chips
+  align) → three labelled metric columns → seats → chips.
+- **Metrics**: always distance / набор высоты / средний темп, each with its
+  `METRIC_TERMS` label; a missing one keeps its column with «—»; pace groups count
+  sits under the pace. All three missing → one line «Дистанция и темп не указаны».
+  Elevation is in the `elevation` ink.
+- **Seats**: «17 из 20 участников», «Осталось 3 места» (warning ink when ≤ 3 left)
+  and a 4px fill bar (`warning-fill` low, `text-muted` full, `brand` otherwise; the bar
+  is `aria-hidden`, the text carries it). No limit → participant count + «Без
+  ограничения мест», no bar. Cancelled → no seats block.
+- **Status chip**: an open ride with ≤ 3 seats → «Мало мест» (warning); an open ride
+  with none left → «Список ожидания» (info — the waitlist is joinable exactly then),
+  never a green «Регистрация открыта». Cancelled: solid red chip, desaturated cover,
+  struck-through muted title.
+- **Chips**: bike type, `DifficultyScale size="sm"` (segments + word), price.
+- Hover: border to `border-input` and a 2px lift (`motion-safe`); focus ring
+  `primary`.
+
 ### Elevation profile
 
 - Area chart: x = distance, y = elevation; single `contour` ink (ADR-021 — elevation is
@@ -494,7 +522,7 @@ removing or repurposing a prop requires checking both cabinets first.
 **Feature-local (inside the feature module, not shared):**
 `RideCard`, `RideFilters`, `RideMap`, `RouteCover` (ADR-024, new — a route-drawn cover
 built from `route-preview.ts`'s projection geometry, lives in
-`features/participant/discovery/components` and is reused from ride-detail),
+`features/participant/discovery/components`; only the grid card uses it),
 `ElevationProfile`, `StopList`, `ServiceList`, `RequirementList`, `RegistrationButton`,
 `ParticipantTable`, `WaitlistTable`, `UpdateComposer`, `ReviewForm`, `ReviewList`.
 

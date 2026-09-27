@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { PublicRideListItem } from 'types';
 import {
+  buildRideCardMetrics,
   buildRideRowMetrics,
   discoveryStatusTerm,
+  rideCardSeats,
   ridesSeatsLabel,
   ridesSeatsLeft,
 } from './ride-metrics';
@@ -108,5 +110,105 @@ describe('buildRideRowMetrics', () => {
     });
     const pace = buildRideRowMetrics(ride).find((m) => m.key === 'pace');
     expect(pace?.suffix).toContain('2');
+  });
+});
+
+describe('discoveryStatusTerm — full open ride (CR-144)', () => {
+  it('offers the waitlist instead of a green «open» when no seats are left', () => {
+    const ride = makeRide({ participantLimit: 3, registrationsCount: 3 });
+    expect(discoveryStatusTerm(ride)).toEqual({
+      label: 'Список ожидания',
+      tone: 'info',
+    });
+  });
+
+  it('keeps the ordinary label for a full ride that is not open', () => {
+    const ride = makeRide({
+      status: 'registration_closed',
+      participantLimit: 3,
+      registrationsCount: 3,
+    });
+    expect(discoveryStatusTerm(ride).label).toBe('Регистрация закрыта');
+  });
+
+  it('keeps «open» for an unlimited ride', () => {
+    const ride = makeRide({ participantLimit: null, registrationsCount: 50 });
+    expect(discoveryStatusTerm(ride).label).toBe('Регистрация открыта');
+  });
+});
+
+describe('buildRideCardMetrics (CR-144)', () => {
+  it('always returns three labelled columns in design order, «—» for a missing one', () => {
+    const metrics = buildRideCardMetrics(
+      makeRide({ elevationGainMeters: null }),
+    );
+    expect(
+      metrics?.map((m) => [m.key, m.label, m.parts.value, m.missing]),
+    ).toEqual([
+      ['distance', 'Дистанция', '69,5', false],
+      ['elevation', 'Набор высоты', '—', true],
+      ['pace', 'Средний темп', '30,0', false],
+    ]);
+  });
+
+  it('puts the groups count under the pace range', () => {
+    const pace = buildRideCardMetrics(
+      makeRide({
+        paceKmh: null,
+        groups: [
+          { name: 'Группа 1', paceKmh: 25 },
+          { name: 'Группа 2', paceKmh: 35 },
+        ],
+      }),
+    )?.find((m) => m.key === 'pace');
+    expect(pace?.parts.value).toBe('25–35');
+    expect(pace?.sub).toBe('2 группы');
+  });
+
+  it('returns null when all three are missing', () => {
+    expect(
+      buildRideCardMetrics(
+        makeRide({
+          distanceKm: null,
+          elevationGainMeters: null,
+          paceKmh: null,
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('rideCardSeats (CR-144)', () => {
+  it('shows taken of limit, seats left and the fill for a limited ride', () => {
+    expect(
+      rideCardSeats(makeRide({ participantLimit: 20, registrationsCount: 17 })),
+    ).toEqual({
+      count: '17 из 20 участников',
+      note: 'Осталось 3 места',
+      level: 'low',
+      fillPercent: 85,
+    });
+  });
+
+  it('marks a full ride and never overfills the bar', () => {
+    const seats = rideCardSeats(
+      makeRide({ participantLimit: 10, registrationsCount: 12 }),
+    );
+    expect(seats.note).toBe('Мест нет');
+    expect(seats.level).toBe('full');
+    expect(seats.fillPercent).toBe(100);
+  });
+
+  it('has no bar and says there is no limit for an unlimited ride', () => {
+    expect(
+      rideCardSeats(
+        makeRide({ participantLimit: null, registrationsCount: 0 }),
+      ),
+    ).toEqual({
+      count: 'Пока нет участников',
+      note: 'Без ограничения мест',
+      level: 'open',
+      fillPercent: null,
+    });
   });
 });

@@ -20,10 +20,10 @@ function LoadingCards() {
   return (
     <div
       aria-hidden="true"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6"
     >
       {[0, 1, 2, 3, 4, 5].map((index) => (
-        <Skeleton key={index} className="h-64 rounded-3xl" />
+        <Skeleton key={index} className="h-108 rounded-3xl" />
       ))}
     </div>
   );
@@ -102,7 +102,7 @@ export function RideGrid() {
             />
           )
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
             {rides.map((ride) => (
               <RideGridCard key={ride.id} ride={ride} />
             ))}

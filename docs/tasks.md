@@ -1147,3 +1147,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `EditRideForm` show not-found for a ride the caller doesn't own instead
       of the form/lifecycle buttons; `ride-detail.test.tsx` now stubs the
       MapGL key itself. See `docs/changelog.md`.
+- [x] CR-144 Discovery grid card redesign («B2») — done 2026-09-27: the
+      route cover carries only the track + status chip; date, a two-line
+      title, three labelled metric columns («—» for a missing one), seats with
+      a fill bar and bike/difficulty/price chips sit on a theme-aware panel
+      below. A full open ride reads «Список ожидания» instead of a green
+      «Регистрация открыта». See `docs/changelog.md` and `docs/design.md` §6.

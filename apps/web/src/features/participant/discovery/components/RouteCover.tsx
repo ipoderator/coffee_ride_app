@@ -6,50 +6,44 @@ import {
 } from '../lib/route-preview';
 
 const VIEW_WIDTH = 400;
-const VIEW_HEIGHT = 260;
+const VIEW_HEIGHT = 160;
+const TRACK_PADDING = 20;
 
-// ADR-024: three fixed decorative isoline/elevation-silhouette backgrounds
-// (same spirit as the mockup's `cv1`/`cv2`/`cv3` — a ride's cover is always a
-// dark "window", not a real elevation chart baked into the art). Picked
-// deterministically per ride so the same ride always gets the same
-// background, not fetched/computed from route data — only the route track
-// itself (below) is real, per-ride geometry.
+// ADR-024: three fixed decorative isoline backgrounds (the mockup's `cv1`/
+// `cv2`/`cv3` spirit — a ride's cover is always a dark "window", not a real
+// elevation chart baked into the art). Picked deterministically per ride so
+// the same ride always gets the same background; only the route track itself
+// (below) is real, per-ride geometry.
 const BACKGROUNDS = [
   {
     isolines: [
-      'M-20 40C60 10 140 70 220 40S360 0 420 30',
-      'M-20 75C70 45 150 105 230 75S360 40 420 65',
+      'M-20 26C60 4 140 50 220 26S350 0 420 18',
+      'M-20 148C70 124 150 170 240 146S350 126 420 138',
     ],
     ellipses: [
-      { cx: 270, cy: 130, rx: 95, ry: 52 },
-      { cx: 270, cy: 130, rx: 64, ry: 34 },
-      { cx: 90, cy: 150, rx: 60, ry: 30 },
+      { cx: 300, cy: 96, rx: 96, ry: 44 },
+      { cx: 300, cy: 96, rx: 62, ry: 27 },
+      { cx: 70, cy: 110, rx: 58, ry: 26 },
     ],
-    silhouette:
-      'M0 260V238L20 232 44 236 70 222 96 228 120 214 146 220 172 204 196 212 222 198 250 210 276 196 300 206 326 190 350 202 376 194 400 200V260Z',
   },
   {
     isolines: [
-      'M-20 200C80 170 160 230 250 200S370 170 420 190',
-      'M-20 165C80 135 160 195 250 165S370 135 420 155',
-      'M260 -10C300 40 380 40 420 20',
+      'M-20 130C80 104 160 150 250 126S370 104 420 118',
+      'M-20 104C80 80 160 124 250 100S370 80 420 92',
+      'M260 -10C300 26 380 26 420 12',
     ],
     ellipses: [
-      { cx: 120, cy: 80, rx: 100, ry: 46 },
-      { cx: 120, cy: 80, rx: 66, ry: 28 },
+      { cx: 120, cy: 52, rx: 100, ry: 32 },
+      { cx: 120, cy: 52, rx: 66, ry: 20 },
     ],
-    silhouette:
-      'M0 260V230L30 228 60 220 90 222 120 210 150 214 180 206 210 214 240 200 270 190 300 196 330 182 360 186 400 176V260Z',
   },
   {
-    isolines: ['M-20 230C80 200 160 250 250 225S370 205 420 220'],
+    isolines: ['M-20 148C80 128 160 160 250 144S370 130 420 140'],
     ellipses: [
-      { cx: 200, cy: 110, rx: 150, ry: 70 },
-      { cx: 200, cy: 110, rx: 110, ry: 50 },
-      { cx: 200, cy: 110, rx: 70, ry: 30 },
+      { cx: 200, cy: 72, rx: 150, ry: 48 },
+      { cx: 200, cy: 72, rx: 110, ry: 34 },
+      { cx: 200, cy: 72, rx: 70, ry: 20 },
     ],
-    silhouette:
-      'M0 260V236L40 230 80 216 120 206 160 196 200 190 240 198 280 210 320 220 360 228 400 232V260Z',
   },
 ] as const;
 
@@ -63,52 +57,56 @@ function pickBackground(seed: string): (typeof BACKGROUNDS)[number] {
 }
 
 export interface RouteCoverProps {
-  /** Sampled `[lat, lng]` route points (`GET /v1/rides`'s `routePreview`, or
-   * the fuller ride-detail geometry) — `null` before a route is uploaded. */
+  /** Sampled `[lat, lng]` route points (`GET /v1/rides`'s `routePreview`) —
+   * `null` before a route is uploaded. */
   routePreview: Array<[number, number]> | null;
   /** Any stable per-ride string (the ride id) — picks the decorative
    * background deterministically, not randomly on every render. */
   seed: string;
-  /** ADR-024: a cancelled ride's cover desaturates its track (`docs/design.md`
-   * §1's "colour never carries meaning alone" — paired with the caller's own
-   * strikethrough title and "Отменён" chip, not a replacement for them). */
+  /** ADR-024: a cancelled ride's cover desaturates (`docs/design.md` §1's
+   * "colour never carries meaning alone" — paired with the caller's own
+   * strikethrough title and «Отменён» chip, not a replacement for them). */
   cancelled?: boolean;
+  /** The status chip. Rendered in a `dark` token scope: the cover is dark in
+   * both UI themes, so a light-theme tone ink would vanish on it. */
   topLeft?: ReactNode;
-  topRight?: ReactNode;
-  /** Bottom content — date/title/metrics/people, composed by the caller so
-   * the same cover works as a card and as the ride-detail hero. */
-  children?: ReactNode;
+  /** Shown on the cover when there is no track to draw. */
+  emptyLabel?: string;
   className?: string;
 }
 
+/**
+ * CR-144 («B2»): the grid card's cover carries the route and the status chip
+ * only — every fact (date, title, metrics, seats) is on the card's panel
+ * below it, so nothing competes with the track for contrast.
+ */
 export function RouteCover({
   routePreview,
   seed,
   cancelled = false,
   topLeft,
-  topRight,
-  children,
+  emptyLabel,
   className,
 }: RouteCoverProps) {
   const background = pickBackground(seed);
-  // Confined to the box's upper ~60%: the bottom holds the text content
-  // (`children`) under the scrim, and the track shouldn't fight it for
-  // legibility (found live — an untrimmed box drew the route straight
-  // through the title/metrics on a tall track).
   const track = projectRoutePreviewToBox(
     routePreview ? smoothRoutePreview(routePreview) : null,
     VIEW_WIDTH,
-    VIEW_HEIGHT * 0.6,
-    16,
+    VIEW_HEIGHT,
+    TRACK_PADDING,
   );
   const trackPoints = track?.split(' ') ?? null;
-  const startPoint = trackPoints?.[0];
+  const start = trackPoints?.[0]?.split(',');
   const finishPoint = trackPoints?.[trackPoints.length - 1];
+  const finish =
+    finishPoint && finishPoint !== trackPoints?.[0]
+      ? finishPoint.split(',')
+      : null;
 
   return (
     <div
       className={cn(
-        'relative isolate flex min-h-[220px] flex-col justify-end overflow-hidden rounded-3xl bg-cover-bg text-cover-ink',
+        'relative isolate h-40 shrink-0 overflow-hidden bg-cover-bg',
         className,
       )}
     >
@@ -121,7 +119,7 @@ export function RouteCover({
           cancelled && 'saturate-0 brightness-75',
         )}
       >
-        <g fill="none" className="stroke-cover-line" strokeWidth={1.3}>
+        <g fill="none" className="stroke-cover-line" strokeWidth={1.2}>
           {background.isolines.map((d, i) => (
             <path key={`iso-${i}`} d={d} />
           ))}
@@ -129,68 +127,60 @@ export function RouteCover({
             <ellipse key={`el-${i}`} {...e} />
           ))}
         </g>
-        <path
-          d={background.silhouette}
-          className="fill-cover-elevation"
-          opacity={0.55}
-        />
-        {trackPoints ? (
+        {track ? (
           <>
             <polyline
-              points={track!}
+              points={track}
               fill="none"
               className="stroke-cover-bg"
-              strokeWidth={9}
+              strokeWidth={8}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
             <polyline
-              points={track!}
+              points={track}
               fill="none"
               className="stroke-cover-route"
-              strokeWidth={4.5}
+              strokeWidth={3.5}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
           </>
         ) : null}
-        {startPoint ? (
+        {start ? (
           <>
             <circle
-              cx={startPoint.split(',')[0]}
-              cy={startPoint.split(',')[1]}
-              r={8}
+              cx={start[0]}
+              cy={start[1]}
+              r={7}
               className="fill-cover-route"
             />
             <circle
-              cx={startPoint.split(',')[0]}
-              cy={startPoint.split(',')[1]}
-              r={3.2}
+              cx={start[0]}
+              cy={start[1]}
+              r={2.8}
               className="fill-cover-bg"
             />
           </>
         ) : null}
-        {finishPoint && finishPoint !== startPoint ? (
+        {finish ? (
           <circle
-            cx={finishPoint.split(',')[0]}
-            cy={finishPoint.split(',')[1]}
-            r={6}
-            className="fill-cover-bg stroke-elevation"
+            cx={finish[0]}
+            cy={finish[1]}
+            r={5.5}
+            className="fill-cover-bg stroke-cover-elevation"
             strokeWidth={2.5}
           />
         ) : null}
       </svg>
-      {/* Legibility scrim under the bottom content, not glass (docs/design.md
-          §1 still bans blur/glass — this is a plain gradient). */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--cover-bg)_0%,transparent)_35%,color-mix(in_srgb,var(--cover-bg)_92%,transparent)_100%)]"
-      />
-      {topLeft ? <div className="absolute top-3 left-3">{topLeft}</div> : null}
-      {topRight ? (
-        <div className="absolute top-2.5 right-2.5">{topRight}</div>
+      {!track && emptyLabel ? (
+        <p className="absolute inset-x-0 bottom-4 text-center font-mono text-xs text-cover-ink/60">
+          {emptyLabel}
+        </p>
       ) : null}
-      {children ? <div className="grid gap-2 p-4">{children}</div> : null}
+      {topLeft ? (
+        <div className="dark absolute top-3.5 left-3.5">{topLeft}</div>
+      ) : null}
     </div>
   );
 }

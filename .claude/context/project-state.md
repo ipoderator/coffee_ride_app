@@ -37,7 +37,16 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-143 (2026-09-27, not committed yet): KI-069 closed — `GET
+None active. CR-144 (2026-09-27, committed): discovery grid card
+redesign «B2» — the route cover shows only the track and status chip; date,
+two-line title, three labelled metric columns, seats with a fill bar and
+bike/difficulty/price chips sit on a theme-aware panel below
+(`docs/design.md` §6 «Ride grid card»). A full open ride's chip now reads
+«Список ожидания» instead of «Регистрация открыта». Visual baselines for the
+grid/card regenerated; coverage baseline raised. KI-073 opened (dark-on-dark
+layout changes slip under the screenshot tolerance).
+
+CR-143 (2026-09-27, committed): KI-069 closed — `GET
 /v1/rides/:id`'s response gains additive `isOwner: boolean`; `EditRideForm`
 shows not-found for a ride the caller doesn't own instead of the form/
 lifecycle buttons. KI-070 closed — `ride-detail.test.tsx` stubs the MapGL key
@@ -71,7 +80,7 @@ fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plu
 `docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task (after CR-143): KI-045/KI-001 (production compose/Caddy
+Next logical task (after CR-144): KI-045/KI-001 (production compose/Caddy
 never run end to end).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a

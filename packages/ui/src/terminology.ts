@@ -716,6 +716,19 @@ export const RIDE_DISCOVERY_TERMS = {
   // between `registration_open`'s ordinary label and `registration_closed`'s
   // "Регистрация закрыта"; derived from seats left, not a `RideStatus` value.
   lowSeatsLabel: 'Мало мест',
+  // CR-144: an open ride that is full — the waitlist is joinable exactly then
+  // (same wording as the ride page's «Встать в список ожидания»).
+  waitlistStatusLabel: 'Список ожидания',
+  routeMissing: 'Маршрут пока не загружен',
+  metricsMissing: 'Дистанция и темп не указаны',
+  // «17 из 20 участников» — `docs/design.md` §7's participants format.
+  seatsTaken: (count: number, limit: number) =>
+    `${count} из ${limit} ${pluralRu(limit, 'участника', 'участников', 'участников')}`,
+  participantsCount: (count: number) =>
+    count === 0
+      ? 'Пока нет участников'
+      : `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
+  noSeatsLimit: 'Без ограничения мест',
 } as const;
 
 /**

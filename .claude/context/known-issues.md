@@ -800,6 +800,24 @@ merging. If this recurs, consider excluding `typescript` from the
 `dev-dependencies` group in `.github/dependabot.yml` so a single incompatible
 major doesn't block the other 12 updates.
 
+### KI-073 — Visual baselines barely see dark-on-dark layout changes
+
+Found: 2026-09-27, CR-144.
+Problem: CR-144 rebuilt the grid card (new panel, metric columns, seats bar),
+yet `discovery-grid-chromium-linux.png`'s old baseline still _passed_
+`--update-snapshots` (mode `changed`). Playwright's per-pixel colour threshold
+(default 0.2) treats the dark theme's near-black tones (`cover-bg` `#16131A`,
+`bg` `#121015`, `bg-raised` `#1C1920`, `border`) as equal, so only glyph pixels
+count, and a card in a 1280×720 page stays under `maxDiffPixelRatio: 0.02`.
+Impact: a dark-theme layout regression that moves panels/borders but little
+text can pass CI's visual suite. Text/element changes are still caught; the
+`mobile` screenshot (card fills more of the frame) did fail as expected.
+Workaround: CR-144 regenerated the grid/card baselines with
+`--update-snapshots=all` so they show the current design.
+Next action: consider a per-assertion `threshold` (e.g. `0.1`) on the
+dark-theme `toHaveScreenshot` calls, or element-scoped screenshots for layout
+surfaces, and check it doesn't add anti-aliasing flakiness on CI.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

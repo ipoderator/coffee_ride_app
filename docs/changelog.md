@@ -1369,3 +1369,62 @@ exported, 50/50. Typecheck/lint/format clean across apps/api, apps/web,
 packages/types.
 
 Decisions: none new. Follow-up: KI-069 and KI-070 resolved and archived.
+
+## 2026-09-27 — CR-144 — Discovery grid card redesign («B2»)
+
+Summary: the product owner found the `/` grid card cluttered — status, date,
+title, three unlabelled metrics and seats were all stacked over the route art
+at low contrast. Three mockups were built (a claude.ai design canvas); they
+chose «B» (cover + panel), asked for it refined («B2»), then implemented.
+
+- `RouteCover` now carries only the route track and the status chip (fixed
+  160px, new 400×160 isoline backgrounds, no elevation silhouette, no scrim,
+  no `children`/`topRight` slots — the card was their only caller; docs said it
+  was also the ride-detail hero, which was no longer true). No route → a
+  «Маршрут пока не загружен» caption. The chip sits in a `dark` token scope,
+  so its tone ink stays legible on the always-dark cover in the light theme.
+- `RideGridCard` puts everything else on a theme-aware `bg-raised` panel:
+  start line, a title always two lines tall (grid rows align), three labelled
+  metric columns (`METRIC_TERMS`; «—» for a missing one; groups count under the
+  pace; one «Дистанция и темп не указаны» line when all three are missing;
+  elevation in the `elevation` ink, not the cover's purple), seats («17 из 20
+  участников» + «Осталось 3 места» + a fill bar; no limit → count + «Без
+  ограничения мест»; cancelled → none) and bike/difficulty/price chips.
+  Hover: `border-input` border + 2px lift (`motion-safe`).
+- Behaviour change: an open ride with no seats left now reads «Список
+  ожидания» (info) instead of a green «Регистрация открыта» —
+  `joinWaitlist` accepts exactly that state. Map-tab legend rows unchanged.
+- Fixed in passing: a cancelled ride's chip lost its red fill on the cover
+  (the card's `bg-cover-bg/85` override was merged over `bg-danger`, leaving
+  near-black text on near-black).
+- `packages/ui` (additive): `RIDE_DISCOVERY_TERMS` gains `waitlistStatusLabel`,
+  `routeMissing`, `metricsMissing`, `seatsTaken`, `participantsCount`,
+  `noSeatsLimit`; `DifficultyScale` gains optional `size="sm"` (default
+  unchanged — other call sites untouched).
+- `lib/ride-metrics.ts`: `buildRideCardMetrics`, `rideCardSeats`; the pace
+  derivation is shared with `buildRideRowMetrics` (`ridePace`).
+
+Files: `apps/web/src/features/participant/discovery/components/{RideGridCard,
+RideGridCard.test,RouteCover,RouteCover.test,RideGrid}.tsx`,
+`apps/web/src/features/participant/discovery/lib/ride-metrics{,.test}.ts`,
+`packages/ui/src/{terminology,terminology-discovery.test}.ts`,
+`packages/ui/src/components/DifficultyScale{,.test}.tsx`, `apps/web/e2e/
+visual-regression.spec.ts-snapshots/{discovery-grid,ride-card}-{chromium,
+mobile}-linux.png`, `coverage-baseline.json`, `docs/design.md` (§1, §6 «Ride
+grid card», §9).
+
+Validation: new `RideGridCard.test.tsx` (9 cases) plus metric/seats/status
+and term/`DifficultyScale` unit cases; the waitlist branch was mutation-checked
+(removing it fails 2 tests). Full suites in the CI environment (Postgres,
+Redis, S3, live flags): api 465/465, web 439/439, ui 155/155, maps-2gis,
+resilience green; typecheck/eslint/prettier clean for web and ui. Live check
+on the dev server, dark and light themes, desktop and Pixel 5. Visual
+baselines regenerated in `mcr.microsoft.com/playwright:v1.63.0-jammy` against
+the host's compose stack (as CR-138), then re-run without updating: 16/16.
+Coverage baseline raised (web +0.4 pp, ui +0.1 pp; api rows raised by
+CR-142/143's tests too); no row decreased. `next build` not run locally (it
+clobbers the running dev server's `.next`).
+
+Decisions: none new (within ADR-024; product owner chose the direction).
+Follow-up: KI-073 (dark-on-dark layout changes slip under the screenshot
+tolerance).

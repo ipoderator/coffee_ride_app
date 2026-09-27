@@ -31,6 +31,20 @@ describe('DifficultyScale', () => {
     expect(empty).toHaveLength(2);
   });
 
+  it('keeps the word, level and filled count in the compact size (CR-144)', () => {
+    const { container } = render(<DifficultyScale level={2} size="sm" />);
+    expect(screen.getByText('Ниже среднего')).toBeInTheDocument();
+    expect(screen.getByText('(уровень 2 из 5)')).toBeInTheDocument();
+    const segments =
+      container
+        .querySelector('[aria-hidden="true"]')
+        ?.querySelectorAll('span') ?? [];
+    expect(segments).toHaveLength(5);
+    expect(
+      Array.from(segments).filter((s) => s.className.includes('bg-frame')),
+    ).toHaveLength(2);
+  });
+
   it('exposes the level to assistive tech via sr-only text, without repeating the word visibly', () => {
     render(<DifficultyScale level={3} />);
     expect(screen.getByText('Средний')).toBeInTheDocument();

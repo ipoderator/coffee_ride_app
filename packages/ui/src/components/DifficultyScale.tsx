@@ -14,19 +14,34 @@ const LEVELS: readonly DifficultyLevel[] = [1, 2, 3, 4, 5];
 // (§12: never color alone, and here not "segments alone" either).
 export interface DifficultyScaleProps {
   level: DifficultyLevel;
+  /** `sm` (CR-144): narrow segments and small text, for a chip on a ride card. */
+  size?: 'md' | 'sm';
   className?: string;
 }
 
-export function DifficultyScale({ level, className }: DifficultyScaleProps) {
+export function DifficultyScale({
+  level,
+  size = 'md',
+  className,
+}: DifficultyScaleProps) {
   const label = DIFFICULTY_LEVEL_TERMS[level];
+  const small = size === 'sm';
   return (
-    <div className={cn('inline-flex items-center gap-2', className)}>
-      <div className="flex gap-1" aria-hidden="true">
+    <div
+      className={cn(
+        'inline-flex items-center',
+        small ? 'gap-1.5' : 'gap-2',
+        className,
+      )}
+    >
+      <div className={small ? 'flex gap-0.5' : 'flex gap-1'} aria-hidden="true">
         {LEVELS.map((segment) => (
           <span
             key={segment}
             className={cn(
-              'h-2 w-4 rounded-sm border',
+              small
+                ? 'h-2.5 w-1 rounded-[1px] border'
+                : 'h-2 w-4 rounded-sm border',
               segment <= level
                 ? 'border-frame bg-frame'
                 : 'border-border-input bg-transparent',
@@ -34,7 +49,13 @@ export function DifficultyScale({ level, className }: DifficultyScaleProps) {
           />
         ))}
       </div>
-      <span className="text-sm font-medium text-text">
+      <span
+        className={
+          small
+            ? 'text-xs text-text-secondary'
+            : 'text-sm font-medium text-text'
+        }
+      >
         {label}
         {/* Visible text says the word; this adds the position a sighted reader gets
             from the segments, without repeating the word itself. */}

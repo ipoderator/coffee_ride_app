@@ -9,15 +9,6 @@ const ROUTE: Array<[number, number]> = [
 ];
 
 describe('RouteCover', () => {
-  it('renders bottom content passed as children', () => {
-    render(
-      <RouteCover routePreview={ROUTE} seed="ride-1">
-        <h3>Тестовый заезд на выходные</h3>
-      </RouteCover>,
-    );
-    expect(screen.getByText('Тестовый заезд на выходные')).toBeInTheDocument();
-  });
-
   it('draws a route track when routePreview has points', () => {
     const { container } = render(
       <RouteCover routePreview={ROUTE} seed="ride-1" />,
@@ -49,16 +40,35 @@ describe('RouteCover', () => {
     );
   });
 
-  it('renders topLeft/topRight slots', () => {
+  it('renders the status chip in a dark token scope (the cover is dark in both themes)', () => {
     render(
       <RouteCover
         routePreview={ROUTE}
         seed="ride-1"
-        topLeft={<span>регистрация открыта</span>}
-        topRight={<button type="button">♥</button>}
+        topLeft={<span>Регистрация открыта</span>}
       />,
     );
-    expect(screen.getByText('регистрация открыта')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '♥' })).toBeInTheDocument();
+    expect(screen.getByText('Регистрация открыта').parentElement).toHaveClass(
+      'dark',
+    );
+  });
+
+  it('shows the empty label only when there is no track to draw', () => {
+    const { rerender } = render(
+      <RouteCover
+        routePreview={null}
+        seed="ride-1"
+        emptyLabel="Нет маршрута"
+      />,
+    );
+    expect(screen.getByText('Нет маршрута')).toBeInTheDocument();
+    rerender(
+      <RouteCover
+        routePreview={ROUTE}
+        seed="ride-1"
+        emptyLabel="Нет маршрута"
+      />,
+    );
+    expect(screen.queryByText('Нет маршрута')).toBeNull();
   });
 });
