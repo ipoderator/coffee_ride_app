@@ -29,7 +29,7 @@ invariants.
 ## Running locally
 
 ```bash
-pnpm infra:up            # postgres/redis/minio
+pnpm infra:up            # postgres/redis/s3
 pnpm --filter db db:migrate
 pnpm --filter api dev &  # or: pnpm --filter api exec tsx src/server.ts
 
@@ -62,5 +62,5 @@ API with different env between the two groups) if running the full suite end to 
 
 `.github/workflows/load-test.yml` — `workflow_dispatch` plus a nightly schedule, never
 on `pull_request`/`push` (same reasoning as `maps-contract.yml`). Two jobs, each
-starting its own Postgres/Redis/MinIO/`apps/api`: `rate-limit-check` (default limits)
+starting its own Postgres/Redis(/S3 for `load`)/`apps/api`: `rate-limit-check` (default limits)
 and `load` (limits raised, the other five scenarios).

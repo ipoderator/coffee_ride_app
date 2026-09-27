@@ -37,19 +37,23 @@ jobs:
         image: redis:8-alpine
         ports:
           - 6379:6379
-      # CR-080/KI-015. Same pinned tag as docker-compose.yml's local-dev
-      # service — keeps the two environments consistent. Unlike postgres/
-      # redis above, MinIO needs a bucket created before anything can use it
-      # (see the "Create MinIO bucket" step) — a fresh container has none.
-      minio:
-        image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+      # CR-140 (ADR-025, KI-068). S3-compatible store, same pinned image as
+      # docker-compose.yml's `s3` service. SeaweedFS, not MinIO: MinIO's
+      # images are no longer publicly pullable, and a `services:` entry
+      # can't pass MinIO's required `server /data` anyway. This image's
+      # default CMD (`mini -dir=/data`) already serves S3 on 8333 and takes
+      # its admin credentials from AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.
+      # Pulled from ghcr.io, not Docker Hub (anonymous rate limits). A fresh
+      # container has no bucket — see the "Create S3 bucket" step.
+      s3:
+        image: ghcr.io/chrislusf/seaweedfs:4.47
         env:
-          MINIO_ROOT_USER: minio
-          MINIO_ROOT_PASSWORD: minio12345
+          AWS_ACCESS_KEY_ID: minio
+          AWS_SECRET_ACCESS_KEY: minio12345
         ports:
-          - 9000:9000
+          - 9000:8333
         options: >-
-          --health-cmd "mc ready local"
+          --health-cmd "wget -q -O /dev/null http://127.0.0.1:8333/healthz"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -70,7 +74,7 @@ jobs:
       # WEB_ORIGIN were never needed in this job before that existed.
       AUTH_SECRET: ci-only-secret-not-for-production
       WEB_ORIGIN: http://localhost:3000
-      # CR-080/KI-015. Matches the bucket the "Create MinIO bucket" step
+      # CR-080/KI-015. Matches the bucket the "Create S3 bucket" step
       # below creates. Configuring these makes both `pnpm test`'s new
       # route-storage.live.test.ts (skips itself when unset — see that
       # file) and the e2e job's real GPX-upload paths exercise a real,
@@ -83,7 +87,7 @@ jobs:
       S3_BUCKET: coffee-ride-ci
       # route-storage.live.test.ts's own explicit opt-in — see that file's
       # comment for why S3_* alone isn't a safe enough signal (a local .env
-      # has them configured for MinIO whether or not MinIO is running).
+      # has them configured for the local S3 service whether or not it is running).
       RUN_LIVE_S3_TESTS: '1'
       # CR-137: queue.live.test.ts — the notification queue's happy path
       # against the `redis` service above (the unit tests mock ioredis).
@@ -111,12 +115,12 @@ jobs:
       - name: Run database migrations
         run: pnpm --filter db db:migrate
 
-      # CR-080/KI-015. MinIO starts with no buckets — aws-cli ships
+      # CR-080/KI-015. The S3 service starts with no buckets — aws-cli ships
       # preinstalled on ubuntu-latest runners, so no extra container/binary
       # is needed just to run one `s3 mb` against the service's root
       # credentials (real AWS creds are never involved — --endpoint-url
-      # points this at the local MinIO service, not real AWS).
-      - name: Create MinIO bucket
+      # points this at the local S3 service, not real AWS).
+      - name: Create S3 bucket
         run: |
           aws --endpoint-url http://localhost:9000 s3 mb s3://coffee-ride-ci
         env:

@@ -35,7 +35,7 @@ updates:
 
   # 'docker-compose' is a separate ecosystem from 'docker' (GA Feb 2025) —
   # covers docker-compose.yml/docker-compose.prod.yml's `image:` references
-  # (postgres/redis/minio/caddy), which no 'docker' entry above reaches.
+  # (postgres/redis/seaweedfs/caddy), which no 'docker' entry above reaches.
   - package-ecosystem: 'docker-compose'
     directory: '/'
     schedule:

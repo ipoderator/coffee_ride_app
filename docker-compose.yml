@@ -1,7 +1,7 @@
 # Local development infrastructure only.
 #
 # Every port is bound to 127.0.0.1 deliberately: on a machine with a public IP a bare
-# "5432:5432" publishes Postgres/Redis/MinIO to the internet. Do not widen these
+# "5432:5432" publishes Postgres/Redis/S3 to the internet. Do not widen these
 # bindings — if a service must be reachable from another host, put it behind the
 # reverse proxy instead.
 #
@@ -25,7 +25,7 @@ services:
       retries: 10
 
   # KI-003: requirepass + AOF persistence. Dev-only literal password (same
-  # pattern as postgres/minio below, this file is local-dev-only and bound to
+  # pattern as postgres/s3 below, this file is local-dev-only and bound to
   # 127.0.0.1) — without AOF a container restart silently drops queued
   # notification jobs (CR-050), which .claude/rules/resilience.md forbids.
   redis:
@@ -49,47 +49,56 @@ services:
       timeout: 5s
       retries: 10
 
-  # Image comes from quay.io, not Docker Hub's minio/minio: MinIO's own docs
-  # (docs/docker/README.md in minio/minio) reference quay.io/minio/minio exclusively now.
-  # Pinned to a specific RELEASE tag rather than :latest so dev/CI/server don't drift
-  # (KI-005). The healthcheck uses `mc ready local`, not curl: the server image does not
-  # ship curl, and `mc` is bundled — this is MinIO's own documented healthcheck, taken
-  # verbatim from their official docker-compose example (KI-004).
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ":9001"
+  # S3-compatible object store (ADR-005; SeaweedFS since CR-140/ADR-025 —
+  # MinIO's images stopped being publicly pullable, KI-068). Same pinned image
+  # as ci.yml's `s3` service so dev and CI don't drift (KI-005); pulled from
+  # ghcr.io, not Docker Hub. The image's default CMD `mini -dir=/data` runs
+  # master+volume+filer+S3 in one process; S3 listens on 8333 and takes its
+  # admin credentials from AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY (the same
+  # dev-only `minio`/`minio12345` pair `.env.example`'s S3_* use). `/healthz`
+  # is the one unauthenticated S3 endpoint; the image ships busybox wget.
+  s3:
+    image: ghcr.io/chrislusf/seaweedfs:4.47
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio12345
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio12345
     ports:
-      - '127.0.0.1:9000:9000'
-      - '127.0.0.1:9001:9001'
+      - '127.0.0.1:9000:8333'
     volumes:
-      - minio_data:/data
+      - s3_data:/data
     healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '-O',
+          '/dev/null',
+          'http://127.0.0.1:8333/healthz',
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # CR-129 (KI-015): a fresh `minio_data` volume has no bucket, so `/health`
+  # CR-129 (KI-015): a fresh `s3_data` volume has no bucket, so `/health`
   # reported `s3: "error"` and every upload showed «Загрузка недоступна» until
-  # someone ran `mc mb` by hand. One-shot: waits for `minio` to be healthy,
-  # creates `.env.example`'s `S3_BUCKET` if missing, exits 0. Same image as
-  # `minio` (it bundles `mc`), so no extra image to pin. Runs with a plain
-  # `docker compose up -d`; after `up -d minio` alone, add `minio-init`.
-  minio-init:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+  # someone created it by hand. One-shot: waits for `s3` to be healthy,
+  # creates `.env.example`'s `S3_BUCKET` (`s3.bucket.create` is a no-op on an
+  # existing bucket), exits 0. Same image as `s3`, so no extra image to pin.
+  # Runs with a plain `docker compose up -d`; after `up -d s3` alone, add
+  # `s3-init`.
+  s3-init:
+    image: ghcr.io/chrislusf/seaweedfs:4.47
     depends_on:
-      minio:
+      s3:
         condition: service_healthy
     entrypoint:
       - sh
       - -c
-      - mc alias set local http://minio:9000 minio minio12345 && mc mb --ignore-existing local/coffee-ride
+      - echo 's3.bucket.create -name coffee-ride' | weed shell -master=s3:9333
     restart: 'no'
 
 volumes:
   postgres_data:
   redis_data:
-  minio_data:
+  s3_data:

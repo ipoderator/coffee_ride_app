@@ -67,7 +67,7 @@ Opt-in suites that hit real services — each skips itself unless its flag is se
 
 - `RUN_LIVE_S3_TESTS=1` (+ `S3_*`): `route-storage.live.test.ts` and
   `file-storage.live.test.ts` (GPX/cover upload → object → download → replace →
-  delete, over HTTP against MinIO).
+  delete, over HTTP against the local S3 service — SeaweedFS, ADR-025).
 - `RUN_LIVE_REDIS_TESTS=1` (+ `REDIS_URL`): `queue.live.test.ts` (a registration
   reaches the inbox through BullMQ); CR-058's block in `auth.routes.test.ts` runs
   whenever `REDIS_URL` is set.
@@ -184,7 +184,7 @@ artifact of the run, the table is in the job summary.
 - No blanket percentage target (no "80%"). Raise the bar module by module,
   API and critical modules (registrations, auth, rides) first; a new or
   touched module should leave its own row higher than it found it.
-- Measure with the CI environment: Postgres, Redis, MinIO up,
+- Measure with the CI environment: Postgres, Redis, S3 up,
   `RUN_LIVE_S3_TESTS=1`, `RUN_LIVE_REDIS_TESTS=1` with `REDIS_URL` set, and no
   `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` in the shell (KI-070) — otherwise skipped
   suites lower the numbers.

@@ -1,72 +1,59 @@
 # Current task
 
-**CR-139 — Load testing (P3)**
+**CR-140 — Replace MinIO with SeaweedFS for local dev + CI S3 (KI-068)**
 
-Status: complete, committed.
+Status: committed and pushed. Awaiting the first GitHub `ci` run.
 
 ## Goal
 
-A separate manual/nightly k6 suite (never part of the Vitest/Playwright CI gate) for the
-load/concurrency scenarios out of Vitest/Playwright's reach: parallel registration for
-the last open slot, the waitlist-promotion race, rate limiting under concurrent load,
-bulk ride-list retrieval, large GPX files/long routes, and API p95/p99 response times.
+Get the `ci` job running again. Every `main` run since 2026-09-19 failed before checkout:
+until ~2026-09-24 the MinIO `services:` container never became healthy (GitHub
+`services:` can't pass `server /data`, so the image's bare `minio` CMD never serves),
+and since ~2026-09-26 the image itself is gone (`quay.io/minio/minio` and
+`docker.io/minio/minio` both 401 anonymously). Owner decision 2026-09-27: SeaweedFS
+everywhere (CI, load-test workflow, local `docker-compose.yml`).
 
 ## Requirements / acceptance criteria
 
-- [x] `load/k6/lib/{config.js,api.js}` — shared HTTP helpers ported from
-      `apps/web/e2e/helpers/api-fixtures.ts`'s register/verify/login/organizer/
-      ride-lifecycle flow.
-- [x] `load/k6/scenarios/last-slot-registration.js` — exact-count capacity invariant.
-- [x] `load/k6/scenarios/waitlist-promotion-race.js` — exact-count + FIFO-order
-      promotion invariant.
-- [x] `load/k6/scenarios/rate-limiting.js` — per-IP auth (5/min) and global (100/min)
-      limits actually reject beyond threshold.
-- [x] `load/k6/scenarios/bulk-ride-list.js` — cursor pagination correctness + latency
-      under concurrent readers.
-- [x] `load/k6/scenarios/gpx-large-route.js` — near-10 MB upload bound, oversized
-      rejection, `/health` latency unaffected during upload (ADR-015).
-- [x] `load/k6/scenarios/api-latency.js` — p95/p99 baseline for a mixed read load.
-- [x] `load/run-all.sh` + `load/README.md`.
-- [x] `.github/workflows/load-test.yml` — `workflow_dispatch` + nightly cron, two jobs
-      (default limits for `rate-limiting.js`, raised limits for the rest).
-- [x] `eslint.config.mjs` — ignore `load/**` (k6's own runtime/module specifiers).
-- [x] `package.json` — `load:test` script.
-- [x] `.claude/rules/testing.md` — Load testing subsection.
-- [x] `docs/tasks.md` — CR-139 entry.
-- [x] `docs/changelog.md` — append entry.
+- [x] `ci.yml` + `load-test.yml`: `minio` service → `ghcr.io/chrislusf/seaweedfs:4.47`
+      (default CMD `mini -dir=/data` serves S3 on 8333, credentials from
+      `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`), healthcheck on `/healthz`; bucket
+      step unchanged (`aws s3 mb`). App env (`S3_*`) unchanged.
+- [x] `docker-compose.yml`: `minio`/`minio-init` → `s3`/`s3-init` (same image, same
+      host port 9000, `weed shell` `s3.bucket.create`), new `s3_data` volume.
+- [x] Existing dev objects (6, 0.3 MB in `coffee-ride`) copied from MinIO to the new
+      service; `/health` reports `s3: ok`.
+- [x] Docs/rules/skills/README references updated; ADR-025 appended (amends ADR-005's
+      "Local MinIO").
+- [x] Live S3 suites pass against the new compose service.
+- [x] KI-068 updated (closes once a GitHub `ci` run gets past service start — pending push).
 
-## Implementation progress
+## Evidence gathered
 
-All done.
+- Registry check (anonymous manifests): quay/hub `minio/minio` 401; `bitnami/minio` 404;
+  `bitnamilegacy/minio` 200 (frozen); `chrislusf/seaweedfs` 200 on Docker Hub and ghcr.io.
+- This machine can't pull Docker Hub blobs (`production.cloudfront.docker.com` doesn't
+  resolve); ghcr.io works → pin ghcr.io in both compose and CI.
+- SeaweedFS 4.47 (native binary and container): anonymous `/` → 403, `/healthz` → 200,
+  `route-storage.live` + `file-storage.live` 3/3 pass, object survives a restart,
+  `s3.bucket.create` is idempotent (exit 0 on existing bucket).
+
+## Progress
+
+(see checkboxes)
 
 ## Validation results
 
-- `pnpm format`/`pnpm lint:root`: clean.
-- Live-verified, not just written: installed k6 locally; migrated a disposable scratch
-  Postgres database (`coffee_ride_loadtest_scratch`, never `coffee_ride_dev`); ran two
-  real local `apps/api` instances against it — one with `AUTH_RATE_LIMIT_MAX`/
-  `RATE_LIMIT_MAX` raised (everything but rate-limiting.js), one with the real defaults
-  (rate-limiting.js only), same split `load/README.md` documents. All six scenarios
-  passed every threshold at reduced scale: last-slot race (capacity 3/3 extra — exactly
-  3 succeeded, exactly 3 `ride_full`); waitlist race (capacity 3/waitlist 5 — oldest 3
-  promoted FIFO, newest 2 left waiting, ride re-filled to exactly capacity); rate
-  limiting (exactly 5/5 login 401/429, exactly 100/10 global 200/429); bulk list and
-  API latency well under their p95/p99 budgets; GPX upload accepted, oversized upload
-  rejected in ~60 ms, concurrent `/health` p95 ~12 ms throughout the upload.
-- Found and fixed one real bug during this validation: `uniqueEmail()` referenced
-  k6's `__ITER`, which is undefined inside `setup()`/`teardown()` (where most accounts
-  in this suite are created) — threw `ReferenceError` immediately. Replaced with an
-  in-module counter + timestamp + random, no `__VU`/`__ITER` dependency.
-- Scratch database and both scratch `apps/api` processes torn down afterward; the
-  developer's own running dev instance (`:4000`, `coffee_ride_dev`) was never touched
-  or restarted.
-- `.github/workflows/load-test.yml` YAML-parsed successfully; not run on GitHub Actions
-  itself (needs a real push/dispatch to verify job wiring — same standing gap
-  `maps-contract.yml` still has).
+- Compose `s3`: live S3 + degraded-dependencies + health tests 9/9; dev `/health` → `s3: ok`;
+  migrated GPX downloaded through the API byte-for-byte; `s3-init` re-run idempotent.
+- `pnpm format:check`, `pnpm lint:root`, api typecheck, `env.test.ts` 11/11, workflow YAML parses.
+- Not run: Playwright upload specs locally (would reuse the running dev servers/DB), GitHub `ci`.
 
 ## Discovered issues
 
-- None outstanding for this ticket. `docs/changelog.md` had no CR-138 entry yet when
-  this task started (a concurrent session was still finishing that ticket's review) —
-  resolved on its own once that session appended its entry; this file previously
-  tracked CR-138 as "in progress," now superseded by that session's own completion.
+- Main has been red for 9 days / ~20 pushes: nothing since CR-080 was checked by CI.
+
+## Final result
+
+Committed. Dev objects backed up at `packages/db/backups/minio-coffee-ride-20260927/`;
+old `coffeeride_minio_data` volume untouched. Next: push, triage first `ci` run.

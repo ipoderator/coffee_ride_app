@@ -1125,3 +1125,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       login 401/429, exactly 100/10 global 200/429), bulk list, GPX
       upload/oversized-rejection/health-during-upload, and API latency all
       passed their thresholds. See `docs/changelog.md`.
+- [ ] CR-140 Local/CI S3: SeaweedFS replaces MinIO (ADR-025, KI-068) —
+      implemented 2026-09-27: `ghcr.io/chrislusf/seaweedfs:4.47` in `ci.yml`,
+      `load-test.yml` and `docker-compose.yml` (`s3`/`s3-init`, new `s3_data`
+      volume, same `S3_*` env and host port 9000); dev objects migrated; live
+      S3 suites green locally. Open item: first green GitHub `ci` run past
+      service start (needs a push). See `docs/changelog.md`.

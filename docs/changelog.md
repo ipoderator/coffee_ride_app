@@ -1171,3 +1171,55 @@ to verify job wiring, same standing gap `maps-contract.yml` still has).
 
 Decisions: none recorded as ADR (tooling choice, not an architecture
 change). Follow-up: none currently open for this ticket.
+
+## 2026-09-27 — CR-140 — Local/CI S3: SeaweedFS replaces MinIO (KI-068)
+
+Summary: the `ci` job had not run a single step since CR-080 (2026-09-19). Until
+~09-24 the MinIO `services:` container pulled but never became healthy — a GitHub
+`services:` entry can't pass MinIO's required `server /data`, so the image's bare
+`minio` CMD never served — and from ~09-26 the image itself was gone
+(`quay.io/minio/minio` and `docker.io/minio/minio` both 401 on anonymous pulls).
+KI-068 had recorded only the second half. Every "CI-verified" claim in between was
+local-only. Owner decision: SeaweedFS everywhere (ADR-025).
+
+- `ci.yml`, `load-test.yml`: service `minio` → `s3`,
+  `ghcr.io/chrislusf/seaweedfs:4.47`. Its default CMD `mini -dir=/data` serves S3
+  on 8333 and reads admin credentials from `AWS_ACCESS_KEY_ID`/
+  `AWS_SECRET_ACCESS_KEY`, so it works as a plain service container; health check
+  `wget …/healthz` (the one unauthenticated endpoint). Port mapped to 9000, bucket
+  step (`aws s3 mb`) and every `S3_*` value unchanged.
+- `docker-compose.yml`: `minio`/`minio-init` → `s3`/`s3-init` (same image;
+  `weed shell` `s3.bucket.create`, a no-op on an existing bucket), new `s3_data`
+  volume. No MinIO console on :9001 any more. `.env` needs no change.
+- ghcr.io rather than Docker Hub: no anonymous rate limit, and this machine can't
+  fetch Docker Hub layers at all right now (`production.cloudfront.docker.com`
+  doesn't resolve), while ghcr.io works.
+- Dev data: the 6 objects in the old `coffee-ride` bucket (avatars + GPX, 0.3 MB)
+  were dumped with their content types, backed up to
+  `packages/db/backups/minio-coffee-ride-20260927/` (gitignored) and restored into
+  the new service. The old `coffeeride_minio_data` volume and cached MinIO image are
+  left in place, untouched.
+- `apps/api/src/env.ts`: production placeholder-credential messages say "local dev
+  S3 default" instead of "local MinIO default" (values unchanged).
+- Docs: README, `run-dev` skill, `.claude/rules/testing.md`, `docs/architecture.md`,
+  `load/README.md`, `dependabot.yml` comment. KI-063 (local S3 stopped) resolved and
+  archived.
+
+Files: `.github/workflows/{ci,load-test}.yml`, `docker-compose.yml`,
+`apps/api/src/env.ts`, `docs/decisions.md` (ADR-025), `docs/architecture.md`,
+`docs/tasks.md`, `README.md`, `load/README.md`, `.github/dependabot.yml`,
+`.claude/rules/testing.md`, `.claude/skills/run-dev/SKILL.md`, `.claude/context/*`.
+
+Validation: candidate images checked by anonymous manifest request; SeaweedFS 4.47
+verified as native binary and as container (anonymous `/` → 403, `/healthz` → 200,
+object survives restart, bucket create idempotent). Against the new compose
+service: `route-storage.live` + `file-storage.live` + `degraded-dependencies` +
+health tests 9/9; dev API `/health` → `s3: "ok"`; a migrated GPX downloaded through
+`GET /v1/rides/:id/route/download` byte-for-byte (117 272 B). `pnpm format:check`,
+`pnpm lint:root`, api typecheck, `env.test.ts` 11/11, workflow YAML parses. Not
+run: Playwright upload specs locally (they reuse the running dev servers with
+production rate limits and the dev DB) and the GitHub `ci` run itself — both need
+the push.
+
+Decisions: ADR-025. Follow-up: close KI-068 after the first `ci` run passes service
+start; expect that run to surface whatever broke unnoticed since 2026-09-19.

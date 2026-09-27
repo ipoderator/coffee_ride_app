@@ -112,15 +112,16 @@ jobs:
         image: redis:8-alpine
         ports:
           - 6379:6379
-      minio:
-        image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+      # Same S3 service as ci.yml (CR-140, ADR-025) — see its comment.
+      s3:
+        image: ghcr.io/chrislusf/seaweedfs:4.47
         env:
-          MINIO_ROOT_USER: minio
-          MINIO_ROOT_PASSWORD: minio12345
+          AWS_ACCESS_KEY_ID: minio
+          AWS_SECRET_ACCESS_KEY: minio12345
         ports:
-          - 9000:9000
+          - 9000:8333
         options: >-
-          --health-cmd "mc ready local"
+          --health-cmd "wget -q -O /dev/null http://127.0.0.1:8333/healthz"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -153,7 +154,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run database migrations
         run: pnpm --filter db db:migrate
-      - name: Create MinIO bucket
+      - name: Create S3 bucket
         run: |
           aws --endpoint-url http://localhost:9000 s3 mb s3://coffee-ride-load
         env:

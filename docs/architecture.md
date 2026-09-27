@@ -42,7 +42,7 @@ Local development:
 
 - PostgreSQL
 - Redis
-- MinIO as S3-compatible storage
+- SeaweedFS as local S3-compatible storage (ADR-025; MinIO until CR-140)
 
 Production provider choices can vary and must be recorded as ADRs.
 

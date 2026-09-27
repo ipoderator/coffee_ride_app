@@ -1200,6 +1200,20 @@ riders/:registrationId/avatar` streams a rider's avatar, gated by the same
 `registrationId`, added additively). See `docs/decisions.md`'s new ADR and
 `docs/changelog.md`'s CR-126 entry for the full design.
 
+### KI-063 — Local MinIO/S3 container is stopped; uploads are unavailable in local dev
+
+Status: open. Discovered: 2026-09-23 (CR-115…CR-120 verification).
+Problem: in the current local stack `GET /health` reports `s3: "error"`
+(db/redis `ok`) — the MinIO container is not running.
+Impact: GPX upload/download, cover images and avatars fail locally with the
+documented "upload unavailable" degraded state; nothing else is affected.
+Workaround: `docker compose up -d minio` before any session that needs uploads.
+Next action: start MinIO and re-check `/health`; close this entry once it
+reports `s3: "ok"` again.
+Resolution 2026-09-27 (CR-140): local S3 now runs as the SeaweedFS `s3` compose
+service (ADR-025); the 6 dev objects were copied over from MinIO and `/health`
+reports `s3: "ok"`.
+
 ### KI-067 — `e2e/home.spec.ts` expects the map/list view on `/`, which defaults to the grid since CR-130
 
 - Status: open, discovered 2026-09-26 (CR-132's e2e run; unrelated to CR-132).

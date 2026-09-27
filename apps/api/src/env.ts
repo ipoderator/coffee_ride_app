@@ -120,12 +120,12 @@ const PRODUCTION_PLACEHOLDER_CHECKS: ReadonlyArray<{
   {
     key: 'S3_ACCESS_KEY_ID',
     isPlaceholder: (v) => v === 'minio',
-    message: 'S3_ACCESS_KEY_ID is still the local MinIO default.',
+    message: 'S3_ACCESS_KEY_ID is still the local dev S3 default.',
   },
   {
     key: 'S3_SECRET_ACCESS_KEY',
     isPlaceholder: (v) => v === 'minio12345',
-    message: 'S3_SECRET_ACCESS_KEY is still the local MinIO default.',
+    message: 'S3_SECRET_ACCESS_KEY is still the local dev S3 default.',
   },
   {
     key: 'DATABASE_URL',

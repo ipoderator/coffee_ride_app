@@ -1194,3 +1194,54 @@ literally: on mobile the bottom tab bar and the shared header's disclosure panel
 coexist outside `/organizer/*` (which has its own header since CR-132). The five
 tabs have no room for the per-cabinet menus, the theme control or sign-out, and
 the panel is their only mobile route. Revisit only if those move to `/me`.
+
+## ADR-025 — Local/CI S3-compatible store: SeaweedFS replaces MinIO
+
+Status: Accepted (2026-09-27, owner decision, CR-140). Amends ADR-005's "Local MinIO";
+ADR-005 itself (S3-compatible storage, production provider deployment-specific) stands.
+
+### Context
+
+`docker-compose.yml`, `ci.yml` and `load-test.yml` all ran
+`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`. By 2026-09-26 MinIO's community
+images were no longer publicly pullable (`quay.io/minio/minio` and
+`docker.io/minio/minio` both answer anonymous pulls with 401; `bitnami/minio` is gone,
+`bitnamilegacy/minio` is frozen with no further updates). Separately, a GitHub Actions
+`services:` entry can't pass a command, and MinIO needs `server /data` — so from
+CR-080 (2026-09-19) the CI service never became healthy and the `ci` job never ran a
+single step (KI-068).
+
+### Decision
+
+- Local dev, `ci.yml` and `load-test.yml` use SeaweedFS, pinned to one tag in all three
+  (`ghcr.io/chrislusf/seaweedfs:4.47`). ghcr.io, not Docker Hub: no anonymous pull
+  rate limit, and it was the registry reachable from the developer machine.
+- The image's default CMD (`mini -dir=/data`) serves S3 on 8333 with admin credentials
+  from `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, so it works as a plain `services:`
+  container. Readiness is `GET /healthz` (unauthenticated); the compose `s3-init`
+  one-shot creates the bucket with `weed shell` `s3.bucket.create` (idempotent), CI
+  keeps its `aws s3 mb` step.
+- Application code and env contract are unchanged: `apps/api` still speaks plain S3
+  via the AWS SDK (`forcePathStyle: true`), and the dev `S3_*` values
+  (`minio`/`minio12345`, host port 9000) stay as they were so no `.env` changes.
+
+Alternatives rejected: `bitnamilegacy/minio` (same server, but frozen — a dead end
+that could disappear the same way); dropping S3 from CI (loses the only real
+upload/download verification — KI-015's lesson — and lowers the coverage floor); a
+filesystem storage adapter for dev/tests (a second storage implementation just to
+avoid an image choice).
+
+Verified before adoption: `route-storage.live.test.ts` + `file-storage.live.test.ts`
+3/3 against both the native binary and the container, anonymous requests rejected
+(403), objects survive a restart, `/health` reports `s3: ok`.
+
+### Rollback
+
+Swap the image/ports/env back in the three files. The data volume is new
+(`s3_data`); the old `minio_data` volume is not touched by this change.
+
+### When to revisit
+
+If production ever self-hosts its object store, choose that server on its own merits
+(this ADR is about dev/CI only). If SeaweedFS's `mini` defaults change in a way that
+breaks the `services:` usage, pin a command via a `docker run` step instead.

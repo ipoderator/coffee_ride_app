@@ -14,7 +14,7 @@ running to click around, hit the API directly, or eyeball a change.
 ## Steps
 
 1. **Check local infra is up**: `docker compose ps` — needs `postgres`, `redis`,
-   `minio` all `healthy`. If Docker Desktop is off (`docker info` fails), start it
+   `s3` all `healthy`. If Docker Desktop is off (`docker info` fails), start it
    (`open -a Docker`) and poll `docker info` until it responds (≤ 90s), then
    `docker compose up -d`.
 2. **Check ports are free**: `lsof -iTCP -sTCP:LISTEN -n -P | grep -E ":3000|:4000"`.

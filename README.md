@@ -23,7 +23,7 @@ layer — it does not pretend the application itself is already implemented. No
 - `.claude/context/` — persistent memory: `project-state.md` (current snapshot),
   `architecture-map.md`, `current-task.md`, `known-issues.md`.
 - Root tooling: pnpm workspaces + Turborepo, ESLint + Prettier, Husky + lint-staged,
-  GitHub Actions CI, Dependabot, Docker Compose (Postgres, Redis, MinIO).
+  GitHub Actions CI, Dependabot, Docker Compose (Postgres, Redis, S3 via SeaweedFS).
 
 ## Claude Code workflow
 
@@ -55,9 +55,9 @@ pnpm install
 `docker compose down`, kept alongside the raw command so the workflow reads the same
 whether or not you have this repo's scripts memorized.
 
-`docker compose up -d` also runs a one-shot `minio-init` that creates the
-`coffee-ride` bucket on a fresh MinIO volume (idempotent, exits 0). Starting MinIO
-alone? Use `docker compose up -d minio minio-init`, or uploads report
+`docker compose up -d` also runs a one-shot `s3-init` that creates the
+`coffee-ride` bucket on a fresh S3 (SeaweedFS) volume (idempotent, exits 0). Starting
+S3 alone? Use `docker compose up -d s3 s3-init`, or uploads report
 «Загрузка недоступна» (`/health` → `s3: "error"`).
 
 Node version is pinned in `.nvmrc`. `pnpm install` also sets up the Husky pre-commit hook

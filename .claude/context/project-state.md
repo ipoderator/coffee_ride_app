@@ -37,7 +37,19 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-139 (2026-09-27, committed): load testing (P3) — a
+CR-140 (2026-09-27, committed and pushed; CI result pending): local and CI S3 moved
+from MinIO to SeaweedFS (`ghcr.io/chrislusf/seaweedfs:4.47`, ADR-025) to fix
+KI-068. Important context: GitHub `ci` has not run a single step since
+2026-09-19 (CR-080) — the MinIO service container never started — so CR-081…
+CR-139 were validated locally only. The first `ci` run after pushing CR-140 is
+the real check and may surface failures that accumulated unnoticed; KI-068
+closes once that run gets past service start. Local dev: `docker compose up -d`
+now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
+
+Next logical task: push CR-140 and triage the first real `ci` run; then KI-064
+(`/login?next=`, critique P0 of the participant journey).
+
+CR-139 (2026-09-27, committed): load testing (P3) — a
 separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly
 (`.github/workflows/load-test.yml`), deliberately outside the Vitest/
 Playwright CI gate: exact-count/FIFO invariants for the last-slot
@@ -204,8 +216,8 @@ assigned. Test accounts, all with password `CoffeeRide-test-2026`:
 `test.uchastnik1.cr117@example.com`, `test.uchastnik2.cr117@example.com`,
 `test.uchastnik3.cr117@example.com` (participants) and
 `test.organizer.cr120@example.com` (organizer of «CR-120 · Проверка групп по
-темпу», 3 groups, 4 riders). Local MinIO is stopped (`/health` shows
-`s3: error`, KI-063).
+темпу», 3 groups, 4 riders). Local S3 (SeaweedFS since CR-140) is up and
+holds the migrated dev objects (`/health` → `s3: ok`).
 
 **Earlier, still-current state (2026-09-22/23).** CR-114: organizer route
 builder — waypoints clicked on `/organizer/rides/[id]/route`, `POST
@@ -685,9 +697,8 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   enqueued job through the `Worker` into a real `notifications` row) was
   exercised by CR-135's `e2e/notifications.spec.ts` against a Redis-backed
   API (KI-014 resolved).
-- `GET /health` (CR-051): as of CR-120 the local MinIO container is stopped, so
-  it reports `s3: "error"` (db/redis `ok`) and uploads are unavailable locally
-  until `docker compose up minio` (KI-063). The endpoint's degraded-vs-error
+- `GET /health` (CR-051): reports `s3: "ok"` locally again since CR-140
+  (KI-063 resolved). The endpoint's degraded-vs-error
   distinction (always `200`, `error` only for a genuine failure,
   `not_configured` for an absent optional dependency) is unchanged.
 - Discovery filters cover only `bicycleType`; distance/difficulty/price/date-range
