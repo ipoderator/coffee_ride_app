@@ -1464,3 +1464,52 @@ duplicates. The password-reset email stays queued-only: a direct send only for
 real accounts would make `/forgot-password` latency an account-existence
 oracle. `degraded-dependencies.test.ts` now asserts the rider's inbox has the
 confirmation with Redis on a closed port.
+
+### KI-069 — `/organizer/rides/[id]/edit` shows a non-owner the edit form and lifecycle buttons
+
+Status: resolved 2026-09-27 (CR-143). Discovered: 2026-09-26 (CR-135, `e2e/access-control.spec.ts`).
+Problem: `EditRideForm` loads the ride through the public `GET /v1/rides/:id`
+(`apps/web/src/features/organizer/rides/api.ts` → `getRide`), which any
+signed-in user can read once the ride has left `draft`. So a participant, or
+another club's organizer, who types the URL gets the full form with «Закрыть
+регистрацию» / «Отменить заезд» etc. Only a draft shows «Заезд не найден».
+Impact: low. Not an authorization hole — every action is rejected server-side
+(`404 ride_not_found`) and the form shows its generic error; the e2e spec
+asserts the ride is unchanged afterwards. It is a confusing screen that looks
+like it grants control.
+Workaround: none needed for safety.
+Next action: have the edit screen confirm ownership before rendering (e.g.
+compare against the viewer's own rides, or a dedicated owner-only read) and
+show the not-found state otherwise. `access-control.spec.ts` already accepts
+either outcome, so it keeps passing after the fix.
+
+Resolution 2026-09-27 (CR-143): `GET /v1/rides/:id` gains an additive
+`isOwner: boolean` field (server-computed from the verified session only,
+never client-supplied — the endpoint already derived this to decide whether
+a `draft` ride 404s). `EditRideForm` now shows its not-found state when
+`isOwner` is `false`, instead of rendering the edit form/lifecycle buttons
+for someone else's ride. `access-control.spec.ts` was tightened from
+"either outcome" to asserting the not-found state and no lifecycle button.
+
+### KI-070 — Two `ride-detail` unit tests fail when the shell has a real MapGL key
+
+Status: resolved 2026-09-27 (CR-143). Discovered: 2026-09-26 (CR-136, measuring the coverage baseline).
+Problem: `apps/web/src/features/participant/ride-detail/ride-detail.test.tsx`
+("start-location map panel…", "route map placeholder and elevation profile…")
+expect the degraded map placeholder because "no MapGL key in the test env".
+`createMapRenderer()` reads `process.env.NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, so
+running Vitest from a shell that exported the local `.env` (which has a real
+key) makes it try the real `@2gis/mapgl` render in jsdom; the placeholder then
+shows up only after `findByText`'s 1 s timeout.
+Impact: low. CI sets no such key and `pnpm test` from a plain shell passes;
+only a developer who sources `.env` first sees two failures.
+Workaround: `unset NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` before running the suite.
+Next action: make the tests own that precondition —
+`vi.stubEnv('NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY', '')` (or mock
+`@/lib/maps/create-map-renderer` to return `null`) in that file.
+
+Resolution 2026-09-27 (CR-143): `ride-detail.test.tsx`'s `beforeEach` now calls
+`vi.stubEnv('NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY', '')` (paired with `afterEach`'s
+`vi.unstubAllEnvs()`), so the suite passes regardless of what the invoking
+shell has sourced — verified by running it with the real key exported (50/50
+passed).

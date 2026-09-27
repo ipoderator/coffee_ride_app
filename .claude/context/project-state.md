@@ -37,7 +37,13 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-142 (2026-09-27, not committed yet): KI-071 closed — with Redis
+None active. CR-143 (2026-09-27, not committed yet): KI-069 closed — `GET
+/v1/rides/:id`'s response gains additive `isOwner: boolean`; `EditRideForm`
+shows not-found for a ride the caller doesn't own instead of the form/
+lifecycle buttons. KI-070 closed — `ride-detail.test.tsx` stubs the MapGL key
+itself instead of assuming the shell's environment.
+
+CR-142 (2026-09-27, committed): KI-071 closed — with Redis
 configured but down, a notification job the queue provably never accepted
 (`NotificationQueueUnavailableError`: circuit open / connection not ready) is
 delivered directly: in-app notifications and the verification email. A timed-out
@@ -65,8 +71,8 @@ fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plu
 `docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task (after CR-142): KI-069/KI-070 (small), then KI-045/KI-001
-(production compose/Caddy never run end to end).
+Next logical task (after CR-143): KI-045/KI-001 (production compose/Caddy
+never run end to end).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a
 separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly

@@ -775,41 +775,6 @@ Workaround: none needed.
 Next action: decide whether 0.5 is a real rule; if so, add it to the shared Zod
 schema (one source for client and server), otherwise drop the client-only step.
 
-### KI-069 — `/organizer/rides/[id]/edit` shows a non-owner the edit form and lifecycle buttons
-
-Status: open. Discovered: 2026-09-26 (CR-135, `e2e/access-control.spec.ts`).
-Problem: `EditRideForm` loads the ride through the public `GET /v1/rides/:id`
-(`apps/web/src/features/organizer/rides/api.ts` → `getRide`), which any
-signed-in user can read once the ride has left `draft`. So a participant, or
-another club's organizer, who types the URL gets the full form with «Закрыть
-регистрацию» / «Отменить заезд» etc. Only a draft shows «Заезд не найден».
-Impact: low. Not an authorization hole — every action is rejected server-side
-(`404 ride_not_found`) and the form shows its generic error; the e2e spec
-asserts the ride is unchanged afterwards. It is a confusing screen that looks
-like it grants control.
-Workaround: none needed for safety.
-Next action: have the edit screen confirm ownership before rendering (e.g.
-compare against the viewer's own rides, or a dedicated owner-only read) and
-show the not-found state otherwise. `access-control.spec.ts` already accepts
-either outcome, so it keeps passing after the fix.
-
-### KI-070 — Two `ride-detail` unit tests fail when the shell has a real MapGL key
-
-Status: open. Discovered: 2026-09-26 (CR-136, measuring the coverage baseline).
-Problem: `apps/web/src/features/participant/ride-detail/ride-detail.test.tsx`
-("start-location map panel…", "route map placeholder and elevation profile…")
-expect the degraded map placeholder because "no MapGL key in the test env".
-`createMapRenderer()` reads `process.env.NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, so
-running Vitest from a shell that exported the local `.env` (which has a real
-key) makes it try the real `@2gis/mapgl` render in jsdom; the placeholder then
-shows up only after `findByText`'s 1 s timeout.
-Impact: low. CI sets no such key and `pnpm test` from a plain shell passes;
-only a developer who sources `.env` first sees two failures.
-Workaround: `unset NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` before running the suite.
-Next action: make the tests own that precondition —
-`vi.stubEnv('NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY', '')` (or mock
-`@/lib/maps/create-map-renderer` to return `null`) in that file.
-
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

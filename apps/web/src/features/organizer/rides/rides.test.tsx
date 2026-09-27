@@ -278,8 +278,24 @@ describe('EditRideForm', () => {
     ).toHaveAttribute('href', '/organizer/rides');
   });
 
+  // KI-069: `GET /v1/rides/:id` is also the public ride-detail endpoint
+  // (CR-023), so a non-owner's request for a published ride answers 200, not
+  // 404 — the same not-found state must render anyway, keyed off `isOwner`,
+  // instead of the edit form/lifecycle controls for a ride that isn't theirs.
+  it("shows a not-found state for a published ride the caller doesn't own", async () => {
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: false });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    expect(await screen.findByText('Заезд не найден')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue(baseRide.title)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Сохранить' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('prefills the form from the loaded ride, including the local start time', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
 
     render(<EditRideForm rideId="ride-1" />);
 
@@ -289,7 +305,7 @@ describe('EditRideForm', () => {
   });
 
   it('links to the pace-groups editor next to the other ride sub-pages (CR-120)', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
 
     render(<EditRideForm rideId="ride-1" />);
 
@@ -299,7 +315,7 @@ describe('EditRideForm', () => {
   });
 
   it('saves changes and shows a success message', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
     updateRideMock.mockResolvedValue({
       ride: { ...baseRide, title: 'Обновлённое название' },
     });
@@ -320,7 +336,7 @@ describe('EditRideForm', () => {
   });
 
   it('saves start coordinates (CR-026)', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
     updateRideMock.mockResolvedValue({
       ride: { ...baseRide, startLat: 55.751244, startLng: 37.618423 },
     });
@@ -345,6 +361,7 @@ describe('EditRideForm', () => {
 
   it('renders a non-draft ride read-only, with no save button', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'published' },
     });
 
@@ -360,7 +377,7 @@ describe('EditRideForm', () => {
   });
 
   it('maps a server validation error onto the matching field', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
     updateRideMock.mockRejectedValue(
       new ApiError({
         type: 'https://coffee-ride.example/errors/validation_error',
@@ -383,7 +400,7 @@ describe('EditRideForm', () => {
   });
 
   it('publishes a draft ride and shows a success message', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
     publishRideMock.mockResolvedValue({
       ride: { ...baseRide, status: 'published' },
     });
@@ -402,7 +419,7 @@ describe('EditRideForm', () => {
   });
 
   it('shows a guiding message when publishing requires email verification', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
     publishRideMock.mockRejectedValue(
       new ApiError({
         type: 'https://coffee-ride.example/errors/email_verification_required',
@@ -426,6 +443,7 @@ describe('EditRideForm', () => {
 
   it('shows no publish button for a non-draft ride', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'published' },
     });
 
@@ -439,6 +457,7 @@ describe('EditRideForm', () => {
 
   it('opens registration on a published ride and shows a success message', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'published' },
     });
     openRegistrationMock.mockResolvedValue({
@@ -464,7 +483,7 @@ describe('EditRideForm', () => {
   });
 
   it('shows no open-registration button for a draft or registration_open ride', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
 
     render(<EditRideForm rideId="ride-1" />);
     await screen.findByDisplayValue(baseRide.title);
@@ -476,6 +495,7 @@ describe('EditRideForm', () => {
 
   it('closes registration on a registration_open ride and shows a success message', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'registration_open' },
     });
     closeRegistrationMock.mockResolvedValue({
@@ -498,6 +518,7 @@ describe('EditRideForm', () => {
 
   it('shows no close-registration button for a published ride', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'published' },
     });
 
@@ -513,6 +534,7 @@ describe('EditRideForm', () => {
     'shows a cancel button for a %s ride',
     async (rideStatus) => {
       getRideMock.mockResolvedValue({
+        isOwner: true,
         ride: { ...baseRide, status: rideStatus },
       });
 
@@ -526,7 +548,7 @@ describe('EditRideForm', () => {
   );
 
   it('shows no cancel button for a draft ride', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
 
     render(<EditRideForm rideId="ride-1" />);
     await screen.findByDisplayValue(baseRide.title);
@@ -538,6 +560,7 @@ describe('EditRideForm', () => {
 
   it('does nothing if the cancel confirmation is dismissed', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'published' },
     });
     vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -552,6 +575,7 @@ describe('EditRideForm', () => {
 
   it('cancels a published ride after confirmation and shows a success message', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'published' },
     });
     cancelRideMock.mockResolvedValue({
@@ -573,6 +597,7 @@ describe('EditRideForm', () => {
 
   it("shows no cancel button for a started ride (reconfirms CR-021's scope)", async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'started' },
     });
 
@@ -586,6 +611,7 @@ describe('EditRideForm', () => {
 
   it('starts a registration_closed ride and shows a success message', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'registration_closed' },
     });
     startRideMock.mockResolvedValue({
@@ -608,7 +634,7 @@ describe('EditRideForm', () => {
   });
 
   it('shows no start button for a draft or started ride', async () => {
-    getRideMock.mockResolvedValue({ ride: baseRide });
+    getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
 
     render(<EditRideForm rideId="ride-1" />);
     await screen.findByDisplayValue(baseRide.title);
@@ -620,6 +646,7 @@ describe('EditRideForm', () => {
 
   it('finishes a started ride and shows a success message', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'started' },
     });
     finishRideMock.mockResolvedValue({
@@ -640,6 +667,7 @@ describe('EditRideForm', () => {
 
   it('shows no finish button for a registration_closed or finished ride', async () => {
     getRideMock.mockResolvedValue({
+      isOwner: true,
       ride: { ...baseRide, status: 'registration_closed' },
     });
 

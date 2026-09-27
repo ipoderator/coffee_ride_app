@@ -995,6 +995,8 @@ describe('/v1/rides', () => {
       expect(response.json().organizer.avatarUrl).toBeNull();
       // CR-030 ("Stops"): additive field, empty until a stop is created.
       expect(response.json().stops).toEqual([]);
+      // KI-069: additive field — the caller's own ride.
+      expect(response.json().isOwner).toBe(true);
 
       await app.close();
     });
@@ -1040,6 +1042,8 @@ describe('/v1/rides', () => {
         rating: null,
         reviewCount: 0,
       });
+      // KI-069: an anonymous viewer never owns the ride.
+      expect(body.isOwner).toBe(false);
 
       const [row] = await app.db
         .select()
@@ -1079,6 +1083,10 @@ describe('/v1/rides', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().ride.status).toBe('published');
+      // KI-069: a signed-in non-owner (of this ride) still doesn't own it —
+      // `EditRideForm` uses this to show its not-found state instead of the
+      // edit form/lifecycle controls for someone else's ride.
+      expect(response.json().isOwner).toBe(false);
 
       await app.close();
     });

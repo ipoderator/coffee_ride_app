@@ -112,24 +112,16 @@ for (const kind of ['participant', 'other organizer'] as const) {
     await expect(page.getByText(PARTICIPANTS_TERMS.loadError)).toHaveCount(2);
     await expect(page.getByText(VICTIM_NAME)).toHaveCount(0);
 
-    // The edit screen. KI-069: it loads through the public ride read, so a
-    // non-owner may still be shown the lifecycle buttons — if so, pressing one
-    // must fail server-side and leave the ride as it was.
+    // The edit screen. KI-069 (resolved): it loads through the public ride
+    // read, but the response's `isOwner` now makes a non-owner see the
+    // not-found state instead of the form/lifecycle buttons.
     await page.goto(`/organizer/rides/${fixture.rideId}/edit`);
-    const close = page.getByRole('button', {
-      name: RIDE_EDIT_TERMS.closeRegistration,
-    });
-    const notFound = page.getByRole('heading', {
-      name: RIDE_EDIT_TERMS.notFoundTitle,
-    });
-    await expect(close.or(notFound)).toBeVisible();
-    if (await close.isVisible()) {
-      await close.click();
-      await expect(page.getByText(RIDE_EDIT_TERMS.loadError)).toBeVisible();
-      await expect(
-        page.getByText(RIDE_EDIT_TERMS.closeRegistrationSuccess),
-      ).toHaveCount(0);
-    }
+    await expect(
+      page.getByRole('heading', { name: RIDE_EDIT_TERMS.notFoundTitle }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: RIDE_EDIT_TERMS.closeRegistration }),
+    ).toHaveCount(0);
     await expectRideUnchanged(fixture);
 
     await fixture.organizerRequest.dispose();

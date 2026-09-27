@@ -5,7 +5,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   GetRideResponse,
   Registration,
@@ -150,6 +150,7 @@ function baseDetailResponse(
     viewerWaitlistEntry: null,
     viewerReview: null,
     groups: [],
+    isOwner: false,
     ...overrides,
   };
 }
@@ -200,6 +201,11 @@ function groupProblem(code: string, status = 422): ApiError {
 
 describe('RideDetailView', () => {
   beforeEach(() => {
+    // KI-070: `createMapRenderer()` reads this at call time, so a shell that
+    // sourced `.env` (a real MapGL key) would make these tests try the real
+    // 2GIS render instead of the degraded placeholder they assert on. Own the
+    // precondition here instead of relying on the shell being clean.
+    vi.stubEnv('NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY', '');
     getRideDetailMock.mockReset();
     getRouteGeometryMock.mockReset();
     getRideReviewsMock.mockReset();
@@ -212,6 +218,10 @@ describe('RideDetailView', () => {
     getRideRidersMock.mockReset();
     getRideRidersMock.mockResolvedValue({ items: [], nextCursor: null });
     sessionState.status = 'anonymous';
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('shows a not-found state for a non-existent/draft ride', async () => {

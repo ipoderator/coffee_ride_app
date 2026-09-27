@@ -156,6 +156,9 @@ const rideDetailResponseSchema = z.object({
   viewerReview: reviewResponseSchema.nullable(),
   // CR-117 ("Pace groups"): additive, `position` order.
   groups: z.array(rideGroupSummaryResponseSchema),
+  // KI-069: additive — see `GetRideResponse.isOwner`'s doc comment
+  // (`packages/types/src/api/rides.ts`).
+  isOwner: z.boolean(),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 

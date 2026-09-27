@@ -137,6 +137,16 @@ export function EditRideForm({ rideId }: { rideId: string }) {
     getRide(rideId)
       .then((response) => {
         if (cancelled) return;
+        // KI-069: `GET /v1/rides/:id` is also the public ride-detail endpoint
+        // (CR-023) — a non-owner viewing a published ride gets a 200, not a
+        // 404. Treat that the same as not-found here instead of rendering the
+        // edit form and lifecycle controls for a ride that isn't the
+        // caller's (every action was already rejected server-side, but the
+        // screen looked like it granted control).
+        if (!response.isOwner) {
+          setStatus('not-found');
+          return;
+        }
         setRide(response.ride);
         setForm(toFormState(response.ride));
         setStatus('ready');

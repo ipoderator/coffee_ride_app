@@ -85,18 +85,24 @@ export async function listMyRides(
   return body as ListRidesResponse;
 }
 
-/** CR-016/CR-018: 404s `ride_not_found` both for a non-existent id and one owned by a
- * different organizer — `EditRideForm` shows the same not-found state either way. */
-export async function getRide(id: string): Promise<{ ride: Ride }> {
+/** CR-016/CR-018: 404s `ride_not_found` only for a non-existent id or a `draft` ride
+ * viewed by anyone but its own organizer — CR-023 made this the shared public
+ * ride-detail endpoint, so a published/non-draft ride owned by someone else answers
+ * 200. `isOwner` (KI-069) is what `EditRideForm` uses to show its own not-found state
+ * for that case instead of rendering the edit form/lifecycle controls. */
+export async function getRide(
+  id: string,
+): Promise<{ ride: Ride; isOwner: boolean }> {
   const response = await fetch(`${RIDES_ENDPOINT}/${id}`);
 
-  const body = (await response.json()) as { ride: Ride } | ProblemDetails;
+  const body = (await response.json()) as
+    { ride: Ride; isOwner: boolean } | ProblemDetails;
 
   if (!response.ok) {
     throw new ApiError(body as ProblemDetails);
   }
 
-  return body as { ride: Ride };
+  return body as { ride: Ride; isOwner: boolean };
 }
 
 export async function updateRide(

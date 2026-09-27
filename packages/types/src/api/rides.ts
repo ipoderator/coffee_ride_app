@@ -120,6 +120,13 @@ export interface GetRideResponse {
   // CR-117 ("Pace groups"): additive, ordered by `position`; `[]` when the ride has
   // none. `viewerRegistration.groupId` says which one the caller is in.
   groups: RideGroupSummary[];
+  // KI-069: additive. The server already computes this (identity from the verified
+  // session only, never a client-supplied id — `.claude/rules/security.md`) to decide
+  // whether a `draft` ride 404s; exposing it lets `EditRideForm` show its not-found
+  // state for a real, published ride the caller doesn't own instead of rendering the
+  // edit form and lifecycle controls for it (every action was already rejected
+  // server-side — this closes the confusing screen, not an authorization hole).
+  isOwner: boolean;
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real

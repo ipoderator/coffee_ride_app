@@ -1329,3 +1329,43 @@ baseline not regenerated (new tests only add coverage).
 Decisions: the fallback policy above (resolves KI-071's open product/resilience
 question). No schema, API contract or dependency change. Follow-up: KI-071
 resolved and archived.
+
+## 2026-09-27 — CR-143 — Edit-screen ownership check (KI-069) + MapGL-key test isolation (KI-070)
+
+Summary: two small, independent fixes bundled together — both quick and both left
+open from earlier CRs.
+
+KI-069: `/organizer/rides/[id]/edit` loads the ride through `GET /v1/rides/:id`,
+which CR-023 made the shared public ride-detail read — a non-owner viewing a
+`published`+ ride got `200`, not `404`, so `EditRideForm` rendered the full form
+and lifecycle buttons for a ride that wasn't theirs (every action was still
+rejected server-side; this was a confusing screen, not an authorization hole).
+`GetRideResponse` gains an additive `isOwner: boolean`, computed server-side from
+the already-existing ownership check (identity from the verified session only,
+never client-supplied). `EditRideForm` now shows its not-found state when
+`isOwner` is `false`. `e2e/access-control.spec.ts` tightened from accepting
+either outcome to asserting the not-found state and no lifecycle button.
+
+KI-070: `ride-detail.test.tsx`'s two map-panel tests assumed no MapGL key is
+set, but `createMapRenderer()` reads `process.env` at call time — a shell that
+had sourced `.env` (a real key) made them try a real 2GIS render instead of the
+degraded placeholder they assert on. The suite's `beforeEach`/`afterEach` now
+own the precondition (`vi.stubEnv`/`vi.unstubAllEnvs`), independent of the
+invoking shell.
+
+Files: `packages/types/src/api/rides.ts`, `apps/api/src/modules/rides/
+{rides.routes,rides.service,rides.routes.test}.ts`, `apps/web/src/features/
+organizer/rides/{api,rides.test}.tsx`, `apps/web/src/features/organizer/rides/
+components/EditRideForm.tsx`, `apps/web/src/app/organizer/rides/[id]/edit/
+page.tsx`, `apps/web/src/features/participant/ride-detail/ride-detail.test.tsx`,
+`apps/web/e2e/access-control.spec.ts`, `docs/api.md`.
+
+Validation: new API case (non-owner session on a published ride → `isOwner:
+false`) plus two existing cases extended with the assertion; new web case
+(non-owner response → not-found, no save button) — both fail against the old
+code (mutation-checked). Full apps/api suite 457/457, apps/web suite 421/421;
+`ride-detail.test.tsx` also run with the real `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`
+exported, 50/50. Typecheck/lint/format clean across apps/api, apps/web,
+packages/types.
+
+Decisions: none new. Follow-up: KI-069 and KI-070 resolved and archived.

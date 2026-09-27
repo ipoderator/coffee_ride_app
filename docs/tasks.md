@@ -1142,3 +1142,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (`NotificationQueueUnavailableError`) is delivered directly — in-app
       notifications and the verification email; the password-reset email stays
       queued-only (timing oracle). See `docs/changelog.md`.
+- [x] CR-143 Edit-screen ownership check (KI-069) + MapGL-key test isolation
+      (KI-070) — done 2026-09-27: `GetRideResponse.isOwner` (additive) lets
+      `EditRideForm` show not-found for a ride the caller doesn't own instead
+      of the form/lifecycle buttons; `ride-detail.test.tsx` now stubs the
+      MapGL key itself. See `docs/changelog.md`.

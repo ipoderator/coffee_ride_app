@@ -1,45 +1,38 @@
 # Current task
 
-**CR-142 — Notification fallback while Redis is down (KI-071)**
+## CR-143 — Edit-screen ownership check (KI-069) + MapGL-key test isolation (KI-070)
 
 Status: complete, not committed.
 
-## Goal
+### Goal
 
-With `REDIS_URL` configured but Redis unreachable, notifications are no longer
-silently dropped: a job that provably never reached Redis is delivered directly,
-the same way the no-Redis configuration already does.
+Two small open known-issues, taken together: (1) a non-owner viewing a published
+ride's edit screen sees the form/lifecycle buttons instead of not-found; (2)
+`ride-detail.test.tsx` fails when the shell has sourced a real MapGL key.
 
-## Decision (product/resilience call, made in this task)
+### Acceptance criteria
 
-- The queue's `add()` throws `NotificationQueueUnavailableError` only when it
-  rejected **before** touching Redis (circuit open, connection not `ready`) — the
-  job certainly was not queued, so direct delivery cannot duplicate it.
-- Any other enqueue failure (timeout, error mid-command) may have landed in Redis:
-  log only, no fallback (a duplicate is worse than the known, logged gap).
-- Fallback applies to in-app rows (`registration_confirmed`, `ride_update`,
-  `ride_cancelled`) and the verification email (there is no resend endpoint, and
-  `/register` already answers 409 for a taken email, so send latency reveals
-  nothing new).
-- The password-reset email stays queued-only: a direct Unisender send only for
-  real accounts would make `/forgot-password`'s latency an account-existence
-  oracle; the user can re-request once Redis is back.
+- [x] `GetRideResponse` gains additive `isOwner: boolean` (`packages/types`),
+      server-computed from the verified session only.
+- [x] `rides.routes.ts`/`rides.service.ts` return it; `rides.routes.test.ts`
+      asserts it for the owner and a stranger-session view of a published ride.
+- [x] `EditRideForm` shows its not-found state when `isOwner` is `false`; web
+      test covers it (mutation-checked: fails against the old code).
+- [x] `e2e/access-control.spec.ts` tightened to assert not-found + no lifecycle
+      button (previously accepted either outcome).
+- [x] `ride-detail.test.tsx` stubs `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` itself;
+      verified passing with the real key exported.
+- [x] Typecheck/lint/format/tests pass; docs (KI-069/KI-070 archived,
+      changelog, tasks, project-state, docs/api.md).
 
-## Acceptance criteria
+### Progress / validation
 
-- [x] `queue.ts` throws `NotificationQueueUnavailableError` for circuit-open and
-      not-connected; other failures unchanged.
-- [x] Producers fall back per the decision above; everything still log-and-swallow.
-- [x] Unit tests: fallback on unavailable, no fallback on other errors, reset email
-      never sent directly; queue.test asserts the error class.
-- [x] `degraded-dependencies.test.ts`: with Redis down, the rider's inbox has the
-      `registration_confirmed` notification.
-- [x] Typecheck/lint/tests pass; docs (KI-071 archived, changelog, tasks, state).
-
-## Progress / validation
-
-- Service/queue/degraded tests + registrations/auth/rides suites: 331/331
-  (TEST_DATABASE_URL from `.env`); live Redis notification suites 33/33.
-- Mutation check: degraded test fails with the old plain-`Error` queue.ts.
-- apps/api typecheck, eslint, prettier clean.
-- Docs: KI-071 archived, changelog, tasks, project-state, resilience.md.
+- apps/api: 457/457 (incl. new/extended `rides.routes.test.ts` cases).
+- apps/web: 421/421 (incl. new `rides.test.tsx`/updated `ride-detail.test.tsx`
+  cases); also ran with the real MapGL key sourced (50/50 in that file).
+- Mutation checks: reverting `EditRideForm`'s gate fails the new web test;
+  reverting `queue.ts`'s error type (CR-142, prior task) failed the degraded
+  test — unrelated, confirms the pattern held across both tasks.
+- Typecheck (api, web, packages/types) and eslint/prettier (same three) clean.
+- Docs: KI-069/KI-070 archived with resolutions, changelog (CR-143), tasks,
+  project-state, `docs/api.md`'s `GET /v1/rides/:id` section.

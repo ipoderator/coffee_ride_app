@@ -1021,6 +1021,7 @@ export async function getRideForViewer(
       : null,
     viewerReview: viewerReviewRows[0] ? toReview(viewerReviewRows[0]) : null,
     groups,
+    isOwner,
   };
 }
 

@@ -376,6 +376,13 @@ registrationsCount }]` (public, `position` order, `[]` without groups);
 `viewerRegistration.groupId`/`viewerWaitlistEntry.groupId` say which one the caller
 chose.
 
+`GET /v1/rides/:id` also gains `isOwner: boolean` (KI-069): true only when the verified
+session belongs to the ride's own organizer — never derived from anything client-supplied.
+It exists because this endpoint is also the public ride-detail read (CR-023), so a
+non-owner's request for a `published`+ ride answers `200`, not `404`; `EditRideForm`
+(`apps/web`) uses it to show its own not-found state for that case instead of the edit
+form and lifecycle controls.
+
 ## Registration
 
 POST `/v1/rides/:id/register` — **implemented (CR-032, "Register")**. Requires a valid

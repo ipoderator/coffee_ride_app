@@ -3,9 +3,12 @@ import { BackLink } from '@/components/site/BackLink';
 import { EditRideForm } from '@/features/organizer/rides/components/EditRideForm';
 
 // `/organizer/rides/[id]/edit` (`docs/design.md` §8 "Edit draft", CR-018). Inherits
-// `CabinetShell`'s auth gate from `app/organizer/layout.tsx`; ownership (CR-016) is
-// enforced server-side by `GET`/`PATCH /v1/rides/:id`, not here — `EditRideForm`
-// renders a not-found state for a ride id that doesn't exist or isn't the caller's.
+// `CabinetShell`'s auth gate from `app/organizer/layout.tsx`; every mutation is
+// authorized server-side by `PATCH /v1/rides/:id` and the lifecycle-action endpoints,
+// not here — identity never comes from this page. `GET /v1/rides/:id` is also the
+// public ride-detail endpoint (CR-023), so `EditRideForm` additionally checks the
+// response's `isOwner` (KI-069) to show its not-found state for a ride that exists
+// and isn't a draft but isn't the caller's, instead of rendering the form.
 //
 // Next.js 15: `params` is a `Promise` for a dynamic route page, not a plain object.
 export default async function EditRidePage({
