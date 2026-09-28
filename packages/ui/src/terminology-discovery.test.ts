@@ -18,6 +18,26 @@ describe('RIDE_DISCOVERY_TERMS grid card (CR-144)', () => {
   });
 });
 
+describe('RIDE_DISCOVERY_TERMS list page (CR-153)', () => {
+  it('pluralises the filtered ride count', () => {
+    expect(RIDE_DISCOVERY_TERMS.ridesCount(1)).toBe('1 заезд');
+    expect(RIDE_DISCOVERY_TERMS.ridesCount(3)).toBe('3 заезда');
+    expect(RIDE_DISCOVERY_TERMS.ridesCount(7)).toBe('7 заездов');
+    expect(RIDE_DISCOVERY_TERMS.ridesCount(21)).toBe('21 заезд');
+  });
+
+  it('pluralises «Показать ещё N заездов»', () => {
+    expect(RIDE_DISCOVERY_TERMS.showMore(1)).toBe('Показать ещё 1 заезд');
+    expect(RIDE_DISCOVERY_TERMS.showMore(4)).toBe('Показать ещё 4 заезда');
+    expect(RIDE_DISCOVERY_TERMS.showMore(12)).toBe('Показать ещё 12 заездов');
+  });
+
+  it('formats the compact seats count and the waitlist queue', () => {
+    expect(RIDE_DISCOVERY_TERMS.seatsTakenShort(4, 10)).toBe('4 из 10');
+    expect(RIDE_DISCOVERY_TERMS.waitlistQueued(2)).toBe('2 в очереди');
+  });
+});
+
 // CR-118: its own file so concurrent CR-119/CR-120 edits to
 // terminology.test.ts don't collide with it.
 describe('RIDE_DISCOVERY_ROW_TERMS (CR-118)', () => {

@@ -52,4 +52,21 @@ export default tseslint.config(
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // Skill helper scripts (`.claude/skills/*/`, e.g. mockup-to-screen's
+    // `shots.mjs`): plain Node scripts whose `page.evaluate` callbacks run in
+    // the browser, and whose whole output is a console report.
+    files: ['.claude/skills/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+        document: 'readonly',
+        innerWidth: 'readonly',
+        getComputedStyle: 'readonly',
+      },
+    },
+    rules: { 'no-console': 'off' },
+  },
 );

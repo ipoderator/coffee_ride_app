@@ -1970,3 +1970,26 @@ Files: `apps/web/src/components/site/{AppHeader,AppHeader.test,ThemeToggle}.tsx`
 Decisions: none new (within ADR-024/026; nav structure unchanged — registries
 still drive both cabinet menus).
 Follow-up: KI-077 — every visual baseline also shows the new header now.
+
+## 2026-09-28 — CR-153/CR-154 CI follow-up: root lint, ui coverage
+
+What: the push of CR-153/CR-154 (`5b83d2a`) failed CI at «Lint (root config)» — root
+ESLint lints `.claude/skills/mockup-to-screen/shots.mjs` (from `b90cfba`), a Node
+script whose `page.evaluate` callbacks use browser globals. Running the rest of the
+CI job locally then found the coverage gate would fail too: CR-153's four new
+`RIDE_DISCOVERY_TERMS` functions had no tests in `packages/ui` itself.
+
+- `eslint.config.mjs`: a `files: ['.claude/skills/**/*.mjs']` block declaring the
+  Node/browser globals those scripts use and allowing `console` (their output is
+  a console report). No new dependency.
+- `packages/ui/src/terminology-discovery.test.ts`: `ridesCount`, `showMore`,
+  `seatsTakenShort`, `waitlistQueued`.
+- `coverage-baseline.json` raised (every changed value went up: api total and
+  `rides/`, web, ui).
+
+Validation: format check, root + workspace lint, typecheck clean; `pnpm
+test:coverage` with the CI environment (Postgres, authenticated Redis, S3, live
+flags, no 2GIS keys) all green — api 499/499, ui 175/175 — and `coverage:check`
+passes. Local note: live Redis tests need `REDIS_URL=redis://:redis-dev-only@
+127.0.0.1:6379` (compose's `requirepass`); `.env` has no `REDIS_URL`, so without
+it those suites skip and api coverage looks lower than CI's.
