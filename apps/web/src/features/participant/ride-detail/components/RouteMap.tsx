@@ -82,6 +82,8 @@ export function RouteMap({
         container: containerRef.current,
         center: { lat: center.lat, lng: center.lng },
         zoom: 13,
+        // The hero's «Трек/Карта» switch owns the top-right corner.
+        zoomControlPosition: 'centerRight',
       })
       .then((renderedHandle) => {
         if (cancelled) {
@@ -149,8 +151,8 @@ export function RouteMap({
     return <RouteMapPlaceholder className={className} />;
   }
 
-  // CR-119: the key to these pins is `RouteLegend` («Условные знаки»), a
-  // separate section of the page — not a chip row glued under the map.
+  // The key to these pins is `RouteTimeline` («Маршрут по точкам», CR-151),
+  // a separate section of the page — not a chip row glued under the map.
   return (
     <div
       ref={containerRef}

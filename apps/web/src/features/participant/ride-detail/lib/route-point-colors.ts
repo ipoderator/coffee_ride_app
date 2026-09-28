@@ -36,3 +36,7 @@ export const ROUTE_POINT_MARKER_LABEL: Record<RoutePointType, string> = {
 };
 
 export const STOP_MARKER_LABEL = 'О';
+
+/** CR-151: every pin the poster draws — a typed route point, the ride's own
+ * start coordinate (no `start` point marks it), or a named `Stop`. */
+export type MarkKind = RoutePointType | 'ride-start' | 'named-stop';

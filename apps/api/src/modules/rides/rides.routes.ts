@@ -159,6 +159,10 @@ const rideDetailResponseSchema = z.object({
   // KI-069: additive — see `GetRideResponse.isOwner`'s doc comment
   // (`packages/types/src/api/rides.ts`).
   isOwner: z.boolean(),
+  // CR-151: additive — see `GetRideResponse.waitlistCount`'s doc comment.
+  waitlistCount: z.number(),
+  viewerStartNumber: z.number().nullable(),
+  viewerWaitlistPosition: z.number().nullable(),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 

@@ -824,6 +824,63 @@ describe('/v1/rides/:id/waitlist', () => {
       await app.close();
     });
 
+    // CR-151: the ticket's «№ N» and «#N» — places by `(createdAt, id)`,
+    // moving up as earlier riders leave; the queue size is public, places are
+    // the caller's own only.
+    it('reports the viewer start number, queue place and queue size, and moves them up after a cancellation', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 2,
+      });
+      const tokens: string[] = [];
+      for (let i = 0; i < 4; i += 1) {
+        const { rawToken } = await registerAndLoginUser(app);
+        tokens.push(rawToken);
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/${i < 2 ? 'register' : 'waitlist'}`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: rawToken },
+        });
+      }
+      const [first, second, third, fourth] = tokens as [
+        string,
+        string,
+        string,
+        string,
+      ];
+
+      const places = async (token?: string) => {
+        const body = (await getRideDetail(app, rideId, token)).json();
+        return [
+          body.viewerStartNumber,
+          body.viewerWaitlistPosition,
+          body.waitlistCount,
+        ];
+      };
+      expect(await places(first)).toEqual([1, null, 2]);
+      expect(await places(second)).toEqual([2, null, 2]);
+      expect(await places(third)).toEqual([null, 1, 2]);
+      expect(await places(fourth)).toEqual([null, 2, 2]);
+      expect(await places()).toEqual([null, null, 2]);
+
+      // The first rider leaves: the second becomes №1, the oldest waiting
+      // rider is promoted to №2, the last one is first in the queue.
+      const cancelled = await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: first },
+      });
+      expect(cancelled.statusCode).toBe(204);
+      expect(await places(second)).toEqual([1, null, 1]);
+      expect(await places(third)).toEqual([2, null, 1]);
+      expect(await places(fourth)).toEqual([null, 1, 1]);
+      expect(await places(first)).toEqual([null, null, 1]);
+
+      await app.close();
+    });
+
     it('does nothing when there is no one waiting', async () => {
       const app = await buildApp(testEnv);
       const { rideId } = await createOrganizerRide(app, {

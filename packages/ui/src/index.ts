@@ -36,3 +36,4 @@ export * from './components/ConfirmDialog';
 export * from './components/Toast';
 export * from './components/Wordmark';
 export * from './components/NavMenu';
+export * from './components/SegmentedControl';

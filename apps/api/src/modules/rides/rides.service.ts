@@ -947,6 +947,48 @@ export async function getRideForViewer(
         .limit(1)
     : [];
 
+  // CR-151 («Постер заезда v2»): the queue's size (the ticket's «В очереди N
+  // человек» — a count only, no one's identity) and the viewer's own places:
+  // «№ N» in the start list and «#N» in the queue. Both rank by `(createdAt,
+  // id)` — the order `listRideRegistrations` lists and waitlist promotion
+  // serves (FIFO). The viewer's row is referenced by id inside SQL, never by a
+  // JS `Date` (ms precision would drop the microseconds and miscount a tie).
+  const [waitlistCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(waitlistEntries)
+    .where(
+      and(
+        eq(waitlistEntries.rideId, rideId),
+        eq(waitlistEntries.status, 'waiting'),
+      ),
+    );
+  const viewerRegistrationId = viewerRegistrationRows[0]?.id;
+  const [startNumberRow] = viewerRegistrationId
+    ? await db
+        .select({ rank: sql<number>`count(*)::int` })
+        .from(registrations)
+        .where(
+          and(
+            eq(registrations.rideId, rideId),
+            eq(registrations.status, 'active'),
+            sql`(${registrations.createdAt}, ${registrations.id}) <= (select r.created_at, r.id from registrations r where r.id = ${viewerRegistrationId})`,
+          ),
+        )
+    : [];
+  const viewerWaitlistEntryId = viewerWaitlistEntryRows[0]?.id;
+  const [waitlistPositionRow] = viewerWaitlistEntryId
+    ? await db
+        .select({ rank: sql<number>`count(*)::int` })
+        .from(waitlistEntries)
+        .where(
+          and(
+            eq(waitlistEntries.rideId, rideId),
+            eq(waitlistEntries.status, 'waiting'),
+            sql`(${waitlistEntries.createdAt}, ${waitlistEntries.id}) <= (select w.created_at, w.id from waitlist_entries w where w.id = ${viewerWaitlistEntryId})`,
+          ),
+        )
+    : [];
+
   // CR-043 ("Organizer rating summary"): additive, same `getOrganizerRatingSummary`
   // aggregate `listPublicRides` batches for its own page of rides.
   const ratingSummary = await getOrganizerRatingSummary(db, row.organizerId);
@@ -999,6 +1041,9 @@ export async function getRideForViewer(
     viewerReview: viewerReviewRows[0] ? toReview(viewerReviewRows[0]) : null,
     groups,
     isOwner,
+    waitlistCount: waitlistCountRow?.count ?? 0,
+    viewerStartNumber: startNumberRow?.rank ?? null,
+    viewerWaitlistPosition: waitlistPositionRow?.rank ?? null,
   };
 }
 

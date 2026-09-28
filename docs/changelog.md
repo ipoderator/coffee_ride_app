@@ -1713,3 +1713,90 @@ its `*-actual.png` from the `playwright-report` artifact per
 
 Decisions: none (KI-074's own planned fix).
 Follow-up: none.
+
+## 2026-09-28 — CR-151 — «Постер заезда v2»: the ride page rebuilt
+
+Summary: `/rides/[id]` rebuilt to the owner's «Постер заезда v2» mockup — a dark
+hero with the route (track ⇄ 2GIS map), a numbers band, and a perforated
+registration «ticket» that carries every registration state.
+
+- **Head**: start line + relative-day chip («через 5 дней», ride time zone), the
+  title in Unbounded at poster size, organizer avatar/name/rating.
+- **Hero** (`RideHero`, `TrackCover`): the real route geometry on the always-dark
+  cover with an elevation silhouette and typed pins, or the live 2GIS `RouteMap`,
+  switched by a «Трек / Карта» `SegmentedControl` on the cover. No track → pins
+  only (never joined) + «Маршрут пока не загружен». Numbers band: distance,
+  elevation, pace (+ group count), duration — always four, missing as «—» (before,
+  missing metrics were dropped).
+- **Ticket** (`RegistrationTicket`, replaces `RegistrationButton`): open / few seats /
+  full (queue size, next queue place) / waitlisted (own queue place) / registered
+  (start number, «До старта 5 дн 14 ч», group, meeting point, change group, share,
+  cancel) / not open yet / closed / started / finished / cancelled. Same API calls,
+  confirm dialogs, toasts and sign-in redirect as before. Sticky aside from `lg`,
+  under the hero on a phone; the phone bar (`TicketBar`) appears only after the
+  ticket scrolls away and scrolls back to it instead of acting itself.
+- **Main**: chips + description; «Маршрут по точкам» (`RouteTimeline`, replaces
+  «Условные знаки»: km along the track, start time, «≈» finish time); the elevation
+  profile redrawn in real pixels with axes, whose pointer moves a dot along the
+  cover's track; GPX + «Поделиться» (Web Share, clipboard fallback); «Кто едет»
+  (initials avatar stack, group split, the grouped list behind «Весь список
+  участников»).
+- **API (additive)**: `GET /v1/rides/:id` gains `waitlistCount`,
+  `viewerStartNumber` and `viewerWaitlistPosition` — ranks by `(createdAt, id)`,
+  the listing/FIFO-promotion order; the viewer's row is referenced by id inside
+  SQL so microsecond timestamps can't miscount a tie. `docs/api.md` updated.
+- **`packages/ui` (additive)**: `SegmentedControl` (native radios in a `fieldset`,
+  sliding thumb; the radio covers its whole segment, so a click — or Playwright's
+  `check()` — lands on it), `MetricTile.valueClassName`, `RIDE_POSTER_TERMS`,
+  `RIDE_TICKET_TERMS`, `formatRelativeDay`, `formatCountdownShort`. Only the ride
+  page uses them; no existing prop changed.
+- Behaviour changes, deliberate: a registered viewer can no longer cancel from
+  the page once the ride has started or finished; a cancelled ride shows the
+  cancelled ticket even to a viewer whose registration row is still active.
+- Maps render contract (additive, same precedent as CR-107/118): optional
+  `MapRenderOptions.zoomControlPosition` (`maps-core`, passed to MapGL's
+  `zoomControl` by `maps-2gis`); the hero's map puts the zoom buttons
+  centre-right so they clear the «Трек / Карта» switch. `.claude/rules/maps.md`
+  updated.
+- Removed: `RegistrationButton`, `RouteLegend`, `GroupPicker`, `StartCountdown`,
+  `buildElevationProfile` (superseded by `lib/route-track.ts`).
+- Mockup items not built: the cancellation reason (no model field — the banner
+  says only that the organizer cancelled; a reason field would be its own
+  ticket); the map face's scrub dot (drawn on the track face only).
+
+Validation: api 118/118 in the touched suites (new start-number/queue-place test)
+and 488/490 full (2 skipped) against the compose Postgres/Redis/S3 with the live
+flags; web 460/460 (ride-detail 74, incl. new lib tests for `route-track`,
+`timeline`, `ticket-state`); ui 170/170 (`SegmentedControl`, formatters, poster
+terms). typecheck/eslint/prettier clean (web, ui, api, types). e2e (chromium,
+native): pace-groups, registration-waitlist, critical-journeys, ride-lifecycle,
+login-return, gpx-route, route-points-stops, profile-visibility, access-control,
+notifications — 19/19 (pace-groups updated: «Группа по темпу» legend, the
+ticket's group cell). Live check on the dev server (seeded ride with a route and
+two groups): desktop 1440 and a 390px phone; the phone bar hidden at the top,
+shown after scrolling, its button scrolls back to the ticket. `coverage:check`
+green, baseline raised (ui branches +1.75 pp, web +1 pp). Visual baselines for
+`ride-detail` NOT regenerated — the `linux/amd64` Playwright image won't pull
+here (KI-076); CI's screenshot check for that page will fail until they're
+replaced from its artifact.
+
+Decisions: cancellation reason not added (no model field; mockup allowed dropping
+the line). No new ADR — additive API fields and one additive `packages/ui`
+component.
+Follow-up: KI-076 (baselines); a cancellation reason, if wanted, is its own ticket.
+
+## 2026-09-28 — CR-151 follow-up — Map zoom buttons clear of the hero's view switch
+
+What: on `/rides/[id]`'s «Карта» face, 2GIS's default top-right zoom control sat
+under the hero's «Трек/Карта» switch (owner's screenshot). `MapRenderOptions` gains
+an optional `zoomControlPosition` (`packages/maps-core/src/render.ts`), mapped to
+MapGL's `zoomControl` in `packages/maps-2gis/src/render.ts`; `RouteMap.tsx` passes
+`'centerRight'`. Discovery/route-builder maps keep the default corner.
+
+Why: an overlay the page owns must not be covered by a provider control; putting
+the position on the render contract keeps the fix provider-neutral (ADR-010/020),
+additive — no new ADR. `.claude/rules/maps.md`'s contract updated.
+
+Validation: maps-2gis `render.test.ts` 19/19 (two new cases: position forwarded,
+omitted → no `zoomControl`); typecheck/eslint clean (maps-core, maps-2gis, web);
+prettier clean. Not checked live with a MapGL key in this run.

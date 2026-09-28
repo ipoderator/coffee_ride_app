@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   countdownParts,
+  formatCountdownShort,
+  formatRelativeDay,
   formatDate,
   formatElapsedShort,
   formatShortPersonName,
@@ -373,5 +375,70 @@ describe('formatShortPersonName (CR-132)', () => {
     expect(formatShortPersonName('Марина')).toBe('Марина');
     expect(formatShortPersonName('   ')).toBeNull();
     expect(formatShortPersonName(null)).toBeNull();
+  });
+});
+
+describe('formatRelativeDay (CR-151)', () => {
+  // 23:30 in Moscow on 28 Sep — still 28 Sep there, 20:30 UTC.
+  const now = new Date('2026-09-28T20:30:00Z');
+  const tz = { timeZone: 'Europe/Moscow' };
+
+  it('counts calendar days in the ride time zone', () => {
+    expect(formatRelativeDay(new Date('2026-09-28T20:50:00Z'), now, tz)).toBe(
+      'сегодня',
+    );
+    // 00:10 on 29 Sep in Moscow — tomorrow there, although under an hour away.
+    expect(formatRelativeDay(new Date('2026-09-28T21:10:00Z'), now, tz)).toBe(
+      'завтра',
+    );
+    expect(formatRelativeDay(new Date('2026-10-03T04:30:00Z'), now, tz)).toBe(
+      `через 5${NBSP}дней`,
+    );
+    expect(formatRelativeDay(new Date('2026-10-20T04:30:00Z'), now, tz)).toBe(
+      `через 22${NBSP}дня`,
+    );
+    expect(formatRelativeDay(new Date('2026-10-19T04:30:00Z'), now, tz)).toBe(
+      `через 21${NBSP}день`,
+    );
+  });
+
+  it('is null for a day that has passed', () => {
+    expect(
+      formatRelativeDay(new Date('2026-09-27T08:00:00Z'), now, tz),
+    ).toBeNull();
+  });
+
+  it('defaults to UTC days and the current instant', () => {
+    // 20:30 UTC and 00:10 UTC next day: different UTC calendar days.
+    expect(formatRelativeDay(new Date('2026-09-29T00:10:00Z'), now)).toBe(
+      'завтра',
+    );
+    expect(formatRelativeDay(new Date(Date.now() + 60_000))).toMatch(
+      /^(сегодня|завтра)$/,
+    );
+    expect(formatCountdownShort(new Date(Date.now() + 5 * 60_000))).toMatch(
+      /мин$/,
+    );
+  });
+});
+
+describe('formatCountdownShort (CR-151)', () => {
+  const now = new Date('2026-09-28T12:00:00Z');
+  const inMinutes = (minutes: number) =>
+    new Date(now.getTime() + minutes * 60_000);
+
+  it('shows the two largest units', () => {
+    expect(formatCountdownShort(inMinutes((5 * 24 + 14) * 60 + 7), now)).toBe(
+      `5${NBSP}дн 14${NBSP}ч`,
+    );
+    expect(formatCountdownShort(inMinutes(3 * 60 + 20), now)).toBe(
+      `3${NBSP}ч 20${NBSP}мин`,
+    );
+    expect(formatCountdownShort(inMinutes(12), now)).toBe(`12${NBSP}мин`);
+  });
+
+  it('is null once the start has passed', () => {
+    expect(formatCountdownShort(inMinutes(0), now)).toBeNull();
+    expect(formatCountdownShort(inMinutes(-5), now)).toBeNull();
   });
 });

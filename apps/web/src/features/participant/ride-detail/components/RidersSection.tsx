@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { RideGroupRef, RideGroupSummary, RideRider } from 'types';
 import {
+  Avatar,
   Button,
   EmptyState,
   ErrorState,
   formatGroupPace,
   RIDE_DETAIL_RIDERS_TERMS,
+  RIDE_POSTER_TERMS,
   Skeleton,
 } from 'ui';
 import { loginHref } from '@/lib/auth/next-path';
@@ -114,6 +116,48 @@ function RiderNames({
   );
 }
 
+const AVATAR_COUNT = 7;
+
+/**
+ * CR-151: the first riders as an overlapping avatar stack (after 21st
+ * cnippet-dev/avatar-stack) — initials only (a rider's photo is behind their
+ * own profile's privacy setting), each a link to that rider's card with the
+ * name as a hover/focus tooltip. The full named list stays one click away.
+ */
+function RiderAvatars({
+  riders,
+  rideId,
+}: {
+  riders: { registrationId: string; displayName: string | null }[];
+  rideId: string;
+}) {
+  return (
+    <ul className="flex items-center" data-testid="riders-avatars">
+      {riders.map((rider) => {
+        const name = rider.displayName ?? RIDE_DETAIL_RIDERS_TERMS.noName;
+        return (
+          <li key={rider.registrationId} className="-ml-2.5 first:ml-0">
+            <Link
+              href={`/rides/${rideId}/riders/${rider.registrationId}`}
+              data-name={name}
+              className="relative block rounded-full ring-2 ring-bg transition-transform after:pointer-events-none after:absolute after:bottom-[calc(100%+8px)] after:left-1/2 after:-translate-x-1/2 after:rounded-lg after:bg-text after:px-2 after:py-1 after:text-xs after:font-medium after:whitespace-nowrap after:text-bg after:opacity-0 after:transition-opacity after:content-[attr(data-name)] hover:z-10 hover:-translate-y-[3px] hover:after:opacity-100 focus-visible:z-10 focus-visible:-translate-y-[3px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus-visible:after:opacity-100 motion-reduce:transition-none"
+            >
+              <Avatar
+                name={rider.displayName}
+                size="md"
+                className="h-10 w-10 bg-primary-tint text-[13px] font-semibold text-primary"
+              />
+              {rider.displayName ? null : (
+                <span className="sr-only">{name}</span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
  * CR-119: «Участники» — who else is riding (`GET /v1/rides/:id/riders`, CR-117).
  * Signed-in viewers see names (CR-125: first + last name when set, else the
@@ -133,11 +177,14 @@ function RiderNames({
 export function RidersSection({
   rideId,
   registrationsCount,
+  participantLimit = null,
   groups,
   version,
 }: {
   rideId: string;
   registrationsCount: number;
+  /** CR-151: «17 из 24» in the heading when the ride has a limit. */
+  participantLimit?: number | null;
   groups: RideGroupSummary[];
   /** Bumped by the page after the viewer's own registration changes. */
   version: number;
@@ -153,6 +200,7 @@ export function RidersSection({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     if (sessionStatus === 'loading') return;
@@ -207,18 +255,34 @@ export function RidersSection({
   const showGroupHeadings = groups.length > 0 || buckets.some((b) => b.group);
 
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="ride-riders">
+    <section className="flex flex-col gap-3.5" aria-labelledby="ride-riders">
       <div className="flex items-baseline justify-between gap-3">
         <h2
           id="ride-riders"
-          className="font-display text-xl font-semibold text-text"
+          className="font-title text-lg leading-tight font-medium text-text"
         >
-          {RIDE_DETAIL_RIDERS_TERMS.sectionTitle}
+          {RIDE_POSTER_TERMS.ridersTitle}
         </h2>
         <p className="text-sm text-text-secondary tabular-nums">
-          {RIDE_DETAIL_RIDERS_TERMS.ridersCount(registrationsCount)}
+          {participantLimit !== null
+            ? RIDE_POSTER_TERMS.ridersOf(registrationsCount, participantLimit)
+            : RIDE_DETAIL_RIDERS_TERMS.ridersCount(registrationsCount)}
         </p>
       </div>
+
+      {groups.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" data-testid="riders-group-split">
+          {groups.map((group) => (
+            <li
+              key={group.id}
+              className="rounded-full bg-surface px-2.5 py-0.5 text-[13px] text-text-secondary tabular-nums"
+            >
+              <b className="font-semibold text-text">{group.name}</b> ·{' '}
+              {formatGroupPace(group.paceKmh)} — {group.registrationsCount}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {status === 'loading' && (
         <div className="flex flex-col gap-2" aria-hidden>
@@ -262,7 +326,25 @@ export function RidersSection({
       )}
 
       {status === 'ready' && riders.length > 0 && (
-        <div className="flex flex-col gap-4">
+        <RiderAvatars riders={riders.slice(0, AVATAR_COUNT)} rideId={rideId} />
+      )}
+
+      {status === 'ready' && riders.length > 0 && (
+        <Button
+          variant="secondary"
+          className="min-h-11 self-start border-0 px-0 text-sm font-medium text-primary hover:bg-transparent hover:text-primary-hover"
+          aria-expanded={isExpanded}
+          aria-controls="ride-riders-list"
+          onClick={() => setIsExpanded((open) => !open)}
+        >
+          {isExpanded
+            ? RIDE_POSTER_TERMS.hideAllRiders
+            : RIDE_POSTER_TERMS.showAllRiders}
+        </Button>
+      )}
+
+      {status === 'ready' && riders.length > 0 && isExpanded && (
+        <div id="ride-riders-list" className="flex flex-col gap-4">
           {showGroupHeadings ? (
             buckets.map((bucket) => (
               <div key={bucket.key} className="flex flex-col gap-1">

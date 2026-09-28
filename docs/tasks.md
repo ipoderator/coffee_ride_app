@@ -1181,3 +1181,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-150 Organizer sidebar highlight: «Участники»/«Обновления» stay lit on
       the ride sub-pages they redirect to, instead of «Заезды»
       (`CabinetNavItem.activeOn`). See `docs/changelog.md`.
+- [x] CR-151 «Постер заезда v2» — `/rides/[id]` rebuilt to the owner's mockup:
+      dark hero (track ⇄ 2GIS map, numbers band), a registration «ticket» with
+      every registration state, «Маршрут по точкам», elevation profile linked to
+      the cover, «Кто едет». API: additive `waitlistCount`/`viewerStartNumber`/
+      `viewerWaitlistPosition` on `GET /v1/rides/:id`. See `docs/changelog.md`.

@@ -151,6 +151,8 @@ export interface MapRenderOptions {
   onClick?: (point: LatLng) => void;
   // CR-118: a marker click/tap, reported by the marker's `id`.
   onMarkerClick?: (id: string) => void;
+  // CR-151 follow-up: where the zoom buttons sit (default: provider's corner).
+  zoomControlPosition?: 'topRight' | 'centerRight' | 'bottomRight';
 }
 
 export interface MapHandle {

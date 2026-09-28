@@ -29,7 +29,7 @@ import {
   registerForRide,
 } from './api';
 
-// `RegistrationButton` calls `useRouter()` (redirect-to-login on a 401) — same
+// `RegistrationTicket` calls `useRouter()` (redirect-to-login on a 401) — same
 // mocking precedent as `features/auth/login/login.test.tsx`, RTL's `render()` doesn't
 // mount a real Next.js App Router.
 const pushMock = vi.fn();
@@ -127,9 +127,8 @@ const baseStop: Stop = {
 };
 
 // CR-032 ("Register"): every fixture below is `published`, not `registration_open`,
-// so `RegistrationButton` renders nothing (`rideStatus !== 'registration_open' &&
-// !viewerRegistration`) unless a test opts in — keeps every pre-existing assertion
-// in this file about other sections unaffected by the new button.
+// so the ticket shows «Регистрация ещё не открыта» with no action (CR-151)
+// unless a test opts in.
 function baseDetailResponse(
   overrides: Partial<GetRideResponse> = {},
 ): GetRideResponse {
@@ -151,6 +150,9 @@ function baseDetailResponse(
     viewerReview: null,
     groups: [],
     isOwner: false,
+    waitlistCount: 0,
+    viewerStartNumber: null,
+    viewerWaitlistPosition: null,
     ...overrides,
   };
 }
@@ -260,27 +262,34 @@ describe('RideDetailView', () => {
 
     render(<RideDetailView rideId="ride-1" />);
 
-    expect(await screen.findByText(baseRide.title)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: baseRide.title }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Опубликован')).toBeInTheDocument();
-    expect(screen.getByText(/Гравийный клуб/)).toBeInTheDocument();
+    expect(screen.getByText('Гравийный клуб')).toBeInTheDocument();
     expect(screen.getByText(baseRide.description!)).toBeInTheDocument();
-    // startsAt is 05:00 UTC; the ride's own zone is Europe/Moscow (UTC+3).
-    expect(screen.getByText(/08:00/)).toBeInTheDocument();
-    expect(screen.getByText('42,3')).toBeInTheDocument();
-    expect(screen.getByText('350')).toBeInTheDocument();
-    expect(screen.getByText('24,5')).toBeInTheDocument();
+    // startsAt is 05:00 UTC; the ride's own zone is Europe/Moscow (UTC+3) —
+    // in the start line and the ticket's «Старт» cell.
+    expect(screen.getAllByText(/08:00/).length).toBeGreaterThanOrEqual(2);
+    const hero = screen.getByRole('region', {
+      name: 'Маршрут и главные цифры',
+    });
+    expect(within(hero).getByText('42,3')).toBeInTheDocument();
+    expect(within(hero).getByText('350')).toBeInTheDocument();
+    expect(within(hero).getByText('24,5')).toBeInTheDocument();
     // `formatDurationParts` joins hours/minutes with NBSP (U+00A0); Testing
-    // Library's default normalizer treats it as whitespace and collapses it to a
-    // plain space before matching, so the query below uses a plain space too.
-    expect(screen.getByText('2 ч 30')).toBeInTheDocument();
-    expect(screen.getByText('500')).toBeInTheDocument();
-    // CR-032: the participant-limit tile is now a registered/capacity ratio
-    // (`formatParticipantsParts`), same NBSP-as-plain-space normalization as above.
-    expect(screen.getByText('12 из 20')).toBeInTheDocument();
-    expect(screen.getByText('Гравийный')).toBeInTheDocument();
+    // Library's default normalizer collapses it to a plain space.
+    expect(within(hero).getByText('2 ч 30')).toBeInTheDocument();
+    const facts = screen.getByTestId('ride-facts');
+    expect(within(facts).getByText('500 ₽')).toBeInTheDocument();
+    expect(within(facts).getByText('Гравийный')).toBeInTheDocument();
+    // CR-151: «12 из 20 участников» on the ticket.
+    expect(
+      within(screen.getByTestId('ride-ticket')).getByText('12 из 20'),
+    ).toBeInTheDocument();
   });
 
-  it('omits metric tiles for fields that are still null', async () => {
+  it('shows «—» for headline metrics that are still null, never 0', async () => {
     const mockedRide: Ride = {
       ...baseRide,
       distanceKm: null,
@@ -297,15 +306,25 @@ describe('RideDetailView', () => {
     render(<RideDetailView rideId="ride-1" />);
 
     await screen.findByText(baseRide.title);
-    expect(screen.queryByText('Дистанция')).not.toBeInTheDocument();
-    expect(screen.queryByText('Набор высоты')).not.toBeInTheDocument();
-    expect(screen.queryByText('Средний темп')).not.toBeInTheDocument();
-    expect(screen.queryByText('Длительность')).not.toBeInTheDocument();
-    // CR-119: «Участники» is also the riders section's heading now — the
-    // participants *fact* is what must be absent without a limit.
+    const hero = screen.getByRole('region', {
+      name: 'Маршрут и главные цифры',
+    });
+    for (const label of [
+      'Дистанция',
+      'Набор высоты',
+      'Средний темп',
+      'Длительность',
+    ]) {
+      expect(within(hero).getByText(label)).toBeInTheDocument();
+    }
+    expect(within(hero).getAllByText('—')).toHaveLength(4);
+    expect(within(hero).queryByText('0')).not.toBeInTheDocument();
+    // No limit → no «N из M» ratio, the ticket says so instead.
     expect(
-      within(screen.getByTestId('ride-facts')).queryByText('Участники'),
-    ).not.toBeInTheDocument();
+      within(screen.getByTestId('ride-ticket')).getByText(
+        'Без ограничения мест',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('omits the "Маршрут" section entirely when no route has been uploaded', async () => {
@@ -332,7 +351,7 @@ describe('RideDetailView', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows a start-location map panel for a ride with a start point but no route', async () => {
+  it('draws only the start pin for a ride with a start point but no route, and offers the map', async () => {
     getRideDetailMock.mockResolvedValue(
       baseDetailResponse({
         ride: { ...baseRide, startLat: 55.75, startLng: 37.61 },
@@ -341,40 +360,51 @@ describe('RideDetailView', () => {
 
     render(<RideDetailView rideId="ride-1" />);
 
-    expect(await screen.findByText('Место старта')).toBeInTheDocument();
-    expect(screen.queryByText('Маршрут')).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('img', { name: 'Обложка с точками маршрута' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Маршрут пока не загружен')).toBeInTheDocument();
+    expect(screen.getAllByTestId('cover-mark')).toHaveLength(1);
     expect(getRouteGeometryMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Старт · 08:00')).toBeInTheDocument();
+    // No route → no elevation profile.
+    expect(screen.queryByText('Профиль высоты')).not.toBeInTheDocument();
+
     // No MapGL key in the test env — the degraded placeholder, never a blank box.
+    fireEvent.click(screen.getByRole('radio', { name: 'Карта' }));
     expect(
       await screen.findByText('Карта маршрута временно недоступна.'),
     ).toBeInTheDocument();
-    // No route → no elevation profile section either.
-    expect(screen.queryByText('Профиль высоты')).not.toBeInTheDocument();
   });
 
-  it('shows the map panel once stops exist, even without a route', async () => {
+  it('puts stops on the cover and the timeline, even without a route', async () => {
     getRideDetailMock.mockResolvedValue(
       baseDetailResponse({ stops: [baseStop] }),
     );
 
     render(<RideDetailView rideId="ride-1" />);
 
-    expect(await screen.findByText('Место старта')).toBeInTheDocument();
-    expect(screen.getByText(/1\. Кофейня на набережной/)).toBeInTheDocument();
+    expect(
+      await screen.findByText('Кофейня на набережной'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByTestId('cover-mark')).toHaveLength(1);
+    expect(screen.getByRole('radio', { name: 'Карта' })).toBeInTheDocument();
   });
 
-  it('shows price and bike type as supporting facts next to the headline metrics', async () => {
+  it('shows difficulty, bike type and price as labelled chips', async () => {
     getRideDetailMock.mockResolvedValue(baseDetailResponse());
 
     render(<RideDetailView rideId="ride-1" />);
 
     await screen.findByText(baseRide.title);
-    expect(screen.getByText('Тип велосипеда')).toBeInTheDocument();
-    expect(screen.getByText('Стоимость участия')).toBeInTheDocument();
-    expect(screen.getByText('₽')).toBeInTheDocument();
+    const facts = screen.getByTestId('ride-facts');
+    expect(within(facts).getByText(/Тип велосипеда/)).toBeInTheDocument();
+    expect(within(facts).getByText(/Стоимость участия/)).toBeInTheDocument();
+    expect(within(facts).getByText('Средний')).toBeInTheDocument();
+    expect(within(facts).getByText('500 ₽')).toBeInTheDocument();
   });
 
-  it('shows the route map placeholder and elevation profile once a route exists', async () => {
+  it('draws the track, the elevation profile and a hover dot once a route exists', async () => {
     getRideDetailMock.mockResolvedValue(
       baseDetailResponse({ route: baseRoute }),
     );
@@ -388,31 +418,38 @@ describe('RideDetailView', () => {
 
     render(<RideDetailView rideId="ride-1" />);
 
-    expect(await screen.findByText('Маршрут')).toBeInTheDocument();
-    expect(getRouteGeometryMock).toHaveBeenCalledWith('ride-1');
-    // Degraded map placeholder (KI-031, no live 2GIS credential) — always shown.
     expect(
-      await screen.findByText('Карта маршрута временно недоступна.'),
+      await screen.findByRole('img', { name: 'Обложка с треком маршрута' }),
     ).toBeInTheDocument();
-    await waitFor(() => {
-      expect(
-        screen.getByRole('img', { name: /Профиль высоты/ }),
-      ).toBeInTheDocument();
-    });
+    expect(getRouteGeometryMock).toHaveBeenCalledWith('ride-1');
+    expect(
+      screen.queryByText('Маршрут пока не загружен'),
+    ).not.toBeInTheDocument();
+    const chart = await screen.findByRole('img', { name: /Профиль высоты/ });
     // CR-128: legible on white paper — the area is filled with the chart's own
-    // gradient (not a flat 15% tint), and strokes keep their width despite
-    // `preserveAspectRatio="none"`.
-    const chart = screen.getByRole('img', { name: /Профиль высоты/ });
+    // gradient (not a flat tint) under a 2px `elevation` line.
     const gradient = chart.querySelector('linearGradient');
     expect(gradient).not.toBeNull();
     expect(
       chart.querySelector(`path[fill="url(#${gradient!.id})"]`),
     ).not.toBeNull();
+    expect(chart.querySelector('path.stroke-elevation')).not.toBeNull();
+
+    // CR-151: the pointer over the profile moves a dot along the cover's track.
+    expect(screen.queryByTestId('cover-scrub')).not.toBeInTheDocument();
+    fireEvent.pointerMove(screen.getByTestId('elevation-hit'), { clientX: 0 });
+    expect(await screen.findByTestId('cover-scrub')).toBeInTheDocument();
+    expect(screen.getByTestId('elevation-readout').textContent).toMatch(
+      /км · 100/,
+    );
+    fireEvent.pointerLeave(screen.getByTestId('elevation-hit'));
+    expect(screen.queryByTestId('cover-scrub')).not.toBeInTheDocument();
+
+    // Degraded map placeholder (no live 2GIS credential) behind «Карта».
+    fireEvent.click(screen.getByRole('radio', { name: 'Карта' }));
     expect(
-      chart.querySelector(
-        'path.stroke-elevation[vector-effect="non-scaling-stroke"]',
-      ),
-    ).not.toBeNull();
+      await screen.findByText('Карта маршрута временно недоступна.'),
+    ).toBeInTheDocument();
   });
 
   it('shows a retryable degraded state when the geometry fetch fails', async () => {
@@ -433,7 +470,7 @@ describe('RideDetailView', () => {
     expect(screen.getByText(baseRide.title)).toBeInTheDocument();
   });
 
-  it('renders stops in order, and omits the section entirely when there are none', async () => {
+  it('lists stops in their order on «Маршрут по точкам»', async () => {
     getRideDetailMock.mockResolvedValue(
       baseDetailResponse({
         stops: [
@@ -451,10 +488,17 @@ describe('RideDetailView', () => {
 
     render(<RideDetailView rideId="ride-1" />);
 
-    expect(await screen.findByText('Остановки')).toBeInTheDocument();
-    expect(screen.getByText(/1\. Кофейня на набережной/)).toBeInTheDocument();
-    expect(screen.getByText(/2\. Смотровая площадка/)).toBeInTheDocument();
-    expect(screen.getByText('Короткая остановка на кофе.')).toBeInTheDocument();
+    const timeline = await screen.findByTestId('route-timeline');
+    const items = within(timeline).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      expect.stringContaining('Кофейня на набережной'),
+      expect.stringContaining('Смотровая площадка'),
+    ]);
+    expect(
+      within(items[0]!).getByText(
+        /Короткая остановка на кофе\. · стоянка 15 мин/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('omits the "Остановки" section entirely when there are no stops', async () => {
@@ -483,12 +527,23 @@ describe('RideDetailView', () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: { ...baseRide, status: 'registration_open' },
+          registrationsCount: 6,
         }),
       );
 
       render(<RideDetailView rideId="ride-1" />);
 
-      expect(await screen.findByText('Зарегистрироваться')).toBeInTheDocument();
+      expect(
+        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+      ).toBeInTheDocument();
+      // CR-151: the ticket stub — the viewer would be seventh in the start list.
+      const ticket = screen.getByTestId('ride-ticket');
+      expect(
+        within(ticket).getByText('Вы будете 7-м из 20 мест'),
+      ).toBeInTheDocument();
+      expect(
+        within(ticket).getByText('500 ₽ · отменить можно до старта'),
+      ).toBeInTheDocument();
     });
 
     it('offers joining the waitlist once capacity is reached', async () => {
@@ -509,6 +564,83 @@ describe('RideDetailView', () => {
       expect(button.closest('button')).not.toBeDisabled();
     });
 
+    // CR-151: the ticket's faces for the states with no register action.
+    it('shows the queue size and the next queue place on a full ride', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: {
+            ...baseRide,
+            status: 'registration_open',
+            participantLimit: 5,
+          },
+          registrationsCount: 5,
+          waitlistCount: 3,
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const ticket = (
+        await screen.findByRole('heading', { name: 'Список ожидания' })
+      ).closest('[data-testid="ride-ticket"]') as HTMLElement;
+      expect(
+        within(ticket).getByText(/В очереди 3 человека\./),
+      ).toBeInTheDocument();
+      expect(within(ticket).getByText('4')).toBeInTheDocument();
+      expect(within(ticket).getByText('Мест не осталось')).toBeInTheDocument();
+      // The cover chip reads the waitlist, not a green «open».
+      expect(
+        within(
+          screen.getByRole('region', { name: 'Маршрут и главные цифры' }),
+        ).getByText('Список ожидания'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows a closed ride as its final count, with no action', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_closed' },
+          registrationsCount: 12,
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const ticket = (
+        await screen.findByRole('heading', { name: 'Регистрация закрыта' })
+      ).closest('[data-testid="ride-ticket"]') as HTMLElement;
+      expect(within(ticket).getByText('/20')).toBeInTheDocument();
+      expect(
+        within(ticket).queryByRole('button', { name: 'Зарегистрироваться' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('voids a registration on a cancelled ride and hides who was riding', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'cancelled' },
+          registrationsCount: 4,
+          viewerRegistration: activeRegistration(),
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const ticket = (
+        await screen.findByRole('heading', { name: 'Заезд отменён' })
+      ).closest('[data-testid="ride-ticket"]') as HTMLElement;
+      expect(
+        within(ticket).getByText('Организатор отменил этот заезд.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Отменить регистрацию' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('region', { name: 'Кто едет' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/через/)).not.toBeInTheDocument();
+    });
+
     it('shows the waitlisted state and a leave-waitlist action when the viewer is queued, even once registration has closed', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
@@ -524,16 +656,26 @@ describe('RideDetailView', () => {
             cancelledAt: null,
             promotedAt: null,
           },
+          waitlistCount: 3,
+          viewerWaitlistPosition: 2,
         }),
       );
 
       render(<RideDetailView rideId="ride-1" />);
 
-      // CR-119: a status badge, not a disabled button posing as one.
-      const waitlistedLabel = await screen.findByText('В списке ожидания');
-      expect(waitlistedLabel.closest('button')).not.toBeInTheDocument();
+      // CR-119: a heading, not a disabled button posing as one.
+      const title = await screen.findByRole('heading', {
+        name: 'Вы в списке ожидания',
+      });
+      const ticket = title.closest(
+        '[data-testid="ride-ticket"]',
+      ) as HTMLElement;
+      // CR-151: the viewer's own place in the queue.
+      expect(within(ticket).getByText('2')).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: 'Покинуть список ожидания' }),
+        within(ticket).getByRole('button', {
+          name: 'Покинуть список ожидания',
+        }),
       ).toBeInTheDocument();
     });
 
@@ -588,7 +730,9 @@ describe('RideDetailView', () => {
         </ToastProvider>,
       );
 
-      fireEvent.click(await screen.findByText('Зарегистрироваться'));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+      );
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(
@@ -612,7 +756,9 @@ describe('RideDetailView', () => {
         </ToastProvider>,
       );
 
-      fireEvent.click(await screen.findByText('Зарегистрироваться'));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+      );
 
       await waitFor(() =>
         expect(pushMock).toHaveBeenCalledWith('/login?next=%2Frides%2Fride-1'),
@@ -699,7 +845,9 @@ describe('RideDetailView', () => {
 
     // CR-105's sticky mobile registration bar — the default since CR-119
     // (`FEATURE_STICKY_REGISTRATION_CTA` removed).
-    it('renders the register action in the fixed bottom bar, with no flag', async () => {
+    // CR-151: the ticket holds the action; the phone bar only appears once the
+    // ticket has scrolled away (hidden and inert until then) and leads back to it.
+    it('keeps seats and the fill bar on the ticket and a hidden phone bar that leads back to it', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: { ...baseRide, status: 'registration_open' },
@@ -712,16 +860,23 @@ describe('RideDetailView', () => {
       const button = await screen.findByRole('button', {
         name: 'Зарегистрироваться',
       });
-      const bar = button.closest('div[class*="fixed"]');
-      expect(bar).toBeInTheDocument();
-      // Seats left sit above the button inside the same bar.
-      expect(
-        within(bar as HTMLElement).getByText('Осталось 6 мест'),
-      ).toBeInTheDocument();
+      const ticket = screen.getByTestId('ride-ticket');
+      expect(ticket).toContainElement(button);
+      expect(within(ticket).getByText('Осталось 6 мест')).toBeInTheDocument();
       // ADR-024: a capacity fill bar reinforces the text, doesn't replace it.
+      expect(within(ticket).getByRole('progressbar')).toHaveAttribute(
+        'aria-valuenow',
+        '70',
+      );
+
+      const bar = screen.getByTestId('ticket-bar');
+      expect(bar).toHaveAttribute('aria-hidden', 'true');
+      expect(bar).toHaveAttribute('inert');
+      expect(within(bar).getByText('№ 15')).toBeInTheDocument();
+      // Only one real register button — the bar's is out of the a11y tree.
       expect(
-        within(bar as HTMLElement).getByRole('progressbar'),
-      ).toHaveAttribute('aria-valuenow', '70');
+        screen.getAllByRole('button', { name: 'Зарегистрироваться' }),
+      ).toHaveLength(1);
     });
 
     it("keeps a registered viewer's block in the flow, not in the fixed bar", async () => {
@@ -868,15 +1023,13 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       const picker = await screen.findByRole('group', {
-        name: 'Выберите группу',
+        name: 'Группа по темпу',
       });
       const radios = within(picker).getAllByRole('radio');
       expect(radios).toHaveLength(2);
       expect(within(picker).getByText('Группа 1')).toBeInTheDocument();
-      expect(within(picker).getByText('7 участников')).toBeInTheDocument();
-      expect(within(picker).getByText('1 участник')).toBeInTheDocument();
       // Group pace in the compact form: «25 км/ч», not «25,0».
-      expect(within(picker).getByText('25')).toBeInTheDocument();
+      expect(within(picker).getByText('25 км/ч')).toBeInTheDocument();
 
       const button = screen.getByRole('button', { name: 'Зарегистрироваться' });
       expect(button).toBeDisabled();
@@ -890,6 +1043,7 @@ describe('RideDetailView', () => {
       expect(
         screen.queryByText('Выберите группу, чтобы записаться'),
       ).not.toBeInTheDocument();
+      expect(screen.getByText('Группа 1 · 7 участников')).toBeInTheDocument();
     });
 
     it('sends the chosen groupId when registering', async () => {
@@ -912,9 +1066,9 @@ describe('RideDetailView', () => {
       await waitFor(() => {
         expect(registerForRideMock).toHaveBeenCalledWith('ride-1', 'group-2');
       });
-      expect(
-        await screen.findByText('Вы едете в группе «Группа 2» · 35 км/ч'),
-      ).toBeInTheDocument();
+      const group = await screen.findByTestId('ticket-group');
+      expect(group).toHaveTextContent('Группа 2');
+      expect(group).toHaveTextContent('35');
     });
 
     it('sends the chosen groupId when joining the waitlist of a full ride', async () => {
@@ -1036,7 +1190,7 @@ describe('RideDetailView', () => {
       updatedBy: null,
     };
 
-    it('shows «Вы зарегистрированы» with when, start and group, and a danger-outline cancel', async () => {
+    it('shows «Вы зарегистрированы» with the start number, when, where and group, and a danger-outline cancel', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: { ...baseRide, status: 'registration_open' },
@@ -1044,34 +1198,36 @@ describe('RideDetailView', () => {
           routePoints: [startPoint],
           registrationsCount: 8,
           viewerRegistration: activeRegistration({ groupId: 'group-1' }),
+          viewerStartNumber: 3,
         }),
       );
 
       render(<RideDetailView rideId="ride-1" />);
 
-      const block = (
+      const ticket = (
         await screen.findByRole('heading', { name: 'Вы зарегистрированы' })
-      ).closest('section') as HTMLElement;
-      expect(within(block).getByText(/08:00/)).toBeInTheDocument();
-      expect(within(block).getByText(/МСК/)).toBeInTheDocument();
-      expect(within(block).getByText('Кофейня «Зерно»')).toBeInTheDocument();
-      expect(
-        within(block).getByText('Вы едете в группе «Группа 1» · 25 км/ч'),
-      ).toBeInTheDocument();
-      const cancel = within(block).getByRole('button', {
+      ).closest('[data-testid="ride-ticket"]') as HTMLElement;
+      expect(within(ticket).getByText('3')).toBeInTheDocument();
+      expect(within(ticket).getByText('08:00')).toBeInTheDocument();
+      expect(within(ticket).getByText('сб 1 мая 2027')).toBeInTheDocument();
+      expect(within(ticket).getByText('Кофейня «Зерно»')).toBeInTheDocument();
+      expect(within(ticket).getByTestId('ticket-group')).toHaveTextContent(
+        'Группа 1',
+      );
+      const cancel = within(ticket).getByRole('button', {
         name: 'Отменить регистрацию',
       });
       expect(cancel.className).toContain('border-danger');
       expect(cancel.className).not.toContain('bg-danger ');
-      // No second «Группы» picker next to the registered block.
+      // No registration group picker next to the registered ticket.
       expect(
-        screen.queryByRole('group', { name: 'Выберите группу' }),
+        screen.queryByRole('group', { name: 'Группа по темпу' }),
       ).not.toBeInTheDocument();
-      // The start point label is also on the page header.
+      // The start point is also the timeline's first item.
       expect(screen.getAllByText('Кофейня «Зерно»').length).toBeGreaterThan(1);
     });
 
-    it('counts down days/hours/minutes to the start (CR-130)', async () => {
+    it('counts down to the start on the ticket (CR-130, CR-151)', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       // 2 days, 14 h, 37 min before baseRide's 2027-05-01T05:00Z start.
       vi.setSystemTime(new Date('2027-04-28T14:23:00.000Z'));
@@ -1085,19 +1241,20 @@ describe('RideDetailView', () => {
 
         render(<RideDetailView rideId="ride-1" />);
 
-        const timer = await screen.findByRole('timer');
-        expect(within(timer).getByText('2')).toBeInTheDocument();
-        expect(within(timer).getByText('дня')).toBeInTheDocument();
-        expect(within(timer).getByText('14')).toBeInTheDocument();
-        expect(within(timer).getByText('часов')).toBeInTheDocument();
-        expect(within(timer).getByText('37')).toBeInTheDocument();
-        expect(within(timer).getByText('минут')).toBeInTheDocument();
+        const ticket = (
+          await screen.findByRole('heading', { name: 'Вы зарегистрированы' })
+        ).closest('[data-testid="ride-ticket"]') as HTMLElement;
+        expect(
+          within(ticket).getByText('До старта 2 дн 14 ч'),
+        ).toBeInTheDocument();
+        // The head's relative day, in the ride's own time zone.
+        expect(screen.getByText('через 3 дня')).toBeInTheDocument();
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it('shows no countdown once the ride has started (CR-130)', async () => {
+    it('shows no countdown and no cancel once the ride has started (CR-130, CR-151)', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: { ...baseRide, status: 'started' },
@@ -1108,7 +1265,10 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       await screen.findByRole('heading', { name: 'Вы зарегистрированы' });
-      expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+      expect(screen.queryByText(/До старта/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Отменить регистрацию' }),
+      ).not.toBeInTheDocument();
     });
 
     it('changes group via PATCH', async () => {
@@ -1151,9 +1311,7 @@ describe('RideDetailView', () => {
         );
       });
       expect(await screen.findByText('Группа изменена.')).toBeInTheDocument();
-      expect(
-        screen.getByText('Вы едете в группе «Группа 2» · 35 км/ч'),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('ticket-group')).toHaveTextContent('Группа 2');
     });
 
     it('maps a failed group change to a clear message', async () => {
@@ -1230,11 +1388,12 @@ describe('RideDetailView', () => {
           name: 'Войдите, чтобы увидеть список',
         }),
       ).toHaveAttribute('href', '/login?next=%2Frides%2Fride-1');
-      expect(screen.getByText('14 участников')).toBeInTheDocument();
+      const riders = screen.getByRole('region', { name: 'Кто едет' });
+      expect(within(riders).getByText('14 из 20')).toBeInTheDocument();
       expect(getRideRidersMock).not.toHaveBeenCalled();
     });
 
-    it('lists signed-in viewers the riders grouped by group, ungrouped last', async () => {
+    it('shows signed-in viewers an avatar stack, and the full list grouped by group on demand', async () => {
       sessionState.status = 'authenticated';
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
@@ -1269,11 +1428,30 @@ describe('RideDetailView', () => {
 
       render(<RideDetailView rideId="ride-1" />);
 
+      const riders = await screen.findByRole('region', { name: 'Кто едет' });
+      // CR-151: avatars link to each rider's card (CR-126), by registrationId.
+      const avatars = await within(riders).findByTestId('riders-avatars');
+      expect(
+        within(avatars).getByRole('link', { name: 'Анна' }),
+      ).toHaveAttribute('href', '/rides/ride-1/riders/reg-anna');
+      expect(
+        within(riders).getByTestId('riders-group-split'),
+      ).toHaveTextContent(/Группа 1 · 25 км\/ч — 2/);
+      expect(getRideRidersMock).toHaveBeenCalledWith('ride-1');
+
+      const toggle = within(riders).getByRole('button', {
+        name: 'Весь список участников',
+      });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
       // `findByText`, not a role query: the pace joins value and unit with an
       // NBSP, which the text matcher's normalizer collapses and the
       // accessible-name matcher does not.
-      const headingOne = await screen.findByText('Группа 1 · 25 км/ч — 2');
-      const headings = screen
+      const list = within(riders).getByText('Группа 1 · 25 км/ч — 2')
+        .parentElement as HTMLElement;
+      const headings = within(riders)
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent?.replace(/\s+/g, ' '));
       expect(headings).toEqual([
@@ -1281,21 +1459,11 @@ describe('RideDetailView', () => {
         'Группа 2 · 35 км/ч — 1',
         'Без группы — 1',
       ]);
-      const groupOneList = headingOne.parentElement as HTMLElement;
-      expect(within(groupOneList).getByText('Анна')).toBeInTheDocument();
+      expect(within(list).getByText('Анна')).toBeInTheDocument();
       expect(
-        within(groupOneList).getByText('Участник без имени'),
-      ).toBeInTheDocument();
-      expect(screen.getByText('Вера')).toBeInTheDocument();
-      expect(getRideRidersMock).toHaveBeenCalledWith('ride-1');
-      // CR-126: each rider name links to their profile card, by registrationId.
-      expect(screen.getByText('Анна').closest('a')).toHaveAttribute(
-        'href',
-        '/rides/ride-1/riders/reg-anna',
-      );
-      expect(
-        within(groupOneList).getByText('Участник без имени').closest('a'),
+        within(list).getByText('Участник без имени').closest('a'),
       ).toHaveAttribute('href', '/rides/ride-1/riders/reg-noname');
+      expect(within(riders).getByText('Вера')).toBeInTheDocument();
     });
 
     it('falls back to the sign-in prompt on a 401 from the riders endpoint', async () => {
@@ -1362,6 +1530,9 @@ describe('RideDetailView', () => {
 
       render(<RideDetailView rideId="ride-1" />);
 
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Весь список участников' }),
+      );
       expect(await screen.findByText('Анна')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Показать ещё' }));
 

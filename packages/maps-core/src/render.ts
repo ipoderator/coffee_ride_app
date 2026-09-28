@@ -61,6 +61,10 @@ export interface MapRenderOptions {
   /** CR-118: called with a marker's `id` when that marker is clicked/tapped
    * (discovery selects the matching list row). */
   onMarkerClick?: (id: string) => void;
+  /** Where the provider's zoom buttons sit, so a caller can keep them clear
+   * of its own overlay (the ride hero's view switch is top-right). Omit for
+   * the provider's default corner. */
+  zoomControlPosition?: 'topRight' | 'centerRight' | 'bottomRight';
 }
 
 export interface MapHandle {

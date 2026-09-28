@@ -831,6 +831,16 @@ for the integration suites. `.github/workflows/maps-contract.yml` is a second
 workflow (manual/weekly, protected `maps-2gis-contract` environment) for the
 live 2GIS contract test.
 
+CR-151 («Постер заезда v2»): `features/participant/ride-detail/` rebuilt around
+`RideHero` (+ `TrackCover`), `RegistrationTicket` (replaces `RegistrationButton`; owns
+the pace-group choice now), `TicketBar`, `RouteTimeline` (replaces `RouteLegend`);
+`GroupPicker`/`StartCountdown` deleted. New `lib/`: `route-track.ts` (running
+distance, point-at-km, pin-to-km, the cover projection), `timeline.ts`,
+`ticket-state.ts`, `use-element-size.ts`. `packages/ui` gained `SegmentedControl`,
+`MetricTile.valueClassName`, `RIDE_POSTER_TERMS`/`RIDE_TICKET_TERMS`,
+`formatRelativeDay`/`formatCountdownShort`. API: `GET /v1/rides/:id` gained
+`waitlistCount`/`viewerStartNumber`/`viewerWaitlistPosition` (`getRideForViewer`).
+
 ## Target structure
 
 apps/

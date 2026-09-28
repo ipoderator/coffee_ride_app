@@ -127,6 +127,16 @@ export interface GetRideResponse {
   // edit form and lifecycle controls for it (every action was already rejected
   // server-side — this closes the confusing screen, not an authorization hole).
   isOwner: boolean;
+  // CR-151 («Постер заезда v2»): additive. `waitlistCount` — `waiting` queue
+  // entries, a count only (the ride page's «В очереди N человек»).
+  // `viewerStartNumber` — the caller's 1-based place among the ride's active
+  // registrations by `(createdAt, id)` («№ 7» on their ticket); `null` without
+  // an active registration or a session. `viewerWaitlistPosition` — the same
+  // over `waiting` entries, i.e. the FIFO promotion order; `null` when not
+  // queued. A place can move up as earlier riders cancel.
+  waitlistCount: number;
+  viewerStartNumber: number | null;
+  viewerWaitlistPosition: number | null;
 }
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real

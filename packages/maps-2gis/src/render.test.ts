@@ -15,6 +15,7 @@ const {
   mapOn,
   htmlMarkerCtor,
   markerOn,
+  mapCtor,
 } = vi.hoisted(() => ({
   polylineCtor: vi.fn(),
   mapFitBounds: vi.fn(),
@@ -23,11 +24,17 @@ const {
   mapOn: vi.fn(),
   htmlMarkerCtor: vi.fn(),
   markerOn: vi.fn(),
+  mapCtor: vi.fn(),
 }));
 
 vi.mock('@2gis/mapgl', () => ({
   load: vi.fn().mockResolvedValue({
-    Map: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    Map: vi.fn().mockImplementation(function (
+      this: Record<string, unknown>,
+      _container: unknown,
+      options: unknown,
+    ) {
+      mapCtor(options);
       this.destroy = vi.fn();
       this.fitBounds = mapFitBounds;
       this.setCenter = mapSetCenter;
@@ -194,6 +201,25 @@ describe('onClick', () => {
   it('subscribes to nothing when no handler is given', async () => {
     await renderHandle();
     expect(mapOn).not.toHaveBeenCalled();
+  });
+});
+
+describe('zoomControlPosition', () => {
+  it('moves the zoom buttons to the requested side', async () => {
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    await renderer.render({
+      container: {} as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+      zoomControlPosition: 'centerRight',
+    });
+    expect(mapCtor).toHaveBeenCalledWith(
+      expect.objectContaining({ zoomControl: 'centerRight' }),
+    );
+  });
+
+  it("leaves MapGL's default corner when omitted", async () => {
+    await renderHandle();
+    expect(mapCtor.mock.calls[0]![0]).not.toHaveProperty('zoomControl');
   });
 });
 

@@ -1362,3 +1362,86 @@ export const CABINET_NAV_BADGE_TERMS = {
 } as const;
 
 // --------------------------- end CR-132 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-151 («Постер заезда v2» — `/rides/[id]` rebuilt around a dark hero and a
+// registration «ticket»). Additive; earlier `RIDE_DETAIL_*` keys stay in use.
+// ---------------------------------------------------------------------------
+
+/** `/rides/[id]`'s hero: the cover's «Трек / Карта» switch and its captions. */
+export const RIDE_POSTER_TERMS = {
+  heroLabel: 'Маршрут и главные цифры',
+  viewLabel: 'Вид обложки',
+  viewTrack: 'Трек',
+  viewMap: 'Карта',
+  trackLabel: 'Обложка с треком маршрута',
+  pointsOnlyLabel: 'Обложка с точками маршрута',
+  routeMissing: 'Маршрут пока не загружен',
+  organizedBy: 'Организует',
+  share: 'Поделиться',
+  shareCopied: 'Ссылка на заезд скопирована.',
+  shareFailed: 'Не удалось скопировать ссылку.',
+  timelineTitle: 'Маршрут по точкам',
+  kmUnit: 'км',
+  startAt: (time: string) => `Старт · ${time}`,
+  finishAt: (time: string) => `Финиш · ≈ ${time}`,
+  stopFor: (duration: string) => `стоянка ${duration}`,
+  elevationHint: 'наведите — точка на обложке',
+  ridersTitle: 'Кто едет',
+  ridersOf: (count: number, limit: number) => `${count} из ${limit}`,
+  showAllRiders: 'Весь список участников',
+  hideAllRiders: 'Свернуть список',
+} as const;
+
+/** The registration «ticket» and its phone bar (CR-151). */
+export const RIDE_TICKET_TERMS = {
+  title: 'Регистрация',
+  numberSign: '№',
+  queueSign: '#',
+  startListLabel: 'Стартовый лист',
+  // «из 24 мест», «из 21 места» — genitive after «из».
+  youWillBe: (place: number, limit: number | null) =>
+    limit === null
+      ? `Вы будете ${place}-м`
+      : `Вы будете ${place}-м из ${limit} ${pluralRu(limit, 'места', 'мест', 'мест')}`,
+  dateLabel: 'Дата',
+  startTimeLabel: 'Старт',
+  groupLegend: 'Группа по темпу',
+  groupNote: (name: string, count: number) =>
+    `${name} · ${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
+  participantsOf: (count: number, limit: number) => `${count} из ${limit}`,
+  participantsWord: 'участников',
+  noLimit: 'Без ограничения мест',
+  registerNote: (price: string) => `${price} · отменить можно до старта`,
+  waitlistLabel: 'Список ожидания',
+  queueSize: (count: number) =>
+    count === 0
+      ? 'Очередь пока пуста.'
+      : `В очереди ${count} ${pluralRu(count, 'человек', 'человека', 'человек')}.`,
+  queueHint: 'Освободится место — запишем по порядку.',
+  waitlistNote: 'Пришлём уведомление, если место освободится',
+  waitlistedTitle: 'Вы в списке ожидания',
+  waitlistedHint:
+    'Освободится место — запишем автоматически и пришлём уведомление.',
+  countdown: (value: string) => `До старта ${value}`,
+  yourGroupLabel: 'Ваша группа',
+  meetingPointLabel: 'Место сбора',
+  closedTitle: 'Регистрация закрыта',
+  closedHint: 'Организатор закрыл набор участников.',
+  notOpenTitle: 'Регистрация ещё не открыта',
+  notOpenHint: 'Организатор откроет её ближе к дате заезда.',
+  startedTitle: 'Заезд идёт',
+  finishedTitle: 'Заезд завершён',
+  rideOverHint: 'Регистрация больше не нужна.',
+  cancelledTitle: 'Заезд отменён',
+  cancelledHint: 'Регистрации аннулированы.',
+  cancelledBanner: 'Организатор отменил этот заезд.',
+  barNumber: (place: number) => `№ ${place}`,
+  barFull: (queue: number) => `Мест нет · очередь ${queue}`,
+  barRegistered: (place: number | null) =>
+    place === null ? 'Вы зарегистрированы' : `Вы зарегистрированы · № ${place}`,
+  barQueue: 'В очередь',
+  barDetails: 'Детали',
+} as const;
+
+// --------------------------- end CR-151 block ------------------------------

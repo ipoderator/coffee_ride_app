@@ -171,6 +171,9 @@ export function create2GisMapRenderer(
         center: toLngLat(options.center),
         zoom: options.zoom ?? 12,
         key: config.apiKey,
+        ...(options.zoomControlPosition
+          ? { zoomControl: options.zoomControlPosition }
+          : {}),
       });
 
       if (options.onClick) {

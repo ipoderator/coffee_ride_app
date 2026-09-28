@@ -524,3 +524,53 @@ export function formatShortPersonName(
   const last = parts[parts.length - 1]!;
   return `${first} ${last[0]!.toUpperCase()}.`;
 }
+
+// ---------------------------------------------------------------------------
+// CR-151 («Постер заезда v2»). Additive.
+// ---------------------------------------------------------------------------
+
+/**
+ * How far the ride's start day is from today, in calendar days of the ride's
+ * own `timeZone` — `сегодня`, `завтра`, `через 5 дней`. `null` once the day
+ * has passed (a past ride needs no «через»).
+ */
+export function formatRelativeDay(
+  target: Date,
+  now: Date = new Date(),
+  options: FormatTimeOptions = {},
+): string | null {
+  const timeZone = options.timeZone ?? 'UTC';
+  const dayNumber = (date: Date) => {
+    const { year, month, day } = partsInZone(date, timeZone);
+    return Date.UTC(year, month - 1, day) / 86_400_000;
+  };
+  const days = dayNumber(target) - dayNumber(now);
+  if (days < 0) return null;
+  if (days === 0) return 'сегодня';
+  if (days === 1) return 'завтра';
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11
+      ? 'день'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+        ? 'дня'
+        : 'дней';
+  return `через ${days}${NBSP}${word}`;
+}
+
+/**
+ * A compact countdown — `5 дн 14 ч`, `3 ч 20 мин`, `12 мин` (abbreviated
+ * units need no plural agreement, same reason as {@link formatElapsedShort}).
+ * `null` once `target` has passed.
+ */
+export function formatCountdownShort(
+  target: Date,
+  now: Date = new Date(),
+): string | null {
+  if (target.getTime() <= now.getTime()) return null;
+  const { days, hours, minutes } = countdownParts(target, now);
+  if (days > 0) return `${days}${NBSP}дн ${hours}${NBSP}ч`;
+  if (hours > 0) return `${hours}${NBSP}ч ${minutes}${NBSP}мин`;
+  return `${minutes}${NBSP}мин`;
+}

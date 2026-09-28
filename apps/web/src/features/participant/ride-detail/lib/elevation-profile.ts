@@ -1,17 +1,8 @@
 import type { LatLng } from 'maps-core';
 
-// CR-028 ("Route rendering"). `ElevationProfileChart`'s input is built from
-// `maps-core`'s provider-neutral `LatLng` (`docs/design.md` §9: "`RideMap` and
-// `ElevationProfile` consume `packages/maps-core` types only") extended with the one
-// field a GPX track adds that a generic lat/lng pair doesn't carry.
-export type ElevationProfileInputPoint = LatLng & {
-  elevationMeters: number | null;
-};
-
-export interface ElevationProfilePoint {
-  distanceKm: number;
-  elevationMeters: number | null;
-}
+// CR-028 ("Route rendering"): the distance/downsampling helpers behind the
+// elevation profile and, since CR-151, `route-track.ts`'s running distance.
+// Provider-neutral `maps-core` `LatLng` only (`docs/design.md` §9).
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -45,39 +36,4 @@ export function downsample<T>(points: T[], maxSamples: number): T[] {
     result.push(points[Math.round(i * step)]!);
   }
   return result;
-}
-
-/**
- * Cumulative distance (haversine, full resolution) paired with each point's
- * elevation, then downsampled to at most `maxSamples` points for rendering — a real
- * GPX track can have thousands of points (CR-027/ADR-015), and an SVG path doesn't
- * need every one of them to look correct. Distance is accumulated *before*
- * downsampling so the chart's x-axis stays faithful to the real path rather than
- * drifting from cutting corners at low resolution. This is a rendering
- * simplification only — `Route.distanceKm`/`elevationGainMeters` (shown separately
- * via `MetricTile`) remain the authoritative, full-resolution, server-computed
- * numbers (`docs/design.md` §6: "the chart is an illustration, the number is the
- * fact").
- */
-export function buildElevationProfile(
-  points: ElevationProfileInputPoint[],
-  maxSamples = 200,
-): ElevationProfilePoint[] {
-  if (points.length === 0) {
-    return [];
-  }
-
-  const full: ElevationProfilePoint[] = [
-    { distanceKm: 0, elevationMeters: points[0]!.elevationMeters },
-  ];
-  let cumulativeKm = 0;
-  for (let i = 1; i < points.length; i++) {
-    cumulativeKm += haversineDistanceKm(points[i - 1]!, points[i]!);
-    full.push({
-      distanceKm: cumulativeKm,
-      elevationMeters: points[i]!.elevationMeters,
-    });
-  }
-
-  return downsample(full, maxSamples);
 }

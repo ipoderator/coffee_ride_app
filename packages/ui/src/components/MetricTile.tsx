@@ -37,6 +37,11 @@ export interface MetricTileProps {
    * KPI row (mockup screen 4), where the numbers are the screen's headline.
    */
   size?: 'md' | 'lg';
+  /**
+   * CR-151: extra classes for the value line — the ride poster's numbers band
+   * tints elevation in its own ink and a missing value muted.
+   */
+  valueClassName?: string;
   className?: string;
 }
 
@@ -48,6 +53,7 @@ export function MetricTile({
   note,
   noteTone = 'muted',
   size = 'md',
+  valueClassName,
   className,
 }: MetricTileProps) {
   return (
@@ -70,6 +76,7 @@ export function MetricTile({
         className={cn(
           'flex items-baseline gap-1 whitespace-nowrap font-num leading-none font-extrabold tabular-nums text-text',
           size === 'lg' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl',
+          valueClassName,
         )}
       >
         <span>{value}</span>

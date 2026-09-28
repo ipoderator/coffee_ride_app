@@ -89,7 +89,7 @@ export async function getRouteGeometry(
 
 /**
  * CR-032 ("Register"). Throws `ApiError` on any non-2xx response — `unauthorized`
- * (401, no session — `RegistrationButton` redirects to `/login`),
+ * (401, no session — `RegistrationTicket` redirects to `/login`),
  * `ride_registration_not_open`/`registration_already_exists`/`ride_full` (409).
  *
  * CR-117/CR-119 (pace groups): `groupId` goes in a JSON body only when given — a

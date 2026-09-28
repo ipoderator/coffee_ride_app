@@ -371,6 +371,42 @@ after the ADR-024 card read as cluttered — every fact was stacked over the rou
 - Hover: border to `border-input` and a 2px lift (`motion-safe`); focus ring
   `primary`.
 
+### Ride poster (CR-151, «Постер заезда v2»)
+
+`/rides/[id]`, built from the owner's «Постер заезда v2» mockup. Reading order:
+
+- **Head**: start line (display face, caps) + a relative-day chip («завтра», «через
+  5 дней» — the ride's own time zone; hidden once started/finished/cancelled) →
+  title (Unbounded 700, `clamp(30px, 5.2vw, 58px)`, ≤ 17ch; muted when cancelled) →
+  organizer avatar + «Организует …» + ★ rating · reviews.
+- **Hero** (`RideHero`): the always-dark cover window, full-bleed on a phone, 28px
+  radius from `sm`. Two faces behind a «Трек / Карта» `SegmentedControl` on the cover
+  (shown only when there is something to map): the drawn track (`TrackCover` —
+  decorative isolines, an elevation silhouette at 22 % along the foot, the real
+  geometry, typed pins) or the live 2GIS `RouteMap` (placeholder when degraded).
+  No track → pins only, never joined, plus «Маршрут пока не загружен». Status chip
+  top-left (same derivation as the grid card). Under the picture, the **numbers
+  band**: distance / набор высоты (elevation ink) / средний темп (+ «N группы») /
+  длительность as `MetricTile size="lg"` — always four, a missing one reads «—».
+- **Ticket** (`RegistrationTicket`): every registration state on one perforated card
+  (shape after 21st larsen66/admit-one-ticket, no shader/glare): a stub with the
+  state's heading and a big `font-num` figure — «№ N» where the viewer would stand
+  or stands in the start list, «#N» in the queue, «12/20» when closed, a ✕ when
+  cancelled — then the perforation, date/start cells, the pace-group
+  `SegmentedControl` (tall), seats + fill bar, the one action and a note. Outline:
+  `frame`; `success` when registered; `danger` when cancelled. Sticky right-hand
+  aside (380px) from `lg`; straight under the hero on a phone.
+- **Phone bar** (`TicketBar`): appears only after the ticket has scrolled up out of
+  view (open/few/full/registered), its button scrolls back to the ticket — never a
+  second copy of the action. Hidden from `lg`.
+- **Main column**: chips (difficulty, bike, price) + description; «Маршрут по
+  точкам» (`RouteTimeline` — km along the track, a dashed `brand` rail through
+  icon pins in the same token colours as the map pins; start with the start time,
+  finish with «≈» start + duration); the elevation profile; «Скачать GPX» +
+  «Поделиться» (Web Share, clipboard fallback); «Кто едет» (initials avatar stack
+  with name tooltips, group split chips, «Весь список участников» expands the
+  grouped list); reviews once finished.
+
 ### Elevation profile
 
 - Area chart: x = distance, y = elevation; single `contour` ink (ADR-021 — elevation is
@@ -383,6 +419,9 @@ after the ADR-024 card read as cluttered — every fact was stacked over the rou
   the fact.
 - Hover/touch shows distance + elevation at that point. Keyboard-accessible alternative:
   the numeric summary is always present in text.
+- CR-151: drawn in real pixels (measured width) with a metres grid and a km axis; the
+  readout sits in the header («43,2 км · 212 м», else «наведите — точка на обложке»),
+  and the hovered distance moves a dot along the hero's track.
 
 ### Difficulty
 
@@ -472,7 +511,7 @@ visible label. It sits alongside the header's disclosure panel, which still hold
 the full per-cabinet menus, the theme control and sign-out — an owner decision
 (2026-09-26, CR-133): the two coexist, deliberately departing from ADR-024 §8's
 "replaces the dropdown", since the five tabs have no room for those. It steps aside on
-`/rides/[id]`, whose sticky registration bar owns that screen edge; `Toast` lifts
+`/rides/[id]`, whose registration bar (CR-151: shown once the ticket scrolls away) owns that screen edge; `Toast` lifts
 above it via `--app-bottom-inset`.
 
 The organizer dashboard (`/organizer`, CR-131 — mockup screen 4) opens with the
@@ -514,7 +553,8 @@ URL with no history behind it. A cabinet sidebar section itself (`/organizer/rid
 `FormField`, `Card`, `Badge`, `Tabs`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toast`,
 `Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `AvatarStack` (ADR-024, new — overlapping
 avatars + `+N` overflow), `Pagination`, `MetricTile`, `MetricRow`, `StatusBadge`,
-`DifficultyScale`, `Wordmark`, `NavMenu`.
+`DifficultyScale`, `Wordmark`, `NavMenu`, `SegmentedControl` (CR-151 — native radios in a
+`fieldset`, a sliding thumb; `tall` two-line and `cover` dark-window variants).
 
 `NavMenu` (CR-108) is the accessible dropdown the global header's sections, theme
 control and account menu are all built from — `aria-haspopup="menu"`/`aria-expanded`,
@@ -529,7 +569,8 @@ removing or repurposing a prop requires checking both cabinets first.
 `RideCard`, `RideFilters`, `RideMap`, `RouteCover` (ADR-024, new — a route-drawn cover
 built from `route-preview.ts`'s projection geometry, lives in
 `features/participant/discovery/components`; only the grid card uses it),
-`ElevationProfile`, `StopList`, `ServiceList`, `RequirementList`, `RegistrationButton`,
+`ElevationProfile`, `StopList`, `ServiceList`, `RequirementList`, `RegistrationTicket`
+(CR-151, replaced `RegistrationButton`), `RideHero`, `TrackCover`, `RouteTimeline`, `TicketBar`,
 `ParticipantTable`, `WaitlistTable`, `UpdateComposer`, `ReviewForm`, `ReviewList`.
 
 `RideMap` and `ElevationProfile` consume `packages/maps-core` types only — never the 2GIS

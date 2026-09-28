@@ -1,9 +1,14 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
-  formatGroupPace,
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+} from '@playwright/test';
+import {
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_GROUP_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
+  RIDE_TICKET_TERMS,
 } from 'ui';
 import {
   createOrganizerProfile,
@@ -43,11 +48,9 @@ async function signInParticipant(request: APIRequestContext) {
   await login(request, participant.email, participant.password);
 }
 
-function ridingIn(group: { name: string; paceKmh: number }) {
-  return RIDE_DETAIL_GROUP_TERMS.ridingIn(
-    group.name,
-    formatGroupPace(group.paceKmh),
-  );
+// CR-151: the registered ticket's «Ваша группа» cell.
+async function expectRidingIn(page: Page, group: { name: string }) {
+  await expect(page.getByTestId('ticket-group')).toContainText(group.name);
 }
 
 test('a ride with groups requires choosing one to register', async ({
@@ -73,7 +76,7 @@ test('a ride with groups requires choosing one to register', async ({
   await expect(page.getByText(RIDE_DETAIL_GROUP_TERMS.pickHint)).toBeVisible();
 
   await page
-    .getByRole('group', { name: RIDE_DETAIL_GROUP_TERMS.pickLegend })
+    .getByRole('group', { name: RIDE_TICKET_TERMS.groupLegend })
     .getByRole('radio', { name: new RegExp(SLOW.name) })
     .check();
   await expect(register).toBeEnabled();
@@ -84,7 +87,7 @@ test('a ride with groups requires choosing one to register', async ({
       name: RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle,
     }),
   ).toBeVisible();
-  await expect(page.getByText(ridingIn(SLOW))).toBeVisible();
+  await expectRidingIn(page, SLOW);
 });
 
 test('a registered rider changes their pace group', async ({ page }) => {
@@ -97,7 +100,7 @@ test('a registered rider changes their pace group', async ({ page }) => {
   await registerForRide(page.request, rideId, slowId);
 
   await page.goto(`/rides/${rideId}`);
-  await expect(page.getByText(ridingIn(SLOW))).toBeVisible();
+  await expectRidingIn(page, SLOW);
 
   await page
     .getByRole('button', { name: RIDE_DETAIL_GROUP_TERMS.changeGroup })
@@ -113,9 +116,9 @@ test('a registered rider changes their pace group', async ({ page }) => {
   await expect(
     page.getByText(RIDE_DETAIL_GROUP_TERMS.changeSuccess),
   ).toBeVisible();
-  await expect(page.getByText(ridingIn(FAST))).toBeVisible();
+  await expectRidingIn(page, FAST);
 
   // Persisted server-side, not just local state.
   await page.reload();
-  await expect(page.getByText(ridingIn(FAST))).toBeVisible();
+  await expectRidingIn(page, FAST);
 });

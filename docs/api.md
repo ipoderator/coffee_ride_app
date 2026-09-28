@@ -384,6 +384,13 @@ non-owner's request for a `published`+ ride answers `200`, not `404`; `EditRideF
 (`apps/web`) uses it to show its own not-found state for that case instead of the edit
 form and lifecycle controls.
 
+CR-151 (additive): `waitlistCount` (the ride's `waiting` queue size — a count, no
+identities), `viewerStartNumber` (the caller's 1-based place among the ride's active
+registrations by `(createdAt, id)`; `null` without an active registration or a session)
+and `viewerWaitlistPosition` (the same over `waiting` entries — the FIFO promotion
+order; `null` when not queued). Places move up as earlier riders cancel; the ride page
+shows them as the ticket's «№ N» / «#N».
+
 ## Registration
 
 POST `/v1/rides/:id/register` — **implemented (CR-032, "Register")**. Requires a valid

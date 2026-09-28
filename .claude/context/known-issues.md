@@ -488,6 +488,22 @@ Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
 
+### KI-076 — `ride-detail` visual baselines are stale after CR-151
+
+Status: open. Discovered: 2026-09-28 (CR-151).
+Problem: `/rides/[id]` was rebuilt, so `visual-regression.spec.ts-snapshots/
+ride-detail-{chromium,mobile}-linux.png` no longer match. They must be rendered
+on x86_64 Linux (`.claude/rules/testing.md`), and this machine can't pull the
+`linux/amd64` `mcr.microsoft.com/playwright:v1.63.0-jammy` image (a layer failed
+15+ retries).
+Impact: CI's e2e job fails on those two screenshots until they're replaced —
+nothing else on the page is untested (unit + functional e2e are green).
+Workaround: none locally.
+Next action: after CR-151 is pushed, take the two `*-actual.png` files from the
+failed run's `playwright-report` artifact (`gh run download <run> -n
+playwright-report`), check the diff is only the redesign, commit them as the new
+baselines, re-run CI.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this
