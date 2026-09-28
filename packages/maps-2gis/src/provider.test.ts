@@ -264,6 +264,49 @@ describe('getRoute', () => {
     ]);
   });
 
+  // CR-147: the live answer for points no road connects.
+  it('maps an HTTP 200 ROUTE_DOES_NOT_EXISTS error to no_route', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        message: null,
+        status: 'ROUTE_DOES_NOT_EXISTS',
+        type: 'error',
+      }),
+    });
+
+    const provider = create2GisMapProvider(config);
+    await expect(
+      provider.getRoute({
+        points: [
+          { lat: 1, lng: 2 },
+          { lat: 3, lng: 4 },
+        ],
+        profile: 'cycling',
+      }),
+    ).rejects.toMatchObject({ name: 'MapProviderError', code: 'no_route' });
+  });
+
+  it('treats any other HTTP 200 routing error as unavailable', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        message: null,
+        status: 'SOMETHING_ELSE',
+        type: 'error',
+      }),
+    });
+
+    const provider = create2GisMapProvider(config);
+    await expect(
+      provider.getRoute({
+        points: [
+          { lat: 1, lng: 2 },
+          { lat: 3, lng: 4 },
+        ],
+        profile: 'cycling',
+      }),
+    ).rejects.toMatchObject({ name: 'MapProviderError', code: 'unavailable' });
+  });
+
   it('throws MapProviderError when no usable route is present', async () => {
     mockFetchOnce({ json: async () => [] });
 

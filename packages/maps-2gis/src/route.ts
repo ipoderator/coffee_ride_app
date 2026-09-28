@@ -20,11 +20,19 @@ const PROFILE_TO_TRANSPORT: Record<RouteRequest['profile'], string> = {
   walking: 'walking',
 };
 
-// Known shapes: a bare list of route items, `{ result: [...] }`, or `null`
-// (204 No Content — no route). Anything else is unexpected (CR-137).
+// Known shapes: a bare list of route items, `{ result: [...] }`, `null`
+// (204 No Content — no route), or HTTP 200 with `{ type: 'error', status }`
+// (live, CR-147: an island with no bridge answers `ROUTE_DOES_NOT_EXISTS`).
+// Anything else is unexpected (CR-137).
+const NO_ROUTE_STATUS = 'ROUTE_DOES_NOT_EXISTS';
+
 function extractItems(body: unknown): unknown[] {
   if (body === null) return [];
   if (Array.isArray(body)) return body;
+  if (isRecord(body) && body.type === 'error') {
+    if (body.status === NO_ROUTE_STATUS) return [];
+    throw new MapProviderError('2GIS routing answered with an error.');
+  }
   if (isRecord(body) && Array.isArray(body.result)) return body.result;
   throw unexpectedShape('no route list');
 }

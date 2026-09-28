@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ROUTING_BASE_URL } from './config.js';
 import { MapProviderError } from './errors.js';
 import { create2GisMapProvider } from './provider.js';
 
@@ -23,13 +22,11 @@ const TEST_TIMEOUT_MS = 30_000;
 // Red Square and a point ~2 km south-west along the embankment (Moscow).
 const RED_SQUARE = { lat: 55.7539, lng: 37.6208 };
 const GORKY_PARK = { lat: 55.7312, lng: 37.6034 };
-// Islands with no bridge, each within 50 km of its mainland pair: the
+// Solovki: an island with no bridge, within 50 km of the mainland: the
 // demo key rejects points further apart with a 403 (CR-147 — Moscow →
 // Reykjavik got "excessive distance between points for demo-keys").
 const SOLOVETSKY_MONASTERY = { lat: 65.0245, lng: 35.711 };
 const RABOCHEOSTROVSK = { lat: 64.989, lng: 34.779 };
-const VLADIVOSTOK = { lat: 43.1155, lng: 131.8855 };
-const POPOVA_ISLAND = { lat: 42.975, lng: 131.73 };
 
 function distanceMeters(a: { lat: number; lng: number }, b: typeof a) {
   const rad = Math.PI / 180;
@@ -104,9 +101,9 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
     TEST_TIMEOUT_MS,
   );
 
-  // KI-056: what 2GIS answers for points no road connects. The adapter maps
-  // 204 / an empty result / no geometry to `no_route` (API 422); any other
-  // answer would surface to the organizer as "maps unavailable" instead.
+  // KI-056: points no road connects. Live answer (CR-147): HTTP 200 with
+  // `{ type: 'error', status: 'ROUTE_DOES_NOT_EXISTS' }` → `no_route` (API
+  // 422), not "maps unavailable".
   it(
     'getRoute: points no road connects fail as no_route',
     async () => {
@@ -122,40 +119,6 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
         (error as MapProviderError).code,
         `status=${(error as MapProviderError).status} ${(error as Error).message}`,
       ).toBe('no_route');
-    },
-    TEST_TIMEOUT_MS,
-  );
-
-  // CR-147 diagnostic, no assertions: the adapter never surfaces a 2GIS
-  // error body, so this prints what 2GIS actually says for island pairs no
-  // road connects. Only the status and body — never the URL, which carries
-  // the key.
-  it(
-    'diagnostic: raw routing answers for unconnectable pairs',
-    async () => {
-      const pairs = {
-        'rabocheostrovsk-solovki': [RABOCHEOSTROVSK, SOLOVETSKY_MONASTERY],
-        'vladivostok-popova': [VLADIVOSTOK, POPOVA_ISLAND],
-      };
-      for (const [name, points] of Object.entries(pairs)) {
-        const url = new URL(`${DEFAULT_ROUTING_BASE_URL}/global`);
-        url.searchParams.set('key', apiKey ?? '');
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            points: points.map((p) => ({
-              lat: p.lat,
-              lon: p.lng,
-              type: 'stop',
-            })),
-            transport: 'bicycle',
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-        const text = await response.text();
-        console.warn(`[2gis ${name}] ${response.status} ${text.slice(0, 600)}`);
-      }
     },
     TEST_TIMEOUT_MS,
   );
