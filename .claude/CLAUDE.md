@@ -132,6 +132,9 @@ as any other Claude skill — no need to invoke them by name):
   (`.claude/rules/git.md`).
 - `run-dev` — start the local dev stack (`apps/api` + `apps/web` via `pnpm dev`)
   for manual testing/verification.
+- `mockup-to-screen` — bring an existing page in line with an approved mockup
+  (gap table → decisions → implement inside the tokens/type scale → screenshots).
+  `shots.mjs` beside it screenshots key pages at 320/390/1440.
 
 These are procedures, not replacements for the underlying rules files — read the linked
 rules file in full for anything the skill doesn't cover.
