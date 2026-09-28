@@ -2,6 +2,7 @@ import type { GeocodeResult, LatLng } from 'maps-core/server';
 import type { CircuitBreaker } from 'resilience';
 import type { TwoGisProviderConfig } from './config.js';
 import { DEFAULT_GEOCODER_BASE_URL, DEFAULT_TIMEOUT_MS } from './config.js';
+import { MapProviderError } from './errors.js';
 import { fetchJson } from './http.js';
 import { isRecord, optionalList } from './shape.js';
 
@@ -16,7 +17,21 @@ import { isRecord, optionalList } from './shape.js';
 // or `null` for 204 No Content (nothing found). Narrowed field by field
 // (CR-137): an item without numeric coordinates is dropped like one with no
 // point, a non-list `items` is a malformed answer.
+//
+// CR-147: the Catalog API answers errors with HTTP 200 and the real status in
+// `meta.code` — an invalid key came back as 200 and was read as "nothing
+// found". 404 there is "no results"; any other non-200 code is a failure.
+const META_CODE_NOT_FOUND = 404;
+
 function extractItems(body: unknown): unknown[] {
+  const meta = isRecord(body) ? body.meta : undefined;
+  const code = isRecord(meta) ? meta.code : undefined;
+  if (typeof code === 'number' && code !== 200) {
+    if (code === META_CODE_NOT_FOUND) return [];
+    throw new MapProviderError(`2GIS responded with status ${code}.`, {
+      status: code,
+    });
+  }
   const result = isRecord(body) ? body.result : undefined;
   return optionalList(isRecord(result) ? result.items : undefined, 'items');
 }

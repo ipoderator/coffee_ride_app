@@ -63,6 +63,34 @@ describe('geocode', () => {
     const provider = create2GisMapProvider(config);
     await expect(provider.geocode('nowhere')).resolves.toEqual([]);
   });
+
+  // CR-147: the Catalog API reports errors as HTTP 200 + `meta.code`.
+  it('treats meta.code 404 as no results', async () => {
+    mockFetchOnce({
+      json: async () => ({
+        meta: { code: 404, error: { type: 'itemNotFound' } },
+      }),
+    });
+
+    const provider = create2GisMapProvider(config);
+    await expect(provider.geocode('nowhere')).resolves.toEqual([]);
+  });
+
+  it('rejects any other non-200 meta.code as MapProviderError with that status', async () => {
+    mockFetchOnce({
+      json: async () => ({ meta: { code: 403, error: { type: 'keyError' } } }),
+    });
+
+    const provider = create2GisMapProvider(config);
+    await expect(provider.geocode('x')).rejects.toMatchObject({
+      name: 'MapProviderError',
+      code: 'unavailable',
+      status: 403,
+    });
+    await expect(
+      provider.reverseGeocode({ lat: 1, lng: 2 }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
 });
 
 describe('reverseGeocode', () => {
@@ -206,8 +234,9 @@ describe('getRoute', () => {
             {
               outcoming_path: {
                 geometry: [
-                  { selection: 'LINESTRING Z(2 1 150.5, 3 2 152)' },
-                  { selection: 'LINESTRING Z(3 2 152, 4 3 149)' },
+                  // Altitudes in centimetres, as 2GIS sends them.
+                  { selection: 'LINESTRING Z(2 1 15050, 3 2 15200)' },
+                  { selection: 'LINESTRING Z(3 2 15200, 4 3 14900)' },
                 ],
               },
             },

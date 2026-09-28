@@ -687,6 +687,14 @@ live run answers both open questions. The other way to run it, the
 `maps-contract.yml` workflow on GitHub's runners, has never run: the
 `maps-2gis-contract` environment and its `MAPS_2GIS_API_KEY` secret don't exist,
 so its weekly schedule is silently skipped too.
+Update 2026-09-28 (CR-147): environment + secret created; first live run
+(`36386689239`) on GitHub's runners — 2GIS REST is reachable from there, so
+the VPN no longer blocks verification. geocode/reverseGeocode pass. Found and
+fixed: altitudes arrive in centimetres (15820 for Moscow; built routes would
+have had ×100 elevation gain), and the Catalog API's HTTP-200 `meta.code`
+errors (an invalid key read as "nothing found"). Still open: Moscow →
+Reykjavik answers HTTP 403 → `unavailable`, not `no_route`; a diagnostic in
+the contract test prints the raw answer on the next run.
 
 ### KI-057 — The 2GIS basemap stays light in the dark theme
 

@@ -46,7 +46,10 @@ function readMetric(
 // Parses 2GIS's `"LINESTRING(lon lat, lon lat, ...)"` WKT string (note:
 // longitude first, per the WKT spec) into provider-neutral points. With
 // `need_altitudes` a vertex may carry a third number, its altitude
-// (`LINESTRING Z(lon lat alt, ...)` or the same without the `Z`).
+// (`LINESTRING Z(lon lat alt, ...)` or the same without the `Z`) — in
+// centimetres: the first live run (CR-147) got 15820 for central Moscow.
+const CENTIMETRES_PER_METRE = 100;
+
 function parseWktLineString(wkt: string): LatLngAlt[] {
   const match = /LINESTRING\s*Z?\s*\(([^)]*)\)/i.exec(wkt);
   const coordinates = match?.[1];
@@ -57,7 +60,7 @@ function parseWktLineString(wkt: string): LatLngAlt[] {
       const [lng, lat, alt] = pair.trim().split(/\s+/).map(Number);
       const point: LatLngAlt = { lat: lat ?? NaN, lng: lng ?? NaN };
       if (alt !== undefined && Number.isFinite(alt)) {
-        point.elevationMeters = alt;
+        point.elevationMeters = alt / CENTIMETRES_PER_METRE;
       }
       return point;
     })

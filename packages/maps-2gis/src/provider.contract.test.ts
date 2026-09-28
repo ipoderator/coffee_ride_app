@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_ROUTING_BASE_URL } from './config.js';
 import { MapProviderError } from './errors.js';
 import { create2GisMapProvider } from './provider.js';
 
@@ -113,6 +114,43 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
         (error as MapProviderError).code,
         `status=${(error as MapProviderError).status} ${(error as Error).message}`,
       ).toBe('no_route');
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  // CR-147 diagnostic, no assertions: the first live run got HTTP 403 for
+  // Moscow → Reykjavik, and the adapter never surfaces a 2GIS error body.
+  // Prints what 2GIS actually says for an out-of-coverage pair and for an
+  // in-coverage pair no road connects (Sakhalin is an island), so the
+  // `no_route` mapping can be decided from real answers. Only the status and
+  // body are printed — never the URL, which carries the key.
+  it(
+    'diagnostic: raw routing answers for unconnectable pairs',
+    async () => {
+      const YUZHNO_SAKHALINSK = { lat: 46.9591, lng: 142.738 };
+      const pairs = {
+        'moscow-reykjavik': [RED_SQUARE, REYKJAVIK],
+        'moscow-sakhalin': [RED_SQUARE, YUZHNO_SAKHALINSK],
+      };
+      for (const [name, points] of Object.entries(pairs)) {
+        const url = new URL(`${DEFAULT_ROUTING_BASE_URL}/global`);
+        url.searchParams.set('key', apiKey ?? '');
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            points: points.map((p) => ({
+              lat: p.lat,
+              lon: p.lng,
+              type: 'stop',
+            })),
+            transport: 'bicycle',
+          }),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        const text = await response.text();
+        console.warn(`[2gis ${name}] ${response.status} ${text.slice(0, 600)}`);
+      }
     },
     TEST_TIMEOUT_MS,
   );

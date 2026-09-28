@@ -1,47 +1,33 @@
 # Current task
 
-## CR-145 — Known-issues sweep (KI-072, KI-062, KI-061, KI-058, KI-073, KI-044)
+## CR-147 — First live 2GIS contract run (KI-056 via GitHub Actions)
 
-Status: complete, committed.
+Status: in progress.
 
 ### Goal
 
-Close the open known issues the owner listed on 2026-09-28, each with its own
-verification; narrow what can't be closed here (KI-045).
+Run `provider.contract.test.ts` on GitHub's runners (the dev machine's VPN egress
+can't reach 2GIS REST, KI-056) and fix what the live answers show.
 
-### Results per item
+### Done so far
 
-- KI-072 — `.github/dependabot.yml`: dev group minor/patch only. Resolved.
-- KI-062 — `RIDE_GROUP_PACE_STEP_KMH` in `packages/types`, schema `.multipleOf`,
-  form uses it; API test for 27.3 → 400 and 27.5/32.5 accepted. Resolved.
-- KI-061 — `RideSectionLink` registry + five feature descriptors; edit page passes
-  flag-filtered list; test asserts all five hrefs in order. Resolved.
-- KI-058 — `routes.preview` (migration `0020_route_preview`, backfill), written on
-  every route write, read by the list. Resolved.
-- KI-073 — `threshold: 0.02`; regression reproduced and caught in the CI Playwright
-  image (arm64). Resolved pending CI's x86_64 run.
-- KI-044 — measured Caddy/Next header behaviour; `TRUST_PROXY_HOPS` +
-  `lib/trust-proxy.ts`; prod compose 1; smoke step green. Resolved.
-- KI-045 — Caddyfile validated with the official v2.11.4 binary. Still open (ACME,
-  backup).
-- KI-074 — new: Google Fonts fetched at build time.
+- Environment `maps-2gis-contract` (branch policy: `main` only) created via `gh`;
+  owner added the `MAPS_2GIS_API_KEY` secret and dispatched the workflow.
+- Run `36386689239`: 2GIS reachable from GitHub. geocode + reverseGeocode pass;
+  3 failures:
+  1. getRoute elevation `15820` for Moscow — 2GIS altitudes are centimetres, the
+     adapter passed them through as metres (built routes' gain ×100).
+  2. Invalid key → geocode resolved `[]` — Catalog API answers HTTP 200 with the
+     error in `meta.code`; the adapter never read `meta`, so a bad/expired key
+     looked like "nothing found".
+  3. Moscow → Reykjavik → HTTP 403 → `unavailable`, not `no_route`. Body unknown
+     (adapter never surfaces it); likely "outside coverage".
 
-### Validation
+### Plan
 
-- Typecheck + lint repo-wide: 17/17.
-- Coverage (CI env, Redis/S3 live): api 489/489, web 440/440, ui 155/155,
-  maps-2gis 41 (+5 skipped), resilience 15/15; `coverage:check` green; baseline raised.
-- `pnpm smoke:docker` green incl. the KI-044 step.
-- Migration on a fresh DB, the test DB and the dev DB.
-
-### Discovered
-
-- One unreproduced `avatar.routes.test.ts` `beforeEach` failure in a turbo run
-  (three clean full runs after).
-- `.env` has `REDIS_URL` commented out: coverage measured from it skips the Redis
-  suites and "fails" `notifications`/`auth` — use `.env.example`'s URL.
-
-### Carried over
-
-- CR-114 live 2GIS verification (KI-056, blocked by VPN); contract test has the new
-  `no_route` case.
+- route.ts: centimetres → metres. geocode.ts: read `meta.code` (200 ok, 404 empty,
+  else `MapProviderError` with that status). Unit tests for both.
+- Contract test: log the raw status/body of the out-of-coverage answer so the
+  next run shows what 2GIS says; decide the 403 mapping after that.
+- Validation: maps-2gis test/typecheck/lint; re-run the workflow after push
+  (needs owner approval to push to `main`).
