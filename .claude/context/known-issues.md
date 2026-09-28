@@ -488,26 +488,17 @@ Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
 
-### KI-077 — Visual baselines are stale after CR-152's type scale
+### KI-078 — Desktop map fullscreen toggle covers the «Карта временно недоступна» banner
 
-Status: open. Discovered: 2026-09-28 (CR-152).
-Problem: CR-152 changes font sizes/faces on every screen, so all 12 committed
-screenshots (`e2e/visual-regression.spec.ts-snapshots/`, `e2e/themes.spec.ts-snapshots/`)
-no longer match. They must be generated on CI's x86_64 runner (`.claude/rules/
-testing.md`); a full-stack x86 Docker run wasn't practical on this machine.
-Impact: CI's e2e job fails the screenshot comparisons until the baselines are replaced.
-Workaround: none needed locally — functional e2e (39 tests) passes.
-Next action: push CR-152, download the `*-actual.png` files from the failed run's
-`playwright-report` artifact (`gh run download <run> -n playwright-report`), check each
-`*-diff.png` shows only the type change (no layout break), commit them as the new
-baselines (same procedure as KI-076), then archive this entry.
-Update 2026-09-28 (CR-153): the discovery page layout changed again (featured card,
-compact cards, filter chips, intro line) — `discovery-grid`, `discovery-map` and
-`ride-card` diffs will now show layout changes too, by design; check them against
-`docs/design.md` «Discovery page (CR-153)» rather than expecting a type-only diff.
-Refresh once, from the first CI run after CR-153 is pushed.
-Update 2026-09-28 (CR-154): the global header changed (full-width raised bar, pill
-sections, icon-only theme control) — every screenshot's top 72px differs by design.
+Status: open. Discovered: 2026-09-28 (reviewing KI-077's CI screenshots).
+Problem: on `/?view=map` at desktop width with the map degraded (no MapGL key, as in
+CI), CR-123's fullscreen toggle (`DiscoveryList.tsx`, top-left over the map panel)
+sits on top of `RideMapPlaceholder`'s warning, hiding its first word «Карта». Visible
+in `discovery-map-chromium-linux.png` both before and after CR-152–CR-154 — not a
+regression from them.
+Impact: cosmetic/legibility in the degraded state only; a live map is unaffected.
+Next action: hide the toggle while the map is unavailable (nothing to expand), or
+offset the banner past it; refresh `discovery-map-chromium` from CI afterwards.
 
 ## Resolved
 

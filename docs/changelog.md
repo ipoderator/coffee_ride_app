@@ -1993,3 +1993,17 @@ flags, no 2GIS keys) all green — api 499/499, ui 175/175 — and `coverage:che
 passes. Local note: live Redis tests need `REDIS_URL=redis://:redis-dev-only@
 127.0.0.1:6379` (compose's `requirepass`); `.env` has no `REDIS_URL`, so without
 it those suites skip and api coverage looks lower than CI's.
+
+## 2026-09-28 — KI-077 — Visual baselines refreshed after CR-152…CR-154
+
+What: the 12 screenshot baselines (`visual-regression.spec.ts-snapshots/` × 10,
+`themes.spec.ts-snapshots/` × 2) replaced with the `*-actual.png` files from CI run
+36450107547 (`97f5f23`, `ubuntu-latest` x86_64) — the procedure in
+`.claude/rules/testing.md`; a local `linux/amd64` Docker run wasn't possible (the
+image pull stalled behind Docker Desktop's proxy).
+Why: CR-152's type scale, CR-153's discovery layout and CR-154's header change
+every screen by design. That run's other 39 e2e tests passed; every step before
+e2e (format, lint, typecheck, coverage gate, build) was green.
+Review: each actual was compared with its old baseline — only the intended changes.
+One older defect noticed in `discovery-map`: the desktop fullscreen toggle covers
+the map-unavailable banner's first word — recorded as KI-078, not fixed here.

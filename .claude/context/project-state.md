@@ -41,7 +41,9 @@ CR-154 (2026-09-28): global `AppHeader` brought to the discovery mockup's header
 full-width raised bar, pill sections «Заезды / Мои заезды / Организатору» (links
 signed out, registry dropdowns signed in), icon-only theme control (also in the
 phone bar), ghost «Войти» + filled «Регистрация». Committed and pushed together with
-CR-153. Next: KI-077 (refresh baselines from the CI run's `*-actual.png`).
+CR-153; CI follow-up `97f5f23` (root lint, ui term tests, coverage baseline raised);
+KI-077 closed — visual baselines refreshed from CI run 36450107547. Open: KI-078
+(desktop map toggle covers the map-unavailable banner, pre-existing).
 
 CR-153 (2026-09-28): discovery «Заезды» brought to the owner's mockup (variant
 B, frontend + additive API). `/`'s «Список» tab: intro line, «Список / Карта»

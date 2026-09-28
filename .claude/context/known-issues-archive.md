@@ -1982,3 +1982,28 @@ via `toHaveScreenshot`'s `stylePath` (`e2e/hide-seeded-art.css`); seven baseline
 (ride-detail, ride-card, discovery-grid mobile, discovery-map mobile, organizer
 dashboard mobile) replaced from the runs' `*-actual.png`, each identical (≤11 px of
 edge anti-aliasing) across all three attempts and checked by eye.
+
+### KI-077 — Visual baselines are stale after CR-152's type scale
+
+Status: resolved 2026-09-28 (CR-154 follow-up). Discovered: 2026-09-28 (CR-152).
+Problem: CR-152 changes font sizes/faces on every screen, so all 12 committed
+screenshots (`e2e/visual-regression.spec.ts-snapshots/`, `e2e/themes.spec.ts-snapshots/`)
+no longer match. They must be generated on CI's x86_64 runner (`.claude/rules/
+testing.md`); a full-stack x86 Docker run wasn't practical on this machine.
+Impact: CI's e2e job fails the screenshot comparisons until the baselines are replaced.
+Workaround: none needed locally — functional e2e (39 tests) passes.
+Next action: push CR-152, download the `*-actual.png` files from the failed run's
+`playwright-report` artifact (`gh run download <run> -n playwright-report`), check each
+`*-diff.png` shows only the type change (no layout break), commit them as the new
+baselines (same procedure as KI-076), then archive this entry.
+Update 2026-09-28 (CR-153): the discovery page layout changed again (featured card,
+compact cards, filter chips, intro line) — `discovery-grid`, `discovery-map` and
+`ride-card` diffs will now show layout changes too, by design; check them against
+`docs/design.md` «Discovery page (CR-153)» rather than expecting a type-only diff.
+Refresh once, from the first CI run after CR-153 is pushed.
+Update 2026-09-28 (CR-154): the global header changed (full-width raised bar, pill
+sections, icon-only theme control) — every screenshot's top 72px differs by design.
+Resolution: all 12 baselines replaced with the `*-actual.png` files of CI run
+36450107547 (commit `97f5f23`, x86_64 `ubuntu-latest`); every screenshot was checked
+against the old baseline — only the new type scale, header and discovery layout
+differ. The one defect spotted there is older than this work (KI-078).
