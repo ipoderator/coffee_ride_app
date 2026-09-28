@@ -23,8 +23,13 @@ const TEST_TIMEOUT_MS = 30_000;
 // Red Square and a point ~2 km south-west along the embankment (Moscow).
 const RED_SQUARE = { lat: 55.7539, lng: 37.6208 };
 const GORKY_PARK = { lat: 55.7312, lng: 37.6034 };
-// Reykjavik: an island, no road connection to Moscow.
-const REYKJAVIK = { lat: 64.1466, lng: -21.9426 };
+// Islands with no bridge, each within 50 km of its mainland pair: the
+// demo key rejects points further apart with a 403 (CR-147 — Moscow →
+// Reykjavik got "excessive distance between points for demo-keys").
+const SOLOVETSKY_MONASTERY = { lat: 65.0245, lng: 35.711 };
+const RABOCHEOSTROVSK = { lat: 64.989, lng: 34.779 };
+const VLADIVOSTOK = { lat: 43.1155, lng: 131.8855 };
+const POPOVA_ISLAND = { lat: 42.975, lng: 131.73 };
 
 function distanceMeters(a: { lat: number; lng: number }, b: typeof a) {
   const rad = Math.PI / 180;
@@ -106,7 +111,10 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
     'getRoute: points no road connects fail as no_route',
     async () => {
       const error = await provider
-        .getRoute({ points: [RED_SQUARE, REYKJAVIK], profile: 'cycling' })
+        .getRoute({
+          points: [RABOCHEOSTROVSK, SOLOVETSKY_MONASTERY],
+          profile: 'cycling',
+        })
         .catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(MapProviderError);
@@ -118,19 +126,16 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
     TEST_TIMEOUT_MS,
   );
 
-  // CR-147 diagnostic, no assertions: the first live run got HTTP 403 for
-  // Moscow → Reykjavik, and the adapter never surfaces a 2GIS error body.
-  // Prints what 2GIS actually says for an out-of-coverage pair and for an
-  // in-coverage pair no road connects (Sakhalin is an island), so the
-  // `no_route` mapping can be decided from real answers. Only the status and
-  // body are printed — never the URL, which carries the key.
+  // CR-147 diagnostic, no assertions: the adapter never surfaces a 2GIS
+  // error body, so this prints what 2GIS actually says for island pairs no
+  // road connects. Only the status and body — never the URL, which carries
+  // the key.
   it(
     'diagnostic: raw routing answers for unconnectable pairs',
     async () => {
-      const YUZHNO_SAKHALINSK = { lat: 46.9591, lng: 142.738 };
       const pairs = {
-        'moscow-reykjavik': [RED_SQUARE, REYKJAVIK],
-        'moscow-sakhalin': [RED_SQUARE, YUZHNO_SAKHALINSK],
+        'rabocheostrovsk-solovki': [RABOCHEOSTROVSK, SOLOVETSKY_MONASTERY],
+        'vladivostok-popova': [VLADIVOSTOK, POPOVA_ISLAND],
       };
       for (const [name, points] of Object.entries(pairs)) {
         const url = new URL(`${DEFAULT_ROUTING_BASE_URL}/global`);
