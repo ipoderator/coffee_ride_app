@@ -521,7 +521,7 @@ project-state.md`'s standing constraint; `known-issues-archive.md`'s KI-059).
 Both routes below share one access check, `resolveRiderAccess`
 (`apps/api/src/modules/registrations/registrations.service.ts`): `401` without a
 session; `403 riders_hidden` if the organizer turned off the riders list (same rule
-as `/riders` itself — checked first); `404 rider_not_found` for a `registrationId`
+as `/riders` itself — checked first; never for the ride's own organizer, CR-149); `404 rider_not_found` for a `registrationId`
 that isn't an active rider of this ride; otherwise access is granted when the viewer
 is the profile's own owner, the ride's organizer, `profileVisibility: 'open'`, or
 `profileVisibility: 'co_participants'` **and** the viewer has their own active

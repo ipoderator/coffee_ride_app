@@ -304,6 +304,9 @@ export const BACK_LINK_TERMS = {
   // CR-126: `/rides/[id]/riders/[registrationId]` back to the ride it was
   // opened from.
   toRide: 'К заезду',
+  // CR-149: the same card opened from the organizer's cabinet goes back there.
+  toOrganizerOverview: 'В кабинет организатора',
+  toRideParticipants: 'К участникам заезда',
 } as const;
 
 /**

@@ -12,7 +12,9 @@ export const MAX_ACTIVITY_RIDES = 10;
 
 /** One registration, joined with the ride it's for. */
 export interface ActivityEntry {
+  /** The registration's id — with `rideId`, addresses the rider's card (CR-149). */
   id: string;
+  rideId: string;
   displayName: string | null;
   groupName: string | null;
   rideTitle: string;
@@ -53,11 +55,12 @@ export function selectActivityRides(rides: Ride[], now: Date): Ride[] {
 }
 
 export function toActivityEntries(
-  ride: Pick<Ride, 'title'>,
+  ride: Pick<Ride, 'id' | 'title'>,
   participants: RideParticipantSummary[],
 ): ActivityEntry[] {
   return participants.map((participant) => ({
     id: participant.id,
+    rideId: ride.id,
     displayName: participant.displayName,
     groupName: participant.group?.name ?? null,
     rideTitle: ride.title,

@@ -1073,6 +1073,16 @@ If a real product need appears for viewing a profile independent of any shared r
 (e.g. organizer-to-past-participant outreach), that is a new, separately-considered
 decision — not a quiet loosening of `resolveRiderAccess`.
 
+### Amendment 2026-09-28 (CR-149, owner decision)
+
+Point 3's "a rider list the organizer hid is hidden completely" no longer applies
+to the ride's own organizer: the organizer cabinet («Новые записи» on `/organizer`,
+a ride's participant table) now links each participant's card, and
+`participantsVisible` only hides the public `/riders` list from other people —
+not the organizer's own participants from them. Point 4 already grants the
+organizer access past every visibility tier; the `riders_hidden` check just ran
+before it. Everyone else still gets `403 riders_hidden` first.
+
 ## ADR-024 — Visual direction: «Ночной старт» replaces «Топокарта»
 
 Status: Accepted (2026-09-24).

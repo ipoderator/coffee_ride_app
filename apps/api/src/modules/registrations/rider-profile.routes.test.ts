@@ -213,6 +213,15 @@ describe('GET /v1/rides/:id/riders/:registrationId/profile', () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json().code).toBe('riders_hidden');
+
+    // CR-149: the organizer's own cabinet links each participant's card — the
+    // hidden public list doesn't hide it from them.
+    const organizer = await app.inject({
+      method: 'GET',
+      url: `/v1/rides/${rideId}/riders/${registrationId}/profile`,
+      cookies: { session: token },
+    });
+    expect(organizer.statusCode).toBe(200);
     await app.close();
   });
 

@@ -1623,3 +1623,35 @@ stopped at the preflight as designed (2GIS unreachable through the VPN).
 
 Next: run `pnpm seed:demo` once 2GIS is reachable from this machine, then
 check CR-148 off.
+
+## 2026-09-28 — CR-149 — Organizer cabinet links to the rider profile card
+
+Summary: the owner asked to open a participant's profile straight from the
+organizer cabinet. A name in `/organizer`'s «Новые записи» feed and in
+`/organizer/rides/[id]/participants` is now a link to that rider's card
+(`/rides/[id]/riders/[registrationId]`, CR-126). `?from=overview|participants`
+(a closed set parsed by `parseRiderProfileOrigin`, never a free-form return URL)
+switches the card's back link to «В кабинет организатора» / «К участникам заезда»;
+without it the card still goes back «К заезду». Waitlist entries stay plain text —
+the card only exists for active registrations.
+
+API (behavior change, additive in effect): `resolveRiderAccess` checked
+`participantsVisible` before the organizer grant, so an organizer who hid the
+riders list got `403 riders_hidden` on their own participants' cards — every new
+link would have been dead on such a ride. The ride's own organizer now skips that
+check; everyone else still gets `riders_hidden` first. Recorded as an ADR-023
+amendment; `docs/api.md` updated.
+
+Files: `apps/api/src/modules/registrations/registrations.service.ts` (+ test in
+`rider-profile.routes.test.ts`), `apps/web/src/lib/rides/rider-profile-href.ts`
+(+ test), `features/organizer/activity/{lib/activity.ts,components/
+RegistrationActivityWidget.tsx}` (`ActivityEntry.rideId`), `features/organizer/
+participants/components/ParticipantTable.tsx`, `app/rides/[id]/riders/
+[registrationId]/page.tsx`, `packages/ui/src/terminology.ts` (`BACK_LINK_TERMS`).
+
+Validation: api registrations suites 60/60 (disposable `TEST_DATABASE_URL`),
+web 443/443, ui 155/155, typecheck + lint (web/api/ui) green, prettier clean;
+dev server renders the right back link for each `from` value (unknown → «К заезду»).
+
+Decisions: ADR-023 amendment 2026-09-28.
+Follow-up: none.

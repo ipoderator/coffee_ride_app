@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   Avatar,
@@ -16,6 +17,7 @@ import {
   listAllRideParticipants,
   listOwnRidesPage,
 } from '@/lib/organizer/own-rides';
+import { riderProfileHref } from '@/lib/rides/rider-profile-href';
 import {
   type ActivityDay,
   type ActivityEntry,
@@ -198,7 +200,13 @@ function RecentRow({
         />
       </span>
       <p className="min-w-0 truncate">
-        <span className="text-base text-text">{name}</span>
+        {/* CR-149: the name opens the rider's profile card. */}
+        <Link
+          href={riderProfileHref(entry.rideId, entry.id, 'overview')}
+          className="rounded-sm text-base text-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          {name}
+        </Link>
         {meta.map((part) => (
           <span key={part} className="font-mono text-sm text-text-muted">
             {' · '}

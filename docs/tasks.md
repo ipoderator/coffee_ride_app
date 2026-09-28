@@ -1172,3 +1172,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       3 organizers, 8 riders, 9 rides in every state, via the HTTP API. Ran
       with `--no-routes`; the full run (routes via the app's 2GIS route
       builder) is pending 2GIS reachability from the dev machine (KI-056).
+- [x] CR-149 Organizer cabinet → rider profile card: participant names in
+      `/organizer`'s «Новые записи» and a ride's participant table link to the
+      rider's card, back link returns to the cabinet; the ride's organizer is
+      no longer blocked by `riders_hidden` (ADR-023 amendment). See
+      `docs/changelog.md`.

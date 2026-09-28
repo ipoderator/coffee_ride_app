@@ -630,7 +630,9 @@ function riderAvatarUrlPath(rideId: string, registrationId: string): string {
  * CR-126: the single access gate backing both {@link getRiderProfile} and
  * {@link getRiderAvatarDownload} — the tier logic lives here exactly once. Same
  * `404 ride_not_found`/`403 riders_hidden` as {@link listRiders} (the rider list
- * itself must be visible before any one card can be), then:
+ * itself must be visible before any one card can be — except to the ride's own
+ * organizer, CR-149: their cabinet links every participant's card, and
+ * `participantsVisible` only hides the public list, not their own), then:
  * - the profile's own owner always sees it;
  * - the ride's organizer always sees it (they already have equal-or-greater
  *   access via {@link listParticipants}'s contact/emergency data);
@@ -647,7 +649,8 @@ async function resolveRiderAccess(
   registrationId: string,
 ) {
   const ride = await resolveVisibleRideStatus(db, viewerId, rideId);
-  if (!ride.participantsVisible) {
+  const isOrganizer = ride.organizerUserId === viewerId;
+  if (!ride.participantsVisible && !isOrganizer) {
     throw RIDERS_HIDDEN();
   }
 
@@ -680,7 +683,6 @@ async function resolveRiderAccess(
   }
 
   const isSelf = target.userId === viewerId;
-  const isOrganizer = ride.organizerUserId === viewerId;
   const granted =
     isSelf ||
     isOrganizer ||

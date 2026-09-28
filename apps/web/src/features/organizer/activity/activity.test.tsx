@@ -169,7 +169,12 @@ describe('RegistrationActivityWidget', () => {
 
     render(<RegistrationActivityWidget />);
 
-    expect(await screen.findByText('Анна К.')).toBeTruthy();
+    // CR-149: the name opens that rider's profile card.
+    expect(
+      (await screen.findByRole('link', { name: 'Анна К.' })).getAttribute(
+        'href',
+      ),
+    ).toBe('/rides/ride-1/riders/a?from=overview');
     expect(screen.getByText('· Группа 1')).toBeTruthy();
     expect(screen.getByText('8 мин')).toBeTruthy();
     expect(screen.getByText('Без имени')).toBeTruthy();

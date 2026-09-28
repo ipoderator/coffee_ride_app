@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   Card,
@@ -17,6 +18,7 @@ import {
   type RideGroupSummary,
   type RideParticipantSummary,
 } from '../api';
+import { riderProfileHref } from '@/lib/rides/rider-profile-href';
 import { buildGroupSections, formatGroupRef } from '../group-sections';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
@@ -99,7 +101,7 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
       {status === 'ready' && items.length > 0 && sections === null && (
         <ul className="flex flex-col gap-3">
           {items.map((item) => (
-            <ParticipantRow key={item.id} item={item} />
+            <ParticipantRow key={item.id} rideId={rideId} item={item} />
           ))}
         </ul>
       )}
@@ -132,7 +134,11 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
                 {section.items.length > 0 && (
                   <ul className="flex flex-col gap-3">
                     {section.items.map((item) => (
-                      <ParticipantRow key={item.id} item={item} />
+                      <ParticipantRow
+                        key={item.id}
+                        rideId={rideId}
+                        item={item}
+                      />
                     ))}
                   </ul>
                 )}
@@ -145,12 +151,24 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
   );
 }
 
-function ParticipantRow({ item }: { item: RideParticipantSummary }) {
+function ParticipantRow({
+  rideId,
+  item,
+}: {
+  rideId: string;
+  item: RideParticipantSummary;
+}) {
   const joinedAt = new Date(item.createdAt);
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 last:border-none last:pb-0">
       <p className="min-w-0 break-words text-sm font-medium text-text">
-        {item.displayName ?? PARTICIPANTS_TERMS.noNameFallback}
+        {/* CR-149: the name opens the rider's profile card. */}
+        <Link
+          href={riderProfileHref(rideId, item.id, 'participants')}
+          className="rounded-sm underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          {item.displayName ?? PARTICIPANTS_TERMS.noNameFallback}
+        </Link>
       </p>
       <p className="text-sm text-text-secondary">
         {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt)}{' '}

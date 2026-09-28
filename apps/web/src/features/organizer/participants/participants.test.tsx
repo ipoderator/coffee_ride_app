@@ -63,6 +63,19 @@ describe('ParticipantTable', () => {
     expect(screen.getByText('Без имени')).toBeInTheDocument();
   });
 
+  it("links each name to the rider's profile card (CR-149)", async () => {
+    getRideParticipantsMock.mockResolvedValue({
+      items: [first],
+      nextCursor: null,
+    });
+
+    render(<ParticipantTable rideId="ride-1" />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Анна Смирнова' }),
+    ).toHaveAttribute('href', '/rides/ride-1/riders/reg-1?from=participants');
+  });
+
   it('shows the empty state when no one has registered', async () => {
     getRideParticipantsMock.mockResolvedValue({ items: [], nextCursor: null });
 
