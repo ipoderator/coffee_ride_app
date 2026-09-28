@@ -166,12 +166,18 @@ describe('/v1/users/me/avatar', () => {
     });
 
     const app = await buildApp(testEnv);
+    // Rides first: another file may leave rides behind, and their organizer
+    // FK blocks the users cascade (CI flake after CR-149).
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
 
   afterAll(async () => {
     const app = await buildApp(testEnv);
+    // Rides first: another file may leave rides behind, and their organizer
+    // FK blocks the users cascade (CI flake after CR-149).
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });

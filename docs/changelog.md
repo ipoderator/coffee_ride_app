@@ -1800,3 +1800,17 @@ additive — no new ADR. `.claude/rules/maps.md`'s contract updated.
 Validation: maps-2gis `render.test.ts` 19/19 (two new cases: position forwarded,
 omitted → no `zoomControl`); typecheck/eslint clean (maps-core, maps-2gis, web);
 prettier clean. Not checked live with a MapGL key in this run.
+
+## 2026-09-28 — CI fix — `users/avatar.routes.test.ts` cleanup order
+
+What: the suite's `beforeAll`/`afterAll` ran `DELETE FROM users` without
+`DELETE FROM rides` first — the only API suite that did. When an earlier file
+left rides behind (`rider-profile.routes.test.ts` has no `afterAll`), the
+`rides.organizer_id` FK blocked the cascade and all 14 tests failed on setup.
+Vitest's file order follows cached durations, so this surfaced only after
+CR-149 changed the order — CI failed on CR-146 and CR-151 for this reason,
+before the e2e job could produce the screenshots KI-076 needs.
+
+Fix: delete rides first, like every other suite. Reproduced locally
+(rider-profile → avatar: 14/14 failed before, 14/14 pass after); full API
+suite 485 passed / 5 skipped with the live S3/Redis flags.
