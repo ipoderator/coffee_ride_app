@@ -1509,3 +1509,31 @@ Decisions: 0.5 km/h is a real API rule (KI-062); `api` trusts one private
 proxy hop in production (KI-044). No ADR — both stay within ADR-011/ADR-018.
 Follow-up: watch the first CI run for KI-073's threshold; KI-074 (self-host
 fonts); CR-114 live check once 2GIS is reachable.
+
+## 2026-09-28 — CR-145 follow-up — x86_64 visual baselines
+
+Summary: CR-145's first CI run (`36383157672`) failed only in E2E: five
+screenshots (`ride-card` chromium + mobile; `discovery-grid`, `discovery-map`,
+`ride-detail` mobile) differed from their baselines by 3–4 % of pixels (21 % for
+the mobile card), identically on all three retries. Every other step and
+`docker-smoke` were green. Cause: those baselines were rendered in the arm64
+Playwright image on an Apple Silicon Mac (CR-138/CR-144's procedure); CI's
+x86_64 runner rasterises glyphs and the cover's thin isolines slightly
+differently. The old `threshold: 0.2` hid that; CR-145's 0.02 exposes it. The
+CR-145 entry's note that CI would be "the first check" was the check, and it
+failed.
+
+- The five baselines are replaced with the `*-actual.png` renders from that
+  run's `playwright-report` artifact, after confirming each `*-diff.png` marks
+  only glyph/isoline anti-aliasing — no panel, border or layout pixels — and
+  that the actual render matches the approved CR-144 card. The other 11
+  screenshots already passed on CI at 0.02 and are unchanged.
+- `.claude/rules/testing.md`: baselines must be x86_64 — `docker run
+--platform linux/amd64 …`, or take CI's actual renders from the artifact.
+
+Files: `apps/web/e2e/visual-regression.spec.ts-snapshots/{ride-card-chromium,
+ride-card-mobile,discovery-grid-mobile,discovery-map-mobile,
+ride-detail-mobile}-linux.png`, `.claude/rules/testing.md`,
+`.claude/context/project-state.md`, `docs/changelog.md`.
+
+Validation: the follow-up CI run is the check (no local x86_64 renderer).

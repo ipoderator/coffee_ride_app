@@ -90,8 +90,8 @@ fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plu
 `docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task (after CR-145): confirm its CI run (KI-073 threshold on
-x86_64), then CR-146 (self-hosted fonts, KI-074).
+Next logical task (after CR-145): confirm CI is green after the x86_64
+baseline follow-up, then CR-146 (self-hosted fonts, KI-074).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a
 separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly
@@ -582,8 +582,10 @@ None.
 
 ## Next
 
-1. **Watch CR-145's first CI run**: KI-073's `threshold: 0.02` was verified on
-   an arm64 Playwright container only; CI renders on x86_64.
+1. **Confirm CI after the CR-145 follow-up**: the first run failed five
+   screenshots (arm64-rendered baselines vs CI's x86_64); they were replaced
+   with CI's own renders. Baselines are x86_64-only from now on
+   (`.claude/rules/testing.md`).
 2. **CR-146 — self-host the web fonts (KI-074)**: `next build` fails whenever
    Google Fonts answers oddly (twice on 2026-09-27).
 3. **CR-114 live verification (KI-056)** once 2GIS REST is reachable (VPN off

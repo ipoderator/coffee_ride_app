@@ -120,13 +120,19 @@ breakpoints — functionally (element visibility), not by screenshot.
 - **Baselines must be generated to match CI** (`ubuntu-latest`, the pinned
   `@playwright/test` version), never by running Playwright natively on a
   developer's Mac/Windows machine — font rendering and anti-aliasing differ
-  enough to make every comparison fail. Regenerate via Docker:
+  enough to make every comparison fail. Regenerate via Docker, **as x86_64**:
   ```
-  docker run --rm -v "$PWD":/work -w /work/apps/web \
+  docker run --rm --platform linux/amd64 -v "$PWD":/work -w /work/apps/web \
     mcr.microsoft.com/playwright:v<version>-jammy \
     npx playwright test --update-snapshots
   ```
   (`<version>` = the installed `@playwright/test` version, `apps/web/package.json`).
+  Without `--platform`, Docker on Apple Silicon runs the arm64 image, whose glyph
+  and thin-stroke anti-aliasing differs from CI's x86_64 runner by 3–20 % of
+  pixels at `threshold: 0.02` (CR-145). Alternative without emulation: take the
+  `*-actual.png` files from a failed CI run's `playwright-report` artifact
+  (`gh run download <run> -n playwright-report`) — after checking the matching
+  `*-diff.png` shows only anti-aliasing, never a layout change.
   Commit the resulting `e2e/*.spec.ts-snapshots/` directories — they are
   baselines, not build output, so they are never gitignored.
 - **No map tiles to fight with**: CI never sets
