@@ -10,5 +10,7 @@ export const organizerParticipantsNavItem: CabinetNavItem = {
   href: '/organizer/participants',
   order: 30,
   icon: 'Users',
+  // CR-150: stays lit on the ride sub-page it redirects to.
+  activeOn: ['/organizer/rides/*/participants'],
   badge: 'newRegistrations',
 };

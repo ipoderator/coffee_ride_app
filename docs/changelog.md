@@ -1655,3 +1655,23 @@ dev server renders the right back link for each `from` value (unknown → «К �
 
 Decisions: ADR-023 amendment 2026-09-28.
 Follow-up: none.
+
+## 2026-09-28 — CR-150 — Organizer sidebar lights the right section on ride sub-pages
+
+Summary: the owner reported that opening «Участники» or «Обновления» left «Заезды»
+highlighted. Both entries go through `NearestRideRedirect` to
+`/organizer/rides/[id]/participants|updates`, and CR-131's prefix rule gave
+`/organizer/rides/…` to «Заезды». `CabinetNavItem` gains an optional `activeOn`
+(path patterns, `*` = exactly one segment); an item whose pattern matches takes the
+highlight outright, otherwise the old exact/prefix rule applies unchanged. Set on
+the participants and updates descriptors; the same rule drives the desktop sidebar
+and the mobile `CabinetSectionTabs`. Every other ride sub-page (edit, route, cover,
+groups) still lights «Заезды».
+
+Files: `apps/web/src/lib/cabinet/types.ts`, `components/cabinet/CabinetSidebar.tsx`
+(`isCabinetNavItemActive`, + test), `features/organizer/{participants,updates}/nav.ts`.
+
+Validation: web 444/444, typecheck + lint green.
+
+Decisions: none (additive registry field, ADR-009 pattern).
+Follow-up: none.

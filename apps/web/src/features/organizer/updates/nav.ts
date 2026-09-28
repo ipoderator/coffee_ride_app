@@ -9,4 +9,6 @@ export const organizerUpdatesNavItem: CabinetNavItem = {
   href: '/organizer/updates',
   order: 40,
   icon: 'Send',
+  // CR-150: stays lit on the ride sub-page it redirects to.
+  activeOn: ['/organizer/rides/*/updates'],
 };

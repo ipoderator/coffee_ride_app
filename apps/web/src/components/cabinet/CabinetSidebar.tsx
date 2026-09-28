@@ -98,13 +98,28 @@ export function NavBadge({
   );
 }
 
+/** `*` matches exactly one non-empty segment; otherwise segment-for-segment. */
+function matchesPathPattern(pathname: string, pattern: string): boolean {
+  const path = pathname.split('/');
+  const parts = pattern.split('/');
+  return (
+    path.length === parts.length &&
+    parts.every((part, i) => (part === '*' ? path[i] !== '' : part === path[i]))
+  );
+}
+
 /** Exact match, or a sub-page — unless `href` is the root every other item's
- * `href` sits under (the overview), which would otherwise always be lit. */
+ * `href` sits under (the overview), which would otherwise always be lit.
+ * CR-150: an item whose `activeOn` matches the path takes it over outright. */
 export function isCabinetNavItemActive(
   pathname: string,
   href: string,
   items: CabinetNavItem[],
 ): boolean {
+  const claimedBy = items.find((item) =>
+    item.activeOn?.some((pattern) => matchesPathPattern(pathname, pattern)),
+  );
+  if (claimedBy) return claimedBy.href === href;
   if (pathname === href) return true;
   const isRoot = items.some(
     (other) => other.href !== href && other.href.startsWith(`${href}/`),

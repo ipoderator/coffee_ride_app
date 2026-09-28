@@ -1177,3 +1177,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       rider's card, back link returns to the cabinet; the ride's organizer is
       no longer blocked by `riders_hidden` (ADR-023 amendment). See
       `docs/changelog.md`.
+- [x] CR-150 Organizer sidebar highlight: «Участники»/«Обновления» stay lit on
+      the ride sub-pages they redirect to, instead of «Заезды»
+      (`CabinetNavItem.activeOn`). See `docs/changelog.md`.

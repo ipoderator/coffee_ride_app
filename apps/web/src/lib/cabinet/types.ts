@@ -31,6 +31,13 @@ export interface CabinetNavItem {
    * frame resolves it client-side (`@/lib/organizer/nav-badges.ts`) and
    * shows nothing while it loads, fails, or is zero. */
   badge?: CabinetNavBadge;
+  /** CR-150: other paths this item is the active one on, beyond its own
+   * `href` subtree — a `*` segment stands for exactly one path segment (e.g.
+   * `/organizer/rides/<id>/participants` is written with `*` for `<id>`). A
+   * match here wins over every other
+   * item's prefix match: «Участники» redirects to a ride's sub-page, which
+   * would otherwise light «Заезды» instead. */
+  activeOn?: string[];
 }
 
 /** CR-132: the live counters a nav item can carry — see `CabinetNavItem.badge`. */

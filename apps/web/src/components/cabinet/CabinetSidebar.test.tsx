@@ -16,6 +16,7 @@ const ITEMS: CabinetNavItem[] = [
     order: 30,
     icon: 'Users',
     badge: 'newRegistrations',
+    activeOn: ['/organizer/rides/*/participants'],
   },
 ];
 
@@ -42,6 +43,12 @@ describe('CabinetSidebar active item (CR-131)', () => {
     pathname = '/organizer/rides/ride-1/edit';
     render(<CabinetSidebar items={ITEMS} />);
     expect(current()).toBe('Заезды');
+  });
+
+  it('lights «Участники», not «Заезды», on the ride sub-page it opens (CR-150)', () => {
+    pathname = '/organizer/rides/ride-1/participants';
+    render(<CabinetSidebar items={ITEMS} />);
+    expect(current()).toContain('Участники');
   });
 
   it('lights nothing on an unrelated cabinet page', () => {
