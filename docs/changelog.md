@@ -1591,3 +1591,35 @@ Files: `apps/api/src/modules/rides/route-builder.routes.test.ts`.
 
 Validation: `src/modules/rides` against the Docker test database — 197 passed,
 3 skipped (live suites); route-builder 12/12.
+
+## 2026-09-28 — CR-148 — Demo data seed (`pnpm seed:demo`)
+
+Summary: the dev database held ~250 leftover e2e accounts (`@example.test`,
+`@example.com`) and ~150 of their rides. With the owner's approval they were
+deleted (dump kept outside the repo first; the owner's own accounts and two
+rides untouched), and a repeatable demo seed was added.
+
+- `packages/db/src/seed-demo.ts` (`pnpm seed:demo`, root → `db`): resets every
+  `@demo.coffeeride.local` account and its rides, then drives the running API
+  over HTTP — 3 organizers with profiles, 8 riders with names/bikes/monthly
+  distance, 9 Moscow-area rides covering every state (4 open, one full with a
+  2-person waitlist, one registration-closed, 2 finished with 7 reviews, one
+  draft, one cancelled), pace groups, stops, typed route points, ride updates.
+- Routes are built by the app's own route builder (`POST /v1/rides/:id/route/
+build`, 2GIS, bicycle), per the owner — consecutive waypoints stay under
+  50 km (KI-075). The first build is the 2GIS preflight: unreachable → the run
+  stops before publishing, with a KI-056 hint. `--no-routes` skips the step.
+- Guards: refuses `NODE_ENV=production` and any non-localhost `DATABASE_URL`/
+  API URL; waits out 429s. Reads the root `.env` itself.
+- Local `.env` (not committed): `AUTH_RATE_LIMIT_MAX`/`RATE_LIMIT_MAX` dev
+  overrides from `.env.example`, so a seed run isn't throttled.
+
+Files: `packages/db/src/seed-demo.ts`, `packages/db/package.json`,
+`package.json`, `README.md`, `docs/tasks.md`, `.claude/context/*`.
+
+Validation: db typecheck + lint; `pnpm seed:demo` without routes — every step
+ok, public list shows the 5 upcoming published demo rides; with routes it
+stopped at the preflight as designed (2GIS unreachable through the VPN).
+
+Next: run `pnpm seed:demo` once 2GIS is reachable from this machine, then
+check CR-148 off.

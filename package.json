@@ -23,7 +23,8 @@
     "format:check": "prettier --check .",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
-    "prepare": "husky"
+    "prepare": "husky",
+    "seed:demo": "pnpm --filter db seed:demo"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [

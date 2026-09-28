@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:backup": "bash scripts/backup.sh",
-    "db:restore": "bash scripts/restore.sh"
+    "db:restore": "bash scripts/restore.sh",
+    "seed:demo": "tsx src/seed-demo.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

@@ -1168,3 +1168,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       are centimetres, Catalog `meta.code` errors, HTTP 200
       `ROUTE_DOES_NOT_EXISTS` → `no_route`. KI-075 (demo key, 50 km limit)
       recorded. See `docs/changelog.md`.
+- [ ] CR-148 Demo data seed — `pnpm seed:demo` (`packages/db/src/seed-demo.ts`):
+      3 organizers, 8 riders, 9 rides in every state, via the HTTP API. Ran
+      with `--no-routes`; the full run (routes via the app's 2GIS route
+      builder) is pending 2GIS reachability from the dev machine (KI-056).

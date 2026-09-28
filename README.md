@@ -60,6 +60,12 @@ whether or not you have this repo's scripts memorized.
 S3 alone? Use `docker compose up -d s3 s3-init`, or uploads report
 «Загрузка недоступна» (`/health` → `s3: "error"`).
 
+Demo data: with `pnpm dev` running, `pnpm seed:demo` wipes and recreates the
+`@demo.coffeeride.local` accounts (3 organizers, 8 riders, password
+`demo-coffee-ride-2026`) and 9 rides in every lifecycle state, through the API.
+Routes come from the app's route builder, so the API must reach 2GIS (KI-056);
+`pnpm seed:demo --no-routes` skips that step.
+
 Node version is pinned in `.nvmrc`. `pnpm install` also sets up the Husky pre-commit hook
 (`prepare` script) which runs lint-staged.
 
