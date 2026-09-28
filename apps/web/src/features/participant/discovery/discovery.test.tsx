@@ -92,6 +92,7 @@ const baseRide: PublicRideListItem = {
   startLabel: null,
   routePreview: null,
   groups: [],
+  waitlistCount: 0,
 };
 
 beforeEach(() => {
@@ -118,7 +119,11 @@ describe('DiscoveryList', () => {
   });
 
   it('shows the empty-sheet state when there are no rides', async () => {
-    listPublicRidesMock.mockResolvedValue({ items: [], nextCursor: null });
+    listPublicRidesMock.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      total: 0,
+    });
 
     render(<DiscoveryList />);
 
@@ -139,6 +144,7 @@ describe('DiscoveryList', () => {
         },
       ],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -176,6 +182,7 @@ describe('DiscoveryList', () => {
         },
       ],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -191,6 +198,7 @@ describe('DiscoveryList', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [{ ...baseRide, groups: [{ name: 'Все', paceKmh: 28 }] }],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -212,6 +220,7 @@ describe('DiscoveryList', () => {
         },
       ],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -228,6 +237,7 @@ describe('DiscoveryList', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [{ ...baseRide, elevationGainMeters: null, paceKmh: null }],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -243,6 +253,7 @@ describe('DiscoveryList', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [{ ...baseRide, priceRub: null }],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -271,6 +282,7 @@ describe('DiscoveryList', () => {
         { ...baseRide, id: 'ride-2', title: 'Без маршрута' },
       ],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -289,6 +301,7 @@ describe('DiscoveryList', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [baseRide],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -309,9 +322,9 @@ describe('DiscoveryList', () => {
 
   it('shows a filtered empty state with a working reset action that restores the full list', async () => {
     listPublicRidesMock
-      .mockResolvedValueOnce({ items: [baseRide], nextCursor: null })
-      .mockResolvedValueOnce({ items: [], nextCursor: null })
-      .mockResolvedValueOnce({ items: [baseRide], nextCursor: null });
+      .mockResolvedValueOnce({ items: [baseRide], nextCursor: null, total: 0 })
+      .mockResolvedValueOnce({ items: [], nextCursor: null, total: 0 })
+      .mockResolvedValueOnce({ items: [baseRide], nextCursor: null, total: 0 });
 
     render(<DiscoveryList />);
     await screen.findByText(baseRide.title);
@@ -336,6 +349,7 @@ describe('DiscoveryList', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [baseRide],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -354,6 +368,7 @@ describe('DiscoveryList', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [baseRide],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -404,6 +419,7 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [plottableA, plottableB, baseRide],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -435,8 +451,13 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
       .mockResolvedValueOnce({
         items: [plottableA, plottableB],
         nextCursor: null,
+        total: 0,
       })
-      .mockResolvedValueOnce({ items: [plottableB], nextCursor: null });
+      .mockResolvedValueOnce({
+        items: [plottableB],
+        nextCursor: null,
+        total: 0,
+      });
 
     render(<DiscoveryList />);
     await waitFor(() => expect(lastMarkers()).toHaveLength(2));
@@ -458,6 +479,7 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [plottableA, plottableB],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -500,6 +522,7 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [plottableA, plottableB],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -522,6 +545,7 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [plottableA, plottableB],
       nextCursor: null,
+      total: 0,
     });
 
     render(<DiscoveryList />);
@@ -588,6 +612,7 @@ describe('route line smoothing', () => {
     listPublicRidesMock.mockResolvedValue({
       items: [plottableA],
       nextCursor: null,
+      total: 0,
     });
     // `beforeEach`: the geometry request never resolves.
 

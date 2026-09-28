@@ -501,6 +501,13 @@ Next action: push CR-152, download the `*-actual.png` files from the failed run'
 `playwright-report` artifact (`gh run download <run> -n playwright-report`), check each
 `*-diff.png` shows only the type change (no layout break), commit them as the new
 baselines (same procedure as KI-076), then archive this entry.
+Update 2026-09-28 (CR-153): the discovery page layout changed again (featured card,
+compact cards, filter chips, intro line) — `discovery-grid`, `discovery-map` and
+`ride-card` diffs will now show layout changes too, by design; check them against
+`docs/design.md` «Discovery page (CR-153)» rather than expecting a type-only diff.
+Refresh once, from the first CI run after CR-153 is pushed.
+Update 2026-09-28 (CR-154): the global header changed (full-width raised bar, pill
+sections, icon-only theme control) — every screenshot's top 72px differs by design.
 
 ## Resolved
 

@@ -9,6 +9,19 @@ const VIEW_WIDTH = 400;
 const VIEW_HEIGHT = 160;
 const TRACK_PADDING = 20;
 
+// CR-153: the featured card's taller cover. The track is projected into this
+// box instead (so `slice` doesn't crop it), the decorative background is
+// stretched to it, and strokes grow by `stroke`.
+const VIEW_BOXES = {
+  card: {
+    width: VIEW_WIDTH,
+    height: VIEW_HEIGHT,
+    padding: TRACK_PADDING,
+    stroke: 1,
+  },
+  hero: { width: 600, height: 380, padding: 44, stroke: 1.5 },
+} as const;
+
 // ADR-024: three fixed decorative isoline backgrounds (the mockup's `cv1`/
 // `cv2`/`cv3` spirit — a ride's cover is always a dark "window", not a real
 // elevation chart baked into the art). Picked deterministically per ride so
@@ -72,6 +85,10 @@ export interface RouteCoverProps {
   topLeft?: ReactNode;
   /** Shown on the cover when there is no track to draw. */
   emptyLabel?: string;
+  /** CR-153: tags over the cover's bottom-left corner (distance, «Ближайший»). */
+  bottomLeft?: ReactNode;
+  /** CR-153: `hero` — the featured card's larger cover. */
+  variant?: keyof typeof VIEW_BOXES;
   className?: string;
 }
 
@@ -86,14 +103,19 @@ export function RouteCover({
   cancelled = false,
   topLeft,
   emptyLabel,
+  bottomLeft,
+  variant = 'card',
   className,
 }: RouteCoverProps) {
   const background = pickBackground(seed);
+  const box = VIEW_BOXES[variant];
+  // The stretched hero background keeps its hairline width.
+  const isolineEffect = variant === 'card' ? undefined : 'non-scaling-stroke';
   const track = projectRoutePreviewToBox(
     routePreview ? smoothRoutePreview(routePreview) : null,
-    VIEW_WIDTH,
-    VIEW_HEIGHT,
-    TRACK_PADDING,
+    box.width,
+    box.height,
+    box.padding,
   );
   const trackPoints = track?.split(' ') ?? null;
   const start = trackPoints?.[0]?.split(',');
@@ -112,7 +134,7 @@ export function RouteCover({
     >
       <svg
         aria-hidden="true"
-        viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+        viewBox={`0 0 ${box.width} ${box.height}`}
         preserveAspectRatio="xMidYMid slice"
         className={cn(
           'absolute inset-0 -z-10 h-full w-full',
@@ -123,13 +145,18 @@ export function RouteCover({
           fill="none"
           className="stroke-cover-line"
           strokeWidth={1.2}
+          transform={
+            variant === 'card'
+              ? undefined
+              : `scale(${box.width / VIEW_WIDTH} ${box.height / VIEW_HEIGHT})`
+          }
           data-isolines
         >
           {background.isolines.map((d, i) => (
-            <path key={`iso-${i}`} d={d} />
+            <path key={`iso-${i}`} d={d} vectorEffect={isolineEffect} />
           ))}
           {background.ellipses.map((e, i) => (
-            <ellipse key={`el-${i}`} {...e} />
+            <ellipse key={`el-${i}`} {...e} vectorEffect={isolineEffect} />
           ))}
         </g>
         {track ? (
@@ -138,7 +165,7 @@ export function RouteCover({
               points={track}
               fill="none"
               className="stroke-cover-bg"
-              strokeWidth={8}
+              strokeWidth={8 * box.stroke}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -146,7 +173,7 @@ export function RouteCover({
               points={track}
               fill="none"
               className="stroke-cover-route"
-              strokeWidth={3.5}
+              strokeWidth={3.5 * box.stroke}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -157,13 +184,13 @@ export function RouteCover({
             <circle
               cx={start[0]}
               cy={start[1]}
-              r={7}
+              r={7 * box.stroke}
               className="fill-cover-route"
             />
             <circle
               cx={start[0]}
               cy={start[1]}
-              r={2.8}
+              r={2.8 * box.stroke}
               className="fill-cover-bg"
             />
           </>
@@ -172,9 +199,9 @@ export function RouteCover({
           <circle
             cx={finish[0]}
             cy={finish[1]}
-            r={5.5}
+            r={5.5 * box.stroke}
             className="fill-cover-bg stroke-cover-elevation"
-            strokeWidth={2.5}
+            strokeWidth={2.5 * box.stroke}
           />
         ) : null}
       </svg>
@@ -185,6 +212,11 @@ export function RouteCover({
       ) : null}
       {topLeft ? (
         <div className="dark absolute top-3.5 left-3.5">{topLeft}</div>
+      ) : null}
+      {bottomLeft ? (
+        <div className="dark absolute right-3.5 bottom-3.5 left-3.5 flex flex-wrap gap-2">
+          {bottomLeft}
+        </div>
       ) : null}
     </div>
   );

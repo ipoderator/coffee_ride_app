@@ -1,10 +1,11 @@
 'use client';
 
-import { LogIn, LogOut, Menu, Route, UserPlus, X } from 'lucide-react';
+import { LogOut, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
+  buttonClassName,
   cn,
   NavMenu,
   NAV_BAR_ITEM_CLASSNAME,
@@ -56,71 +57,101 @@ export function AppHeader({
   const isAuthenticated = status === 'authenticated';
 
   return (
-    <header className="border-b border-border bg-bg">
+    <header className="border-b border-border bg-bg-raised">
+      {/* CR-154: the «Ночной старт» discovery mockup's header — a full-width
+          raised bar (72px, 60px on a phone), pill section links beside the
+          wordmark, the theme as an icon button, «Войти» as a ghost pill and
+          «Регистрация» as the filled one. */}
       <nav
         aria-label={SITE_HEADER_TERMS.navLabel}
-        className="mx-auto flex max-w-300 items-center gap-2 p-4"
+        className="flex h-15 items-center gap-1 pr-2 pl-4 md:h-18 md:gap-7 md:px-12"
       >
         <Link
           href="/"
-          className="mr-2 inline-flex min-h-11 items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
-          <Wordmark />
+          <Wordmark className="text-[1.375rem] md:text-[1.5rem]" />
         </Link>
 
-        <HeaderLink
-          href="/"
-          label={SITE_HEADER_TERMS.homeLink}
-          icon={<Route aria-hidden="true" />}
-          active={pathname === '/'}
-          className="hidden md:inline-flex"
-        />
-
-        {isAuthenticated && (
-          <div className="ml-auto hidden items-center gap-1 md:flex">
-            <NavMenu
-              label={SITE_HEADER_TERMS.participantMenuLabel}
-              active={pathname.startsWith('/me')}
-            >
-              <MenuLink
-                href="/me"
-                label={SITE_HEADER_TERMS.participantOverviewLink}
-                pathname={pathname}
-              />
-              {participantNavItems.map((item) => (
+        <div className="hidden items-center gap-1 md:flex">
+          <HeaderLink
+            href="/"
+            label={SITE_HEADER_TERMS.homeLink}
+            active={pathname === '/'}
+          />
+          {isAuthenticated ? (
+            <>
+              <NavMenu
+                label={SITE_HEADER_TERMS.participantMenuLabel}
+                active={pathname.startsWith('/me')}
+                triggerClassName={pillClassName(pathname.startsWith('/me'))}
+              >
                 <MenuLink
-                  key={item.href}
-                  href={item.href}
-                  label={item.label}
-                  icon={item.icon}
+                  href="/me"
+                  label={SITE_HEADER_TERMS.participantOverviewLink}
                   pathname={pathname}
                 />
-              ))}
-            </NavMenu>
+                {participantNavItems.map((item) => (
+                  <MenuLink
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    pathname={pathname}
+                  />
+                ))}
+              </NavMenu>
 
-            <NavMenu
-              label={SITE_HEADER_TERMS.organizerMenuLabel}
-              active={pathname.startsWith('/organizer')}
-            >
-              <MenuLink
+              <NavMenu
+                label={SITE_HEADER_TERMS.organizerMenuLabel}
+                active={pathname.startsWith('/organizer')}
+                triggerClassName={pillClassName(
+                  pathname.startsWith('/organizer'),
+                )}
+              >
+                <MenuLink
+                  href="/organizer"
+                  label={SITE_HEADER_TERMS.organizerOverviewLink}
+                  pathname={pathname}
+                />
+                {organizerNavItems.map((item) => (
+                  <MenuLink
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    pathname={pathname}
+                  />
+                ))}
+              </NavMenu>
+            </>
+          ) : (
+            // Signed out (or not yet known): plain links to the same two
+            // sections; each cabinet's own gate sends a visitor to `/login`.
+            <>
+              <HeaderLink
+                href={PARTICIPANT_HREF}
+                label={SITE_HEADER_TERMS.participantMenuLabel}
+                active={pathname.startsWith('/me')}
+              />
+              <HeaderLink
                 href="/organizer"
-                label={SITE_HEADER_TERMS.organizerOverviewLink}
-                pathname={pathname}
+                label={SITE_HEADER_TERMS.organizerMenuLabel}
+                active={pathname.startsWith('/organizer')}
               />
-              {organizerNavItems.map((item) => (
-                <MenuLink
-                  key={item.href}
-                  href={item.href}
-                  label={item.label}
-                  icon={item.icon}
-                  pathname={pathname}
-                />
-              ))}
-            </NavMenu>
+            </>
+          )}
+        </div>
 
-            <ThemeToggle />
+        <div className="ml-auto flex items-center gap-1 md:gap-3">
+          <ThemeToggle />
 
-            <NavMenu label={user?.email ?? SITE_HEADER_TERMS.accountMenuLabel}>
+          {isAuthenticated && (
+            <NavMenu
+              label={user?.email ?? SITE_HEADER_TERMS.accountMenuLabel}
+              className="hidden md:block"
+              triggerClassName={pillClassName(false)}
+            >
               <button
                 type="button"
                 role="menuitem"
@@ -132,61 +163,55 @@ export function AppHeader({
                 {SITE_HEADER_TERMS.logoutLink}
               </button>
             </NavMenu>
-          </div>
-        )}
-
-        {status === 'anonymous' && (
-          <div className="ml-auto hidden items-center gap-1 md:flex">
-            <HeaderLink
-              href="/login"
-              label={SITE_HEADER_TERMS.loginLink}
-              icon={<LogIn aria-hidden="true" />}
-              active={pathname === '/login'}
-            />
-            <HeaderLink
-              href="/register"
-              label={SITE_HEADER_TERMS.registerLink}
-              icon={<UserPlus aria-hidden="true" />}
-              active={pathname === '/register'}
-            />
-            <ThemeToggle />
-          </div>
-        )}
-
-        {/* `loading`/`error` render neither set: guessing wrong would flash
-            "Войти" at someone who is already signed in, or the reverse. The
-            theme control does not depend on the session, so it stays. */}
-        {!isAuthenticated && status !== 'anonymous' && (
-          <div className="ml-auto hidden md:flex">
-            <ThemeToggle />
-          </div>
-        )}
-
-        <button
-          type="button"
-          aria-expanded={mobileOpen}
-          aria-controls="app-header-mobile-menu"
-          aria-label={
-            mobileOpen
-              ? SITE_HEADER_TERMS.closeMenuLabel
-              : SITE_HEADER_TERMS.openMenuLabel
-          }
-          onClick={() => setMobileOpen((open) => !open)}
-          className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-md text-text-secondary hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:hidden"
-        >
-          {mobileOpen ? (
-            <X className="h-5 w-5" aria-hidden="true" />
-          ) : (
-            <Menu className="h-5 w-5" aria-hidden="true" />
           )}
-        </button>
+
+          {/* `loading`/`error` render neither set: guessing wrong would flash
+              "Войти" at someone who is already signed in, or the reverse. */}
+          {status === 'anonymous' && (
+            <div className="hidden items-center gap-2 md:flex">
+              <Link
+                href="/login"
+                aria-current={pathname === '/login' ? 'page' : undefined}
+                className={cn(
+                  NAV_BAR_ITEM_CLASSNAME,
+                  'rounded-full px-5 text-body-sm tracking-normal text-text-secondary hover:bg-surface hover:text-text',
+                )}
+              >
+                {SITE_HEADER_TERMS.loginLink}
+              </Link>
+              <Link
+                href="/register"
+                aria-current={pathname === '/register' ? 'page' : undefined}
+                className={buttonClassName('primary')}
+              >
+                {SITE_HEADER_TERMS.registerLink}
+              </Link>
+            </div>
+          )}
+
+          <button
+            type="button"
+            aria-expanded={mobileOpen}
+            aria-controls="app-header-mobile-menu"
+            aria-label={
+              mobileOpen
+                ? SITE_HEADER_TERMS.closeMenuLabel
+                : SITE_HEADER_TERMS.openMenuLabel
+            }
+            onClick={() => setMobileOpen((open) => !open)}
+            className="inline-flex size-11 items-center justify-center rounded-full text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:hidden"
+          >
+            {mobileOpen ? (
+              <X className="size-5" aria-hidden="true" />
+            ) : (
+              <Menu className="size-5" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </nav>
 
       {logoutFailed && (
-        <p
-          role="alert"
-          className="mx-auto max-w-300 px-4 pb-3 text-body-sm text-danger"
-        >
+        <p role="alert" className="px-4 pb-3 text-body-sm text-danger md:px-12">
           {SITE_HEADER_TERMS.logoutError}
         </p>
       )}
@@ -194,7 +219,8 @@ export function AppHeader({
       {/* Below `md` the bar cannot hold every section at 375px
           (`docs/design.md` §11), so the same links live in one disclosure
           panel instead — a flat list, since a dropdown inside a dropdown is
-          not worth the interaction cost on a phone. */}
+          not worth the interaction cost on a phone. The theme control stays
+          in the bar (CR-154). */}
       {mobileOpen && (
         <div
           id="app-header-mobile-menu"
@@ -246,6 +272,14 @@ export function AppHeader({
           )}
           {status === 'anonymous' && (
             <>
+              <MobileLink
+                href={PARTICIPANT_HREF}
+                label={SITE_HEADER_TERMS.participantMenuLabel}
+              />
+              <MobileLink
+                href="/organizer"
+                label={SITE_HEADER_TERMS.organizerMenuLabel}
+              />
               <MobileLink href="/login" label={SITE_HEADER_TERMS.loginLink} />
               <MobileLink
                 href="/register"
@@ -253,39 +287,38 @@ export function AppHeader({
               />
             </>
           )}
-          <div className="pt-2">
-            <ThemeToggle />
-          </div>
         </div>
       )}
     </header>
   );
 }
 
+/** Signed out, «Мои заезды» points at the rides list itself. */
+const PARTICIPANT_HREF = '/me/rides';
+
+/** CR-154: the mockup's section pill — `surface` fill marks the current one. */
+function pillClassName(active: boolean): string {
+  return cn(
+    'rounded-full px-4 font-medium tracking-normal',
+    active ? 'bg-surface text-text' : 'text-text-secondary hover:text-text',
+  );
+}
+
 function HeaderLink({
   href,
   label,
-  icon,
-  active,
-  className,
+  active = false,
 }: {
   href: string;
   label: string;
-  icon?: React.ReactNode;
   active?: boolean;
-  className?: string;
 }) {
   return (
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={cn(
-        NAV_BAR_ITEM_CLASSNAME,
-        active ? 'text-text' : 'text-text-secondary hover:text-text',
-        className,
-      )}
+      className={cn(NAV_BAR_ITEM_CLASSNAME, pillClassName(active))}
     >
-      {icon}
       {label}
     </Link>
   );

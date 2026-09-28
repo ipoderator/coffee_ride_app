@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
-import type { BicycleType, PublicRideListItem } from 'types';
+import type { PublicRideListItem } from 'types';
 import {
   Button,
   cn,
@@ -21,9 +21,14 @@ import {
   Skeleton,
 } from 'ui';
 import { listPublicRides } from '../api';
+import {
+  NO_DISCOVERY_FILTERS,
+  filtersToQuery,
+  hasActiveFilters,
+} from '../lib/discovery-filters';
 import { ContoursIllustration } from './ContoursIllustration';
 import { DiscoveryMap } from './DiscoveryMap';
-import { RideFilters } from './RideFilters';
+import { DiscoveryFilters } from './DiscoveryFilters';
 import { RideLegendRow } from './RideLegendRow';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
@@ -105,9 +110,7 @@ function LoadingRows() {
 export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rides, setRides] = useState<PublicRideListItem[]>([]);
-  const [bicycleType, setBicycleType] = useState<BicycleType | undefined>(
-    undefined,
-  );
+  const [filters, setFilters] = useState(NO_DISCOVERY_FILTERS);
   const [attempt, setAttempt] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -132,7 +135,7 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
     let cancelled = false;
     setStatus('loading');
 
-    listPublicRides({ bicycleType })
+    listPublicRides(filtersToQuery(filters))
       .then((response) => {
         if (cancelled) return;
         setRides(response.items);
@@ -149,7 +152,7 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [bicycleType, attempt]);
+  }, [filters, attempt]);
 
   // The desktop grid is "viewport height minus whatever sits above it" (the
   // global header). Measured rather than hard-coded so a header change can't
@@ -195,12 +198,15 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
       </div>
     );
   } else if (rides.length === 0) {
-    listPanel = bicycleType ? (
+    listPanel = hasActiveFilters(filters) ? (
       <EmptyState
         icon={<ContoursIllustration />}
         title={RIDE_DISCOVERY_TERMS.emptyFilteredTitle}
         action={
-          <Button variant="secondary" onClick={() => setBicycleType(undefined)}>
+          <Button
+            variant="secondary"
+            onClick={() => setFilters(NO_DISCOVERY_FILTERS)}
+          >
             {RIDE_DISCOVERY_TERMS.resetFiltersLabel}
           </Button>
         }
@@ -256,13 +262,20 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
         )}
       >
         <div className="flex flex-wrap items-end justify-between gap-4 border-b-[1.5px] border-frame bg-bg px-4 pt-6 pb-4 lg:sticky lg:top-0 lg:z-10 lg:px-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <div
+            data-discovery-head
+            className="flex flex-wrap items-center gap-x-5 gap-y-3"
+          >
             <h1 id="discovery-heading" className="text-h1 text-text">
               {RIDE_DISCOVERY_TERMS.pageTitle}
             </h1>
             {viewSwitch}
           </div>
-          <RideFilters bicycleType={bicycleType} onChange={setBicycleType} />
+          <DiscoveryFilters
+            filters={filters}
+            onChange={setFilters}
+            className="w-full lg:-mx-6 lg:flex-nowrap lg:overflow-x-auto lg:px-6 lg:[mask-image:linear-gradient(90deg,black_85%,transparent)]"
+          />
         </div>
         <div aria-busy={status === 'loading'}>{listPanel}</div>
       </section>

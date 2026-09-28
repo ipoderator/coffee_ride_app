@@ -302,7 +302,11 @@ describe('/v1/rides', () => {
       const response = await app.inject({ method: 'GET', url: '/v1/rides' });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ items: [], nextCursor: null });
+      expect(response.json()).toEqual({
+        items: [],
+        nextCursor: null,
+        total: 0,
+      });
 
       await app.close();
     });
@@ -629,6 +633,204 @@ describe('/v1/rides', () => {
         unfiltered.json().items as Array<{ id: string }>
       ).map((item) => item.id);
       expect(unfilteredIds).toContain(noCoordsId);
+
+      await app.close();
+    });
+
+    // CR-153: the discovery filter chips' params and the `total` count.
+    it('filters by start window, difficulty, price and pace (groups first), and counts total across pages', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+
+      async function createPublished(
+        title: string,
+        fields: Record<string, unknown>,
+        groupPaces: number[] = [],
+      ) {
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: { ...VALID_PAYLOAD, title },
+        });
+        const rideId = created.json().ride.id as string;
+        const patched = await app.inject({
+          method: 'PATCH',
+          url: `/v1/rides/${rideId}`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: fields,
+        });
+        expect(patched.statusCode).toBe(200);
+        for (const [index, paceKmh] of groupPaces.entries()) {
+          const group = await app.inject({
+            method: 'POST',
+            url: `/v1/rides/${rideId}/groups`,
+            headers: { origin: WEB_ORIGIN },
+            cookies: { session: owner.rawToken },
+            payload: { name: `Группа ${index + 1}`, paceKmh },
+          });
+          expect(group.statusCode).toBe(201);
+        }
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/publish`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+        });
+        return rideId;
+      }
+
+      const earlyId = await createPublished('Ранний', {
+        startsAt: '2027-05-01T05:00:00.000Z',
+        startTimezone: 'Europe/Moscow',
+        difficulty: 2,
+        paceKmh: 22,
+      });
+      // Own pace 30 is ignored: with groups, the groups' paces (18/25) count.
+      const groupsId = await createPublished(
+        'С группами',
+        {
+          startsAt: '2027-05-10T05:00:00.000Z',
+          startTimezone: 'Europe/Moscow',
+          difficulty: 4,
+          priceRub: 500,
+          paceKmh: 30,
+        },
+        [18, 25],
+      );
+      const freeId = await createPublished('Бесплатный', {
+        startsAt: '2027-06-01T05:00:00.000Z',
+        startTimezone: 'Europe/Moscow',
+        priceRub: 0,
+      });
+
+      async function ids(query: string) {
+        const response = await app.inject({
+          method: 'GET',
+          url: `/v1/rides?${query}`,
+        });
+        expect(response.statusCode).toBe(200);
+        const body = response.json() as {
+          items: Array<{ id: string }>;
+          total: number;
+        };
+        expect(body.total).toBe(body.items.length);
+        return body.items.map((item) => item.id);
+      }
+
+      expect(
+        await ids(
+          'startsFrom=2027-05-05T00:00:00Z&startsTo=2027-05-31T00:00:00%2B03:00',
+        ),
+      ).toEqual([groupsId]);
+      expect(await ids('startsTo=2027-05-05T00:00:00Z')).toEqual([earlyId]);
+      // A `startsFrom` in the past never reopens rides that already started.
+      expect(await ids('startsFrom=2000-01-01T00:00:00Z')).toEqual([
+        earlyId,
+        groupsId,
+        freeId,
+      ]);
+      expect(await ids('difficulty=4')).toEqual([groupsId]);
+      expect(await ids('free=true')).toEqual([earlyId, freeId]);
+      expect(await ids('free=false')).toEqual([groupsId]);
+      expect(await ids('paceMin=20&paceMax=23')).toEqual([earlyId]);
+      expect(await ids('paceMin=24&paceMax=26')).toEqual([groupsId]);
+      expect(await ids('paceMin=29&paceMax=31')).toEqual([]);
+      expect(await ids('paceMax=20')).toEqual([groupsId]);
+      expect(await ids('paceMin=20&free=true')).toEqual([earlyId]);
+
+      const firstPage = await app.inject({
+        method: 'GET',
+        url: '/v1/rides?limit=1',
+      });
+      expect(firstPage.json().items).toHaveLength(1);
+      expect(firstPage.json().total).toBe(3);
+      const secondPage = await app.inject({
+        method: 'GET',
+        url: `/v1/rides?limit=1&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      });
+      expect(secondPage.json().items[0].id).toBe(groupsId);
+      expect(secondPage.json().total).toBe(3);
+
+      await app.close();
+    });
+
+    it.each([
+      'startsFrom=2027-06-01T00:00:00Z&startsTo=2027-05-01T00:00:00Z',
+      'startsTo=next-week',
+      'paceMin=30&paceMax=20',
+      'paceMin=-1',
+      'difficulty=6',
+      'difficulty=2.5',
+      'free=maybe',
+    ])('rejects %s with 400 validation_error (CR-153)', async (query) => {
+      const app = await buildApp(testEnv);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides?${query}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('validation_error');
+
+      await app.close();
+    });
+
+    it('reports waitlistCount per item — a count only (CR-153)', async () => {
+      const app = await buildApp(testEnv);
+      const owner = await registerAndLogin(app, { withOrganizerProfile: true });
+      const rider = await registerAndLogin(app);
+      const queued = await registerAndLogin(app);
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: VALID_PAYLOAD,
+      });
+      const rideId = created.json().ride.id as string;
+      await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: owner.rawToken },
+        payload: { participantLimit: 1 },
+      });
+      for (const action of ['publish', 'open-registration']) {
+        await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/${action}`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+        });
+      }
+      const registered = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rider.rawToken },
+      });
+      expect(registered.statusCode).toBe(201);
+      const waitlisted = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: queued.rawToken },
+      });
+      expect(waitlisted.statusCode).toBe(201);
+
+      const response = await app.inject({ method: 'GET', url: '/v1/rides' });
+      const [item] = response.json().items;
+      expect(item).toMatchObject({
+        id: rideId,
+        registrationsCount: 1,
+        waitlistCount: 1,
+      });
+      expect(JSON.stringify(item)).not.toContain(queued.userId);
 
       await app.close();
     });

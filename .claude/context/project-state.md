@@ -37,6 +37,24 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-154 (2026-09-28): global `AppHeader` brought to the discovery mockup's header —
+full-width raised bar, pill sections «Заезды / Мои заезды / Организатору» (links
+signed out, registry dropdowns signed in), icon-only theme control (also in the
+phone bar), ghost «Войти» + filled «Регистрация». Committed and pushed together with
+CR-153. Next: KI-077 (refresh baselines from the CI run's `*-actual.png`).
+
+CR-153 (2026-09-28): discovery «Заезды» brought to the owner's mockup (variant
+B, frontend + additive API). `/`'s «Список» tab: intro line, «Список / Карта»
+with icons, filter chips shared with the map tab (bike, «Эта неделя», pace
+buckets, difficulty, «Бесплатные»), «N заездов», the featured «Ближайший» card
+(soonest open ride, `RouteCover variant="hero"`), compact cards (one metrics
+line, «Мест нет · 2 в очереди» / «Запись закрыта», tags), «Все заезды» and
+«Показать ещё N заездов» (cursor paging). API: `GET /v1/rides` gains optional
+`startsFrom`/`startsTo`/`paceMin`/`paceMax`/`difficulty`/`free`, response `total`,
+item `waitlistCount`. Header nav from the mockup deliberately not taken. Open
+follow-up: KI-077 — visual baselines (discovery grid/card change again) must be
+refreshed from CI after the push.
+
 CR-152 (2026-09-28): typography & responsive pass (ADR-026) — one role type
 scale in `tokens.css` (`text-display/h1/h2/h3/body/body-sm/label/metric`, phone →
 `md` desktop), body text 16px (was 14px), nothing under 12px, Sofia Sans Condensed

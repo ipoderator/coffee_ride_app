@@ -47,11 +47,12 @@ function makeRide(
       { name: 'Группа 1', paceKmh: 25 },
       { name: 'Группа 2', paceKmh: 35 },
     ],
+    waitlistCount: 0,
     ...overrides,
   } as PublicRideListItem;
 }
 
-describe('RideGridCard (CR-144)', () => {
+describe('RideGridCard (CR-144, compact in CR-153)', () => {
   it('is one link to the ride page with its title as a heading', () => {
     render(<RideGridCard ride={makeRide()} />);
     expect(screen.getByRole('link')).toHaveAttribute('href', '/rides/ride-1');
@@ -60,14 +61,23 @@ describe('RideGridCard (CR-144)', () => {
     ).toBeInTheDocument();
   });
 
-  it('labels each metric, with the groups count under the pace', () => {
+  it('shows the headline numbers in one line, the groups count as a tag', () => {
     render(<RideGridCard ride={makeRide()} />);
-    const terms = screen.getAllByRole('term').map((t) => t.textContent);
-    expect(terms).toEqual(['Дистанция', 'Набор высоты', 'Средний темп']);
     expect(screen.getByText('69,5')).toBeInTheDocument();
     expect(screen.getByText('350')).toHaveClass('text-elevation');
     expect(screen.getByText('25–35')).toBeInTheDocument();
-    expect(screen.getByText('2 группы')).toBeInTheDocument();
+    expect(screen.getByText('2 группы')).toHaveClass('rounded-full');
+  });
+
+  it('leaves a missing number out rather than showing 0', () => {
+    render(
+      <RideGridCard
+        ride={makeRide({ elevationGainMeters: null, groups: [] })}
+      />,
+    );
+    expect(screen.getByText('69,5')).toBeInTheDocument();
+    expect(screen.queryByText('350')).toBeNull();
+    expect(screen.queryByText('0')).toBeNull();
   });
 
   it('shows one line instead of three dashes when no metric is known', () => {
@@ -80,13 +90,12 @@ describe('RideGridCard (CR-144)', () => {
         })}
       />,
     );
-    expect(screen.queryByRole('term')).toBeNull();
     expect(screen.getByText('Дистанция и темп не указаны')).toBeInTheDocument();
   });
 
   it('shows seats taken, seats left and the low-seats chip', () => {
     render(<RideGridCard ride={makeRide()} />);
-    expect(screen.getByText('17 из 20 участников')).toBeInTheDocument();
+    expect(screen.getByText('17 из 20')).toBeInTheDocument();
     expect(screen.getByText('Осталось 3 места')).toHaveClass('text-warning');
     expect(screen.getByText('Мало мест')).toBeInTheDocument();
   });
@@ -96,6 +105,30 @@ describe('RideGridCard (CR-144)', () => {
     expect(screen.getByText('Список ожидания')).toBeInTheDocument();
     expect(screen.getByText('Мест нет')).toBeInTheDocument();
     expect(screen.queryByText('Регистрация открыта')).toBeNull();
+  });
+
+  it('names the queue on a full ride (CR-153)', () => {
+    render(
+      <RideGridCard
+        ride={makeRide({ registrationsCount: 20, waitlistCount: 2 })}
+      />,
+    );
+    expect(screen.getByText('Мест нет · 2 в очереди')).toBeInTheDocument();
+  });
+
+  it('says registration is closed instead of the seats left (CR-153)', () => {
+    render(
+      <RideGridCard
+        ride={makeRide({
+          status: 'registration_closed',
+          registrationsCount: 4,
+          participantLimit: 10,
+        })}
+      />,
+    );
+    expect(screen.getByText('4 из 10')).toBeInTheDocument();
+    expect(screen.getByText('Запись закрыта')).toBeInTheDocument();
+    expect(screen.queryByText(/Осталось/)).toBeNull();
   });
 
   it('says there is no limit and draws no bar for an unlimited ride', () => {

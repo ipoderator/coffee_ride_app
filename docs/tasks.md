@@ -1191,3 +1191,14 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       12px, Sofia Sans Condensed retired (labels → IBM Plex Mono), Unbounded only for
       display/`h1`, render settings, 44px text actions, discovery view switch beside
       the `h1`. ADR-026. Follow-up: KI-077 (refresh visual baselines from CI).
+- [x] CR-153 Discovery «Заезды» to the owner's mockup (variant B): intro line,
+      «Список / Карта» with icons, filter chips (bike, «Эта неделя», pace,
+      difficulty, «Бесплатные») in both tabs, the featured «Ближайший» card,
+      compact cards («Мест нет · 2 в очереди», «Запись закрыта»), «Все заезды» and
+      «Показать ещё N заездов». API (additive): `GET /v1/rides` `startsFrom`/
+      `startsTo`/`paceMin`/`paceMax`/`difficulty`/`free`, response `total`, item
+      `waitlistCount`. See `docs/changelog.md`. Follow-up: KI-077 (baselines).
+- [x] CR-154 Global header to the discovery mockup: full-width raised bar, pill
+      sections «Заезды / Мои заезды / Организатору» (links signed out, registry
+      dropdowns signed in), icon-only theme control, ghost «Войти» + filled
+      «Регистрация». Follow-up: KI-077 (baselines).

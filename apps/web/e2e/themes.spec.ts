@@ -11,7 +11,7 @@ async function mockEmptyRideList(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ items: [], nextCursor: null }),
+      body: JSON.stringify({ items: [], nextCursor: null, total: 0 }),
     }),
   );
 }

@@ -62,6 +62,7 @@ export const publicRideListItemResponseSchema =
     startLabel: z.string().nullable(),
     routePreview: z.array(z.tuple([z.number(), z.number()])).nullable(),
     groups: z.array(z.object({ name: z.string(), paceKmh: z.number() })),
+    waitlistCount: z.number(),
   });
 
 // CR-117 ("Pace groups"): the one "group over the wire" shape, returned by

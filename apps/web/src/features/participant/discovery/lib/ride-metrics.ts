@@ -122,29 +122,67 @@ export interface RideCardSeats {
   fillPercent: number | null;
 }
 
-/** CR-144: the grid card's seats line and fill bar. */
-export function rideCardSeats(ride: PublicRideListItem): RideCardSeats {
+/**
+ * CR-144: the grid card's seats line and fill bar. CR-153: a closed
+ * registration says so («Запись закрыта») instead of the seats left, a full
+ * ride names its queue («Мест нет · 2 в очереди»), and `short` drops
+ * «участников» from the count («4 из 10») for the compact card.
+ */
+export function rideCardSeats(
+  ride: PublicRideListItem,
+  { short = false }: { short?: boolean } = {},
+): RideCardSeats {
   const left = ridesSeatsLeft(ride);
+  const closed = ride.status === 'registration_closed';
   if (left === null || ride.participantLimit === null) {
     return {
       count: RIDE_DISCOVERY_TERMS.participantsCount(ride.registrationsCount),
-      note: RIDE_DISCOVERY_TERMS.noSeatsLimit,
+      note: closed
+        ? RIDE_DISCOVERY_TERMS.registrationClosedNote
+        : RIDE_DISCOVERY_TERMS.noSeatsLimit,
       level: 'open',
       fillPercent: null,
     };
   }
+  let note = ridesSeatsLabel(ride)!;
+  if (closed) {
+    note = RIDE_DISCOVERY_TERMS.registrationClosedNote;
+  } else if (left === 0 && ride.waitlistCount > 0) {
+    note = `${note} · ${RIDE_DISCOVERY_TERMS.waitlistQueued(ride.waitlistCount)}`;
+  }
   return {
-    count: RIDE_DISCOVERY_TERMS.seatsTaken(
+    count: (short
+      ? RIDE_DISCOVERY_TERMS.seatsTakenShort
+      : RIDE_DISCOVERY_TERMS.seatsTaken)(
       ride.registrationsCount,
       ride.participantLimit,
     ),
-    note: ridesSeatsLabel(ride)!,
-    level: left === 0 ? 'full' : left <= LOW_SEATS_THRESHOLD ? 'low' : 'open',
+    note,
+    level:
+      closed || left === 0
+        ? 'full'
+        : left <= LOW_SEATS_THRESHOLD
+          ? 'low'
+          : 'open',
     fillPercent: Math.min(
       100,
       Math.round((ride.registrationsCount / ride.participantLimit) * 100),
     ),
   };
+}
+
+/**
+ * CR-153: the featured «Ближайший» card — the soonest ride that is open for
+ * registration (the list is already soonest-first), else simply the soonest.
+ */
+export function pickFeaturedRide(
+  rides: readonly PublicRideListItem[],
+): PublicRideListItem | null {
+  return (
+    rides.find((ride) => ride.status === 'registration_open') ??
+    rides[0] ??
+    null
+  );
 }
 
 /** Seats-left chip text, or `null` when the ride has no capacity limit. */

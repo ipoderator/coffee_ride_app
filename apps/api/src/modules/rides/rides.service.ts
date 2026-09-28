@@ -4,17 +4,21 @@ import {
   asc,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
+  isNull,
   lte,
   ne,
+  or,
   sql,
 } from 'drizzle-orm';
 import {
   organizerProfiles,
   registrations,
   reviews,
+  rideGroups,
   rides,
   routePoints,
   routes,
@@ -652,10 +656,40 @@ export async function listPublicRides(
   query: ListPublicRidesQuery,
 ): Promise<ListPublicRidesResponse> {
   const limit = clampLimit(query.limit);
+  // CR-153: `startsFrom` can narrow the window but never reopen the past.
+  const now = new Date();
+  const startsFrom =
+    query.startsFrom !== undefined ? new Date(query.startsFrom) : null;
   const conditions = [
     ne(rides.status, 'draft'),
-    gte(rides.startsAt, new Date()),
+    gte(rides.startsAt, startsFrom && startsFrom > now ? startsFrom : now),
   ];
+  if (query.startsTo !== undefined) {
+    conditions.push(lte(rides.startsAt, new Date(query.startsTo)));
+  }
+  if (query.difficulty !== undefined) {
+    conditions.push(eq(rides.difficulty, query.difficulty));
+  }
+  if (query.free === true) {
+    conditions.push(or(isNull(rides.priceRub), eq(rides.priceRub, 0))!);
+  } else if (query.free === false) {
+    conditions.push(gt(rides.priceRub, 0));
+  }
+  // CR-153: pace the way the cards show it (CR-117) — the groups' paces when
+  // the ride has groups, otherwise its own `paceKmh`.
+  if (query.paceMin !== undefined || query.paceMax !== undefined) {
+    const inRange = (
+      column: typeof rides.paceKmh | typeof rideGroups.paceKmh,
+    ) =>
+      and(
+        query.paceMin !== undefined ? gte(column, query.paceMin) : undefined,
+        query.paceMax !== undefined ? lte(column, query.paceMax) : undefined,
+      );
+    conditions.push(
+      sql`(exists (select 1 from ${rideGroups} where ${rideGroups.rideId} = ${rides.id} and ${inRange(rideGroups.paceKmh)})
+        or (not exists (select 1 from ${rideGroups} where ${rideGroups.rideId} = ${rides.id}) and ${inRange(rides.paceKmh)}))`,
+    );
+  }
   if (query.bicycleType) {
     conditions.push(eq(rides.bicycleType, query.bicycleType));
   }
@@ -680,6 +714,8 @@ export async function listPublicRides(
       lte(rides.startLng, query.bboxEast),
     );
   }
+  // CR-153: `total` counts the filtered set, not the page — no cursor.
+  const filterConditions = [...conditions];
   if (query.cursor) {
     let cursorKey;
     try {
@@ -696,18 +732,24 @@ export async function listPublicRides(
     );
   }
 
-  const rows = await db
-    .select({
-      ride: rides,
-      organizerId: organizerProfiles.id,
-      organizerName: organizerProfiles.name,
-      organizerAvatarKey: organizerProfiles.avatarKey,
-    })
-    .from(rides)
-    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
-    .where(and(...conditions))
-    .orderBy(asc(rides.startsAt), asc(rides.id))
-    .limit(limit + 1);
+  const [rows, [totalRow]] = await Promise.all([
+    db
+      .select({
+        ride: rides,
+        organizerId: organizerProfiles.id,
+        organizerName: organizerProfiles.name,
+        organizerAvatarKey: organizerProfiles.avatarKey,
+      })
+      .from(rides)
+      .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+      .where(and(...conditions))
+      .orderBy(asc(rides.startsAt), asc(rides.id))
+      .limit(limit + 1),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(rides)
+      .where(and(...filterConditions)),
+  ]);
 
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
@@ -755,15 +797,17 @@ export async function listPublicRides(
         startLabel: extras.startLabel.get(row.ride.id) ?? null,
         routePreview: extras.routePreview.get(row.ride.id) ?? null,
         groups: extras.groups.get(row.ride.id) ?? [],
+        waitlistCount: extras.waitlistCount.get(row.ride.id) ?? 0,
       };
     }),
     nextCursor,
+    total: totalRow?.count ?? 0,
   };
 }
 
 /**
  * CR-116 (discovery cards): the additive `PublicRideListItem` fields for one page of
- * rides — four batched queries per page (keyed by `ride_id IN (...)`), never one per
+ * rides — five batched queries per page (CR-153 added `waitlistCount`) (keyed by `ride_id IN (...)`), never one per
  * row, same precedent as `getOrganizerRatingSummaries`.
  *
  * `routePreview` is read from `routes.preview` (KI-058), computed when the route
@@ -773,53 +817,69 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
   const registrationsCount = new Map<string, number>();
   const startLabel = new Map<string, string | null>();
   const routePreview = new Map<string, Array<[number, number]> | null>();
+  const waitlistCount = new Map<string, number>();
   if (rideIds.length === 0) {
     return {
       registrationsCount,
       startLabel,
       routePreview,
+      waitlistCount,
       groups: new Map<string, Array<{ name: string; paceKmh: number }>>(),
     };
   }
 
-  const [countRows, startRows, previewRows, groups] = await Promise.all([
-    db
-      .select({
-        rideId: registrations.rideId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(registrations)
-      .where(
-        and(
-          inArray(registrations.rideId, rideIds),
-          eq(registrations.status, 'active'),
-        ),
-      )
-      .groupBy(registrations.rideId),
-    // The oldest `start` point wins if an organizer placed more than one — same
-    // `createdAt` order `GET /v1/rides/:id`'s `routePoints` uses.
-    db
-      .selectDistinctOn([routePoints.rideId], {
-        rideId: routePoints.rideId,
-        label: routePoints.label,
-      })
-      .from(routePoints)
-      .where(
-        and(
-          inArray(routePoints.rideId, rideIds),
-          eq(routePoints.type, 'start'),
-        ),
-      )
-      .orderBy(asc(routePoints.rideId), asc(routePoints.createdAt)),
-    db
-      .select({
-        rideId: routes.rideId,
-        preview: routes.preview,
-      })
-      .from(routes)
-      .where(inArray(routes.rideId, rideIds)),
-    listRideGroupNamesByRideIds(db, rideIds),
-  ]);
+  const [countRows, startRows, previewRows, groups, waitlistRows] =
+    await Promise.all([
+      db
+        .select({
+          rideId: registrations.rideId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(registrations)
+        .where(
+          and(
+            inArray(registrations.rideId, rideIds),
+            eq(registrations.status, 'active'),
+          ),
+        )
+        .groupBy(registrations.rideId),
+      // The oldest `start` point wins if an organizer placed more than one — same
+      // `createdAt` order `GET /v1/rides/:id`'s `routePoints` uses.
+      db
+        .selectDistinctOn([routePoints.rideId], {
+          rideId: routePoints.rideId,
+          label: routePoints.label,
+        })
+        .from(routePoints)
+        .where(
+          and(
+            inArray(routePoints.rideId, rideIds),
+            eq(routePoints.type, 'start'),
+          ),
+        )
+        .orderBy(asc(routePoints.rideId), asc(routePoints.createdAt)),
+      db
+        .select({
+          rideId: routes.rideId,
+          preview: routes.preview,
+        })
+        .from(routes)
+        .where(inArray(routes.rideId, rideIds)),
+      listRideGroupNamesByRideIds(db, rideIds),
+      db
+        .select({
+          rideId: waitlistEntries.rideId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(waitlistEntries)
+        .where(
+          and(
+            inArray(waitlistEntries.rideId, rideIds),
+            eq(waitlistEntries.status, 'waiting'),
+          ),
+        )
+        .groupBy(waitlistEntries.rideId),
+    ]);
 
   for (const row of countRows) {
     registrationsCount.set(row.rideId, row.count);
@@ -830,7 +890,16 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
   for (const row of previewRows) {
     routePreview.set(row.rideId, row.preview);
   }
-  return { registrationsCount, startLabel, routePreview, groups };
+  for (const row of waitlistRows) {
+    waitlistCount.set(row.rideId, row.count);
+  }
+  return {
+    registrationsCount,
+    startLabel,
+    routePreview,
+    waitlistCount,
+    groups,
+  };
 }
 
 /**

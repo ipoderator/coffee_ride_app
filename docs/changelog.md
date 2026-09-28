@@ -1888,3 +1888,85 @@ Files: `packages/ui/src/{tokens.css,lib/cn.ts,components/*}`, `apps/web/src/app/
 `docs/design.md` §4/§5.
 Decisions: ADR-026.
 Follow-up: KI-077 — the 12 visual baselines must be refreshed from CI after push.
+
+## 2026-09-28 — CR-153 — Discovery «Заезды» to the owner's mockup (variant B)
+
+What: CR-152 moved only type and touch targets; the discovery layout from the
+owner's mockup (Design canvas D9o9QsXikDVbMbDkDTsZxt, `Discovery-Desktop`/
+`Discovery-Mobile`) was still missing. The owner chose variant B from
+`handoff-cr-153.md`: frontend plus additive API; header nav unchanged.
+
+- **API (additive, ADR-011 envelope unchanged)**: `GET /v1/rides` takes optional
+  `startsFrom`/`startsTo` (never earlier than now), `paceMin`/`paceMax` (groups'
+  paces when the ride has groups, else its own `paceKmh` — the cards' derivation),
+  `difficulty`, `free` (`true` = price null/0, `false` = paid). Inverted ranges →
+  `400 validation_error`. Response gains `total` (filtered count, ignoring the
+  cursor — one extra `count(*)`), items gain `waitlistCount` (a fifth batched
+  query; the number is already public on `GET /v1/rides/:id`).
+- **`/` «Список» tab** (`RideGrid`): intro line; «Список / Карта» with icons (full
+  width on a phone); `DiscoveryFilters` chips — native selects dressed as chips
+  for bike/pace/difficulty, toggles for «Эта неделя» (Mon–Sun, viewer's clock)
+  and «Бесплатные» — shared with the map tab (replaces `RideFilters`); «N
+  заездов»; `FeaturedRideCard` «Ближайший» (soonest open ride, else soonest; not
+  repeated below; `RouteCover variant="hero"` + distance tag); «Все заезды» with
+  compact `RideGridCard`s (one metrics line, `SeatsMeter` with «Мест нет · 2 в
+  очереди» / «Запись закрыта», tags incl. «N группы»); «Показать ещё N заездов»
+  paging with the first page's exact query, inline error that keeps loaded cards.
+- `packages/ui` terminology (additive): intro, chip labels, pace buckets,
+  `ridesCount`, featured/all-rides/load-more strings, `seatsTakenShort`,
+  `registrationClosedNote`, `waitlistQueued`; `viewGridLabel` «Заезды» → «Список».
+- Intro copy is deliberately city-neutral («Групповые велозаезды с кофе…»), not
+  the mockup's «по Москве и области» — rides aren't limited to Moscow.
+- Not taken: header nav «Заезды / Мои заезды / Организатору», «кофе у …» (stops
+  aren't in the list payload), text < 12px, colours outside tokens.
+
+Validation: api `src/modules` 403 passed (new: filter/`total`/paging case, 7
+invalid-query cases, `waitlistCount`); web 473/473 (new `RideGrid.test.tsx`,
+`discovery-filters.test.ts`, card/seats/featured cases); ui 172/172; typecheck and
+eslint (api, web, ui, types) and prettier clean. Functional e2e
+discovery-states/critical-journeys/themes 10/10. Dev server screenshots at
+320/390/1440: no horizontal scroll or text under 12px on `/` and `?view=map`.
+Coverage gate not run locally. Visual baselines not regenerated (x86_64 only).
+
+Files: `packages/types/src/api/rides.ts`, `apps/api/src/modules/rides/{rides.
+service,rides.routes,ride-response.schema,rides.routes.test}.ts`,
+`packages/ui/src/terminology.ts`, `apps/web/src/features/participant/discovery/`
+(`api.ts`, `lib/{discovery-filters,ride-metrics}`, `components/{RideGrid,
+RideGridCard,FeaturedRideCard,SeatsMeter,DiscoveryFilters,DiscoveryList,
+DiscoveryTabs,RouteCover}` + tests; `RideFilters.tsx` removed),
+`apps/web/e2e/{discovery-states,themes,visual-regression}.spec.ts` (mocks carry
+`total`), `docs/{api,design,tasks}.md`.
+Decisions: none new (additive contract, within ADR-024/026).
+Follow-up: KI-077 — refresh baselines from the first CI run after push
+(discovery grid/map/card now differ by layout, by design).
+
+## 2026-09-28 — CR-154 — Global header to the discovery mockup
+
+What: `AppHeader` now matches the header of the owner's «Ночной старт» discovery
+mockup (`Discovery-Desktop/Mobile.dc.html`), which CR-153 had left out.
+
+- Full-width `bg-raised` bar, 72px / 60px on a phone, `md:px-12`; wordmark 24px
+  (22px on a phone). The content column below keeps its 1200px cap.
+- Sections as pills beside the wordmark: «Заезды», «Мои заезды», «Организатору»
+  (`rounded-full`, Golos 500, current one on `surface`). Signed out (and while the
+  session loads) they are plain links — `/me/rides` and `/organizer`, whose
+  `CabinetShell` gate redirects to `/login`; signed in, the two cabinet pills are
+  the same ADR-009 registry dropdowns as before, now labelled «Мои заезды» /
+  «Организатору» (were «Участник» / «Организатор») and keeping their chevron.
+- Right: `ThemeToggle` is a round 44px icon button without a chevron, and now sits
+  in the bar on a phone too (moved out of the disclosure panel); «Войти» is a ghost
+  pill, «Регистрация» the filled `buttonClassName('primary')`. Icons removed from
+  the header's text links.
+- Terms: `SITE_HEADER_TERMS.participantMenuLabel`/`organizerMenuLabel` changed
+  (no other callers).
+
+Validation: web `src/components/{site,cabinet}` 47/47 (new: anonymous section
+links + `aria-current`); typecheck + lint (web, ui) clean; functional e2e
+mobile-cabinets/themes/critical-journeys 11/11; dev screenshots at 1440/390 — no
+horizontal scroll.
+Files: `apps/web/src/components/site/{AppHeader,AppHeader.test,ThemeToggle}.tsx`,
+`apps/web/src/components/cabinet/OrganizerHeader.test.tsx`,
+`packages/ui/src/terminology.ts`, `docs/{design,tasks}.md`.
+Decisions: none new (within ADR-024/026; nav structure unchanged — registries
+still drive both cabinet menus).
+Follow-up: KI-077 — every visual baseline also shows the new header now.

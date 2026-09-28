@@ -86,7 +86,7 @@ describe('AppHeader', () => {
     getCurrentUserMock.mockResolvedValue({ user });
     renderHeader();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Участник/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Мои заезды/ }));
 
     const items = screen.getAllByRole('menuitem');
     expect(items[0]).toHaveTextContent('Личный кабинет');
@@ -100,7 +100,9 @@ describe('AppHeader', () => {
     getCurrentUserMock.mockResolvedValue({ user });
     renderHeader();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Организатор/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Организатору/ }),
+    );
 
     expect(
       screen.getByRole('menuitem', { name: 'Пункт организатора' }),
@@ -114,8 +116,29 @@ describe('AppHeader', () => {
     expect(await screen.findByRole('link', { name: /Войти/ })).toBeVisible();
     expect(screen.getByRole('link', { name: /Регистрация/ })).toBeVisible();
     expect(
-      screen.queryByRole('button', { name: /Участник/ }),
+      screen.queryByRole('button', { name: /Мои заезды/ }),
     ).not.toBeInTheDocument();
+  });
+
+  // CR-154: the mockup shows the three sections to everyone; signed out they
+  // are plain links, and each cabinet's gate redirects to `/login`.
+  it('links an anonymous visitor to every section, marking the current one', async () => {
+    getCurrentUserMock.mockRejectedValue(unauthorized());
+    renderHeader();
+
+    await screen.findByRole('link', { name: /Войти/ });
+    expect(screen.getByRole('link', { name: 'Заезды' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: 'Мои заезды' })).toHaveAttribute(
+      'href',
+      '/me/rides',
+    );
+    expect(screen.getByRole('link', { name: 'Организатору' })).toHaveAttribute(
+      'href',
+      '/organizer',
+    );
   });
 
   // Guessing either way while the session is still in flight flashes the wrong
@@ -128,7 +151,7 @@ describe('AppHeader', () => {
       screen.queryByRole('link', { name: /Войти/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Участник/ }),
+      screen.queryByRole('button', { name: /Мои заезды/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -167,7 +190,7 @@ describe('AppHeader', () => {
     getCurrentUserMock.mockResolvedValue({ user });
     renderHeader();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Участник/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Мои заезды/ }));
 
     expect(
       screen.getByRole('menuitem', { name: 'Первый пункт' }),

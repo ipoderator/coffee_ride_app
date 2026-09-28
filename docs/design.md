@@ -375,24 +375,55 @@ after the ADR-024 card read as cluttered — every fact was stacked over the rou
 - **Cover** (`RouteCover`, fixed 160px): route track + status chip only. No route →
   a quiet «Маршрут пока не загружен» caption. The chip sits in a `dark` token scope
   so its tone ink stays legible on the always-dark cover in the light theme.
-- **Panel** (`bg-raised`, theme-aware), top to bottom: start line → title (Unbounded,
-  clamped to two lines and always two lines tall, so a grid row's metrics/seats/chips
-  align) → three labelled metric columns → seats → chips.
-- **Metrics**: always distance / набор высоты / средний темп, each with its
-  `METRIC_TERMS` label; a missing one keeps its column with «—»; pace groups count
-  sits under the pace. All three missing → one line «Дистанция и темп не указаны».
+- **Panel** (`bg-raised`, theme-aware), top to bottom: start line → title (Golos 600
+  `text-h3`, clamped to two lines and always two lines tall, so a grid row's
+  metrics/seats/tags align) → metrics line → seats → tags. CR-153 made it compact
+  (owner's discovery mockup).
+- **Metrics** (CR-153): one line «32 км 120 м 18 км/ч» — value `text-body` 600, unit
+  mono and muted; a missing value is left out (never `0`); pace from the groups
+  (range) when there are any. All three missing → «Дистанция и темп не указаны».
   Elevation is in the `elevation` ink.
-- **Seats**: «17 из 20 участников», «Осталось 3 места» (warning ink when ≤ 3 left)
-  and a 4px fill bar (`warning-fill` low, `text-muted` full, `brand` otherwise; the bar
-  is `aria-hidden`, the text carries it). No limit → participant count + «Без
-  ограничения мест», no bar. Cancelled → no seats block.
+- **Seats** (`SeatsMeter`): «4 из 10» + «Осталось 6 мест» (warning ink when ≤ 3 left)
+  and a 6px fill bar (`warning-fill` low, `text-muted` full/closed, `primary-fill`
+  otherwise; `aria-hidden`, the text carries it). Full → «Мест нет · 2 в очереди»
+  (`waitlistCount`); `registration_closed` → «Запись закрыта». No limit →
+  participant count + «Без ограничения мест», no bar. Cancelled → no seats block.
 - **Status chip**: an open ride with ≤ 3 seats → «Мало мест» (warning); an open ride
   with none left → «Список ожидания» (info — the waitlist is joinable exactly then),
   never a green «Регистрация открыта». Cancelled: solid red chip, desaturated cover,
   struck-through muted title.
-- **Chips**: bike type, `DifficultyScale size="sm"` (segments + word), price.
+- **Tags** (32px, not interactive): bike type, difficulty word, «N группы» (≥ 2
+  groups), price.
 - Hover: border to `border-input` and a 2px lift (`motion-safe`); focus ring
   `primary`.
+
+### Discovery page (CR-153)
+
+`/`'s «Список» tab (`RideGrid`), from the owner's discovery mockup (desktop 1440 /
+phone 390), top to bottom:
+
+- **Head**: `h1` «Заезды» + one line of intro (`text-body`, secondary, ≤ 62ch); the
+  «Список / Карта» switch with icons on the right (full width under the intro on a
+  phone). The map tab keeps its own layout (§11) but shares the switch and chips.
+- **Filter chips** (`DiscoveryFilters`, both tabs): «Любой велосипед ▾», «Эта неделя»
+  (Mon–Sun, the viewer's clock), «Темп ▾» (до 20 / 20–25 / 25–30 / от 30 км/ч),
+  «Сложность ▾», «Бесплатные». 44px pills; dropdowns are native `<select>`s dressed
+  as chips; a chosen chip is outlined `primary` on `primary-tint` plus
+  `aria-pressed`/its own value. One sideways-scrolling row on a phone. «N заездов»
+  (the API's `total`) on the right from `md`.
+- **Featured card** (`FeaturedRideCard`): the soonest ride open for registration
+  (else the soonest), never repeated in the grid. `RouteCover variant="hero"` left
+  (1.25fr) on desktop / 208px on top on a phone, status chip + distance tag on it;
+  then «БЛИЖАЙШИЙ» (mono label, `primary`), start line, title (`text-h2`), «Старт: …»,
+  three big metrics (`text-metric`, «—» when missing), seats, «Подробнее и запись»
+  (primary button, full width on a phone).
+- **«Все заезды»** (`text-h2`) + «Сначала ближайшие» (the total on a phone), then the
+  compact cards, 3 / 2 / 1 columns.
+- **«Показать ещё N заездов»** (secondary button, full width on a phone): the next
+  cursor page with the first page's exact query; a failure keeps the loaded cards and
+  shows an inline alert over the button.
+- Not taken from the mockup: header nav «Заезды / Мои заезды / Организатору» (the
+  registry nav stays), «кофе у …» (stops are not in the list payload).
 
 ### Ride poster (CR-151, «Постер заезда v2»)
 
@@ -489,7 +520,7 @@ Public / participant:
 
 | Route                                                | Screen                   | Notes                                                                                          |
 | ---------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `/`                                                  | Discovery                | «Заезды» (route-cover grid) / «Карта» tabs, `?view=map` (ADR-024, CR-130); filters             |
+| `/`                                                  | Discovery                | «Список» (featured + grid) / «Карта» tabs, `?view=map` (ADR-024, CR-130, CR-153); filter chips |
 | `/rides/[id]`                                        | Ride detail              | Cover, metrics, route + profile, stops, services, requirements, organizer, registration action |
 | `/login` `/register`                                 | Auth                     |                                                                                                |
 | `/forgot-password` `/reset-password` `/verify-email` | Auth flows               | CR-059, CR-060                                                                                 |
@@ -518,6 +549,17 @@ discovery link, one dropdown per cabinet built from that cabinet's ADR-009 featu
 registry, the theme control (§3), and the account menu. A new screen registers itself
 into its registry; it does not edit the header. `CabinetShell` remains, narrowed to
 the `/me/*` and `/organizer/*` session gate.
+
+**Header bar (CR-154, discovery mockup).** Full-width `bg-raised` bar, 72px (60px on
+a phone), 48px side padding from `md`. Left: the wordmark at 24px (22px on a phone),
+then three pill sections — «Заезды», «Мои заезды», «Организатору» (44px, `rounded-full`,
+Golos 500 `body`; the current one filled `surface`). Signed out they are plain links
+(«Мои заезды» → `/me/rides`, «Организатору» → `/organizer`; each cabinet's gate sends
+the visitor to `/login`); signed in, the two cabinet pills open their registry
+dropdowns (with a chevron — an honest menu affordance the signed-out mockup doesn't
+show). Right: the theme control as a round 44px icon button (no chevron, also on a
+phone next to the menu button), then «Войти» as a ghost pill and «Регистрация» as the
+filled `Button`; signed in, the account menu instead.
 
 Exception (CR-132, mockup screen 4): `/organizer/*` is an app frame of its own and
 does not show the global header. Its **organizer header** holds only the wordmark
@@ -635,7 +677,7 @@ messages tied to the field, a pending state, and duplicate-submit protection.
 | ---------- | ------ | ----------------------------------------------------------------------------- |
 | base       | ≥ 375  | Single column; header collapses to one disclosure panel; list-first discovery |
 | `sm`       | ≥ 640  | Two-column metric grid                                                        |
-| `md`       | ≥ 768  | Full header bar (sections as dropdowns); two-column ride detail               |
+| `md`       | ≥ 768  | Full header bar (pill sections, §8); two-column ride detail                   |
 | `lg`       | ≥ 1024 | Discovery becomes split list + map, the map sticky and full-column-height     |
 | `xl`       | ≥ 1280 | Max content width 1200px, centered                                            |
 

@@ -61,13 +61,18 @@ const RIDE: PublicRideListItem = {
   startLabel: null,
   routePreview: null,
   groups: [],
+  waitlistCount: 0,
 };
 
 beforeEach(() => {
   search = '';
   window.history.replaceState(null, '', '/');
   listPublicRidesMock.mockReset();
-  listPublicRidesMock.mockResolvedValue({ items: [RIDE], nextCursor: null });
+  listPublicRidesMock.mockResolvedValue({
+    items: [RIDE],
+    nextCursor: null,
+    total: 1,
+  });
 });
 
 describe('DiscoveryTabs', () => {
@@ -76,7 +81,7 @@ describe('DiscoveryTabs', () => {
     expect(
       await screen.findByText('Тестовый заезд на выходные'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Заезды' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Список' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -86,7 +91,9 @@ describe('DiscoveryTabs', () => {
     render(<DiscoveryTabs />);
     await screen.findByText('Тестовый заезд на выходные');
     const headingRow = () =>
-      screen.getByRole('heading', { level: 1, name: 'Заезды' }).parentElement;
+      screen
+        .getByRole('heading', { level: 1, name: 'Заезды' })
+        .closest('[data-discovery-head]');
     expect(headingRow()).toContainElement(screen.getByRole('tablist'));
 
     fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
@@ -128,7 +135,7 @@ describe('DiscoveryTabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
     expect(window.location.search).toBe('?view=map');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Заезды' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Список' }));
     expect(window.location.search).toBe('');
   });
 });

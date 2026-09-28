@@ -99,7 +99,14 @@ export function ThemeToggle() {
   const [preference, choose] = useThemePreference();
 
   return (
-    <NavMenu label={THEME_TERMS.menuLabel} icon={ICONS[preference]} labelHidden>
+    // CR-154: a round 44px icon button, no chevron — the mockup's header.
+    <NavMenu
+      label={THEME_TERMS.menuLabel}
+      icon={ICONS[preference]}
+      labelHidden
+      hideChevron
+      triggerClassName="size-11 justify-center rounded-full px-0 hover:bg-surface [&>svg]:size-5"
+    >
       <ThemeMenuItems preference={preference} onChoose={choose} />
     </NavMenu>
   );

@@ -64,7 +64,7 @@ describe('OrganizerHeader (CR-132)', () => {
       '/organizer/rides/new',
     );
     await screen.findByRole('button', { name: 'Меню аккаунта' });
-    expect(screen.queryByRole('button', { name: /Участник/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Мои заезды/ })).toBeNull();
   });
 
   it('names the signed-in account and links out of the cabinet', async () => {

@@ -1,5 +1,6 @@
 import type {
   BicycleType,
+  DifficultyLevel,
   GetRouteGeometryResponse,
   ListPublicRidesResponse,
   ProblemDetails,
@@ -12,22 +13,31 @@ export type { ListPublicRidesResponse };
 const RIDES_ENDPOINT = '/api/v1/rides';
 
 /**
- * CR-024 ("Ride list", public discovery), extended by CR-025 ("Filters"): `GET
- * /v1/rides`, no session cookie ever required or sent (`docs/api.md`: "no auth").
- * Always fetches one page — same "no load more yet" precedent
- * `features/organizer/rides/api.ts`'s `listMyRides` already established for
- * `/mine` (the underlying API is already cursor-paginated per ADR-011 for when a
- * `Pagination` component exists). `bicycleType` is the one filter dimension this
- * ticket ships — omitted entirely returns every type.
+ * CR-024 ("Ride list", public discovery), extended by CR-025 ("Filters") and
+ * CR-153 (the filter chips: start window, pace, difficulty, free): `GET
+ * /v1/rides`, no session cookie ever required or sent (`docs/api.md`: "no
+ * auth"). One page per call; `cursor` fetches the next one («Показать ещё»).
+ * An omitted param doesn't filter.
  */
+export interface ListPublicRidesParams {
+  limit?: number;
+  cursor?: string;
+  bicycleType?: BicycleType;
+  startsFrom?: string;
+  startsTo?: string;
+  paceMin?: number;
+  paceMax?: number;
+  difficulty?: DifficultyLevel;
+  free?: boolean;
+}
+
 export async function listPublicRides(
-  params: { limit?: number; cursor?: string; bicycleType?: BicycleType } = {},
+  params: ListPublicRidesParams = {},
 ): Promise<ListPublicRidesResponse> {
   const query = new URLSearchParams();
-  if (params.limit !== undefined) query.set('limit', String(params.limit));
-  if (params.cursor !== undefined) query.set('cursor', params.cursor);
-  if (params.bicycleType !== undefined)
-    query.set('bicycleType', params.bicycleType);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
   const queryString = query.toString();
 
   const response = await fetch(

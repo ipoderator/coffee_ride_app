@@ -277,10 +277,12 @@ export const SITE_HEADER_TERMS = {
   registerLink: 'Регистрация',
   cabinetLink: 'Личный кабинет',
   // CR-108: the two registry-backed section menus, their overview entries,
-  // and the account menu.
-  participantMenuLabel: 'Участник',
+  // and the account menu. CR-154: named as the «Ночной старт» discovery
+  // mockup's header names them — also the signed-out links to the same
+  // sections (their cabinets send an anonymous visitor to `/login`).
+  participantMenuLabel: 'Мои заезды',
   participantOverviewLink: 'Личный кабинет',
-  organizerMenuLabel: 'Организатор',
+  organizerMenuLabel: 'Организатору',
   organizerOverviewLink: 'Кабинет организатора',
   accountMenuLabel: 'Аккаунт',
   logoutLink: 'Выйти',
@@ -709,7 +711,8 @@ export const RIDE_DISCOVERY_TERMS = {
   // (`DiscoveryList`, unchanged, ADR-021/CR-118's view). Revives CR-026's
   // never-wired-up List/Map toggle terms with the new labels.
   tabsLabel: 'Режим просмотра',
-  viewGridLabel: 'Заезды',
+  // CR-153: «Список / Карта», as in the owner's mockup (was «Заезды»).
+  viewGridLabel: 'Список',
   viewMapLabel: 'Карта',
   mapUnavailable: 'Карта временно недоступна. Используйте список заездов.',
   // CR-123: the map-fullscreen toggle on the discovery map panel.
@@ -732,6 +735,38 @@ export const RIDE_DISCOVERY_TERMS = {
       ? 'Пока нет участников'
       : `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
   noSeatsLimit: 'Без ограничения мест',
+  // CR-153 (owner's discovery mockup, variant B): page intro, filter chips,
+  // the featured «ближайший» card, the «Все заезды» section and load-more.
+  pageDescription:
+    'Групповые велозаезды с кофе. Выбирайте по темпу, покрытию и свободным местам.',
+  filtersLabel: 'Фильтры заездов',
+  filterBicycleAny: 'Любой велосипед',
+  filterThisWeek: 'Эта неделя',
+  filterPace: 'Темп',
+  filterDifficulty: 'Сложность',
+  filterFree: 'Бесплатные',
+  // Keys are the web's pace buckets (`lib/discovery-filters.ts`).
+  paceFilterOptions: {
+    upTo20: 'до 20\u00A0км/ч',
+    from20to25: '20–25\u00A0км/ч',
+    from25to30: '25–30\u00A0км/ч',
+    from30: 'от 30\u00A0км/ч',
+  },
+  ridesCount: (count: number) =>
+    `${count} ${pluralRu(count, 'заезд', 'заезда', 'заездов')}`,
+  featuredLabel: 'Ближайший',
+  featuredCta: 'Подробнее и запись',
+  allRidesTitle: 'Все заезды',
+  sortNote: 'Сначала ближайшие',
+  showMore: (count: number) =>
+    `Показать ещё ${count} ${pluralRu(count, 'заезд', 'заезда', 'заездов')}`,
+  showMoreFallback: 'Показать ещё',
+  loadMoreError: 'Не удалось загрузить ещё заезды. Попробуйте ещё раз.',
+  // «4 из 10» — the compact card's seats count (the featured card keeps
+  // `seatsTaken`'s «участников»).
+  seatsTakenShort: (count: number, limit: number) => `${count} из ${limit}`,
+  registrationClosedNote: 'Запись закрыта',
+  waitlistQueued: (count: number) => `${count} в очереди`,
 } as const;
 
 /**

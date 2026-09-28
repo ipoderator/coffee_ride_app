@@ -69,9 +69,12 @@ async function onlyShowThisRide(page: Page, rideId: string): Promise<void> {
     const body = (await response.json()) as {
       items: Array<{ id: string }>;
     };
+    const items = body.items.filter((item) => item.id === rideId);
+    // CR-153: the page shows `total` («1 заезд») and «Показать ещё» from
+    // `nextCursor` — both must describe the filtered list, not the database.
     await route.fulfill({
       response,
-      json: { ...body, items: body.items.filter((item) => item.id === rideId) },
+      json: { ...body, items, total: items.length, nextCursor: null },
     });
   });
 }

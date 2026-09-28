@@ -1,74 +1,87 @@
 # Current task
 
-## CR-152 — Typography & responsive consistency pass
+## CR-154 — Global header to the discovery mockup
 
-Status: **done, committed** (2026-09-28); follow-up KI-077 (baselines from CI).
-Previous task CR-151 is done and recorded in `docs/changelog.md`.
+Status: **done, committed** (2026-09-28) together with CR-153 below.
+Goal: owner asked «переделай шапку как на референсе» (screenshot = the mockup's
+`.hdr`, `Discovery-Desktop.dc.html`: 72px raised bar, `padding 0 48px`, wordmark
+24px, pill nav 44px/500/`surface` active, `.ib` theme 44px, ghost «Войти», filled
+«Регистрация»; phone: 60px, wordmark 22px, theme + menu buttons).
 
-Mockup for approval: claude.ai/artifact/D9o9QsXikDVbMbDkDTsZxt (Design canvas,
-8 artboards: system board + discovery/ride desktop+390, organizer create, my
-rides, login).
+Gap table:
 
-### Goal
+| In mockup                                  | Was                                    | Done                                            |
+| ------------------------------------------ | -------------------------------------- | ----------------------------------------------- |
+| Full-width raised bar 72/60px              | `bg`, 1200px-capped, `p-4`             | done                                            |
+| Wordmark 24/22px                           | 28.8px                                 | done (`Wordmark` `className`)                   |
+| Pills «Заезды / Мои заезды / Организатору» | «Заезды» link; cabinet menus signed-in | done (terms); signed-in keep dropdown + chevron |
+| Theme icon button, no chevron              | `NavMenu` icon + chevron               | done; also in phone bar                         |
+| Ghost «Войти», filled «Регистрация»        | text links with icons                  | done (`buttonClassName('primary')`)             |
 
-One consistent type system on every page, readable body text on phones,
-touch-safe controls, cleaner font rendering — inside the existing ADR-024
-«Ночной старт» identity (same palette, logo, Golos/Unbounded/Plex Mono).
+Validation: see `docs/changelog.md` CR-154. Follow-up: KI-077.
 
-### Audit evidence (2026-09-28, `apps/web/src` + `packages/ui/src`)
+## CR-153 — Discovery «Заезды» to the owner's mockup (variant B: frontend + API)
 
-- `text-sm` (14px) used 242×, `text-base` 19× — body text is 14px site-wide,
-  against `docs/design.md` §4 (16px reading floor).
-- 10–11px text in 7 places: `BottomTabBar.tsx:132` (0.625rem),
-  `AvatarStack.tsx:54`, `RouteTimeline.tsx:68`, `ElevationProfileChart.tsx:169,181`,
-  `RideGridCard.tsx:107,131` (0.6875rem).
-- 8 arbitrary sizes (13/15/17px, 1.625rem…) — `tokens.css` has no type-scale
-  tokens at all.
-- h1: 19× `text-2xl font-semibold`, `RideGrid.tsx:69` `text-4xl`,
-  `RiderProfileCard.tsx:161` `font-display text-xl`; h2 has 10 variants.
-- 5 font families; Sofia Sans Condensed (`font-display`, 21 uses) and IBM Plex
-  Mono (20 uses) overlap in the label role.
-- No `font-synthesis`, font-smoothing, `text-wrap: balance` settings in
-  `globals.css`.
-- 21 `h-8/h-9/size-8/size-9` usages to check against the 44/48px target rule.
+Status: **done, committed** (2026-09-28). Previous task CR-152 is done and recorded in
+`docs/changelog.md`. Handoff with the gap table: `.claude/context/handoff-cr-153.md`.
 
-### Proposed scope (after approval)
+Mockup: claude.ai/artifact/D9o9QsXikDVbMbDkDTsZxt → `project/Discovery-Desktop.dc.html`
+(1440) and `project/Discovery-Mobile.dc.html` (390).
 
-1. Role type-scale tokens in `packages/ui/src/tokens.css` (`--text-display/h1/h2/
-h3/body/secondary/label/metric`, mobile→desktop), documented in
-   `docs/design.md` §4.
-2. Unbounded only for display + h1; h2/h3/card titles → Golos 600.
-3. Labels → IBM Plex Mono; retire Sofia Sans Condensed (needs ADR-024 addendum).
-4. Body text 14→16px, secondary 15px, nothing under 12px (tab bar 12px).
-5. Render quality: `font-synthesis: none`, antialiased in dark theme,
-   `text-wrap: balance` on headings, metric fallback fonts.
-6. Touch targets / 320–1440 overflow sweep; discovery page head (toggle beside
-   h1), filter chips as a scroll row on mobile.
-7. Refresh visual baselines (Docker, linux/amd64) per `.claude/rules/testing.md`.
+### Decision (owner, 2026-09-28)
 
-### Decisions (2026-09-28)
+Variant B from the handoff: everything frontend-only plus additive optional params on
+`GET /v1/rides` and a `total`. Header nav (handoff question 3) is **not** in scope —
+`AppHeader` stays as is.
 
-- Retire Sofia Sans Condensed; labels → IBM Plex Mono (ADR-026 amends ADR-024 §typography).
-- Unbounded only for display + h1; h2/h3/card titles → Golos 600.
-- Ride-detail sticky CTA: already shipped in CR-151 (`TicketBar`; `BottomTabBar`
-  hides on `/rides/[id]`) — nothing to build.
-- Role sizes are Tailwind v4 `--text-*` theme tokens (`text-display/h1/h2/h3/body/
-body-sm/label/metric`), phone values on `:root`, desktop from `md` (48rem).
-  `cn()` in both apps/web and packages/ui must learn these as font-size classes
-  (tailwind-merge otherwise treats `text-h1` as a colour and drops `text-text`).
-- Mechanical rule: `text-sm` → `text-body-sm` (15px) by default; reading text,
-  form inputs, descriptions → `text-body` (16px). Nothing under 12px.
+### Requirements
+
+API (additive, ADR-011 pagination unchanged):
+
+- `GET /v1/rides` query: `startsFrom`/`startsTo` (ISO datetime with offset; lower
+  bound never earlier than now), `paceMin`/`paceMax` (km/h; matches a ride whose
+  pace groups include one in range, or — without groups — whose `paceKmh` is in
+  range; same derivation as the cards), `difficulty` (1–5), `free` (`true` = price
+  null/0, `false` = paid). Invalid ranges → 400 `validation_error`.
+- Response: `total` (all rides matching the filters, cursor ignored); each item gains
+  `waitlistCount` (count of `waiting` entries — already public on `GET /v1/rides/:id`).
+
+Frontend (`features/participant/discovery`):
+
+- Page head: `h1` + description, «Список / Карта» segments with icons on the right
+  (full width on a phone).
+- Filter chips row (both views): bicycle ▾, «Эта неделя», Темп ▾, Сложность ▾,
+  «Бесплатные»; «N заездов» on the right; horizontal scroll on a phone.
+- Featured card «Ближайший»: first ride with open registration (else the first ride),
+  cover with the track + distance/start tag, date, title, «Старт: …», three big
+  metrics, seats line + bar, «Подробнее и запись».
+- «Все заезды» + «Сначала ближайшие» (count on a phone).
+- Compact cards: metrics in one line, seats «4 из 10 · Запись закрыта / Мест нет · 2 в
+  очереди / Осталось 15 мест» + bar, tags (bike, difficulty, groups, price).
+- «Показать ещё N заездов» via `nextCursor` + `total`.
+
+Not taken: header nav change, text under 12px, controls under 44/48px, colours outside
+tokens, Unbounded below `h1`, «кофе у …» (stops not in the list payload).
+
+### Acceptance criteria
+
+- New params filter correctly (route tests), invalid ranges rejected, `total` and
+  `waitlistCount` correct.
+- Discovery renders featured + grid + load-more; filters drive the query; loading /
+  empty / error states kept. Unit tests updated/added.
+- typecheck/lint/tests green for api/web/ui/types; screenshots at 390/1440 checked.
+- Docs: `docs/api.md`, `docs/design.md`, changelog, tasks, project-state.
 
 ### Progress
 
-- [x] tokens + cn (`TEXT_ROLES`, apps/web re-exports ui's `cn`)
-- [x] globals.css render settings, heading faces
-- [x] fonts: Sofia Sans Condensed removed (layout, woff2, licence, build script)
-- [x] sweep packages/ui + apps/web (~90 files)
-- [x] touch targets (text actions, SegmentedControl, ErrorState retry, avatars,
-      wordmark links); discovery switch beside h1; card metric labels wrap on a subgrid
-- [x] validation: ui 172, web 461 unit; typecheck/lint; next build; e2e 39/39
-      functional; dev server 320/390/1440 — no h-scroll, no text < 12px
-- [x] docs: design.md §4/§5, ADR-026, changelog, tasks, project-state,
-      architecture-map, KI-077
-- [ ] visual baselines — KI-077 (needs push + CI artifacts)
+- [x] API + types + tests
+- [x] terminology
+- [x] frontend components + tests
+- [x] validation + screenshots (see changelog CR-153)
+- [x] docs/context
+
+### Result
+
+Implemented as specified; validation in `docs/changelog.md` → CR-153. Open:
+KI-077 baselines after push; ride page at 320px overflowed by 31px in the
+screenshot run (ride-detail untouched by this task — not investigated).

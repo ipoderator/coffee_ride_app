@@ -191,9 +191,18 @@ export interface PublicRideListItem extends PublicRide {
   startLabel: string | null;
   routePreview: Array<[number, number]> | null;
   groups: Array<{ name: string; paceKmh: number }>;
+  // CR-153: `waiting` queue entries, a count only — the same number
+  // `GetRideResponse.waitlistCount` already makes public (the card's
+  // «Мест нет · 2 в очереди»).
+  waitlistCount: number;
 }
 
-export type ListPublicRidesResponse = Paginated<PublicRideListItem>;
+// CR-153: `total` — every ride matching the request's filters, ignoring
+// `cursor`/`limit` («7 заездов», «Показать ещё 4 заезда»). Additive on top of
+// the ADR-011 envelope; `nextCursor` stays the only way to page.
+export type ListPublicRidesResponse = Paginated<PublicRideListItem> & {
+  total: number;
+};
 
 // CR-025 ("Filters"): `bicycleType` is the one filter dimension this ticket ships —
 // the only `Ride` field that's both always-set and a small closed enum
@@ -231,6 +240,44 @@ export const listPublicRidesQuerySchema = listRidesQuerySchema
       .min(-180, 'bboxWest must be between -180 and 180.')
       .max(180, 'bboxWest must be between -180 and 180.')
       .optional(),
+    // CR-153 (discovery filter chips), all optional and additive:
+    // - `startsFrom`/`startsTo`: a start-time window («Эта неделя»). The list
+    //   never goes back before «now», whatever `startsFrom` says.
+    // - `paceMin`/`paceMax` (km/h, inclusive): a ride matches when one of its
+    //   pace groups is in range, or — without groups — its own `paceKmh` is
+    //   (the cards' pace derivation, CR-117).
+    // - `difficulty`: exactly this 1–5 level.
+    // - `free`: `true` — no price or 0 ₽ (`formatPrice`'s «Бесплатно»);
+    //   `false` — paid only.
+    startsFrom: z.iso
+      .datetime({
+        offset: true,
+        error: 'startsFrom must be an ISO 8601 datetime.',
+      })
+      .optional(),
+    startsTo: z.iso
+      .datetime({
+        offset: true,
+        error: 'startsTo must be an ISO 8601 datetime.',
+      })
+      .optional(),
+    paceMin: z.coerce
+      .number()
+      .min(0, 'paceMin must be between 0 and 100.')
+      .max(100, 'paceMin must be between 0 and 100.')
+      .optional(),
+    paceMax: z.coerce
+      .number()
+      .min(0, 'paceMax must be between 0 and 100.')
+      .max(100, 'paceMax must be between 0 and 100.')
+      .optional(),
+    difficulty: z.coerce
+      .number()
+      .int('difficulty must be an integer from 1 to 5.')
+      .min(1, 'difficulty must be an integer from 1 to 5.')
+      .max(5, 'difficulty must be an integer from 1 to 5.')
+      .optional(),
+    free: z.stringbool({ error: 'free must be true or false.' }).optional(),
   })
   .refine(
     (value) => {
@@ -247,6 +294,20 @@ export const listPublicRidesQuerySchema = listRidesQuerySchema
         'bboxNorth, bboxSouth, bboxEast and bboxWest must all be provided together.',
       path: ['bboxNorth'],
     },
+  )
+  .refine(
+    (value) =>
+      value.startsFrom === undefined ||
+      value.startsTo === undefined ||
+      Date.parse(value.startsFrom) <= Date.parse(value.startsTo),
+    { message: 'startsFrom must not be after startsTo.', path: ['startsFrom'] },
+  )
+  .refine(
+    (value) =>
+      value.paceMin === undefined ||
+      value.paceMax === undefined ||
+      value.paceMin <= value.paceMax,
+    { message: 'paceMin must not be greater than paceMax.', path: ['paceMin'] },
   );
 export type ListPublicRidesQuery = z.infer<typeof listPublicRidesQuerySchema>;
 

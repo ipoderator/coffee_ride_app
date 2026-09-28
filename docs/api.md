@@ -250,6 +250,17 @@ stored route geometry as at most 40 `[lat, lng]` pairs, 5 decimals — Douglas�
 point budget over the full geometry, computed when the route is written and stored in
 `routes.preview` (KI-058); `null` without a route; for a card sketch, never navigation), `groups` (`[{ name, paceKmh }]` in `position` order,
 `[]` without groups). Computed with four batched queries per page, never per row.
+**CR-153** (discovery filter chips) — additive, all optional: `?startsFrom=`/
+`?startsTo=` (ISO 8601 datetime with offset; the lower bound is never earlier
+than now), `?paceMin=`/`?paceMax=` (km/h, 0–100, inclusive — a ride with pace
+groups matches when one of its groups is in range, one without groups when its
+own `paceKmh` is; the same derivation the cards show), `?difficulty=` (1–5,
+exact), `?free=true|false` (`true`: `priceRub` null or 0; `false`: paid only).
+`startsFrom` after `startsTo` or `paceMin` above `paceMax` → `400
+validation_error`. Response gains `total` (every ride matching the filters,
+ignoring `cursor`/`limit` — one extra `count(*)`), items gain `waitlistCount`
+(`waiting` entries, a count only — already public on `GET /v1/rides/:id`; a
+fifth batched query).
 
 GET `/v1/rides/mine` — **implemented (CR-088)**. Requires a valid session cookie
 (`401` otherwise). Every ride owned by the caller, any status — distinct from the

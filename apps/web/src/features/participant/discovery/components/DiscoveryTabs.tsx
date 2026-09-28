@@ -1,5 +1,6 @@
 'use client';
 
+import { List, Map as MapIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { RIDE_DISCOVERY_TERMS } from 'ui';
@@ -10,11 +11,11 @@ type DiscoveryTab = 'grid' | 'map';
 
 function tabClassName(isActive: boolean): string {
   return [
-    'min-h-11 rounded-full px-5 text-body-sm font-medium',
+    'inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 text-body-sm font-semibold md:flex-none',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     isActive
       ? 'bg-primary-fill text-on-primary-fill'
-      : 'bg-bg-raised text-text-secondary hover:text-text',
+      : 'text-text-secondary hover:text-text',
   ].join(' ');
 }
 
@@ -50,12 +51,13 @@ export function DiscoveryTabs() {
   }
 
   // CR-152: the switch sits in each view's own header row, beside its `h1`,
-  // rather than centred on a row of its own above it.
+  // rather than centred on a row of its own above it. CR-153 (owner's
+  // mockup): «Список / Карта» with icons, full width on a phone.
   const viewSwitch = (
     <div
       role="tablist"
       aria-label={RIDE_DISCOVERY_TERMS.tabsLabel}
-      className="flex w-fit gap-1 rounded-full bg-surface p-1"
+      className="flex w-full shrink-0 gap-1 rounded-full border border-border bg-surface p-1 md:w-fit"
     >
       <button
         type="button"
@@ -64,6 +66,7 @@ export function DiscoveryTabs() {
         className={tabClassName(tab === 'grid')}
         onClick={() => selectTab('grid')}
       >
+        <List aria-hidden="true" className="size-5" />
         {RIDE_DISCOVERY_TERMS.viewGridLabel}
       </button>
       <button
@@ -73,6 +76,7 @@ export function DiscoveryTabs() {
         className={tabClassName(tab === 'map')}
         onClick={() => selectTab('map')}
       >
+        <MapIcon aria-hidden="true" className="size-5" />
         {RIDE_DISCOVERY_TERMS.viewMapLabel}
       </button>
     </div>

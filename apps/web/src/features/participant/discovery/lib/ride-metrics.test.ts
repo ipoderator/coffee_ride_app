@@ -4,6 +4,7 @@ import {
   buildRideCardMetrics,
   buildRideRowMetrics,
   discoveryStatusTerm,
+  pickFeaturedRide,
   rideCardSeats,
   ridesSeatsLabel,
   ridesSeatsLeft,
@@ -46,6 +47,7 @@ function makeRide(
     startLabel: null,
     routePreview: null,
     groups: [],
+    waitlistCount: 0,
     ...overrides,
   } as PublicRideListItem;
 }
@@ -210,5 +212,15 @@ describe('rideCardSeats (CR-144)', () => {
       level: 'open',
       fillPercent: null,
     });
+  });
+});
+
+describe('pickFeaturedRide (CR-153)', () => {
+  it('picks the soonest ride open for registration, else the soonest', () => {
+    const closed = makeRide({ id: 'closed', status: 'registration_closed' });
+    const open = makeRide({ id: 'open' });
+    expect(pickFeaturedRide([closed, open])?.id).toBe('open');
+    expect(pickFeaturedRide([closed])?.id).toBe('closed');
+    expect(pickFeaturedRide([])).toBeNull();
   });
 });

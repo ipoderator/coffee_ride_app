@@ -204,6 +204,7 @@ const rideSummaryResponseSchema = z.object({
 const listPublicRidesResponseSchema = z.object({
   items: z.array(publicRideListItemResponseSchema),
   nextCursor: z.string().nullable(),
+  total: z.number(),
 });
 const rideIdParamsSchema = z.object({
   id: z.uuid('id must be a valid ride id.'),
