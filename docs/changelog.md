@@ -1814,3 +1814,20 @@ before the e2e job could produce the screenshots KI-076 needs.
 Fix: delete rides first, like every other suite. Reproduced locally
 (rider-profile → avatar: 14/14 failed before, 14/14 pass after); full API
 suite 485 passed / 5 skipped with the live S3/Redis flags.
+
+## 2026-09-28 — KI-076 — Visual baselines refreshed; seeded cover art hidden from snapshots
+
+What: with the API cleanup flake fixed, CI's e2e failed on seven screenshots, not
+just the two KI-076 expected. Two causes: CR-146's self-hosted fonts (every glyph
+shifted — first e2e run since that change) and the cover isolines, which
+`RouteCover`/`TrackCover` pick/generate from the ride's id — a random UUID per
+run, so the card, grid and ride-detail shots never matched, even between retries.
+
+Fix: both isoline groups carry `data-isolines`; `visual-regression.spec.ts`
+hides them via `toHaveScreenshot`'s `stylePath` (`e2e/hide-seeded-art.css`) —
+the track, labels and layout are still compared. Baselines replaced from CI
+runs `36413572568` (organizer-dashboard, discovery-map — mobile) and
+`36415279536` (ride-detail ×2, ride-card ×2, discovery-grid mobile): each
+identical across all three attempts (≤11 px of edge anti-aliasing), checked by
+eye — only the CR-151 layout and the new fonts, no layout breakage.
+KI-076 archived.

@@ -1957,3 +1957,28 @@ Update 2026-09-24 (CR-129): done — `docker-compose.yml`'s one-shot
 `minio-init` creates the bucket (`mc mb --ignore-existing`) once `minio` is
 healthy; verified on a fresh isolated volume (bucket created, exit 0, re-run
 exit 0). What keeps this open is only `route-storage.ts`'s GPX path above.
+
+### KI-076 — `ride-detail` visual baselines are stale after CR-151
+
+Status: resolved 2026-09-28 (baselines from CI runs `36413572568`/`36415279536`). Discovered: 2026-09-28 (CR-151).
+Problem: `/rides/[id]` was rebuilt, so `visual-regression.spec.ts-snapshots/
+ride-detail-{chromium,mobile}-linux.png` no longer match. They must be rendered
+on x86_64 Linux (`.claude/rules/testing.md`), and this machine can't pull the
+`linux/amd64` `mcr.microsoft.com/playwright:v1.63.0-jammy` image (a layer failed
+15+ retries).
+Impact: CI's e2e job fails on those two screenshots until they're replaced —
+nothing else on the page is untested (unit + functional e2e are green).
+Workaround: none locally.
+Next action: after CR-151 is pushed, take the two `*-actual.png` files from the
+failed run's `playwright-report` artifact (`gh run download <run> -n
+playwright-report`), check the diff is only the redesign, commit them as the new
+baselines, re-run CI.
+Resolution 2026-09-28: CI first had to reach e2e (an API test-cleanup flake,
+`users/avatar.routes.test.ts`, stopped it on CR-146/CR-151). Then more screens than
+these two failed: CR-146's self-hosted fonts shifted every glyph, and the cover
+isolines (picked/generated from the ride's random id) made the card, grid and
+ride-detail shots differ on every run. Isolines are now `data-isolines` and hidden
+via `toHaveScreenshot`'s `stylePath` (`e2e/hide-seeded-art.css`); seven baselines
+(ride-detail, ride-card, discovery-grid mobile, discovery-map mobile, organizer
+dashboard mobile) replaced from the runs' `*-actual.png`, each identical (≤11 px of
+edge anti-aliasing) across all three attempts and checked by eye.
