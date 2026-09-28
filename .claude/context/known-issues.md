@@ -695,6 +695,15 @@ have had ×100 elevation gain), and the Catalog API's HTTP-200 `meta.code`
 errors (an invalid key read as "nothing found"). Still open: Moscow →
 Reykjavik answers HTTP 403 → `unavailable`, not `no_route`; a diagnostic in
 the contract test prints the raw answer on the next run.
+Update 2026-09-28 (CR-147, later): the 403 was the demo key's 50 km limit
+between points (KI-075), not coverage. An island with no bridge (Rabocheostrovsk
+→ Solovki) answers HTTP 200 `{type:'error', status:'ROUTE_DOES_NOT_EXISTS'}`,
+now mapped to `no_route`. Run `36387478533` on `0d8d57c`: 5/5 green — both
+CR-114 questions answered. Also seen: bicycle routing takes ferries
+(Vladivostok → Popova island returned a route with `filter_road_types:
+["dirt_road","ferry"]`). What stays open here is only local reachability:
+the seed route rebuild still needs this machine to reach 2GIS (VPN off or
+split-tunnel `*.2gis.com`); live adapter checks go through `maps-contract.yml`.
 
 ### KI-057 — The 2GIS basemap stays light in the dark theme
 
@@ -743,6 +752,22 @@ Workaround: re-run the failed job.
 Next action: self-host the fonts — commit the `.woff2` files (all SIL OFL) and
 switch to `next/font/local`, keeping the `cyrillic`/`latin` subsets, the weights,
 the CSS variables and Sofia Sans' `locl` behaviour (`<html lang="ru">`).
+
+### KI-075 — The 2GIS key is a demo key: routing refuses points over 50 km apart
+
+Status: open. Discovered: 2026-09-28 (CR-147, contract run `36387194155`).
+Problem: `MAPS_2GIS_API_KEY` (in `.env` and the `maps-2gis-contract` GitHub
+environment) is a demo key. Routing answers HTTP 403 `"excessive distance
+between points for demo-keys, max (km): 50"` for points further apart. The
+adapter maps any 403 to `unavailable`, so the route builder answers 503 "route
+builder unavailable" — not a clear "points too far apart".
+Impact: high before launch — a gravel/brevet ride whose waypoints are over
+50 km apart can't be built; demo keys likely have other quota/licence limits.
+Fine for development and the contract test (its pairs stay under 50 km).
+Workaround: place waypoints closer than 50 km.
+Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
+replaces the secret in both places; then check the commercial limit and
+whether the 403 case still needs its own error code.
 
 ## Resolved
 

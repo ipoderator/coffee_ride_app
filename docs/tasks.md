@@ -953,11 +953,11 @@ critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
       done 2026-09-23: `packages/ui` `FileInput` (native picker styled as a
       button) in all four upload forms; `OrganizerProfileForm` clears its
       stale "saved" line on edit and toasts every save. See `docs/changelog.md`.
-- [ ] CR-114 Route builder on 2GIS roads — implemented 2026-09-23
+- [x] CR-114 Route builder on 2GIS roads — implemented 2026-09-23
       (`POST /v1/rides/:id/route/build` + `RouteBuilder` on the organizer route
-      page; adapter no longer falls back to straight lines). Open item: live
-      verification against real 2GIS, blocked by KI-056 (VPN). See
-      `docs/changelog.md`.
+      page; adapter no longer falls back to straight lines). Live-verified
+      2026-09-28 in CR-147 via the GitHub contract workflow (KI-056's VPN
+      blocks it locally). See `docs/changelog.md`.
 - [x] CR-115 «Топокарта» visual foundation (ADR-021) — done 2026-09-23: the UI
       as a printed orienteering-map sheet — white paper, black ink, one plum
       overprint for the route and the primary action only, meaning inks
@@ -1163,3 +1163,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `docs/changelog.md`.
 - [ ] CR-146 Self-host the web fonts (KI-074) — `next/font/local` instead of
       `next/font/google`, so `next build` needs no network.
+- [x] CR-147 First live 2GIS contract run — done 2026-09-28: `maps-2gis-contract`
+      environment + secret, run on GitHub's runners. Fixed: routing altitudes
+      are centimetres, Catalog `meta.code` errors, HTTP 200
+      `ROUTE_DOES_NOT_EXISTS` → `no_route`. KI-075 (demo key, 50 km limit)
+      recorded. See `docs/changelog.md`.

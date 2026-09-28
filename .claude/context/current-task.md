@@ -2,7 +2,7 @@
 
 ## CR-147 — First live 2GIS contract run (KI-056 via GitHub Actions)
 
-Status: in progress.
+Status: complete, committed.
 
 ### Goal
 
@@ -31,3 +31,12 @@ can't reach 2GIS REST, KI-056) and fix what the live answers show.
   next run shows what 2GIS says; decide the 403 mapping after that.
 - Validation: maps-2gis test/typecheck/lint; re-run the workflow after push
   (needs owner approval to push to `main`).
+
+### Result
+
+- Fixes committed (`21ea128`, `ea297ed`, `0d8d57c`); the 403 was the demo
+  key's 50 km limit (KI-075); unroutable pairs answer HTTP 200
+  `ROUTE_DOES_NOT_EXISTS`, now `no_route`.
+- Final contract run `36387478533`: 5/5 green. CR-114 checked off.
+- Validation: maps-2gis tests (45), typecheck, lint. apps/api suites not run
+  locally (no `TEST_DATABASE_URL`; no apps/api code changed) — left to CI.

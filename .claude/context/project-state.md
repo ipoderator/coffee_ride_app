@@ -37,6 +37,14 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-147 (2026-09-28, committed): first live 2GIS contract run, on GitHub's
+runners (`maps-contract.yml`; environment `maps-2gis-contract`, `main` only,
+secret `MAPS_2GIS_API_KEY`) — the local VPN still blocks 2GIS REST (KI-056).
+Adapter fixes: routing altitudes are centimetres (÷100), Catalog API errors
+arrive as HTTP 200 + `meta.code`, and HTTP 200 `ROUTE_DOES_NOT_EXISTS` is
+`no_route`. Contract test 5/5 green (`36387478533`); CR-114 checked off.
+KI-075: the key is a demo key — routing refuses points over 50 km apart.
+
 CR-145 (2026-09-28, committed): known-issues sweep — KI-072 (Dependabot dev
 group minor/patch only), KI-062 (0.5 km/h pace step in the shared Zod schema;
 the API now rejects off-step paces), KI-061 (ride sub-page link registry,
@@ -90,8 +98,8 @@ fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plu
 `docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task (after CR-145): confirm CI is green after the x86_64
-baseline follow-up, then CR-146 (self-hosted fonts, KI-074).
+Next logical task (after CR-147): CR-146 (self-hosted fonts, KI-074); before
+launch, a commercial 2GIS key (KI-075).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a
 separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly
@@ -267,9 +275,8 @@ holds the migrated dev objects (`/health` → `s3: ok`).
 builder — waypoints clicked on `/organizer/rides/[id]/route`, `POST
 /v1/rides/:id/route/build` routes them along 2GIS roads (bicycle); no
 straight-line fallback (`no_route` → 422); apps/api maps composition point
-`plugins/maps.ts` (`app.mapProvider`). **Not yet live-verified against 2GIS**
-— the 2GIS REST APIs are unreachable through this machine's VPN (KI-056), so
-CR-114 stays unchecked in `docs/tasks.md`. CR-113: `packages/ui` `FileInput`
+`plugins/maps.ts` (`app.mapProvider`). Live-verified 2026-09-28 through the
+GitHub contract workflow (CR-147); still unreachable locally (KI-056). CR-113: `packages/ui` `FileInput`
 in all four upload forms. CR-112: `MapHandle.fitBounds` + re-fit on resize,
 `MapPolylineInput.outlineColor`. CR-108…CR-111: one global header
 (`components/site/AppHeader.tsx`, cabinet dropdowns from the ADR-009

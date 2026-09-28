@@ -1537,3 +1537,43 @@ ride-detail-mobile}-linux.png`, `.claude/rules/testing.md`,
 `.claude/context/project-state.md`, `docs/changelog.md`.
 
 Validation: the follow-up CI run is the check (no local x86_64 renderer).
+
+## 2026-09-28 — CR-147 — First live 2GIS contract run
+
+Summary: this machine's VPN egress can't reach the 2GIS REST APIs (KI-056), so
+the contract test ran on GitHub's runners instead. Created the
+`maps-2gis-contract` environment (deployment branches: `main` only); the owner
+added the `MAPS_2GIS_API_KEY` secret. Four dispatches of `maps-contract.yml`:
+
+- `36386689239` (before fixes): geocode/reverseGeocode pass; three failures,
+  each a real adapter defect or a wrong test premise.
+- Routing altitudes are centimetres — central Moscow came back as 15820. The
+  adapter passed them through as metres, so a built route's GPX (and every
+  elevation gain derived from it) would have been ×100. Now ÷100.
+- The Catalog API reports errors as HTTP 200 with the status in `meta.code`;
+  an invalid key resolved to `[]` ("nothing found"). Now `meta.code` 404 → no
+  results, any other non-200 → `MapProviderError` with that status.
+- Moscow → Reykjavik answered 403: `"excessive distance between points for
+demo-keys, max (km): 50"` (read via a temporary diagnostic test, run
+  `36387194155`) — the key is a demo key (KI-075). The `no_route` case now uses
+  Rabocheostrovsk → Solovki (island, no bridge, ~44 km), which answers HTTP 200
+  `{type:'error', status:'ROUTE_DOES_NOT_EXISTS'}` (run `36387334632`) — the
+  adapter read that as an unexpected shape (`unavailable`, 503). Now
+  `no_route` (422); other HTTP 200 routing errors stay `unavailable`.
+- `36387478533` on `0d8d57c`: 5/5 green. CR-114's two open questions
+  (`need_altitudes` gives Z per vertex; what an unroutable pair returns) are
+  answered, and CR-114 is checked off.
+
+Files: `packages/maps-2gis/src/{route,geocode}.ts`, `provider.test.ts` (four
+new cases, altitude fixture in centimetres), `provider.contract.test.ts`
+(island pair; the diagnostic was removed once answered),
+`.claude/context/{known-issues,project-state,current-task}.md`,
+`docs/tasks.md`.
+
+Validation: maps-2gis unit tests 45 passed, typecheck, lint; live contract run
+green. apps/api's rides suites were not run locally (need `TEST_DATABASE_URL`);
+they mock `MapProvider` and no apps/api code changed — CI covers them.
+
+Found: KI-075 (demo key: routing refuses points over 50 km apart, surfaced as
+503 "unavailable"); bicycle routes may include ferries (Vladivostok → Popova
+island). KI-056 narrowed to local reachability only.
