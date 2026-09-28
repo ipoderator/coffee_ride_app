@@ -71,14 +71,43 @@ fetch('$PROBE_URL')
 
 echo "==> Probing GET $PROBE_URL through web"
 last=''
+probe_ok=0
 for _ in $(seq 1 "$PROBE_ATTEMPTS"); do
   if last="$("${COMPOSE[@]}" exec -T web node -e "$probe_js" 2>&1)"; then
     echo "OK: $last"
-    succeeded=1
-    exit 0
+    probe_ok=1
+    break
   fi
   sleep 2
 done
 
-echo "FAIL: expected 200 with an { items } body, last response: $last" >&2
-exit 1
+if [ "$probe_ok" -ne 1 ]; then
+  echo "FAIL: expected 200 with an { items } body, last response: $last" >&2
+  exit 1
+fi
+
+# KI-044: the per-IP rate limiter must key on the client address Caddy writes
+# into X-Forwarded-For, not on `web`'s one internal IP. This request plays
+# Caddy: client A twice, A again behind a forged left entry, then client B.
+# A's bucket must keep counting down across all three; B must start fresh.
+xff_js="
+const remaining = async (xff) => {
+  const res = await fetch('$PROBE_URL', { headers: { 'x-forwarded-for': xff } });
+  return Number(res.headers.get('x-ratelimit-remaining'));
+};
+(async () => {
+  const a1 = await remaining('203.0.113.7');
+  const a2 = await remaining('203.0.113.7');
+  const aForged = await remaining('6.6.6.6, 203.0.113.7');
+  const b1 = await remaining('203.0.113.9');
+  console.log(JSON.stringify({ a1, a2, aForged, b1 }));
+  process.exit(a2 === a1 - 1 && aForged === a1 - 2 && b1 > aForged ? 0 : 1);
+})().catch((err) => { console.log('request error: ' + err.message); process.exit(1); });
+"
+echo '==> Checking the rate limiter sees client addresses through web (KI-044)'
+if ! xff_result="$("${COMPOSE[@]}" exec -T web node -e "$xff_js" 2>&1)"; then
+  echo "FAIL: per-client rate-limit buckets through web, got: $xff_result" >&2
+  exit 1
+fi
+echo "OK: $xff_result"
+succeeded=1

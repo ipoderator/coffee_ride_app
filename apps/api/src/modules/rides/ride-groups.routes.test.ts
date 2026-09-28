@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { buildRoutePreview } from './route-preview.js';
 
 // CR-117 ("Pace groups") organizer CRUD + CR-116 (discovery card fields). Same
 // real-Postgres rationale as `stops.routes.test.ts`: `DELETE FROM rides` before
@@ -207,6 +208,8 @@ describe('/v1/rides/:id/groups (CR-117)', () => {
       { name: 'x'.repeat(61), paceKmh: 25 },
       { name: 'Группа', paceKmh: 4.9 },
       { name: 'Группа', paceKmh: 60.1 },
+      // KI-062: the 0.5 km/h step is enforced server-side too.
+      { name: 'Группа', paceKmh: 27.3 },
       { name: 'Группа' },
       { name: 'Группа', paceKmh: 25, description: 'x'.repeat(501) },
     ]) {
@@ -214,6 +217,32 @@ describe('/v1/rides/:id/groups (CR-117)', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().code).toBe('validation_error');
     }
+    await app.close();
+  });
+
+  it('accepts a pace on the 0.5 km/h step and rejects one off it on update (KI-062)', async () => {
+    const app = await buildApp(testEnv);
+    const { token, rideId } = await createOrganizerRide(app);
+
+    const created = await createGroup(app, token, rideId, {
+      name: 'Группа',
+      paceKmh: 27.5,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().group.paceKmh).toBe(27.5);
+
+    const update = (paceKmh: number) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}/groups/${created.json().group.id}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: token },
+        payload: { paceKmh },
+      });
+    const offStep = await update(30.2);
+    expect(offStep.statusCode).toBe(400);
+    expect(offStep.json().code).toBe('validation_error');
+    expect((await update(32.5)).statusCode).toBe(200);
     await app.close();
   });
 
@@ -656,6 +685,7 @@ describe('GET /v1/rides card fields (CR-116)', () => {
     });
     // A 1000-point zigzag, inserted directly (a GPX upload needs S3, which this
     // suite doesn't run) — the preview must come back at ≤ 40 points, endpoints kept.
+    // A direct insert must fill `preview` the way every service write does (KI-058).
     const geometry = Array.from({ length: 1000 }, (_, i) => ({
       lat: 55.7 + i * 0.0005,
       lng: 37.6 + (i % 2 === 0 ? 0 : 0.0003) + Math.sin(i / 50) * 0.02,
@@ -670,6 +700,7 @@ describe('GET /v1/rides card fields (CR-116)', () => {
       elevationGainMeters: 0,
       pointCount: geometry.length,
       geometry,
+      preview: buildRoutePreview(geometry),
     });
     await transition(app, token, rideId, 'publish');
     await transition(app, token, rideId, 'open-registration');

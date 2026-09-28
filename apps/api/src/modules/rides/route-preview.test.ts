@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { simplifyRoutePreview } from './route-preview.js';
+import { ROUTE_PREVIEW_MAX_POINTS } from 'types';
+import { buildRoutePreview, simplifyRoutePreview } from './route-preview.js';
 
 describe('simplifyRoutePreview', () => {
   it('returns null for fewer than two points', () => {
@@ -53,5 +54,42 @@ describe('simplifyRoutePreview', () => {
       [55.049, 37],
       [55.049, 37.05],
     ]);
+  });
+});
+
+describe('buildRoutePreview (KI-058)', () => {
+  it('simplifies the full geometry to at most ROUTE_PREVIEW_MAX_POINTS pairs', () => {
+    const geometry = Array.from({ length: 5000 }, (_, i) => ({
+      lat: 55.7 + i * 0.0001,
+      lng: 37.6 + Math.sin(i / 50) * 0.01,
+      elevationMeters: 150,
+    }));
+
+    const preview = buildRoutePreview(geometry)!;
+
+    expect(preview.length).toBeLessThanOrEqual(ROUTE_PREVIEW_MAX_POINTS);
+    expect(preview[0]).toEqual([55.7, 37.6]);
+    expect(preview.at(-1)).toEqual([
+      Math.round((55.7 + 4999 * 0.0001) * 1e5) / 1e5,
+      Math.round((37.6 + Math.sin(4999 / 50) * 0.01) * 1e5) / 1e5,
+    ]);
+  });
+
+  it('keeps a one-point spike an even-stride sample would skip', () => {
+    const geometry = Array.from({ length: 1000 }, (_, i) => ({
+      lat: 55.7 + i * 0.0001,
+      lng: i === 517 ? 37.7 : 37.6,
+    }));
+
+    const preview = buildRoutePreview(geometry)!;
+
+    expect(preview).toContainEqual([
+      Math.round((55.7 + 517 * 0.0001) * 1e5) / 1e5,
+      37.7,
+    ]);
+  });
+
+  it('returns null for a geometry too short to draw', () => {
+    expect(buildRoutePreview([{ lat: 55.7, lng: 37.6 }])).toBeNull();
   });
 });

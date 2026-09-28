@@ -1513,3 +1513,162 @@ Resolution 2026-09-27 (CR-143): `ride-detail.test.tsx`'s `beforeEach` now calls
 `vi.unstubAllEnvs()`), so the suite passes regardless of what the invoking
 shell has sourced — verified by running it with the real key exported (50/50
 passed).
+
+### KI-044 — `apps/api`'s rate limiter may see one internal IP for every request once deployed behind Caddy
+
+Status: resolved 2026-09-28 (CR-145). Discovered: 2026-09-17 (CR-075, ADR-018).
+Problem: `docker-compose.prod.yml`'s topology is `Caddy → web → (Next.js rewrite,
+server-side) → api` — `api` is never hit directly by Caddy or the public internet,
+only by `web` as an internal peer. `apps/api`'s per-IP rate limiter
+(`@fastify/rate-limit`, already flagged in-memory-only/single-instance by
+KI-014/KI-022) has no `trustProxy` configured on its Fastify instance
+(`apps/api/src/app.ts`) — deliberately left alone since `api` has no direct proxy
+boundary of its own yet. Whether Next's own `/api/v1/*` `rewrites()` forwards the
+original client's `X-Forwarded-For` header through to `api` (Caddy sets it when
+proxying to `web`; whether `web`'s own outbound rewrite request preserves it is a
+separate, unverified question) was not checked either way.
+Impact: unknown until checked — if the header isn't forwarded, every request
+`api` sees in production would appear to originate from `web`'s single internal
+IP, making the per-IP rate limiter effectively a single shared bucket across every
+real client at once (both over- and under-limiting incorrectly, not just a minor
+inaccuracy).
+Workaround: none — not yet checked, so not yet fixed.
+Next action: belongs with CR-058 (Redis-backed, per-account auth rate limiting,
+currently blocked on KI-014) since that ticket already touches this rate limiter —
+verify whether `X-Forwarded-For` survives Next's rewrite hop (inspect the header
+`api` actually receives, e.g. via a temporary log line, under a real Caddy→web→api
+chain once Docker is available), and if not, either configure `apps/api`'s
+`trustProxy` against `web`'s known internal address plus forward the header
+through the rewrite explicitly, or move rate limiting in front of `web` instead.
+
+Resolution 2026-09-28 (CR-145): verified, then fixed. Caddy (v2.11.4, probed
+locally) overwrites any client-sent X-Forwarded-For with the real client address;
+Next 15.5's `/api/v1/*` rewrite forwards the header unchanged and does not append
+its own peer — so `api` sees exactly one entry, the client, with `web` as the socket
+peer. Without a trust setting every production request keyed the per-IP limiters
+on `web`'s address. New `TRUST_PROXY_HOPS` (`apps/api/src/env.ts`, unset = trust
+nothing) → `lib/trust-proxy.ts`: trust at most N hops from the socket peer, each
+only if it is a private address (Fastify 5 deliberately ignores a bare hop count).
+`docker-compose.prod.yml` sets 1 for `api`. `deploy/smoke/run.sh` now checks it
+through the real prod images: client A 99 → 98 → 97 (a forged left entry doesn't
+reset the bucket), client B starts at 99.
+
+### KI-058 — `routePreview` samples each ride's full stored geometry on every list request
+
+Status: resolved 2026-09-28 (CR-145). Discovered: 2026-09-23 (CR-116).
+Problem: `GET /v1/rides` builds each item's `routePreview` at request time —
+`rides.service.ts`'s batched list extras sample every ride's full
+`routes.geometry` in SQL, then `modules/rides/route-preview.ts` runs
+Douglas–Peucker over the sample. The full geometry never leaves Postgres, but
+Postgres still expands it for every ride on every page of every discovery
+request.
+Impact: low today (few rides, short routes); grows with route length × page size
+× discovery traffic.
+Workaround: none needed at current scale.
+Next action: if the list query becomes hot, compute the preview once at route
+write time (GPX upload/replace and `POST /v1/rides/:id/route/build`) into a
+stored column and read that instead — the response contract stays unchanged.
+
+Resolution 2026-09-28 (CR-145): `routes.preview` (migration
+`0020_route_preview`, nullable `jsonb`, CHECK is-array) is computed by
+`buildRoutePreview` on every route write (GPX upload/replace, 2GIS build) from the
+full geometry; `GET /v1/rides` reads the column and never expands a geometry. The
+migration backfills existing rows with an even-stride ≤ 40-point sketch (no
+production data existed). Response contract unchanged.
+
+### KI-061 — Organizer ride sub-page links are a hard-coded list, not a registry
+
+Status: resolved 2026-09-28 (CR-145). Discovered: 2026-09-23 (CR-120).
+Problem: `EditRideForm` links to the ride's sub-pages (Маршрут, Обложка,
+Группы, Участники, Обновления) as a plain hand-written link list; CR-120 added
+«Группы» as one more entry. `.claude/rules/extensibility.md` ("Registration over
+branching") asks for a descriptor registry on shared surfaces that every feature
+extends.
+Impact: low now (five links); each new ride sub-feature edits a shared form
+component, which is the coupling ADR-009 exists to prevent.
+Workaround: none needed.
+Next action: when the next ride sub-page is added, move these links into a
+small descriptor registry (label, href builder, order, optional flag), the same
+pattern as the cabinet nav/widget registries.
+
+Resolution 2026-09-28 (CR-145): `RideSectionLink` descriptors
+(`lib/cabinet/types.ts`: label, path `segment`, order, optional flag), one
+`ride-section.ts` per owning feature module, `lib/cabinet/organizer-ride-sections.ts`
+registry; `edit/page.tsx` (Server Component) flag-filters it and passes it to
+`EditRideForm`'s new optional `sections` prop.
+
+### KI-062 — Group pace: the client requires 0.5 km/h steps, the API only checks 5–60
+
+Status: resolved 2026-09-28 (CR-145). Discovered: 2026-09-23 (CR-120).
+Problem: `features/organizer/groups/validation.ts` enforces a 0.5 km/h step,
+but the API's `groupPaceSchema` (`packages/types/src/api/ride-groups.ts`) and the
+DB (`numeric(4,1)`, CHECK 5–60) accept any one-decimal value, e.g. 27.3.
+Impact: very low — only a direct API call can store a non-0.5 pace; it is still
+valid data.
+Workaround: none needed.
+Next action: decide whether 0.5 is a real rule; if so, add it to the shared Zod
+schema (one source for client and server), otherwise drop the client-only step.
+
+Resolution 2026-09-28 (CR-145): 0.5 km/h is the rule — it is what the editor
+has always enforced, with its own message. `RIDE_GROUP_PACE_STEP_KMH` in
+`packages/types` feeds both `groupPaceSchema` (`.multipleOf`) and the form. A direct
+API call with e.g. 27.3 now gets `400 validation_error`; the DB CHECK is unchanged.
+
+### KI-072 — Dependabot's dev-dependencies group bundles TypeScript 7.0, which breaks CI
+
+Status: resolved 2026-09-28 (CR-145). Discovered: 2026-09-27, PR #24 (`chore(deps-dev)`, 13 dev-dependency
+updates in one group).
+Problem: the group bumped `typescript` `6.0.3 → 7.0.2` alongside 12 unrelated
+updates (eslint, prettier, turbo, vitest, etc.). Two things break under TS 7:
+`typescript-eslint@8.70.0` refuses to run at all (`Error: typescript-eslint does
+not support TS 7.0`, a hard check in its own code, not a lint rule — [tracking
+issue](https://github.com/typescript-eslint/typescript-eslint/issues/10940)),
+which fails `ci`'s `Lint (root config)` step; separately,
+`docker-smoke`'s `apps/web` image fails `next build` — Next.js 15's
+`next.config.ts` loader throws `Cannot read properties of undefined (reading
+'fileExists')` under the new compiler, unrelated to anything in this repo's
+config.
+Impact: none to `main` — the PR was never merged. Blocks only this one grouped
+update; every other dependency in it (eslint 10, prettier, turbo, vitest 5.0.1,
+etc.) is unaffected on its own.
+Workaround: PR #24 closed 2026-09-27 without merging.
+Next action: once `typescript-eslint` (and Next.js's config loader) support
+TS 7, or Dependabot proposes the group again with a newer compatible
+`typescript-eslint`, re-run `docker-smoke` + `Lint (root config)` before
+merging. If this recurs, consider excluding `typescript` from the
+`dev-dependencies` group in `.github/dependabot.yml` so a single incompatible
+major doesn't block the other 12 updates.
+
+Resolution 2026-09-28 (CR-145): the `dev-dependencies` group is limited to
+minor/patch updates (`.github/dependabot.yml`), so a major — TypeScript 7 included —
+arrives as its own PR and can't hold unrelated patches back. TypeScript 7 itself
+still needs `typescript-eslint` and Next.js support before its PR can go green.
+
+### KI-073 — Visual baselines barely see dark-on-dark layout changes
+
+Status: resolved 2026-09-28 (CR-145).
+Found: 2026-09-27, CR-144.
+Problem: CR-144 rebuilt the grid card (new panel, metric columns, seats bar),
+yet `discovery-grid-chromium-linux.png`'s old baseline still _passed_
+`--update-snapshots` (mode `changed`). Playwright's per-pixel colour threshold
+(default 0.2) treats the dark theme's near-black tones (`cover-bg` `#16131A`,
+`bg` `#121015`, `bg-raised` `#1C1920`, `border`) as equal, so only glyph pixels
+count, and a card in a 1280×720 page stays under `maxDiffPixelRatio: 0.02`.
+Impact: a dark-theme layout regression that moves panels/borders but little
+text can pass CI's visual suite. Text/element changes are still caught; the
+`mobile` screenshot (card fills more of the frame) did fail as expected.
+Workaround: CR-144 regenerated the grid/card baselines with
+`--update-snapshots=all` so they show the current design.
+Next action: consider a per-assertion `threshold` (e.g. `0.1`) on the
+dark-theme `toHaveScreenshot` calls, or element-scoped screenshots for layout
+surfaces, and check it doesn't add anti-aliasing flakiness on CI.
+
+Resolution 2026-09-28 (CR-145): the cause was the per-pixel `threshold`,
+not the pixel ratio. Pixelmatch YIQ deltas: `bg`→`bg-raised` 46, `bg-raised`→
+`surface` 37, `bg-raised`→`border` 148, against 0.2's cut-off of 1409 (0.1's is 352,
+so the KI's suggested 0.1 would not have helped). `playwright.config.ts` now sets
+`threshold: 0.02` (cut-off 14). Verified in `mcr.microsoft.com/playwright:v1.63.0-
+jammy` (arm64): with the dark `--bg-raised` set equal to `--bg`, the old config
+passed all 16 screenshots; at 0.02, 7 fail (11–58 % of pixels). With the token
+restored, 16/16 on two consecutive runs; baselines unchanged. Not yet run on CI's
+x86_64 runner — the first CI run is the check.

@@ -1,14 +1,13 @@
+import { ROUTE_PREVIEW_MAX_POINTS } from 'types';
+
 // CR-116: `GET /v1/rides` items' `routePreview` — a small `[lat, lng]` sketch of the
 // stored route for a discovery card, never used for navigation.
 //
-// Two stages, split so the full geometry (thousands of points for a long GPX) never
-// leaves Postgres: `rides.service.ts`'s `getRideListExtras` samples every ride on the
-// page down to at most `ROUTE_PREVIEW_SAMPLE_POINTS` at an even stride in SQL, then
-// {@link simplifyRoutePreview} keeps the shape-defining points out of that sample
-// (Douglas–Peucker by point budget) instead of just thinning it further.
-
-/** Upper bound of the SQL stride sample fed into {@link simplifyRoutePreview}. */
-export const ROUTE_PREVIEW_SAMPLE_POINTS = 200;
+// KI-058: computed once, whenever a route's geometry is written (GPX upload/replace,
+// `POST /v1/rides/:id/route/build`), into `routes.preview` — the list reads that
+// small column instead of sampling every page's full geometry per request.
+// {@link simplifyRoutePreview} keeps the shape-defining points (Douglas–Peucker by
+// point budget) instead of just thinning the track at an even stride.
 
 // ~1 m of latitude — plenty for a card-sized sketch, and keeps the payload small.
 const COORDINATE_DECIMALS = 5;
@@ -121,4 +120,17 @@ export function simplifyRoutePreview(
       const [lat, lng] = points[i]!;
       return [round(lat), round(lng)];
     });
+}
+
+/**
+ * KI-058: the stored `routes.preview` for a route geometry, from the full track.
+ * `null` for fewer than two points (nothing to draw).
+ */
+export function buildRoutePreview(
+  geometry: ReadonlyArray<{ lat: number; lng: number }>,
+): Array<[number, number]> | null {
+  return simplifyRoutePreview(
+    geometry.map((point) => [point.lat, point.lng]),
+    ROUTE_PREVIEW_MAX_POINTS,
+  );
 }

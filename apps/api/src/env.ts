@@ -95,6 +95,18 @@ const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.coerce.number().int().positive().optional(),
   ),
+  // KI-044: how many proxies in front of `api` to trust for `X-Forwarded-For`
+  // (`lib/trust-proxy.ts`). Production is Caddy → web → api: Caddy writes the
+  // client address into the header and Next's rewrite passes it through
+  // without appending its own, so `1` (trust `web`, the socket peer, when it
+  // is a private address) makes `request.ip` the rightmost entry — the one
+  // Caddy wrote — and ignores any entries a client forged to its left. Unset
+  // = trust nothing, the socket address is the client: correct while `api` is
+  // reached directly (local dev, tests).
+  TRUST_PROXY_HOPS: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(5).optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -139,6 +139,10 @@ up`/`docker compose run` in any session — Docker's daemon has been unreachable
   on the host (e.g. the migration script's own concurrency safety, CR-076).
 - Caddy's automatic TLS additionally needs a real public DNS record — unverifiable in
   any sandbox regardless of Docker access.
-- Whether `apps/api` sees each real client's IP through the Caddy → web → api hop, or
-  just `web`'s single internal one, is unverified (KI-044) — relevant if per-IP rate
-  limiting (CR-058) is later added here.
+- Client IPs through the Caddy → web → api hop (KI-044, resolved CR-145): Caddy
+  overwrites X-Forwarded-For with the client address, Next's rewrite forwards it
+  unchanged, and `api` trusts exactly one private hop (`TRUST_PROXY_HOPS: 1` in
+  `docker-compose.prod.yml`, `apps/api/src/lib/trust-proxy.ts`) — so the per-IP rate
+  limiters key on real clients. `deploy/smoke/run.sh` checks this through the prod
+  images. Keep `api` without `ports:`; see `apps/api/src/env.ts` before changing
+  either.

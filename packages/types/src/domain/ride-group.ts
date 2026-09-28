@@ -23,3 +23,5 @@ export const RIDE_GROUP_NAME_MAX_LENGTH = 60;
 export const RIDE_GROUP_DESCRIPTION_MAX_LENGTH = 500;
 export const RIDE_GROUP_PACE_MIN_KMH = 5;
 export const RIDE_GROUP_PACE_MAX_KMH = 60;
+// KI-062: the group editor's step — one rule for the form and the API.
+export const RIDE_GROUP_PACE_STEP_KMH = 0.5;

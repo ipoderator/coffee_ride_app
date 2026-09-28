@@ -22,6 +22,8 @@ const TEST_TIMEOUT_MS = 30_000;
 // Red Square and a point ~2 km south-west along the embankment (Moscow).
 const RED_SQUARE = { lat: 55.7539, lng: 37.6208 };
 const GORKY_PARK = { lat: 55.7312, lng: 37.6034 };
+// Reykjavik: an island, no road connection to Moscow.
+const REYKJAVIK = { lat: 64.1466, lng: -21.9426 };
 
 function distanceMeters(a: { lat: number; lng: number }, b: typeof a) {
   const rad = Math.PI / 180;
@@ -92,6 +94,25 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
         expect(elevation).toBeGreaterThan(50);
         expect(elevation).toBeLessThan(400);
       }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  // KI-056: what 2GIS answers for points no road connects. The adapter maps
+  // 204 / an empty result / no geometry to `no_route` (API 422); any other
+  // answer would surface to the organizer as "maps unavailable" instead.
+  it(
+    'getRoute: points no road connects fail as no_route',
+    async () => {
+      const error = await provider
+        .getRoute({ points: [RED_SQUARE, REYKJAVIK], profile: 'cycling' })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(MapProviderError);
+      expect(
+        (error as MapProviderError).code,
+        `status=${(error as MapProviderError).status} ${(error as Error).message}`,
+      ).toBe('no_route');
     },
     TEST_TIMEOUT_MS,
   );

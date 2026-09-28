@@ -39,8 +39,18 @@ export default defineConfig({
   // CI (`ubuntu-latest`, this pinned `@playwright/test` version) — see
   // `.claude/rules/testing.md` "Visual regression" for the Docker command,
   // never `--update-snapshots` run natively on a developer's machine.
+  //
+  // KI-073: `threshold` is the per-pixel colour tolerance (pixelmatch YIQ,
+  // default 0.2). At 0.2 the dark theme's surfaces all compare equal — `bg` →
+  // `bg-raised` is a delta of ~46 against 0.2's ~1409 — so removing every
+  // card panel still passed. 0.02 (~14) tells `bg`/`bg-raised`/`surface`/
+  // `border` apart; only `bg`/`cover-bg` (~6) stay equal.
   expect: {
-    toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: 'disabled' },
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.02,
+      threshold: 0.02,
+      animations: 'disabled',
+    },
   },
   webServer: [
     {

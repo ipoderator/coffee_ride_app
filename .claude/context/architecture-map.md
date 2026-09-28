@@ -297,6 +297,13 @@ CR-014 built, reusing `getOrganizerProfile()` as-is, no new API endpoint. No
 ride-related widget exists yet — `Ride` isn't in the schema until CR-017+, so
 there is nothing else organizer-owned to summarize.
 
+KI-061 (CR-145): `lib/cabinet/organizer-ride-sections.ts` — third organizer registry,
+`RideSectionLink` descriptors (`label`/`segment`/`order`/`flag?`) for the links from
+`/organizer/rides/[id]/edit` to the ride's sub-pages. Each owning feature exports its
+own `ride-section.ts` (`route`, `cover-image`, `groups`, `participants`, `updates`);
+the edit page (Server Component) flag-filters the list and passes it to
+`EditRideForm`'s optional `sections` prop.
+
 CR-016 ("Organizer authorization") was explicitly NOT started this session —
 confirmed still blocked on `Ride`/CR-017+ existing (nothing organizer-owned to
 protect an ownership check against yet); `docs/tasks.md` line for it is
@@ -683,6 +690,13 @@ design.md's fixed shared-component inventory, and this repo's existing
 precedent (GPX upload vs. cover-image upload) is to keep near-identical
 upload-form UI feature-local rather than force a shared abstraction. No new
 package/dependency-direction edge.
+
+`apps/api/src/lib/trust-proxy.ts` (KI-044, CR-145): `createTrustProxy(hops)` →
+Fastify's `trustProxy` function (`app.ts`), fed by `TRUST_PROXY_HOPS`. Trusts at
+most N hops from the socket peer, each only if private; production sets 1
+(Caddy → web → api). `request.ip` is what every per-IP rate limiter keys on.
+Also KI-058: `modules/rides/route-preview.ts`'s `buildRoutePreview` runs on every
+route write into `routes.preview`; the discovery list only reads that column.
 
 CR-098 ("Live 2GIS MapGL rendering", 2026-09-20, resolving KI-031, ADR-020): a
 real public `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` now exists. `packages/maps-core`

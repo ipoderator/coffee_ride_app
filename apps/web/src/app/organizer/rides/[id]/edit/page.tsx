@@ -1,6 +1,8 @@
 import { BACK_LINK_TERMS, RIDE_EDIT_TERMS } from 'ui';
 import { BackLink } from '@/components/site/BackLink';
 import { EditRideForm } from '@/features/organizer/rides/components/EditRideForm';
+import { filterEnabled } from '@/lib/cabinet/feature-flags';
+import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 
 // `/organizer/rides/[id]/edit` (`docs/design.md` §8 "Edit draft", CR-018). Inherits
 // `CabinetShell`'s auth gate from `app/organizer/layout.tsx`; every mutation is
@@ -26,7 +28,10 @@ export default async function EditRidePage({
       <h1 className="text-2xl font-semibold text-text">
         {RIDE_EDIT_TERMS.pageTitle}
       </h1>
-      <EditRideForm rideId={id} />
+      <EditRideForm
+        rideId={id}
+        sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}
+      />
     </div>
   );
 }

@@ -60,6 +60,11 @@ export const routes = pgTable(
     // Ordered `{ lat, lng, elevationMeters }[]` — see the module comment above for why
     // this isn't a separate per-point table.
     geometry: jsonb('geometry').notNull(),
+    // KI-058: the discovery card's `[lat, lng]` sketch (≤ `ROUTE_PREVIEW_MAX_POINTS`
+    // pairs), computed from `geometry` whenever it is written — so `GET /v1/rides`
+    // reads this small array instead of expanding every page's full geometry.
+    // Null only for a geometry too short to draw (fewer than two points).
+    preview: jsonb('preview').$type<Array<[number, number]>>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -82,5 +87,9 @@ export const routes = pgTable(
     ),
     check('routes_point_count_positive', sql`${table.pointCount} >= 1`),
     check('routes_gpx_file_size_positive', sql`${table.gpxFileSizeBytes} > 0`),
+    check(
+      'routes_preview_is_array',
+      sql`${table.preview} is null or jsonb_typeof(${table.preview}) = 'array'`,
+    ),
   ],
 );

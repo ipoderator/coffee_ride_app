@@ -1428,3 +1428,84 @@ clobbers the running dev server's `.next`).
 Decisions: none new (within ADR-024; product owner chose the direction).
 Follow-up: KI-073 (dark-on-dark layout changes slip under the screenshot
 tolerance).
+
+## 2026-09-28 — CR-145 — Known-issues sweep: KI-072, KI-062, KI-061, KI-058, KI-073, KI-044
+
+Summary: six open known issues closed in one pass, each with its own
+verification; KI-045 narrowed, KI-056 re-checked, KI-074 recorded. Commit per
+KI if split (they touch disjoint files except the context docs).
+
+- **KI-072 — Dependabot.** The `dev-dependencies` group is minor/patch only
+  (`.github/dependabot.yml`); majors (TypeScript 7 in PR #24) come as their
+  own PRs instead of failing CI for 12 unrelated patches.
+- **KI-062 — group pace step. Contract tightening:** `RIDE_GROUP_PACE_STEP_KMH`
+  (0.5) in `packages/types` now feeds `groupPaceSchema` (`.multipleOf`) and the
+  editor. `POST`/`PATCH /v1/rides/:id/groups` with a pace off the step (e.g.
+  27.3) now returns `400 validation_error`. The web editor already rejected
+  those values, so no caller changes; the DB CHECK (5–60) is unchanged.
+- **KI-061 — ride sub-page links registry.** `RideSectionLink` descriptors
+  (`lib/cabinet/types.ts`), one `ride-section.ts` per owning feature (route,
+  cover-image, groups, participants, updates), `lib/cabinet/
+organizer-ride-sections.ts`. `edit/page.tsx` flag-filters and passes the
+  list to `EditRideForm`'s new optional `sections` prop. Same links, same order.
+- **KI-058 — route preview at write time. Migration `0020_route_preview`:**
+  nullable `routes.preview jsonb` (CHECK is-array), filled by
+  `buildRoutePreview` on every route write (GPX upload/replace, 2GIS build)
+  from the full geometry; `GET /v1/rides` reads it instead of sampling each
+  route in SQL. Backfill: even-stride ≤ 40-point sketch for existing rows
+  (dev only — no production data). Response contract unchanged.
+- **KI-073 — dark-theme screenshots.** The per-pixel `threshold` (0.2) made
+  `bg`/`bg-raised`/`surface`/`border` compare equal (YIQ deltas 37–358 vs a
+  1409 cut-off). `threshold: 0.02` (cut-off 14) in `playwright.config.ts`.
+- **KI-044 — client IP behind Caddy.** Measured: Caddy overwrites a
+  client-sent X-Forwarded-For; Next's rewrite forwards it unchanged without
+  appending. `api` trusted nothing, so every production request would have
+  shared `web`'s rate-limit bucket. New optional `TRUST_PROXY_HOPS`
+  (`apps/api/src/env.ts`) → `lib/trust-proxy.ts` (trust ≤ N hops, private
+  addresses only — Fastify 5 ignores a bare hop count); prod compose sets 1;
+  `.env.example` documents it.
+- **KI-045:** `deploy/Caddyfile` passes `caddy validate` (v2.11.4). ACME/TLS and
+  `backup` remain unverified.
+- **KI-056 / CR-114:** 2GIS REST still unreachable from this machine (VPN).
+  `provider.contract.test.ts` gained the unroutable-pair case (`no_route`).
+  The `maps-contract.yml` workflow has never run — its environment/secret
+  don't exist.
+- **KI-074 (new):** `next build` fetches five Google Fonts families; a bad
+  response fails the build (CI run `36345478610`, green on re-run).
+
+Files: `.github/dependabot.yml`; `packages/types/src/{domain/ride-group,
+api/ride-groups}.ts`; `apps/web/src/features/organizer/groups/validation.ts`;
+`apps/web/src/lib/cabinet/{types,organizer-ride-sections,
+cabinet-registries.test}.ts`, `apps/web/src/features/organizer/{route,
+cover-image,groups,participants,updates}/ride-section.ts`,
+`apps/web/src/features/organizer/rides/{components/EditRideForm,
+rides.test}.tsx`, `apps/web/src/app/organizer/rides/[id]/edit/page.tsx`;
+`packages/db/src/schema/route.ts`, `packages/db/migrations/
+{0020_route_preview.sql,meta/}`; `apps/api/src/modules/rides/{rides.service,
+route-preview,route-preview.test,ride-groups.routes.test,
+route-builder.routes.test}.ts`; `apps/web/playwright.config.ts`;
+`apps/api/src/{env,app,app.test}.ts`, `apps/api/src/lib/trust-proxy{,.test}.ts`,
+`docker-compose.prod.yml`, `deploy/smoke/run.sh`, `.env.example`;
+`packages/maps-2gis/src/provider.contract.test.ts`; `coverage-baseline.json`;
+`docs/{api,database,deployment}.md`, `.claude/rules/testing.md`,
+`.claude/context/{known-issues,known-issues-archive,architecture-map,
+project-state,current-task}.md`, `docs/tasks.md`.
+
+Validation: typecheck + lint repo-wide (17/17 tasks). Coverage run in the CI
+environment (Postgres, Redis, S3, live flags, no MapGL key): api 489/489, web
+440/440, ui 155/155, maps-2gis 41 (+5 contract skipped), resilience 15/15;
+`coverage:check` green, baseline raised (api total +0.06 pp lines, `lib/`
++0.57 pp). One earlier full turbo run had `avatar.routes.test.ts` fail in its
+`beforeEach` (`DELETE FROM users`); not reproduced in three full api runs
+since. Per item: migration applied to a fresh database, the test DB and the dev
+DB (dev backfill: 1865-point route → 39 preview points). `pnpm smoke:docker`
+green with the new KI-044 step (client A 99 → 98 → 97 incl. a forged left
+entry, client B 99). KI-073 in `mcr.microsoft.com/playwright:v1.63.0-jammy`:
+the dark `--bg-raised` set to `--bg` passed all 16 screenshots at the old
+config and failed 7 at 0.02; restored, 16/16 twice. That container was arm64 —
+CI's x86_64 run is the first check of 0.02 against the committed baselines.
+
+Decisions: 0.5 km/h is a real API rule (KI-062); `api` trusts one private
+proxy hop in production (KI-044). No ADR — both stay within ADR-011/ADR-018.
+Follow-up: watch the first CI run for KI-073's threshold; KI-074 (self-host
+fonts); CR-114 live check once 2GIS is reachable.

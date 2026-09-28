@@ -113,6 +113,8 @@ breakpoints — functionally (element visibility), not by screenshot.
   an iPhone preset: it already defaults to the `chromium` engine, so CI's
   Chromium-only `playwright install` step doesn't need a second browser.
 - **`expect.toHaveScreenshot` options** (`playwright.config.ts`):
+  `threshold: 0.02` (per-pixel colour tolerance — the default 0.2 treats
+  the dark theme's near-black surfaces as one colour, KI-073),
   `maxDiffPixelRatio: 0.02` (tolerates anti-aliasing noise, not a real
   regression) and `animations: 'disabled'`.
 - **Baselines must be generated to match CI** (`ubuntu-latest`, the pinned

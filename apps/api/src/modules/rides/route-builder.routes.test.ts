@@ -268,6 +268,17 @@ describe('POST /v1/rides/:id/route/build', () => {
     });
     expect(ride.json().ride.distanceKm).toBe(route.distanceKm);
     expect(ride.json().ride.elevationGainMeters).toBe(30);
+
+    // KI-058: the discovery-card sketch is stored with the route, not computed
+    // per list request.
+    const [stored] = await app.db.execute<{ preview: unknown }>(
+      sql`select preview from routes where ride_id = ${rideId}`,
+    );
+    expect(stored!.preview).toEqual([
+      [55.75, 37.6],
+      [55.755, 37.61],
+      [55.76, 37.6],
+    ]);
     await app.close();
   });
 

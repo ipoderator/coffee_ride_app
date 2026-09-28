@@ -4,6 +4,7 @@ import type { Ride } from 'types';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
 import { EditRideForm } from './components/EditRideForm';
+import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 import {
   ApiError,
   cancelRide,
@@ -304,14 +305,25 @@ describe('EditRideForm', () => {
     expect(screen.getByDisplayValue('2027-05-01T08:00')).toBeInTheDocument();
   });
 
-  it('links to the pace-groups editor next to the other ride sub-pages (CR-120)', async () => {
+  it('links to every registered ride sub-page, in registry order (CR-120, KI-061)', async () => {
     getRideMock.mockResolvedValue({ ride: baseRide, isOwner: true });
 
-    render(<EditRideForm rideId="ride-1" />);
+    render(<EditRideForm rideId="ride-1" sections={ORGANIZER_RIDE_SECTIONS} />);
 
     expect(
       await screen.findByRole('link', { name: 'Группы →' }),
     ).toHaveAttribute('href', '/organizer/rides/ride-1/groups');
+    const hrefs = screen
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href'))
+      .filter((href) => href?.startsWith('/organizer/rides/ride-1/'));
+    expect(hrefs).toEqual([
+      '/organizer/rides/ride-1/route',
+      '/organizer/rides/ride-1/cover',
+      '/organizer/rides/ride-1/groups',
+      '/organizer/rides/ride-1/participants',
+      '/organizer/rides/ride-1/updates',
+    ]);
   });
 
   it('saves changes and shows a success message', async () => {

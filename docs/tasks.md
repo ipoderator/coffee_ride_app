@@ -1153,3 +1153,13 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       a fill bar and bike/difficulty/price chips sit on a theme-aware panel
       below. A full open ride reads «Список ожидания» instead of a green
       «Регистрация открыта». See `docs/changelog.md` and `docs/design.md` §6.
+- [x] CR-145 Known-issues sweep — done 2026-09-28: KI-072 (Dependabot dev
+      group minor/patch only), KI-062 (0.5 km/h pace step in the shared
+      schema — API now rejects off-step paces), KI-061 (ride sub-page link
+      registry), KI-058 (`routes.preview` computed at write time, migration
+      `0020_route_preview`), KI-073 (screenshot `threshold: 0.02`), KI-044
+      (`TRUST_PROXY_HOPS` + private-hop trust, smoke-checked). KI-045 narrowed
+      (Caddyfile validated); KI-074 recorded (Google Fonts at build time). See
+      `docs/changelog.md`.
+- [ ] CR-146 Self-host the web fonts (KI-074) — `next/font/local` instead of
+      `next/font/google`, so `next build` needs no network.

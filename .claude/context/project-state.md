@@ -37,7 +37,17 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-None active. CR-144 (2026-09-27, committed): discovery grid card
+CR-145 (2026-09-28, committed): known-issues sweep — KI-072 (Dependabot dev
+group minor/patch only), KI-062 (0.5 km/h pace step in the shared Zod schema;
+the API now rejects off-step paces), KI-061 (ride sub-page link registry,
+`lib/cabinet/organizer-ride-sections.ts`), KI-058 (`routes.preview` computed at
+route write time, migration `0020_route_preview`), KI-073 (screenshot
+`threshold: 0.02`), KI-044 (`TRUST_PROXY_HOPS`, `lib/trust-proxy.ts`, prod
+compose = 1, checked in `pnpm smoke:docker`). KI-045 narrowed (Caddyfile
+validated), KI-074 opened (Google Fonts fetched at build time). CR-114's live
+2GIS check still blocked by KI-056; its contract test gained a `no_route` case.
+
+CR-144 (2026-09-27, committed): discovery grid card
 redesign «B2» — the route cover shows only the track and status chip; date,
 two-line title, three labelled metric columns, seats with a fill bar and
 bike/difficulty/price chips sit on a theme-aware panel below
@@ -80,8 +90,8 @@ fully green — every `ci` step incl. coverage gate, build and 50 e2e specs, plu
 `docker-smoke`). Local dev: `docker compose up -d`
 now starts `s3`/`s3-init` (host port 9000, same `S3_*`); no MinIO console.
 
-Next logical task (after CR-144): KI-045/KI-001 (production compose/Caddy
-never run end to end).
+Next logical task (after CR-145): confirm its CI run (KI-073 threshold on
+x86_64), then CR-146 (self-hosted fonts, KI-074).
 
 CR-139 (2026-09-27, committed): load testing (P3) — a
 separate k6 suite (`load/`), manual (`pnpm load:test`) or nightly
@@ -572,17 +582,18 @@ None.
 
 ## Next
 
-1. **Critique P0 — login bounce loses the ride (KI-064).** `/login` has no
-   `?next=`, so an anonymous «Зарегистрироваться» on `/rides/[id]` sends the
-   visitor to `/login` and they land elsewhere after signing in. Add a validated
-   same-origin `next` parameter to login (and register) and return to the ride.
-2. **2GIS dark basemap style (KI-057)** — the basemap stays light in the dark theme.
-3. Commit CR-118…CR-120 (still uncommitted in the working tree).
-4. CR-114 live verification against 2GIS once the VPN allows it (KI-056).
+1. **Watch CR-145's first CI run**: KI-073's `threshold: 0.02` was verified on
+   an arm64 Playwright container only; CI renders on x86_64.
+2. **CR-146 — self-host the web fonts (KI-074)**: `next build` fails whenever
+   Google Fonts answers oddly (twice on 2026-09-27).
+3. **CR-114 live verification (KI-056)** once 2GIS REST is reachable (VPN off
+   or `*.2gis.com` split-tunnelled) — or create the `maps-2gis-contract` GitHub
+   environment + secret and run `maps-contract.yml`.
+4. KI-045/KI-001 — first real deployment (ACME/TLS, `backup`).
+5. 2GIS dark basemap style (KI-057).
 
-Every other `docs/tasks.md` section (Registration, Communication, Post-ride,
-Quality, Resilience, Extensibility and Security foundations, Deployment, Contract &
-model follow-ups) is complete; CR-114 is the only unchecked ticket.
+Every other `docs/tasks.md` section is complete; CR-114 and CR-146 are the only
+unchecked tickets.
 
 ## Important decisions
 
@@ -938,7 +949,13 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
   phone or emergency data (ADR-022, CR-117, ADR-023);
 - `DiscoveryMap`'s markers following the filtered ride list (CR-118 fixed markers
   that never updated after the first render).
+- `routes.preview` is written together with `routes.geometry` — every write path
+  calls `buildRoutePreview` (KI-058); a new writer (seed, script, test insert) must
+  too, or that ride's discovery card shows no track;
+- `TRUST_PROXY_HOPS` only on an `api` reachable solely through `web` (no `ports:`
+  in `docker-compose.prod.yml`) — `lib/trust-proxy.ts` trusts private peers only,
+  but the hop count still assumes exactly that chain (KI-044).
 
 ## Last updated
 
-2026-09-27 (CR-139)
+2026-09-28 (CR-145)

@@ -24,7 +24,6 @@ import {
 } from 'db/schema';
 import type { DbClient } from 'db';
 import {
-  ROUTE_PREVIEW_MAX_POINTS,
   type CoverImageResponse,
   type CreateRideRequest,
   type CreateRoutePointRequest,
@@ -75,10 +74,7 @@ import {
   listRideGroupNamesByRideIds,
   listRideGroupSummaries,
 } from './ride-groups.service.js';
-import {
-  ROUTE_PREVIEW_SAMPLE_POINTS,
-  simplifyRoutePreview,
-} from './route-preview.js';
+import { buildRoutePreview } from './route-preview.js';
 import {
   RouteStorageError,
   deleteGpxObject,
@@ -770,11 +766,8 @@ export async function listPublicRides(
  * rides — four batched queries per page (keyed by `ride_id IN (...)`), never one per
  * row, same precedent as `getOrganizerRatingSummaries`.
  *
- * `routePreview` never pulls a full geometry out of Postgres: the stored `jsonb`
- * point array (`routes.geometry`, CR-027/CR-114) is sampled at an even stride down to
- * at most {@link ROUTE_PREVIEW_SAMPLE_POINTS} (+ the last point) in SQL, then
- * {@link simplifyRoutePreview} keeps the ≤ `ROUTE_PREVIEW_MAX_POINTS` points that
- * best preserve the shape.
+ * `routePreview` is read from `routes.preview` (KI-058), computed when the route
+ * was written — the full geometry is never touched by a list request.
  */
 async function getRideListExtras(db: DbClient, rideIds: string[]) {
   const registrationsCount = new Map<string, number>();
@@ -821,20 +814,7 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
     db
       .select({
         rideId: routes.rideId,
-        points: sql<Array<[number, number]>>`(
-          select coalesce(
-            jsonb_agg(
-              jsonb_build_array(p.value->'lat', p.value->'lng') order by p.ord
-            ),
-            '[]'::jsonb
-          )
-          from jsonb_array_elements(${routes.geometry}) with ordinality as p(value, ord)
-          where (p.ord - 1) % greatest(
-              1,
-              ceil(jsonb_array_length(${routes.geometry})::numeric / ${ROUTE_PREVIEW_SAMPLE_POINTS})::int
-            ) = 0
-            or p.ord = jsonb_array_length(${routes.geometry})
-        )`,
+        preview: routes.preview,
       })
       .from(routes)
       .where(inArray(routes.rideId, rideIds)),
@@ -848,10 +828,7 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
     startLabel.set(row.rideId, row.label);
   }
   for (const row of previewRows) {
-    routePreview.set(
-      row.rideId,
-      simplifyRoutePreview(row.points, ROUTE_PREVIEW_MAX_POINTS),
-    );
+    routePreview.set(row.rideId, row.preview);
   }
   return { registrationsCount, startLabel, routePreview, groups };
 }
@@ -1477,6 +1454,7 @@ export async function uploadRoute(
         elevationGainMeters: parsed.elevationGainMeters,
         pointCount: parsed.pointCount,
         geometry: parsed.geometry,
+        preview: buildRoutePreview(parsed.geometry),
         updatedBy: userId,
       })
       .returning();
@@ -1560,6 +1538,7 @@ export async function replaceRoute(
       elevationGainMeters: parsed.elevationGainMeters,
       pointCount: parsed.pointCount,
       geometry: parsed.geometry,
+      preview: buildRoutePreview(parsed.geometry),
       updatedAt: new Date(),
       updatedBy: userId,
     })
@@ -1656,6 +1635,7 @@ export async function buildRoute(
     elevationGainMeters: parsed.elevationGainMeters,
     pointCount: parsed.pointCount,
     geometry: parsed.geometry,
+    preview: buildRoutePreview(parsed.geometry),
     updatedBy: userId,
   };
 

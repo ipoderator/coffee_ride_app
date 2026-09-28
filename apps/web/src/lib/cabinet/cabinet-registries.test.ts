@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ORGANIZER_NAV_ITEMS } from './organizer-nav';
+import { ORGANIZER_RIDE_SECTIONS } from './organizer-ride-sections';
 import { ORGANIZER_WIDGETS } from './organizer-widgets';
 import { PARTICIPANT_NAV_ITEMS } from './participant-nav';
 
@@ -21,6 +22,11 @@ describe('cabinet registries', () => {
   it('sorts the participant nav registry by order', () => {
     expect(PARTICIPANT_NAV_ITEMS.length).toBeGreaterThan(0);
     expectSortedByOrder(PARTICIPANT_NAV_ITEMS);
+  });
+
+  it('sorts the organizer ride-section registry by order (KI-061)', () => {
+    expect(ORGANIZER_RIDE_SECTIONS.length).toBeGreaterThan(0);
+    expectSortedByOrder(ORGANIZER_RIDE_SECTIONS);
   });
 
   it('sorts the organizer widget registry by order', () => {

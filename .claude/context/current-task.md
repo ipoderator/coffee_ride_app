@@ -1,84 +1,47 @@
 # Current task
 
-## CR-144 — Discovery grid card redesign («B2»)
+## CR-145 — Known-issues sweep (KI-072, KI-062, KI-061, KI-058, KI-073, KI-044)
 
 Status: complete, committed.
 
 ### Goal
 
-The product owner reported the `/` grid card as cluttered and hard to read: status,
-date, title, three unlabelled metrics and seats all stacked over the route art at low
-contrast. Of three mockups (claude.ai artifact «Ride card redesign — 3 options») they
-chose option B and asked for it refined («B2»), then implemented.
+Close the open known issues the owner listed on 2026-09-28, each with its own
+verification; narrow what can't be closed here (KI-045).
 
-### Requirements (B2, approved mockup)
+### Results per item
 
-- Cover (`RouteCover`) carries only the route track + the status chip. No text over
-  the art; a ride without a route shows a quiet «Маршрут пока не загружен» caption.
-- Everything else lives on a theme-aware `bg-raised` panel below the cover:
-  date line → title (always two lines tall, so grid rows align) → three labelled
-  metric columns → seats with a fill bar → chips (bike type, difficulty, price).
-- Metrics: always three columns (distance, elevation, pace) with labels
-  (`METRIC_TERMS`); a missing value is «—»; groups count under the pace; when all
-  three are missing, one line «Дистанция и темп не указаны». Elevation in the
-  `elevation` ink (`docs/design.md` §1), not the brand purple.
-- Seats: «17 из 20 участников» + «Осталось 3 места» (warning when low) + bar;
-  no limit → participant count + «Без ограничения мест», no bar; cancelled → no
-  seats block.
-- Status chip: an open ride that is full reads «Список ожидания» (info) — the
-  waitlist is joinable exactly then (`registrations.service.ts` `joinWaitlist`)
-  — instead of a green «Регистрация открыта».
-- Cancelled: desaturated cover, solid red chip, struck-through muted title.
-- Status chip stays legible on the always-dark cover in the light theme too.
-- Hover: border brightens, slight lift (motion-safe); visible focus ring.
+- KI-072 — `.github/dependabot.yml`: dev group minor/patch only. Resolved.
+- KI-062 — `RIDE_GROUP_PACE_STEP_KMH` in `packages/types`, schema `.multipleOf`,
+  form uses it; API test for 27.3 → 400 and 27.5/32.5 accepted. Resolved.
+- KI-061 — `RideSectionLink` registry + five feature descriptors; edit page passes
+  flag-filtered list; test asserts all five hrefs in order. Resolved.
+- KI-058 — `routes.preview` (migration `0020_route_preview`, backfill), written on
+  every route write, read by the list. Resolved.
+- KI-073 — `threshold: 0.02`; regression reproduced and caught in the CI Playwright
+  image (arm64). Resolved pending CI's x86_64 run.
+- KI-044 — measured Caddy/Next header behaviour; `TRUST_PROXY_HOPS` +
+  `lib/trust-proxy.ts`; prod compose 1; smoke step green. Resolved.
+- KI-045 — Caddyfile validated with the official v2.11.4 binary. Still open (ACME,
+  backup).
+- KI-074 — new: Google Fonts fetched at build time.
 
-### Acceptance criteria
+### Validation
 
-- [x] `RideGridCard`/`RouteCover` implement the above; `RideLegendRow` (map tab)
-      unchanged in behavior.
-- [x] Shared helpers in `lib/ride-metrics.ts` (metric tiles, seats, status) are
-      unit-tested, including the waitlist status and «—» metrics.
-- [x] New `RideGridCard.test.tsx` covers labelled metrics, seats variants,
-      no-metrics line, cancelled state, chips, link target.
-- [x] `packages/ui` changes additive only (new terms; optional prop defaults
-      unchanged); ui tests + both cabinets' web tests pass.
-- [x] Typecheck/lint/format/tests pass; live check in the running dev server.
-- [x] Visual baselines (`discovery-grid`, `ride-card`, themes) regenerated the
-      CI way (Docker, `.claude/rules/testing.md`) or the gap recorded.
-- [x] Docs: `docs/design.md`, changelog, tasks, project-state.
+- Typecheck + lint repo-wide: 17/17.
+- Coverage (CI env, Redis/S3 live): api 489/489, web 440/440, ui 155/155,
+  maps-2gis 41 (+5 skipped), resilience 15/15; `coverage:check` green; baseline raised.
+- `pnpm smoke:docker` green incl. the KI-044 step.
+- Migration on a fresh DB, the test DB and the dev DB.
 
-### Planned files
+### Discovered
 
-- `apps/web/src/features/participant/discovery/components/{RideGridCard,RouteCover,
-RideGrid}.tsx` (+ tests)
-- `apps/web/src/features/participant/discovery/lib/ride-metrics.ts` (+ test)
-- `packages/ui/src/terminology.ts`, `packages/ui/src/components/DifficultyScale.tsx`
-  (optional `size`)
-- `docs/design.md`, `docs/changelog.md`, `docs/tasks.md`,
-  `.claude/context/project-state.md`
+- One unreproduced `avatar.routes.test.ts` `beforeEach` failure in a turbo run
+  (three clean full runs after).
+- `.env` has `REDIS_URL` commented out: coverage measured from it skips the Redis
+  suites and "fails" `notifications`/`auth` — use `.env.example`'s URL.
 
-### Progress / validation
+### Carried over
 
-- Unit: new `RideGridCard.test.tsx` (9), ride-metrics (+9), terms (+2),
-  `DifficultyScale` (+1). Waitlist branch mutation-checked (2 tests fail).
-- Full suites, CI env (Postgres/Redis with password/S3, live flags): api
-  465/465, web 439/439, ui 155/155, maps-2gis, resilience green.
-- typecheck/eslint/prettier clean (web, ui). `next build` not run (would
-  clobber the running dev server's `.next`).
-- Live: dev server, dark/light, desktop/Pixel 5. Found and fixed: the seats
-  row wrapped mid-phrase («Пока никто не записался» + note) → shorter zero
-  wording «Пока нет участников», halves `whitespace-nowrap` in a wrapping row.
-- Visual: baselines regenerated in Playwright 1.63.0-jammy Docker (AppleDouble
-  `._*` files in the macOS tar broke the first two runs — excluded), grid/card
-  forced with `--update-snapshots=all`, verify run 16/16.
-- Coverage baseline raised, no row decreased.
-
-### Discovered issues
-
-- KI-073: dark-on-dark layout changes pass the screenshot tolerance.
-- Fixed in passing: cancelled chip lost its red fill on the cover (twMerge).
-
-### Final result
-
-Implemented as approved; docs updated (design.md §1/§6/§9, changelog,
-tasks, project-state, known-issues).
+- CR-114 live 2GIS verification (KI-056, blocked by VPN); contract test has the new
+  `no_route` case.

@@ -91,6 +91,11 @@ services:
       # mutating request at the CSRF Origin/Referer check
       # (apps/api/src/plugins/csrf.ts, ADR-013).
       WEB_ORIGIN: https://${DOMAIN}
+      # KI-044: trust exactly one hop (`web`) for X-Forwarded-For, so the
+      # per-IP rate limiters key on the client address Caddy wrote instead of
+      # `web`'s one internal IP. Safe only because `api` has no `ports:` —
+      # see apps/api/src/env.ts before changing either.
+      TRUST_PROXY_HOPS: 1
       MAPS_2GIS_API_KEY: ${MAPS_2GIS_API_KEY}
       # CR-079/KI-006. Optional — see .env.example. Empty string is fine:
       # env.ts's z.string().url().optional() treats an unset/empty value as

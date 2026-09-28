@@ -39,6 +39,22 @@ export type CabinetNavBadge = 'newRegistrations';
 /** Resolved values per badge name; a missing name renders no badge. */
 export type CabinetNavBadgeCounts = Partial<Record<CabinetNavBadge, number>>;
 
+// KI-061: same registration-over-branching pattern, for the links from a ride's
+// edit screen to its sub-pages (Маршрут, Обложка, Группы, ...). The page
+// (`app/organizer/rides/[id]/edit/page.tsx`, a Server Component) flag-filters the
+// registry and hands it to `EditRideForm`, so a descriptor is plain data: a path
+// `segment`, not an href-building function.
+export interface RideSectionLink {
+  label: string;
+  /** Path segment under `/organizer/rides/:id/`, e.g. `'route'`. */
+  segment: string;
+  /** Lower sorts first. Leave gaps (10, 20, 30, ...), same convention as
+   * `CabinetNavItem.order`. */
+  order: number;
+  /** CR-055: same staged-rollout gate as `CabinetNavItem.flag`. */
+  flag?: string;
+}
+
 // CR-015: same registration-over-branching pattern as `CabinetNavItem`, for
 // dashboard widgets (`docs/design.md` §8: "Dashboard (widgets from the ADR-009
 // registry)"). A feature owns its own data fetching/loading/error states

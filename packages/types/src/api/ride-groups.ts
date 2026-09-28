@@ -5,6 +5,7 @@ import {
   RIDE_GROUP_NAME_MAX_LENGTH,
   RIDE_GROUP_PACE_MAX_KMH,
   RIDE_GROUP_PACE_MIN_KMH,
+  RIDE_GROUP_PACE_STEP_KMH,
   type RideGroup,
 } from '../domain/ride-group.js';
 import type { Paginated } from './pagination.js';
@@ -29,6 +30,10 @@ const groupPaceSchema = z
   .max(
     RIDE_GROUP_PACE_MAX_KMH,
     `paceKmh must be between ${RIDE_GROUP_PACE_MIN_KMH} and ${RIDE_GROUP_PACE_MAX_KMH}.`,
+  )
+  .multipleOf(
+    RIDE_GROUP_PACE_STEP_KMH,
+    `paceKmh must be a multiple of ${RIDE_GROUP_PACE_STEP_KMH}.`,
   );
 const groupDescriptionSchema = z
   .string()

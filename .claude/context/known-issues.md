@@ -552,33 +552,6 @@ can't resolve `unisender.ru` (`nslookup` confirms `SERVFAIL`) to exercise a
 real send. Next action: same as KI-026's — configure a verified sender,
 then verify one real send from an environment with real network access.
 
-### KI-044 — `apps/api`'s rate limiter may see one internal IP for every request once deployed behind Caddy
-
-Status: open. Discovered: 2026-09-17 (CR-075, ADR-018).
-Problem: `docker-compose.prod.yml`'s topology is `Caddy → web → (Next.js rewrite,
-server-side) → api` — `api` is never hit directly by Caddy or the public internet,
-only by `web` as an internal peer. `apps/api`'s per-IP rate limiter
-(`@fastify/rate-limit`, already flagged in-memory-only/single-instance by
-KI-014/KI-022) has no `trustProxy` configured on its Fastify instance
-(`apps/api/src/app.ts`) — deliberately left alone since `api` has no direct proxy
-boundary of its own yet. Whether Next's own `/api/v1/*` `rewrites()` forwards the
-original client's `X-Forwarded-For` header through to `api` (Caddy sets it when
-proxying to `web`; whether `web`'s own outbound rewrite request preserves it is a
-separate, unverified question) was not checked either way.
-Impact: unknown until checked — if the header isn't forwarded, every request
-`api` sees in production would appear to originate from `web`'s single internal
-IP, making the per-IP rate limiter effectively a single shared bucket across every
-real client at once (both over- and under-limiting incorrectly, not just a minor
-inaccuracy).
-Workaround: none — not yet checked, so not yet fixed.
-Next action: belongs with CR-058 (Redis-backed, per-account auth rate limiting,
-currently blocked on KI-014) since that ticket already touches this rate limiter —
-verify whether `X-Forwarded-For` survives Next's rewrite hop (inspect the header
-`api` actually receives, e.g. via a temporary log line, under a real Caddy→web→api
-chain once Docker is available), and if not, either configure `apps/api`'s
-`trustProxy` against `web`'s known internal address plus forward the header
-through the rewrite explicitly, or move rate limiting in front of `web` instead.
-
 ### KI-045 — CR-075/CR-076's Caddy/compose production manifest has never been run end to end
 
 Status: open. Discovered: 2026-09-17 (CR-075, ADR-018; extended CR-076).
@@ -618,6 +591,12 @@ Update 2026-09-26 (CR-134): everything except Caddy now runs end to end in
 `api` starts with no published port, `web` reaches `api` by service name.
 Still unverified: Caddy (config, ACME/TLS, Caddy → web hop) and the `backup`
 service — both need a real host.
+Update 2026-09-28 (CR-145): `deploy/Caddyfile` passes `caddy validate` (official
+v2.11.4 binary, same 2.x line as `caddy:2-alpine`; Docker Hub layers can't be
+pulled from this machine) and adapts to the expected single `reverse_proxy web:3000`
+route on :443. Caddy's X-Forwarded-For handling — the Caddy → web hop's one
+observable effect on `api` — was probed and relied on for KI-044. Still
+unverified: ACME/TLS and the `backup` service, both need a real host.
 
 ### KI-051 — Native dev `DATABASE_URL` database was missing CR-097's migration, 500ing every ride read
 
@@ -701,6 +680,13 @@ Update 2026-09-23 (CR-114): the route builder is implemented against mocked
 coordinate in `outcoming_path.geometry[].selection` (otherwise built routes have
 no elevation profile), and what 2GIS returns for an unroutable pair of points
 (the adapter maps 204 / empty result / no geometry to `no_route` → 422).
+Update 2026-09-28 (CR-114 verification attempt): still unreachable — Routing/
+Geocoder time out, egress `FR`. `provider.contract.test.ts` gained the
+unroutable-pair case (Moscow → Reykjavik must fail as `no_route`), so a single
+live run answers both open questions. The other way to run it, the
+`maps-contract.yml` workflow on GitHub's runners, has never run: the
+`maps-2gis-contract` environment and its `MAPS_2GIS_API_KEY` secret don't exist,
+so its weekly schedule is silently skipped too.
 
 ### KI-057 — The 2GIS basemap stays light in the dark theme
 
@@ -719,22 +705,6 @@ option (e.g. a `theme: 'light' | 'dark'`, mapped to a style id inside
 `packages/maps-2gis`), switch it when the theme changes, and re-check the halo
 colours on both basemaps. Next task after KI-064.
 
-### KI-058 — `routePreview` samples each ride's full stored geometry on every list request
-
-Status: open. Discovered: 2026-09-23 (CR-116).
-Problem: `GET /v1/rides` builds each item's `routePreview` at request time —
-`rides.service.ts`'s batched list extras sample every ride's full
-`routes.geometry` in SQL, then `modules/rides/route-preview.ts` runs
-Douglas–Peucker over the sample. The full geometry never leaves Postgres, but
-Postgres still expands it for every ride on every page of every discovery
-request.
-Impact: low today (few rides, short routes); grows with route length × page size
-× discovery traffic.
-Workaround: none needed at current scale.
-Next action: if the list query becomes hot, compute the preview once at route
-write time (GPX upload/replace and `POST /v1/rides/:id/route/build`) into a
-stored column and read that instead — the response contract stays unchanged.
-
 ### KI-060 — Discovery's «Старт: …» only knows the start route-point label
 
 Status: open. Discovered: 2026-09-23 (CR-118…CR-120 main-session review).
@@ -748,75 +718,23 @@ Workaround: organizers can name the start point by place («Парк Горьк�
 Next action: send the start point's description too (additive field) or add a
 dedicated start-place field on `Ride`, and use the same fallback on both screens.
 
-### KI-061 — Organizer ride sub-page links are a hard-coded list, not a registry
+### KI-074 — `apps/web`'s production build fetches five font families from Google Fonts
 
-Status: open. Discovered: 2026-09-23 (CR-120).
-Problem: `EditRideForm` links to the ride's sub-pages (Маршрут, Обложка,
-Группы, Участники, Обновления) as a plain hand-written link list; CR-120 added
-«Группы» as one more entry. `.claude/rules/extensibility.md` ("Registration over
-branching") asks for a descriptor registry on shared surfaces that every feature
-extends.
-Impact: low now (five links); each new ride sub-feature edits a shared form
-component, which is the coupling ADR-009 exists to prevent.
-Workaround: none needed.
-Next action: when the next ride sub-page is added, move these links into a
-small descriptor registry (label, href builder, order, optional flag), the same
-pattern as the cabinet nav/widget registries.
-
-### KI-062 — Group pace: the client requires 0.5 km/h steps, the API only checks 5–60
-
-Status: open. Discovered: 2026-09-23 (CR-120).
-Problem: `features/organizer/groups/validation.ts` enforces a 0.5 km/h step,
-but the API's `groupPaceSchema` (`packages/types/src/api/ride-groups.ts`) and the
-DB (`numeric(4,1)`, CHECK 5–60) accept any one-decimal value, e.g. 27.3.
-Impact: very low — only a direct API call can store a non-0.5 pace; it is still
-valid data.
-Workaround: none needed.
-Next action: decide whether 0.5 is a real rule; if so, add it to the shared Zod
-schema (one source for client and server), otherwise drop the client-only step.
-
-### KI-072 — Dependabot's dev-dependencies group bundles TypeScript 7.0, which breaks CI
-
-Status: open. Discovered: 2026-09-27, PR #24 (`chore(deps-dev)`, 13 dev-dependency
-updates in one group).
-Problem: the group bumped `typescript` `6.0.3 → 7.0.2` alongside 12 unrelated
-updates (eslint, prettier, turbo, vitest, etc.). Two things break under TS 7:
-`typescript-eslint@8.70.0` refuses to run at all (`Error: typescript-eslint does
-not support TS 7.0`, a hard check in its own code, not a lint rule — [tracking
-issue](https://github.com/typescript-eslint/typescript-eslint/issues/10940)),
-which fails `ci`'s `Lint (root config)` step; separately,
-`docker-smoke`'s `apps/web` image fails `next build` — Next.js 15's
-`next.config.ts` loader throws `Cannot read properties of undefined (reading
-'fileExists')` under the new compiler, unrelated to anything in this repo's
-config.
-Impact: none to `main` — the PR was never merged. Blocks only this one grouped
-update; every other dependency in it (eslint 10, prettier, turbo, vitest 5.0.1,
-etc.) is unaffected on its own.
-Workaround: PR #24 closed 2026-09-27 without merging.
-Next action: once `typescript-eslint` (and Next.js's config loader) support
-TS 7, or Dependabot proposes the group again with a newer compatible
-`typescript-eslint`, re-run `docker-smoke` + `Lint (root config)` before
-merging. If this recurs, consider excluding `typescript` from the
-`dev-dependencies` group in `.github/dependabot.yml` so a single incompatible
-major doesn't block the other 12 updates.
-
-### KI-073 — Visual baselines barely see dark-on-dark layout changes
-
-Found: 2026-09-27, CR-144.
-Problem: CR-144 rebuilt the grid card (new panel, metric columns, seats bar),
-yet `discovery-grid-chromium-linux.png`'s old baseline still _passed_
-`--update-snapshots` (mode `changed`). Playwright's per-pixel colour threshold
-(default 0.2) treats the dark theme's near-black tones (`cover-bg` `#16131A`,
-`bg` `#121015`, `bg-raised` `#1C1920`, `border`) as equal, so only glyph pixels
-count, and a card in a 1280×720 page stays under `maxDiffPixelRatio: 0.02`.
-Impact: a dark-theme layout regression that moves panels/borders but little
-text can pass CI's visual suite. Text/element changes are still caught; the
-`mobile` screenshot (card fills more of the frame) did fail as expected.
-Workaround: CR-144 regenerated the grid/card baselines with
-`--update-snapshots=all` so they show the current design.
-Next action: consider a per-assertion `threshold` (e.g. `0.1`) on the
-dark-theme `toHaveScreenshot` calls, or element-scoped screenshots for layout
-surfaces, and check it doesn't add anti-aliasing flakiness on CI.
+Status: open. Discovered: 2026-09-27 (CI run `36345478610`, CR-144's push).
+Problem: `app/layout.tsx` loads Golos Text, Sofia Sans Condensed, IBM Plex Mono,
+Unbounded and Sofia Sans Extra Condensed through `next/font/google`, which
+downloads them from `fonts.googleapis.com` during `next build`. When a response
+isn't the expected CSS, `next/font` crashes (`Cannot read properties of null
+(reading '1')`) and the whole build fails. Second occurrence in a day — the first
+hit `docker-smoke` (`docs/changelog.md`, CR-140 entry), this one `ci`'s Build step;
+both went green on re-run with no code change.
+Impact: medium — CI goes red for reasons unrelated to the change under test, and
+a production image build depends on an external service at build time
+(`.claude/rules/resilience.md`).
+Workaround: re-run the failed job.
+Next action: self-host the fonts — commit the `.woff2` files (all SIL OFL) and
+switch to `next/font/local`, keeping the `cyrillic`/`latin` subsets, the weights,
+the CSS variables and Sofia Sans' `locl` behaviour (`<html lang="ru">`).
 
 ## Resolved
 

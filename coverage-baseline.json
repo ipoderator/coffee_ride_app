@@ -4,10 +4,10 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 92.14,
-        "statements": 90.98,
-        "functions": 95.78,
-        "branches": 79.63
+        "lines": 92.2,
+        "statements": 91.05,
+        "functions": 95.84,
+        "branches": 79.76
       },
       "scopes": {
         "src/modules/auth/": {
@@ -23,8 +23,8 @@
           "branches": 83.33
         },
         "src/modules/rides/": {
-          "lines": 93.94,
-          "statements": 92.25,
+          "lines": 93.95,
+          "statements": 92.26,
           "functions": 99.4,
           "branches": 82.71
         },
@@ -59,18 +59,18 @@
           "branches": 88.88
         },
         "src/lib/": {
-          "lines": 94.21,
-          "statements": 93.75,
-          "functions": 93.93,
-          "branches": 85.24
+          "lines": 94.77,
+          "statements": 94.48,
+          "functions": 94.44,
+          "branches": 87.32
         }
       }
     },
     "apps/web": {
       "total": {
-        "lines": 74.7,
-        "statements": 72.76,
-        "functions": 71.66,
+        "lines": 74.73,
+        "statements": 72.78,
+        "functions": 71.73,
         "branches": 73.8
       }
     },

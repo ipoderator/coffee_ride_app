@@ -12,7 +12,6 @@ import {
   ErrorState,
   FormField,
   Input,
-  ORGANIZER_GROUPS_TERMS,
   RIDE_EDIT_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
   Skeleton,
@@ -20,6 +19,7 @@ import {
   Textarea,
   RIDE_STATUS_TERMS,
 } from 'ui';
+import type { RideSectionLink } from '@/lib/cabinet/types';
 import {
   utcIsoToZonedLocalInput,
   zonedTimeToUtcIso,
@@ -112,7 +112,15 @@ interface FieldErrors {
  * resolves before this ever renders: a 404 here means "not found or not yours",
  * never revealed which).
  */
-export function EditRideForm({ rideId }: { rideId: string }) {
+export function EditRideForm({
+  rideId,
+  sections = [],
+}: {
+  rideId: string;
+  /** KI-061: links to the ride's sub-pages, from `ORGANIZER_RIDE_SECTIONS`
+   * (already flag-filtered and sorted by the page). */
+  sections?: readonly RideSectionLink[];
+}) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [ride, setRide] = useState<Ride | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -422,36 +430,15 @@ export function EditRideForm({ rideId }: { rideId: string }) {
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-          <Link
-            href={`/organizer/rides/${rideId}/route`}
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_EDIT_TERMS.routeLink}
-          </Link>
-          <Link
-            href={`/organizer/rides/${rideId}/cover`}
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_EDIT_TERMS.coverLink}
-          </Link>
-          <Link
-            href={`/organizer/rides/${rideId}/groups`}
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            {ORGANIZER_GROUPS_TERMS.rideEditLink}
-          </Link>
-          <Link
-            href={`/organizer/rides/${rideId}/participants`}
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_EDIT_TERMS.participantsLink}
-          </Link>
-          <Link
-            href={`/organizer/rides/${rideId}/updates`}
-            className="text-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_EDIT_TERMS.updatesLink}
-          </Link>
+          {sections.map((section) => (
+            <Link
+              key={section.segment}
+              href={`/organizer/rides/${rideId}/${section.segment}`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              {section.label}
+            </Link>
+          ))}
         </div>
 
         {!isDraft && (

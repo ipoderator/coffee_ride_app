@@ -246,9 +246,9 @@ distinct from `/mine`'s `(createdAt desc, id desc)`. A malformed `cursor` →
 (`PublicRideListItem`, this endpoint only; `GET /v1/registrations/mine` keeps plain
 `PublicRide`): `registrationsCount` (active registrations), `startLabel` (label of the
 ride's oldest `start` route point, `null` if none/unlabelled), `routePreview` (the
-stored route geometry as at most 40 `[lat, lng]` pairs, 5 decimals — stride-sampled to
-≤200 points in SQL, then Douglas–Peucker by point budget; `null` without a route; for a
-card sketch, never navigation), `groups` (`[{ name, paceKmh }]` in `position` order,
+stored route geometry as at most 40 `[lat, lng]` pairs, 5 decimals — Douglas–Peucker by
+point budget over the full geometry, computed when the route is written and stored in
+`routes.preview` (KI-058); `null` without a route; for a card sketch, never navigation), `groups` (`[{ name, paceKmh }]` in `position` order,
 `[]` without groups). Computed with four batched queries per page, never per row.
 
 GET `/v1/rides/mine` — **implemented (CR-088)**. Requires a valid session cookie
@@ -355,7 +355,8 @@ GET `/v1/rides/:id/groups` — organizer-only, any status. `200` → `{ items: (
 (`400 invalid_cursor`).
 
 POST `/v1/rides/:id/groups` — body `{ name, paceKmh, description? }`: `name` trimmed,
-1–60 chars (the client suggests «Группа N»; the API never invents one), `paceKmh` 5–60,
+1–60 chars (the client suggests «Группа N»; the API never invents one), `paceKmh` 5–60
+in 0.5 steps (KI-062, the same rule the editor enforces),
 `description` ≤500 or `null`. Appended at the end (`position` server-assigned). `201` →
 `{ group }`. `409 group_limit_reached` past 6, `409 group_name_taken` for a
 case-insensitive duplicate name within the ride, `400 validation_error`.

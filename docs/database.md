@@ -90,8 +90,12 @@ registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
   haversine sum / positive-elevation-delta sum — independent from `Ride`'s own
   organizer-entered `distanceKm`/`elevationGainMeters`, not reconciled), `geometry`
   (`jsonb`, the ordered `{ lat, lng, elevationMeters }[]` polyline — a single column,
-  not a row-per-point table; see the next line), `createdAt`/`updatedAt`,
-  `updatedBy` (audit trail).
+  not a row-per-point table; see the next line), `preview` (KI-058, nullable
+  `jsonb`, CHECK is-array: the discovery card's ≤ 40-pair `[lat, lng]` sketch,
+  computed from `geometry` by the API on every route write — GPX upload/replace and
+  2GIS build — so `GET /v1/rides` never expands full geometries; a direct write to
+  `geometry` must refresh it too), `createdAt`/`updatedAt`, `updatedBy` (audit
+  trail).
 - RoutePoint — start/finish/stop/danger/water/food/technical/other: a small set of
   organizer-placed _typed_ markers along the route (CR-031): `id`, `rideId` (FK →
   Ride, `ON DELETE CASCADE`), `type` (not null, pg enum — the eight values above),

@@ -9,6 +9,7 @@ import {
 } from '@fastify/type-provider-zod';
 import type { Env } from './env.js';
 import { generateRequestId } from './lib/request-id.js';
+import { createTrustProxy } from './lib/trust-proxy.js';
 import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerErrorReporting } from './plugins/error-reporting.js';
@@ -57,6 +58,9 @@ export async function buildApp(env: Env) {
     // — Fastify's default genReqId is just a per-process counter, useless
     // for that. `lib/request-id.ts` validates/bounds the inbound header.
     genReqId: generateRequestId,
+    // KI-044: `request.ip` — the per-IP rate limiters' key — behind the
+    // Caddy → web → api chain. See `env.ts`'s `TRUST_PROXY_HOPS`.
+    trustProxy: createTrustProxy(env.TRUST_PROXY_HOPS),
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);

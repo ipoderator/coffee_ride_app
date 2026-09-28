@@ -205,3 +205,67 @@ describe('request id (CR-079)', () => {
     await app.close();
   });
 });
+
+// KI-044: production is Caddy → web → api. Caddy writes the client address into
+// X-Forwarded-For, Next's rewrite forwards it without appending its own, and
+// `request.ip` keys the per-IP rate limiters.
+describe('client address behind the proxy chain (KI-044)', () => {
+  async function appReportingIp(trustProxyHops?: number) {
+    const app = await buildApp({
+      ...testEnv,
+      TRUST_PROXY_HOPS: trustProxyHops,
+      RATE_LIMIT_MAX: 1,
+    });
+    app.get('/ip-probe', async (request) => ({ ip: request.ip }));
+    return app;
+  }
+  const probe = (
+    app: Awaited<ReturnType<typeof appReportingIp>>,
+    xff?: string,
+  ) =>
+    app.inject({
+      method: 'GET',
+      url: '/ip-probe',
+      remoteAddress: '172.18.0.5', // `web`, the socket peer
+      headers: xff ? { 'x-forwarded-for': xff } : {},
+    });
+
+  it('ignores X-Forwarded-For by default: the socket peer is the client', async () => {
+    const app = await appReportingIp();
+    const response = await probe(app, '203.0.113.7');
+    expect(response.json().ip).toBe('172.18.0.5');
+    await app.close();
+  });
+
+  it('with one trusted hop, takes the address Caddy wrote and ignores forged ones', async () => {
+    const app = await appReportingIp(1);
+    expect((await probe(app, '203.0.113.7')).json().ip).toBe('203.0.113.7');
+    expect((await probe(app, '6.6.6.6, 203.0.113.8')).json().ip).toBe(
+      '203.0.113.8',
+    );
+    await app.close();
+  });
+
+  it('never trusts a public socket peer, even with a trusted hop configured', async () => {
+    const app = await appReportingIp(1);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/ip-probe',
+      remoteAddress: '198.51.100.20',
+      headers: { 'x-forwarded-for': '203.0.113.7' },
+    });
+    expect(response.json().ip).toBe('198.51.100.20');
+    await app.close();
+  });
+
+  it('with one trusted hop, gives each client its own rate-limit bucket', async () => {
+    const app = await appReportingIp(1);
+    expect((await probe(app, '203.0.113.7')).statusCode).toBe(200);
+    expect((await probe(app, '203.0.113.7')).statusCode).toBe(429);
+    // A forged left entry doesn't buy a fresh bucket for the same client…
+    expect((await probe(app, '6.6.6.6, 203.0.113.7')).statusCode).toBe(429);
+    // …while a different real client still gets through.
+    expect((await probe(app, '203.0.113.9')).statusCode).toBe(200);
+    await app.close();
+  });
+});

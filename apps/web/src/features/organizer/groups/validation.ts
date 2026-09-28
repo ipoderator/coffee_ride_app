@@ -3,12 +3,11 @@ import {
   RIDE_GROUP_NAME_MAX_LENGTH,
   RIDE_GROUP_PACE_MAX_KMH,
   RIDE_GROUP_PACE_MIN_KMH,
+  RIDE_GROUP_PACE_STEP_KMH,
   type CreateRideGroupRequest,
 } from 'types';
 import { ORGANIZER_GROUPS_TERMS as T } from 'ui';
 import type { GroupFieldErrors, GroupFormState } from './types';
-
-const PACE_STEP_KMH = 0.5;
 
 /**
  * «27,5» / «27.5» / « 30 » → a number; anything else (empty, «27,5,1», «abc»,
@@ -28,9 +27,9 @@ export function paceToInput(paceKmh: number): string {
 }
 
 /**
- * Client-side mirror of `createRideGroupRequestSchema` (bounds from
- * `packages/types`), with Russian messages instead of the schema's English ones,
- * plus the editor's 0,5 km/h step. The server re-validates everything.
+ * Client-side mirror of `createRideGroupRequestSchema` (bounds and the 0,5 km/h
+ * step from `packages/types`), with Russian messages instead of the schema's
+ * English ones. The server re-validates everything.
  */
 export function validateGroupForm(
   form: GroupFormState,
@@ -52,7 +51,8 @@ export function validateGroupForm(
     paceKmh > RIDE_GROUP_PACE_MAX_KMH
   )
     errors.pace = T.paceOutOfRange;
-  else if (!Number.isInteger(paceKmh / PACE_STEP_KMH)) errors.pace = T.paceStep;
+  else if (!Number.isInteger(paceKmh / RIDE_GROUP_PACE_STEP_KMH))
+    errors.pace = T.paceStep;
 
   const description = form.description.trim();
   if (description.length > RIDE_GROUP_DESCRIPTION_MAX_LENGTH)
