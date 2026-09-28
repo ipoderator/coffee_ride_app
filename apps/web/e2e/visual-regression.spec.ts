@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { ORGANIZER_HEADER_TERMS, ORGANIZER_OVERVIEW_TERMS } from 'ui';
 import {
@@ -43,6 +44,12 @@ import { newIsolatedRequest } from './helpers/ui';
 // such option (it requires a session to view at all); its own header
 // (`OrganizerHeader`) only ever shows a decorative avatar circle there, not
 // the email as text, so that one trigger is `mask`ed instead.
+
+// The cover art's isolines are picked/generated from the ride's id — a fresh
+// UUID every run, so they differ between runs and even between retries.
+// Hidden while capturing (the documented use of `toHaveScreenshot`'s
+// `stylePath`); the track, labels and layout around them are still compared.
+const HIDE_SEEDED_ART = path.join(__dirname, 'hide-seeded-art.css');
 
 const FIXED_NOW = new Date('2030-01-10T09:00:00.000Z').getTime();
 const RIDE_STARTS_AT = '2030-01-15T09:00:00.000Z';
@@ -96,20 +103,26 @@ test.describe('discovery screens', () => {
   test('discovery grid', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('a[href^="/rides/"]').first()).toBeVisible();
-    await expect(page).toHaveScreenshot('discovery-grid.png');
+    await expect(page).toHaveScreenshot('discovery-grid.png', {
+      stylePath: HIDE_SEEDED_ART,
+    });
   });
 
   test('discovery map', async ({ page }) => {
     await page.goto('/?view=map');
     await expect(page.getByTestId('discovery-list-panel')).toBeVisible();
-    await expect(page).toHaveScreenshot('discovery-map.png');
+    await expect(page).toHaveScreenshot('discovery-map.png', {
+      stylePath: HIDE_SEEDED_ART,
+    });
   });
 
   test('ride card', async ({ page }) => {
     await page.goto('/');
     const card = page.locator('a[href^="/rides/"]').first();
     await expect(card).toBeVisible();
-    await expect(card).toHaveScreenshot('ride-card.png');
+    await expect(card).toHaveScreenshot('ride-card.png', {
+      stylePath: HIDE_SEEDED_ART,
+    });
   });
 });
 
@@ -130,7 +143,9 @@ test('ride detail page with inline registration', async ({ page }) => {
 
   await page.goto(`/rides/${rideId}`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page).toHaveScreenshot('ride-detail.png');
+  await expect(page).toHaveScreenshot('ride-detail.png', {
+    stylePath: HIDE_SEEDED_ART,
+  });
 });
 
 test('organizer dashboard with one upcoming ride', async ({ page }) => {

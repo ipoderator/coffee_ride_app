@@ -119,7 +119,12 @@ export function RouteCover({
           cancelled && 'saturate-0 brightness-75',
         )}
       >
-        <g fill="none" className="stroke-cover-line" strokeWidth={1.2}>
+        <g
+          fill="none"
+          className="stroke-cover-line"
+          strokeWidth={1.2}
+          data-isolines
+        >
           {background.isolines.map((d, i) => (
             <path key={`iso-${i}`} d={d} />
           ))}

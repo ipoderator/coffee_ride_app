@@ -177,7 +177,12 @@ export function TrackCover({
         )}
       >
         <rect width={width} height={height} className="fill-cover-bg" />
-        <g fill="none" className="stroke-cover-line" strokeWidth={1.2}>
+        <g
+          fill="none"
+          className="stroke-cover-line"
+          strokeWidth={1.2}
+          data-isolines
+        >
           {drawing.isolines.map((d, i) => (
             <path key={i} d={d} />
           ))}

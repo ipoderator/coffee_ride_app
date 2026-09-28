@@ -1,0 +1,4 @@
+/* visual-regression.spec.ts: cover isolines are seeded by the ride's random id. */
+[data-isolines] {
+  visibility: hidden;
+}
