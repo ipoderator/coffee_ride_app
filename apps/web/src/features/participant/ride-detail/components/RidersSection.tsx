@@ -99,7 +99,7 @@ function RiderNames({
         // CR-126: `registrationId` is an opaque id — not a user id — that only
         // unlocks the access-gated rider-profile route below, itself gated by
         // the profile owner's own privacy setting. Safe to link to directly.
-        <li key={rider.registrationId} className="py-2 text-base">
+        <li key={rider.registrationId} className="py-2 text-body">
           <Link
             href={`/rides/${rideId}/riders/${rider.registrationId}`}
             className={
@@ -145,7 +145,7 @@ function RiderAvatars({
               <Avatar
                 name={rider.displayName}
                 size="md"
-                className="h-10 w-10 bg-primary-tint text-[13px] font-semibold text-primary"
+                className="size-11 bg-primary-tint text-body-sm font-semibold text-primary"
               />
               {rider.displayName ? null : (
                 <span className="sr-only">{name}</span>
@@ -257,13 +257,10 @@ export function RidersSection({
   return (
     <section className="flex flex-col gap-3.5" aria-labelledby="ride-riders">
       <div className="flex items-baseline justify-between gap-3">
-        <h2
-          id="ride-riders"
-          className="font-title text-lg leading-tight font-medium text-text"
-        >
+        <h2 id="ride-riders" className="text-h2 text-text">
           {RIDE_POSTER_TERMS.ridersTitle}
         </h2>
-        <p className="text-sm text-text-secondary tabular-nums">
+        <p className="text-body-sm text-text-secondary tabular-nums">
           {participantLimit !== null
             ? RIDE_POSTER_TERMS.ridersOf(registrationsCount, participantLimit)
             : RIDE_DETAIL_RIDERS_TERMS.ridersCount(registrationsCount)}
@@ -275,7 +272,7 @@ export function RidersSection({
           {groups.map((group) => (
             <li
               key={group.id}
-              className="rounded-full bg-surface px-2.5 py-0.5 text-[13px] text-text-secondary tabular-nums"
+              className="rounded-full bg-surface px-2.5 py-0.5 text-body-sm text-text-secondary tabular-nums"
             >
               <b className="font-semibold text-text">{group.name}</b> ·{' '}
               {formatGroupPace(group.paceKmh)} — {group.registrationsCount}
@@ -293,7 +290,7 @@ export function RidersSection({
       )}
 
       {status === 'anonymous' && registrationsCount > 0 && (
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           <Link
             href={loginHref(`/rides/${rideId}`)}
             className="font-medium text-primary underline decoration-1 underline-offset-2 hover:text-primary-hover"
@@ -304,7 +301,7 @@ export function RidersSection({
       )}
 
       {status === 'hidden' && (
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           {RIDE_DETAIL_RIDERS_TERMS.hiddenByOrganizer}
         </p>
       )}
@@ -332,7 +329,7 @@ export function RidersSection({
       {status === 'ready' && riders.length > 0 && (
         <Button
           variant="secondary"
-          className="min-h-11 self-start border-0 px-0 text-sm font-medium text-primary hover:bg-transparent hover:text-primary-hover"
+          className="min-h-11 self-start border-0 px-0 text-body-sm font-medium text-primary hover:bg-transparent hover:text-primary-hover"
           aria-expanded={isExpanded}
           aria-controls="ride-riders-list"
           onClick={() => setIsExpanded((open) => !open)}
@@ -348,7 +345,7 @@ export function RidersSection({
           {showGroupHeadings ? (
             buckets.map((bucket) => (
               <div key={bucket.key} className="flex flex-col gap-1">
-                <h3 className="border-b border-frame pb-1 font-display text-sm font-semibold tracking-[0.04em] text-text uppercase tabular-nums">
+                <h3 className="border-b border-frame pb-1 font-mono text-label text-text uppercase tabular-nums">
                   {bucket.group
                     ? RIDE_DETAIL_RIDERS_TERMS.groupHeading(
                         bucket.group.name,

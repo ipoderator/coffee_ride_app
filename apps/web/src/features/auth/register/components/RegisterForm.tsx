@@ -51,14 +51,12 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
 
     return (
       <Card role="status" aria-live="polite">
-        <h2 className="text-xl font-semibold text-text">
-          {AUTH_TERMS.registerSuccessTitle}
-        </h2>
+        <h2 className="text-h2 text-text">{AUTH_TERMS.registerSuccessTitle}</h2>
         <p className="mt-2 text-text-secondary">
           {AUTH_TERMS.registerSuccessBody}
         </p>
         {verifyEmailPath && (
-          <p className="mt-4 rounded-lg border border-border bg-surface p-3 text-sm text-text-secondary">
+          <p className="mt-4 rounded-lg border border-border bg-surface p-3 text-body-sm text-text-secondary">
             {AUTH_TERMS.registerSuccessDevNote}{' '}
             <Link
               href={verifyEmailPath}
@@ -70,7 +68,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
         )}
         <Link
           href={loginHref(next)}
-          className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+          className="mt-4 inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {AUTH_TERMS.registerSuccessLoginLink}
         </Link>
@@ -167,7 +165,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
         </FormField>
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
@@ -180,7 +178,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
 
         <Link
           href={loginHref(next)}
-          className="text-sm text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-body-sm text-primary hover:underline"
         >
           {AUTH_TERMS.loginLink}
         </Link>

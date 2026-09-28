@@ -1186,3 +1186,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       every registration state, «Маршрут по точкам», elevation profile linked to
       the cover, «Кто едет». API: additive `waitlistCount`/`viewerStartNumber`/
       `viewerWaitlistPosition` on `GET /v1/rides/:id`. See `docs/changelog.md`.
+- [x] CR-152 Typography & responsive pass — one role type scale in `tokens.css`
+      (`text-display/h1/h2/h3/body/body-sm/label/metric`), body 16px, nothing under
+      12px, Sofia Sans Condensed retired (labels → IBM Plex Mono), Unbounded only for
+      display/`h1`, render settings, 44px text actions, discovery view switch beside
+      the `h1`. ADR-026. Follow-up: KI-077 (refresh visual baselines from CI).

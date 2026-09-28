@@ -34,7 +34,7 @@ export function BackLink({
         // `-ml-2` pulls the icon back to the container's optical left edge:
         // the padding is there for the 44px touch target (`docs/design.md`
         // §5), not to indent the link away from the content it sits above.
-        'inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-2 -ml-2 text-sm font-medium text-text-secondary transition-colors hover:text-text',
+        'inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-2 -ml-2 text-body-sm font-medium text-text-secondary transition-colors hover:text-text',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         className,
       )}

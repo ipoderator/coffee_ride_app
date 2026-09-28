@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import type { BicycleType, PublicRideListItem } from 'types';
 import {
   Button,
@@ -35,7 +35,7 @@ function LoadingCards() {
  * own fetch — each tab only pays for the data its own view needs, and the two
  * views don't have to agree on layout to share the underlying list.
  */
-export function RideGrid() {
+export function RideGrid({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rides, setRides] = useState<PublicRideListItem[]>([]);
   const [bicycleType, setBicycleType] = useState<BicycleType | undefined>(
@@ -66,9 +66,12 @@ export function RideGrid() {
   return (
     <div className="mx-auto w-full max-w-300 px-4 py-6 lg:px-6">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="font-title text-4xl leading-none font-semibold text-text">
-          {RIDE_DISCOVERY_TERMS.pageTitle}
-        </h1>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <h1 className="text-h1 text-text">
+            {RIDE_DISCOVERY_TERMS.pageTitle}
+          </h1>
+          {viewSwitch}
+        </div>
         <RideFilters bicycleType={bicycleType} onChange={setBicycleType} />
       </div>
 

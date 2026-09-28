@@ -488,6 +488,20 @@ Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
 
+### KI-077 — Visual baselines are stale after CR-152's type scale
+
+Status: open. Discovered: 2026-09-28 (CR-152).
+Problem: CR-152 changes font sizes/faces on every screen, so all 12 committed
+screenshots (`e2e/visual-regression.spec.ts-snapshots/`, `e2e/themes.spec.ts-snapshots/`)
+no longer match. They must be generated on CI's x86_64 runner (`.claude/rules/
+testing.md`); a full-stack x86 Docker run wasn't practical on this machine.
+Impact: CI's e2e job fails the screenshot comparisons until the baselines are replaced.
+Workaround: none needed locally — functional e2e (39 tests) passes.
+Next action: push CR-152, download the `*-actual.png` files from the failed run's
+`playwright-report` artifact (`gh run download <run> -n playwright-report`), check each
+`*-diff.png` shows only the type change (no layout break), commit them as the new
+baselines (same procedure as KI-076), then archive this entry.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

@@ -176,10 +176,10 @@ export function OrganizerOverviewWidget() {
     <div className="col-span-full flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <p className="truncate font-display text-xs font-semibold tracking-[0.08em] text-text-secondary uppercase">
+          <p className="truncate font-mono text-label text-text-secondary uppercase">
             {profile.organizerProfile.name}
           </p>
-          <p className="font-title text-2xl font-semibold text-text md:text-3xl">
+          <p className="font-title text-h1 text-text">
             {ORGANIZER_OVERVIEW_TERMS.greeting(now.getHours())}
           </p>
         </div>

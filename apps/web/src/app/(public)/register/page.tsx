@@ -18,7 +18,7 @@ export default async function RegisterPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-text">Регистрация</h1>
+      <h1 className="text-h1 text-text">Регистрация</h1>
       <RegisterForm next={next} />
     </main>
   );

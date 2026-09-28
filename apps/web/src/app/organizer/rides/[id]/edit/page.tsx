@@ -25,9 +25,7 @@ export default async function EditRidePage({
         href="/organizer/rides"
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
-      <h1 className="text-2xl font-semibold text-text">
-        {RIDE_EDIT_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{RIDE_EDIT_TERMS.pageTitle}</h1>
       <EditRideForm
         rideId={id}
         sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}

@@ -115,7 +115,7 @@ export function NotificationList() {
               }
             >
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-text">
+                <p className="text-body-sm font-medium text-text">
                   {TYPE_LABEL[item.type]}
                 </p>
                 {isUnread && (
@@ -124,11 +124,13 @@ export function NotificationList() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-text-secondary">{item.ride.title}</p>
+              <p className="text-body-sm text-text-secondary">
+                {item.ride.title}
+              </p>
               {item.message && (
-                <p className="text-sm text-text">{item.message}</p>
+                <p className="text-body text-text">{item.message}</p>
               )}
-              <p className="text-xs text-text-muted">
+              <p className="text-body-sm text-text-muted">
                 {formatDate(createdAt)} {formatTime(createdAt)}
               </p>
             </Card>

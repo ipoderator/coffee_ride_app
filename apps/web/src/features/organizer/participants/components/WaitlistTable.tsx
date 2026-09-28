@@ -66,7 +66,7 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
 
   return (
     <Card className="flex flex-col gap-4">
-      <p className="text-sm font-medium text-text">
+      <p className="text-body-sm font-medium text-text">
         {PARTICIPANTS_TERMS.waitlistSectionTitle}
       </p>
 
@@ -101,12 +101,12 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
                 className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 last:border-none last:pb-0"
               >
                 <div className="flex min-w-0 flex-col gap-1">
-                  <p className="break-words text-sm font-medium text-text">
+                  <p className="break-words text-body-sm font-medium text-text">
                     {index + 1}.{' '}
                     {item.displayName ?? PARTICIPANTS_TERMS.noNameFallback}
                   </p>
                   {showGroup && (
-                    <p className="text-sm text-text-secondary">
+                    <p className="text-body-sm text-text-secondary">
                       {PARTICIPANTS_GROUP_TERMS.groupLabel}:{' '}
                       <span className="text-text">
                         {formatGroupRef(item.group)}
@@ -114,7 +114,7 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
                     </p>
                   )}
                 </div>
-                <p className="text-sm text-text-secondary">
+                <p className="text-body-sm text-text-secondary">
                   {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt)}{' '}
                   {formatTime(joinedAt)}
                 </p>

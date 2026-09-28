@@ -12,9 +12,7 @@ export default function CreateRidePage() {
         href="/organizer/rides"
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
-      <h1 className="text-2xl font-semibold text-text">
-        {RIDE_CREATE_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{RIDE_CREATE_TERMS.pageTitle}</h1>
       <CreateRideForm />
     </div>
   );

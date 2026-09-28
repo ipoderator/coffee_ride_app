@@ -37,6 +37,15 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-152 (2026-09-28): typography & responsive pass (ADR-026) — one role type
+scale in `tokens.css` (`text-display/h1/h2/h3/body/body-sm/label/metric`, phone →
+`md` desktop), body text 16px (was 14px), nothing under 12px, Sofia Sans Condensed
+retired (labels are IBM Plex Mono `text-label`), Unbounded only for display/`h1`,
+`font-synthesis: none` + dark-theme greyscale smoothing + balanced headings,
+standalone text actions 44px tall, discovery's «Заезды / Карта» switch beside the
+`h1`. Open follow-up: KI-077 — the 12 visual baselines must be refreshed from CI
+after the push (CI's screenshot checks fail until then).
+
 CR-151 (2026-09-28): «Постер заезда v2» — `/rides/[id]` rebuilt to the owner's
 mockup: dark hero (drawn track ⇄ live 2GIS map behind a `SegmentedControl`,
 numbers band with «—» for missing values), a perforated registration «ticket»
@@ -980,8 +989,12 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
   unlayered rule unconditionally outranks every `@layer utilities` rule regardless of
   source order and silently breaks a caller's own `md:`-style reset (found before
   shipping in CR-107);
-- `<html lang="ru">` in `apps/web/src/app/layout.tsx` — Sofia Sans Condensed's
-  Russian letterforms come from `locl` and need it (ADR-021); `app/icon.svg` repeats
+- `<html lang="ru">` in `apps/web/src/app/layout.tsx` — Sofia Sans Extra Condensed's
+  Russian letterforms come from `locl` and need it (ADR-021);
+- the role type scale (ADR-026): text in `apps/web`/`packages/ui` uses a role utility
+  (`text-h2`, `text-body-sm`, `text-label`, …) or `text-xs`, never `text-sm`/
+  `text-base`/arbitrary `text-[…]`; a new role name must also go into
+  `packages/ui/src/lib/cn.ts`'s `TEXT_ROLES` or tailwind-merge drops it; `app/icon.svg` repeats
   the two `primary` hex values and must be kept in step with `tokens.css` by hand;
 - the plum overprint (`primary`/`route`) staying reserved for the route line and the
   primary action — no second accent, no map-themed decoration (ADR-021);
@@ -1003,4 +1016,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-28 (CR-145)
+2026-09-28 (CR-152)

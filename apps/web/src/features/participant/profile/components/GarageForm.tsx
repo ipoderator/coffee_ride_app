@@ -46,7 +46,7 @@ const EMPTY_FORM: BikeFormState = { bikeType: 'road', brand: '', model: '' };
 
 function selectClassName(hasError: boolean): string {
   return [
-    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-base text-text',
+    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-body text-text',
     hasError ? 'border-danger' : 'border-border-input',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     'disabled:cursor-not-allowed disabled:opacity-60',
@@ -243,7 +243,7 @@ export function GarageForm() {
         aria-label={mode.kind === 'add' ? T.addTitle : T.editTitle}
         className="flex flex-col gap-4 rounded-md border-[1.5px] border-frame p-4"
       >
-        <p className="text-base font-semibold text-text">
+        <p className="text-h3 text-text">
           {mode.kind === 'add' ? T.addTitle : T.editTitle}
         </p>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -321,10 +321,8 @@ export function GarageForm() {
   return (
     <Card className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="font-display text-xl font-semibold text-text">
-          {T.sectionTitle}
-        </h2>
-        <p className="text-sm text-text-secondary">{T.hint}</p>
+        <h2 className="text-h2 text-text">{T.sectionTitle}</h2>
+        <p className="text-body-sm text-text-secondary">{T.hint}</p>
       </div>
 
       {status === 'loading' && (
@@ -366,8 +364,8 @@ export function GarageForm() {
                 className="flex flex-col gap-3 border-b border-border py-4 first:pt-0 last:border-none last:pb-0 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex flex-col gap-1">
-                  <p className="text-base font-semibold text-text">{label}</p>
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-h3 text-text">{label}</p>
+                  <p className="text-body-sm text-text-secondary">
                     {BICYCLE_TYPE_TERMS[bike.bikeType]}
                     {bike.isActive && (
                       <>
@@ -423,7 +421,7 @@ export function GarageForm() {
       {mode.kind === 'add' && formNode}
 
       {formError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {formError}
         </p>
       )}
@@ -435,12 +433,12 @@ export function GarageForm() {
       )}
 
       {listError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {listError}
         </p>
       )}
       {success && !formError && !listError && (
-        <p role="status" className="text-sm text-success">
+        <p role="status" className="text-body-sm text-success">
           {success}
         </p>
       )}

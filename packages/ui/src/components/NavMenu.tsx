@@ -28,7 +28,7 @@ import { cn } from '../lib/cn';
  * shared constant keeps the several call sites from drifting.
  */
 export const NAV_MENU_ITEM_CLASSNAME =
-  'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-sm font-medium text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
+  'flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-body-sm font-medium text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
 
 /**
  * One look for every top-level item in the header bar (CR-122): a menu
@@ -38,7 +38,7 @@ export const NAV_MENU_ITEM_CLASSNAME =
  * 16px text, so callers pass them unsized. Colour stays with the caller.
  */
 export const NAV_BAR_ITEM_CLASSNAME =
-  'inline-flex min-h-11 items-center gap-2 rounded-md px-3 font-sans text-base font-semibold tracking-[-0.01em] transition-colors [&>svg]:size-[1.125rem] [&>svg]:shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+  'inline-flex min-h-11 items-center gap-2 rounded-md px-3 font-sans text-body font-semibold tracking-[-0.01em] transition-colors [&>svg]:size-[1.125rem] [&>svg]:shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 export interface NavMenuProps {
   /** The trigger's visible text, and its accessible name. */

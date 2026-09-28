@@ -129,7 +129,7 @@ function TabBar({ view }: { view: string | null }) {
                   href={href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 font-mono text-[0.625rem] font-medium tracking-wide uppercase',
+                    'flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-xs font-medium',
                     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                     active ? 'text-primary' : 'text-text-muted hover:text-text',
                   )}

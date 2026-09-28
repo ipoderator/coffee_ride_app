@@ -102,7 +102,7 @@ function LoadingRows() {
  * a copy of it over the map strip on a phone, where scrolling the list would
  * push the map off-screen.
  */
-export function DiscoveryList() {
+export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rides, setRides] = useState<PublicRideListItem[]>([]);
   const [bicycleType, setBicycleType] = useState<BicycleType | undefined>(
@@ -256,12 +256,12 @@ export function DiscoveryList() {
         )}
       >
         <div className="flex flex-wrap items-end justify-between gap-4 border-b-[1.5px] border-frame bg-bg px-4 pt-6 pb-4 lg:sticky lg:top-0 lg:z-10 lg:px-6">
-          <h1
-            id="discovery-heading"
-            className="text-4xl leading-none font-semibold text-text"
-          >
-            {RIDE_DISCOVERY_TERMS.pageTitle}
-          </h1>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <h1 id="discovery-heading" className="text-h1 text-text">
+              {RIDE_DISCOVERY_TERMS.pageTitle}
+            </h1>
+            {viewSwitch}
+          </div>
           <RideFilters bicycleType={bicycleType} onChange={setBicycleType} />
         </div>
         <div aria-busy={status === 'loading'}>{listPanel}</div>

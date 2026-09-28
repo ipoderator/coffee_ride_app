@@ -40,7 +40,7 @@ interface FieldErrors {
 
 function selectClassName(hasError: boolean): string {
   return [
-    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-base text-text',
+    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-body text-text',
     hasError ? 'border-danger' : 'border-border-input',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     'disabled:cursor-not-allowed disabled:opacity-60',
@@ -149,12 +149,14 @@ export function CreateRideForm() {
     return (
       <Card className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-medium text-text">
+          <h2 className="text-h2 text-text">
             {RIDE_CREATE_TERMS.successTitle}
           </h2>
           <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
         </div>
-        <p className="text-sm font-medium text-text">{createdRide.title}</p>
+        <p className="text-body-sm font-medium text-text">
+          {createdRide.title}
+        </p>
         <MetricRow>
           <MetricTile
             label={RIDE_CREATE_TERMS.summaryBicycleTypeLabel}
@@ -173,19 +175,19 @@ export function CreateRideForm() {
         <div className="flex flex-wrap gap-4">
           <Link
             href={`/organizer/rides/${createdRide.id}/edit`}
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
           >
             {RIDE_CREATE_TERMS.editRideLink}
           </Link>
           <Link
             href="/organizer/rides"
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
           >
             {RIDE_CREATE_TERMS.allRidesLink}
           </Link>
           <Link
             href="/organizer"
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
           >
             {RIDE_CREATE_TERMS.backToDashboard}
           </Link>
@@ -265,7 +267,7 @@ export function CreateRideForm() {
         </FormField>
 
         {organizerProfileRequired && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {RIDE_CREATE_TERMS.organizerProfileRequired}{' '}
             <Link href="/organizer/profile" className="underline">
               {RIDE_CREATE_TERMS.createOrganizerProfileLink}
@@ -274,7 +276,7 @@ export function CreateRideForm() {
         )}
 
         {formError && !organizerProfileRequired && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}

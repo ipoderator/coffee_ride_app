@@ -19,9 +19,7 @@ export default async function ResetPasswordPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-text">
-        {RESET_PASSWORD_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{RESET_PASSWORD_TERMS.pageTitle}</h1>
       <ResetPasswordForm token={token ?? null} />
     </main>
   );

@@ -115,7 +115,7 @@ export function AvatarUploadForm({
           size="lg"
         />
         {!avatarUrl && (
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {AVATAR_TERMS.emptyDescription}
           </p>
         )}
@@ -124,7 +124,7 @@ export function AvatarUploadForm({
       <div className="flex flex-col gap-2">
         <label
           htmlFor="organizer-avatar-file"
-          className="text-sm font-medium text-text"
+          className="text-body-sm font-medium text-text"
         >
           {AVATAR_TERMS.uploadLabel}
         </label>
@@ -145,13 +145,13 @@ export function AvatarUploadForm({
       )}
 
       {formError && !storageUnavailable && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {formError}
         </p>
       )}
 
       {successMessage && !formError && !storageUnavailable && (
-        <p role="status" className="text-sm text-success">
+        <p role="status" className="text-body-sm text-success">
           {successMessage}
         </p>
       )}

@@ -98,19 +98,41 @@
      for anything using the generic `rounded-md`/`rounded-lg` utilities. */
   --radius: 1rem;
 
-  /* Typography (§4). Golos Text / Sofia Sans Condensed / IBM Plex Mono /
-     Unbounded / Sofia Sans Extra Condensed are loaded via `next/font/google`
-     in apps/web's layout.tsx, which binds the actual webfont to the
-     `--font-golos`/`--font-sofia-condensed`/`--font-plex-mono`/
-     `--font-unbounded`/`--font-sofia-extra-condensed` custom properties
-     below. The nested `var(..., fallback)` keeps this stylesheet safe to use
-     wherever that wiring is absent (e.g. a future non-Next consumer, or a
-     test environment that doesn't render layout.tsx). */
+  /* Typography (§4). Golos Text / IBM Plex Mono / Unbounded / Sofia Sans
+     Extra Condensed are self-hosted via `next/font/local` in apps/web's
+     layout.tsx, which binds the actual webfont to the `--font-golos`/
+     `--font-plex-mono`/`--font-unbounded`/`--font-sofia-extra-condensed`
+     custom properties below (and generates a metric-matched fallback face
+     for each, so the swap doesn't shift layout). The nested
+     `var(..., fallback)` keeps this stylesheet safe to use wherever that
+     wiring is absent (e.g. a test environment that doesn't render
+     layout.tsx). CR-152 (ADR-026) retired Sofia Sans Condensed: labels are
+     IBM Plex Mono now. */
   --font-golos-fallback: -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-display-fallback: 'Arial Narrow', var(--font-golos-fallback);
   --font-plex-mono-fallback: ui-monospace, 'SFMono-Regular', monospace;
   --font-unbounded-fallback: var(--font-golos-fallback);
   --font-num-fallback: 'Arial Narrow', var(--font-golos-fallback);
+
+  /* Type scale by role (CR-152, ADR-026, docs/design.md §4) — phone values
+     here, desktop values from `md` below. Consumed through the `text-*` role
+     utilities in `@theme` (`text-h1`, `text-body`, ...), never directly. */
+  --fs-display: clamp(2rem, 1.1rem + 3.2vw, 3.25rem);
+  --fs-h1: 1.75rem;
+  --fs-h2: 1.25rem;
+  --fs-h3: 1.125rem;
+  --fs-body: 1rem;
+  --fs-body-sm: 0.9375rem;
+  --fs-label: 0.8125rem;
+  --fs-metric: 2.25rem;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --fs-h1: 2.25rem;
+    --fs-h2: 1.5rem;
+    --fs-label: 0.75rem;
+    --fs-metric: 2.75rem;
+  }
 }
 
 /* Dark — the default theme (ADR-024 §4). Neutral graphite-violet ground. */
@@ -185,26 +207,52 @@
 
 @theme {
   --font-sans: var(--font-golos, 'Golos Text'), var(--font-golos-fallback);
-  /* `font-display`: labels, eyebrows and section headings that aren't a ride
-     title (§4). Sofia Sans' default Cyrillic draws Bulgarian letterforms;
-     the Russian ones come from its `locl` feature, which the browser only
-     applies because `<html lang="ru">` (apps/web's layout.tsx). Never
-     override `lang` on an element set in this face. */
-  --font-display:
-    var(--font-sofia-condensed, 'Sofia Sans Condensed'),
-    var(--font-display-fallback);
   --font-mono:
     var(--font-plex-mono, 'IBM Plex Mono'), var(--font-plex-mono-fallback);
-  /* `font-title` (ADR-024, new): ride titles and screen headings — the one
-     role ADR-021 gave to `font-display` that Unbounded takes over. */
+  /* `font-title` (ADR-024): the display and `h1` roles only since CR-152
+     (ADR-026) — `h2`/`h3`/card titles are Golos 600. */
   --font-title:
     var(--font-unbounded, 'Unbounded'), var(--font-unbounded-fallback);
   /* `font-num` (ADR-024, new): large tabular metric numerals (route cover,
-     `MetricTile`). Sofia Sans Extra Condensed also needs `lang="ru"`'s
-     `locl` feature, same caveat as `font-display` above. */
+     `MetricTile`). Sofia Sans' default Cyrillic draws Bulgarian letterforms;
+     the Russian ones come from its `locl` feature, which the browser only
+     applies because `<html lang="ru">` (apps/web's layout.tsx). Never
+     override `lang` on an element set in this face. */
   --font-num:
     var(--font-sofia-extra-condensed, 'Sofia Sans Extra Condensed'),
     var(--font-num-fallback);
+
+  /* Role type scale (CR-152, ADR-026, docs/design.md §4). One utility per
+     role, carrying its own line height/tracking/weight, so a heading is
+     `text-h2` rather than a hand-picked size + leading + weight combination.
+     `text-body-sm` is the secondary line (15px); nothing renders under 12px
+     (Tailwind's own `text-xs`). Both `cn()` helpers register these names as
+     font sizes for tailwind-merge (`packages/ui/src/lib/cn.ts`). */
+  --text-display: var(--fs-display);
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 600;
+  --text-h1: var(--fs-h1);
+  --text-h1--line-height: 1.12;
+  --text-h1--letter-spacing: -0.015em;
+  --text-h1--font-weight: 600;
+  --text-h2: var(--fs-h2);
+  --text-h2--line-height: 1.25;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h2--font-weight: 600;
+  --text-h3: var(--fs-h3);
+  --text-h3--line-height: 1.3;
+  --text-h3--font-weight: 600;
+  --text-body: var(--fs-body);
+  --text-body--line-height: 1.55;
+  --text-body-sm: var(--fs-body-sm);
+  --text-body-sm--line-height: 1.45;
+  --text-label: var(--fs-label);
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.06em;
+  --text-label--font-weight: 500;
+  --text-metric: var(--fs-metric);
+  --text-metric--line-height: 0.95;
 
   /* «Ночной старт» (§5, ADR-024): pills and large radii, not a 4px stamp.
      This scale backs the generic `rounded-*` utilities; components with a

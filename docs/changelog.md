@@ -1845,3 +1845,46 @@ it and keeps the scrub-dot link). `docs/design.md` §Ride page hero updated.
 Validation: ride-detail unit tests 74/74 incl. a new assertion (track centred,
 no silhouette — fails on the old cover); web typecheck/eslint/prettier clean;
 checked on the dev server at 1440 and 390 px on a seeded ride with a route.
+
+## 2026-09-28 — CR-152 — One type scale, readable body text, touch-safe text actions
+
+What: an audit found no type scale in `tokens.css` — body text was 14px (`text-sm`,
+242 uses) against design.md's 16px floor, 10–11px text in seven places, eight
+arbitrary sizes, 3 `h1` and 10 `h2` styles, and two faces (Sofia Sans Condensed,
+IBM Plex Mono) sharing the label role. The owner approved a proposal (Design canvas
+D9o9QsXikDVbMbDkDTsZxt) and its open decisions (ADR-026).
+
+- `packages/ui/src/tokens.css`: eight role tokens (`--fs-*` values, phone → `md`
+  desktop; `--text-*` theme tokens with line height/tracking/weight) →
+  `text-display/h1/h2/h3/body/body-sm/label/metric`. `packages/ui/src/lib/cn.ts`:
+  tailwind-merge learns these names (otherwise `text-h1` read as a colour and
+  `cn('text-h1','text-text')` dropped one); apps/web's `lib/utils.ts` re-exports it.
+- `globals.css`: `h1` = Unbounded `text-h1`, `h2`/`h3` = Golos 600 role sizes, body =
+  `text-body`; `font-synthesis: none`, greyscale antialiasing in dark,
+  `text-wrap: balance` on headings, `pretty` on paragraphs.
+- Sofia Sans Condensed removed (`layout.tsx`, `.woff2`, licence, `build-fonts.sh`,
+  `font-display`); every label is `font-mono text-label uppercase`.
+- Sweep of ~90 files: `text-sm` → `text-body-sm` (15px), reading text (ride/review/
+  update/notification text, bio, inputs) → `text-body` (16px); page titles →
+  `text-h1`; ride title → `text-display`; 10–11px text → 12px (tab bar, avatar
+  stack, elevation axis, route timeline, card metric labels); `Button` Golos 600
+  16px (15px from `md`).
+- Touch targets: standalone text actions (edit/delete/links in forms) and wordmark
+  links are `min-h-11`; `SegmentedControl` pills 36 → 44px; `ErrorState` retry
+  44px; rider avatars 40 → 44px.
+- Discovery: the «Заезды / Карта» switch moved from its own centred row into each
+  view's header beside the `h1` (`RideGrid`/`DiscoveryList` take a `viewSwitch`
+  slot). The grid card's metric labels wrap instead of truncating (the mono face is
+  wider), on a subgrid so values stay aligned. (Filter "chips as a scroll row" was
+  not applicable: discovery has one `<select>` filter, no chips.)
+
+Validation: ui 26 files/172 tests, web 49 files/461 tests (new: `cn` role merge,
+discovery switch placement); typecheck + eslint (web, ui) clean; `next build` OK and
+its CSS contains the role utilities; functional e2e 39/39 (two first-run failures were
+environmental: the seed helper's `DATABASE_URL` and one parallel-run flake, both green on
+rerun). Dev server at 320/390/1440 px: no horizontal scroll, no text under 12px.
+Files: `packages/ui/src/{tokens.css,lib/cn.ts,components/*}`, `apps/web/src/app/
+{globals.css,layout.tsx}`, `apps/web/src/fonts/`, ~80 `apps/web/src` components/pages,
+`docs/design.md` §4/§5.
+Decisions: ADR-026.
+Follow-up: KI-077 — the 12 visual baselines must be refreshed from CI after push.

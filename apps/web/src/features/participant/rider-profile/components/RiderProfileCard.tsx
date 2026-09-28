@@ -96,7 +96,7 @@ export function RiderProfileCard({
       )}
 
       {status === 'unauthorized' && (
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           <Link
             href={loginHref(`/rides/${rideId}/riders/${registrationId}`)}
             className="font-medium text-primary underline decoration-1 underline-offset-2 hover:text-primary-hover"
@@ -107,7 +107,7 @@ export function RiderProfileCard({
       )}
 
       {status === 'hidden' && (
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           {RIDE_DETAIL_RIDERS_TERMS.hiddenByOrganizer}
         </p>
       )}
@@ -117,7 +117,7 @@ export function RiderProfileCard({
           <p className="font-medium text-text">
             {RIDER_PROFILE_TERMS.profilePrivateTitle}
           </p>
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {RIDER_PROFILE_TERMS.profilePrivateDescription}
           </p>
         </div>
@@ -128,7 +128,7 @@ export function RiderProfileCard({
           <p className="font-medium text-text">
             {RIDER_PROFILE_TERMS.notFoundTitle}
           </p>
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {RIDER_PROFILE_TERMS.notFoundDescription}
           </p>
         </div>
@@ -158,17 +158,19 @@ function RiderProfileContent({ profile }: { profile: RiderProfile }) {
           name={profile.displayName}
           size="xl"
         />
-        <h1 className="font-display text-xl font-semibold text-text">
+        <h1 className="text-h1 text-text">
           {profile.displayName ?? RIDE_DETAIL_RIDERS_TERMS.noName}
         </h1>
       </div>
 
       {profile.bio && (
         <div className="flex flex-col gap-1">
-          <h2 className="font-display text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">
+          <h2 className="font-mono text-label text-text-secondary uppercase">
             {RIDER_PROFILE_TERMS.bioLabel}
           </h2>
-          <p className="whitespace-pre-wrap text-sm text-text">{profile.bio}</p>
+          <p className="whitespace-pre-wrap text-body text-text">
+            {profile.bio}
+          </p>
         </div>
       )}
 
@@ -188,11 +190,9 @@ function RiderProfileContent({ profile }: { profile: RiderProfile }) {
       </MetricRow>
 
       <div className="flex flex-col gap-2">
-        <h2 className="font-display text-sm font-semibold text-text">
-          {RIDER_PROFILE_TERMS.garageTitle}
-        </h2>
+        <h2 className="text-h3 text-text">{RIDER_PROFILE_TERMS.garageTitle}</h2>
         {profile.bikes.length === 0 ? (
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {RIDER_PROFILE_TERMS.noBikes}
           </p>
         ) : (
@@ -200,7 +200,7 @@ function RiderProfileContent({ profile }: { profile: RiderProfile }) {
             {profile.bikes.map((bike) => (
               <li
                 key={bike.id}
-                className="flex items-center justify-between gap-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 py-2 text-body-sm"
               >
                 <span className="text-text">
                   {BICYCLE_TYPE_TERMS[bike.bikeType]}
@@ -221,17 +221,17 @@ function RiderProfileContent({ profile }: { profile: RiderProfile }) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="font-display text-sm font-semibold text-text">
+        <h2 className="text-h3 text-text">
           {RIDER_PROFILE_TERMS.recentRidesTitle}
         </h2>
         {profile.recentRides.length === 0 ? (
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {RIDER_PROFILE_TERMS.recentRidesEmpty}
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-border">
             {profile.recentRides.map((ride) => (
-              <li key={ride.id} className="py-2 text-sm">
+              <li key={ride.id} className="py-2 text-body-sm">
                 <Link
                   href={`/rides/${ride.id}`}
                   className="font-medium text-primary underline decoration-1 underline-offset-2 hover:text-primary-hover"

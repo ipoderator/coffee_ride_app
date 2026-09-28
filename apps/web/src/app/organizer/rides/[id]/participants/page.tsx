@@ -21,9 +21,7 @@ export default async function RideParticipantsPage({
         href="/organizer/rides"
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
-      <h1 className="text-2xl font-semibold text-text">
-        {PARTICIPANTS_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{PARTICIPANTS_TERMS.pageTitle}</h1>
       <ParticipantTable rideId={id} />
       <WaitlistTable rideId={id} />
     </div>

@@ -84,7 +84,7 @@ export function ErrorState({
         'flex gap-3 rounded-md border',
         TONE_STYLES[tone],
         isInline
-          ? 'items-center px-4 py-3 text-sm'
+          ? 'items-center px-4 py-3 text-body-sm'
           : 'flex-col items-center py-12 text-center',
         className,
       )}
@@ -110,7 +110,7 @@ export function ErrorState({
           type="button"
           onClick={onRetry}
           className={cn(
-            'rounded-md border border-current px-3 py-1.5 text-sm font-medium',
+            'inline-flex min-h-11 items-center rounded-md border border-current px-4 text-body-sm font-medium',
             isInline ? 'ml-auto shrink-0' : 'mt-1',
           )}
         >

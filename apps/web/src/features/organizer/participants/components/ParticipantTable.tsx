@@ -73,7 +73,7 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
 
   return (
     <Card className="flex flex-col gap-4">
-      <p className="text-sm font-medium text-text">
+      <p className="text-body-sm font-medium text-text">
         {PARTICIPANTS_TERMS.participantsSectionTitle}
       </p>
 
@@ -117,15 +117,12 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
                 className="flex flex-col gap-3"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b-[1.5px] border-frame pb-2">
-                  <h2
-                    id={headingId}
-                    className="text-base font-semibold text-text"
-                  >
+                  <h2 id={headingId} className="text-h3 text-text">
                     {section.group
                       ? formatGroupRef(section.group)
                       : PARTICIPANTS_GROUP_TERMS.ungroupedHeading}
                   </h2>
-                  <p className="text-sm tabular-nums text-text-secondary">
+                  <p className="text-body-sm tabular-nums text-text-secondary">
                     {PARTICIPANTS_GROUP_TERMS.participantsCount(
                       section.items.length,
                     )}
@@ -161,7 +158,7 @@ function ParticipantRow({
   const joinedAt = new Date(item.createdAt);
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 last:border-none last:pb-0">
-      <p className="min-w-0 break-words text-sm font-medium text-text">
+      <p className="min-w-0 break-words text-body-sm font-medium text-text">
         {/* CR-149: the name opens the rider's profile card. */}
         <Link
           href={riderProfileHref(rideId, item.id, 'participants')}
@@ -170,7 +167,7 @@ function ParticipantRow({
           {item.displayName ?? PARTICIPANTS_TERMS.noNameFallback}
         </Link>
       </p>
-      <p className="text-sm text-text-secondary">
+      <p className="text-body-sm text-text-secondary">
         {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt)}{' '}
         {formatTime(joinedAt)}
       </p>

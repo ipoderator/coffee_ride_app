@@ -141,14 +141,14 @@ function StubText({
     <div className="flex min-w-0 flex-col gap-1.5">
       <h3
         className={cn(
-          'font-display text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase',
+          'font-mono text-label text-text-secondary uppercase',
           titleClassName,
         )}
       >
         {title}
       </h3>
       {children ? (
-        <p className="text-sm text-text-secondary">{children}</p>
+        <p className="text-body-sm text-text-secondary">{children}</p>
       ) : null}
     </div>
   );
@@ -197,7 +197,7 @@ function Cell({
         className,
       )}
     >
-      <span className="font-display text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase">
+      <span className="font-mono text-label text-text-secondary uppercase">
         {label}
       </span>
       {children}
@@ -216,7 +216,7 @@ function Seats({
 }) {
   if (participantLimit === null) {
     return (
-      <div className="flex items-baseline justify-between gap-3 text-sm">
+      <div className="flex items-baseline justify-between gap-3 text-body-sm">
         <span className="text-text tabular-nums">
           {RIDE_DETAIL_RIDERS_TERMS.ridersCount(registrationsCount)}
         </span>
@@ -232,7 +232,7 @@ function Seats({
   const few = state === 'few';
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-body-sm">
         <span>
           <b className="font-semibold text-text tabular-nums">
             {RIDE_TICKET_TERMS.participantsOf(
@@ -444,7 +444,7 @@ export function RegistrationTicket({
   }
 
   const errorAlert = error ? (
-    <p role="alert" className="text-sm text-danger">
+    <p role="alert" className="text-body-sm text-danger">
       {error}
     </p>
   ) : null;
@@ -496,7 +496,7 @@ export function RegistrationTicket({
   const shareButton = (
     <Button
       variant="secondary"
-      className="min-h-11 border-0 px-3 text-sm text-text-secondary hover:text-text"
+      className="min-h-11 border-0 px-3 text-body-sm text-text-secondary hover:text-text"
       onClick={onShare}
     >
       <Share2 className="size-4" aria-hidden="true" />
@@ -550,7 +550,7 @@ export function RegistrationTicket({
               disabled={isPending}
             />
             {selectedGroup ? (
-              <p className="text-sm text-text-secondary tabular-nums">
+              <p className="text-body-sm text-text-secondary tabular-nums">
                 {RIDE_TICKET_TERMS.groupNote(
                   selectedGroup.name,
                   selectedGroup.registrationsCount,
@@ -572,12 +572,15 @@ export function RegistrationTicket({
             : REGISTRATION_ACTION_TERMS.register}
         </Button>
         {needsGroupChoice ? (
-          <p id={hintId} className="text-center text-sm text-text-secondary">
+          <p
+            id={hintId}
+            className="text-center text-body-sm text-text-secondary"
+          >
             {RIDE_DETAIL_GROUP_TERMS.pickHint}
           </p>
         ) : null}
         {errorAlert}
-        <p className="text-center text-[13px] text-text-secondary">
+        <p className="text-center text-body-sm text-text-secondary">
           {full
             ? RIDE_TICKET_TERMS.waitlistNote
             : RIDE_TICKET_TERMS.registerNote(formatPrice(priceRub))}
@@ -643,7 +646,7 @@ export function RegistrationTicket({
         {showPicker ? (
           <div className="flex flex-col gap-3">
             {mustPickGroup ? (
-              <p className="text-sm text-text-secondary">
+              <p className="text-body-sm text-text-secondary">
                 {RIDE_DETAIL_GROUP_TERMS.noGroupDescription}
               </p>
             ) : null}
@@ -694,7 +697,7 @@ export function RegistrationTicket({
           {canChangeGroup && viewerGroup && !isChangingGroup ? (
             <Button
               variant="secondary"
-              className="min-h-11 border-0 px-3 text-sm text-text-secondary hover:text-text"
+              className="min-h-11 border-0 px-3 text-body-sm text-text-secondary hover:text-text"
               onClick={() => {
                 setError(null);
                 setPendingGroupId(viewerGroup.id);
@@ -709,7 +712,7 @@ export function RegistrationTicket({
         {!rideOver ? (
           <Button
             variant="danger"
-            className="min-h-11 w-full text-[15px]"
+            className="w-full"
             isLoading={isPending && confirmAction === 'cancel'}
             disabled={isPending}
             onClick={() => setConfirmAction('cancel')}
@@ -791,7 +794,7 @@ export function RegistrationTicket({
           </>
         }
       >
-        <p className="flex items-start gap-2 rounded-xl bg-danger px-3 py-2.5 text-sm font-medium text-on-danger">
+        <p className="flex items-start gap-2 rounded-xl bg-danger px-3 py-2.5 text-body-sm font-medium text-on-danger">
           <CircleX className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {RIDE_TICKET_TERMS.cancelledBanner}
         </p>

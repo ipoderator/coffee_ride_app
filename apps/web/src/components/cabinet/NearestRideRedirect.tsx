@@ -54,7 +54,7 @@ export function NearestRideRedirect({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-text">{title}</h1>
+      <h1 className="text-h1 text-text">{title}</h1>
       {state.status === 'loading' && (
         <div aria-busy="true" className="flex flex-col gap-3">
           <p className="sr-only">{ORGANIZER_NEAREST_RIDE_TERMS.opening}</p>

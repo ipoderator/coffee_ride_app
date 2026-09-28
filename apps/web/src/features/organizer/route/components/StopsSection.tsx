@@ -197,63 +197,67 @@ export function StopsSection({
   ) {
     return (
       <div className="flex flex-col gap-3 rounded-md border border-border-input p-4">
-        <label className="flex flex-col gap-1 text-sm text-text">
+        <label className="flex flex-col gap-1 text-body-sm text-text">
           {STOPS_TERMS.nameLabel}
           <input
-            className="rounded-md border border-border-input px-3 py-2 text-sm"
+            className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             disabled={isPending}
           />
           {fieldErrors.name && (
-            <span className="text-sm text-danger">{fieldErrors.name}</span>
+            <span className="text-body-sm text-danger">{fieldErrors.name}</span>
           )}
         </label>
-        <label className="flex flex-col gap-1 text-sm text-text">
+        <label className="flex flex-col gap-1 text-body-sm text-text">
           {STOPS_TERMS.descriptionLabel}
           <input
-            className="rounded-md border border-border-input px-3 py-2 text-sm"
+            className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             disabled={isPending}
           />
           {fieldErrors.description && (
-            <span className="text-sm text-danger">
+            <span className="text-body-sm text-danger">
               {fieldErrors.description}
             </span>
           )}
         </label>
         <div className="flex flex-wrap gap-3">
-          <label className="flex flex-col gap-1 text-sm text-text">
+          <label className="flex flex-col gap-1 text-body-sm text-text">
             {STOPS_TERMS.latLabel}
             <input
-              className="rounded-md border border-border-input px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
               value={form.lat}
               onChange={(e) => setForm({ ...form, lat: e.target.value })}
               disabled={isPending}
               inputMode="decimal"
             />
             {fieldErrors.lat && (
-              <span className="text-sm text-danger">{fieldErrors.lat}</span>
+              <span className="text-body-sm text-danger">
+                {fieldErrors.lat}
+              </span>
             )}
           </label>
-          <label className="flex flex-col gap-1 text-sm text-text">
+          <label className="flex flex-col gap-1 text-body-sm text-text">
             {STOPS_TERMS.lngLabel}
             <input
-              className="rounded-md border border-border-input px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
               value={form.lng}
               onChange={(e) => setForm({ ...form, lng: e.target.value })}
               disabled={isPending}
               inputMode="decimal"
             />
             {fieldErrors.lng && (
-              <span className="text-sm text-danger">{fieldErrors.lng}</span>
+              <span className="text-body-sm text-danger">
+                {fieldErrors.lng}
+              </span>
             )}
           </label>
-          <label className="flex flex-col gap-1 text-sm text-text">
+          <label className="flex flex-col gap-1 text-body-sm text-text">
             {STOPS_TERMS.durationLabel}
             <input
-              className="rounded-md border border-border-input px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
               value={form.durationMinutes}
               onChange={(e) =>
                 setForm({ ...form, durationMinutes: e.target.value })
@@ -262,7 +266,7 @@ export function StopsSection({
               inputMode="numeric"
             />
             {fieldErrors.durationMinutes && (
-              <span className="text-sm text-danger">
+              <span className="text-body-sm text-danger">
                 {fieldErrors.durationMinutes}
               </span>
             )}
@@ -287,22 +291,22 @@ export function StopsSection({
 
   return (
     <Card className="flex flex-col gap-4">
-      <p className="text-sm font-medium text-text">
+      <p className="text-body-sm font-medium text-text">
         {STOPS_TERMS.sectionTitle}
       </p>
 
       {!isDraft && (
-        <p role="status" className="text-sm text-warning">
+        <p role="status" className="text-body-sm text-warning">
           {STOPS_TERMS.notEditable}
         </p>
       )}
 
       {stops.length === 0 && !addForm && (
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-text">
+          <p className="text-body-sm font-medium text-text">
             {STOPS_TERMS.emptyTitle}
           </p>
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {STOPS_TERMS.emptyDescription}
           </p>
         </div>
@@ -329,12 +333,14 @@ export function StopsSection({
                 className="flex flex-col gap-1 border-b border-border pb-3 last:border-none last:pb-0"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-text">{stop.name}</p>
+                  <p className="text-body-sm font-medium text-text">
+                    {stop.name}
+                  </p>
                   {isDraft && (
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        className="text-sm font-medium text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
                         onClick={() => {
                           setEditingId(stop.id);
                           setEditForm(stopToForm(stop));
@@ -345,7 +351,7 @@ export function StopsSection({
                       </button>
                       <button
                         type="button"
-                        className="text-sm font-medium text-danger hover:underline"
+                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-danger hover:underline"
                         onClick={() => handleDelete(stop.id)}
                       >
                         {STOPS_TERMS.delete}
@@ -354,11 +360,11 @@ export function StopsSection({
                   )}
                 </div>
                 {stop.description && (
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-body-sm text-text-secondary">
                     {stop.description}
                   </p>
                 )}
-                <p className="text-sm text-text-secondary">
+                <p className="text-body-sm text-text-secondary">
                   {stop.lat.toFixed(6)}, {stop.lng.toFixed(6)}
                   {stop.durationMinutes !== null &&
                     ` · ${stop.durationMinutes} мин`}
@@ -391,12 +397,12 @@ export function StopsSection({
         ))}
 
       {formError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {formError}
         </p>
       )}
       {successMessage && !formError && (
-        <p role="status" className="text-sm text-success">
+        <p role="status" className="text-body-sm text-success">
           {successMessage}
         </p>
       )}

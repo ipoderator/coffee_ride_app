@@ -79,12 +79,12 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
 
       <div className="flex flex-1 flex-col gap-3 px-4 pt-4 pb-4 sm:px-5">
         <div className="grid gap-1.5">
-          <p className="font-display text-xs leading-4 font-semibold tracking-[0.06em] text-text-secondary uppercase tabular-nums">
+          <p className="font-mono text-label text-text-secondary uppercase tabular-nums">
             {startLine}
           </p>
           <h3
             className={cn(
-              'line-clamp-2 min-h-11 font-title text-base leading-5.5 font-semibold wrap-anywhere',
+              'line-clamp-2 min-h-[2lh] text-h3 wrap-anywhere',
               cancelled
                 ? 'text-text-muted line-through decoration-2'
                 : 'text-text',
@@ -95,22 +95,31 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
         </div>
 
         {metrics ? (
-          <dl className={cn('grid grid-cols-3', METRICS_BLOCK_CLASSNAME)}>
+          // CR-152: a mono label may wrap to two lines on a narrow card
+          // («НАБОР ВЫСОТЫ») rather than truncate; each metric spans the three
+          // shared subgrid rows (label / value / sub), so every value still
+          // sits on one line across the columns.
+          <dl
+            className={cn(
+              'grid grid-cols-3 grid-rows-[auto_auto_auto] gap-y-0.5',
+              METRICS_BLOCK_CLASSNAME,
+            )}
+          >
             {metrics.map((metric, index) => (
               <div
                 key={metric.key}
                 className={cn(
-                  'flex min-w-0 flex-col gap-0.5',
+                  'row-span-3 grid min-w-0 grid-rows-subgrid',
                   index > 0 && 'border-l border-border pl-3',
                 )}
               >
-                <dt className="truncate font-display text-[0.6875rem] leading-4 font-semibold tracking-[0.08em] text-text-muted uppercase">
+                <dt className="self-end font-mono text-xs leading-tight font-medium break-words text-text-muted uppercase">
                   {metric.label}
                 </dt>
                 <dd className="flex items-baseline whitespace-nowrap">
                   <span
                     className={cn(
-                      'font-num text-[1.625rem] leading-none font-extrabold tabular-nums',
+                      'font-num text-2xl leading-none font-extrabold tabular-nums',
                       metric.missing
                         ? 'text-text-muted'
                         : metric.key === 'elevation'
@@ -128,7 +137,7 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
                   ) : null}
                 </dd>
                 {metric.sub ? (
-                  <dd className="font-mono text-[0.6875rem] leading-3 text-text-muted">
+                  <dd className="font-mono text-xs leading-4 text-text-muted">
                     {metric.sub}
                   </dd>
                 ) : null}
@@ -138,7 +147,7 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
         ) : (
           <p
             className={cn(
-              'flex items-center text-sm text-text-muted',
+              'flex items-center text-body-sm text-text-muted',
               METRICS_BLOCK_CLASSNAME,
             )}
           >
@@ -151,7 +160,7 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
             {/* Each half stays on one line; if both don't fit, the note
                 moves to its own line whole rather than breaking mid-phrase. */}
             <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-              <span className="text-sm font-medium whitespace-nowrap tabular-nums">
+              <span className="text-body-sm font-medium whitespace-nowrap tabular-nums">
                 {seats.count}
               </span>
               <span

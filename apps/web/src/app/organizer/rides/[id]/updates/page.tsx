@@ -22,12 +22,10 @@ export default async function RideUpdatesPage({
           href="/organizer/rides"
           label={BACK_LINK_TERMS.toOrganizerRides}
         />
-        <h1 className="text-2xl font-semibold text-text">
-          {RIDE_UPDATES_TERMS.pageTitle}
-        </h1>
+        <h1 className="text-h1 text-text">{RIDE_UPDATES_TERMS.pageTitle}</h1>
         <Link
           href={`/organizer/rides/${id}/edit`}
-          className="text-sm font-medium text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {RIDE_UPDATES_TERMS.backToEdit}
         </Link>

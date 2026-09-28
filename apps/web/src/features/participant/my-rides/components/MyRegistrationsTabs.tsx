@@ -4,7 +4,7 @@ export type RegistrationsTab = 'upcoming' | 'past';
 
 function tabClassName(isActive: boolean): string {
   return [
-    'min-h-11 rounded-lg px-4 text-sm font-medium',
+    'min-h-11 rounded-lg px-4 text-body-sm font-medium',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     isActive
       ? 'bg-primary text-on-primary'

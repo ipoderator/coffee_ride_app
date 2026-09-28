@@ -212,18 +212,18 @@ export function OrganizerProfileForm() {
 
       {profile && (
         <Card className="flex flex-col gap-1">
-          <p className="text-xs font-medium uppercase tracking-[0.04em] text-text-secondary">
+          <p className="font-mono text-label text-text-secondary uppercase">
             {ORGANIZER_TERMS.ratingLabel}
           </p>
           {reviewCount > 0 ? (
-            <p className="text-lg font-semibold text-text">
+            <p className="text-h3 text-text">
               {formatRating(rating, reviewCount)}{' '}
-              <span className="text-sm font-normal text-text-secondary">
+              <span className="text-body-sm font-normal text-text-secondary">
                 {ORGANIZER_TERMS.ratingReviewsCount(reviewCount)}
               </span>
             </p>
           ) : (
-            <p className="text-sm text-text-secondary">
+            <p className="text-body-sm text-text-secondary">
               {ORGANIZER_TERMS.ratingNoReviews}
             </p>
           )}
@@ -271,19 +271,19 @@ export function OrganizerProfileForm() {
           </FormField>
 
           {verificationRequired && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-body-sm text-danger">
               {ORGANIZER_TERMS.emailVerificationRequired}
             </p>
           )}
 
           {formError && !verificationRequired && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-body-sm text-danger">
               {formError}
             </p>
           )}
 
           {successMessage && !formError && !verificationRequired && (
-            <p role="status" className="text-sm text-success">
+            <p role="status" className="text-body-sm text-success">
               {successMessage}
             </p>
           )}

@@ -53,20 +53,20 @@ export function ReviewList({
           className="flex flex-col gap-1 border-b border-border pb-3 last:border-none last:pb-0"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-text">
+            <span className="text-body-sm font-medium text-text">
               {review.authorName ?? '—'}
             </span>
             <span
               aria-label={`${review.rating} из 5`}
-              className="text-sm font-semibold text-text tabular-nums"
+              className="text-body-sm font-semibold text-text tabular-nums"
             >
               {review.rating}/5
             </span>
           </div>
           {review.comment && (
-            <p className="text-sm text-text-secondary">{review.comment}</p>
+            <p className="text-body text-text-secondary">{review.comment}</p>
           )}
-          <p className="text-xs text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {formatDate(new Date(review.createdAt))}
           </p>
         </li>

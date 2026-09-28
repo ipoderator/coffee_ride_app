@@ -10,7 +10,7 @@ export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
 
 const SIZE_STYLES: Record<AvatarSize, string> = {
   sm: 'h-8 w-8 text-xs',
-  md: 'h-12 w-12 text-sm',
+  md: 'h-12 w-12 text-body-sm',
   lg: 'h-20 w-20 text-xl',
   xl: 'h-32 w-32 text-3xl',
 };

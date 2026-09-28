@@ -10,7 +10,7 @@ type DiscoveryTab = 'grid' | 'map';
 
 function tabClassName(isActive: boolean): string {
   return [
-    'min-h-11 rounded-full px-5 text-sm font-medium',
+    'min-h-11 rounded-full px-5 text-body-sm font-medium',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     isActive
       ? 'bg-primary-fill text-on-primary-fill'
@@ -49,33 +49,38 @@ export function DiscoveryTabs() {
     window.history.replaceState(window.history.state, '', url);
   }
 
-  return (
-    <div>
-      <div
-        role="tablist"
-        aria-label={RIDE_DISCOVERY_TERMS.tabsLabel}
-        className="mx-auto flex w-fit gap-1 rounded-full bg-surface p-1 mt-4"
+  // CR-152: the switch sits in each view's own header row, beside its `h1`,
+  // rather than centred on a row of its own above it.
+  const viewSwitch = (
+    <div
+      role="tablist"
+      aria-label={RIDE_DISCOVERY_TERMS.tabsLabel}
+      className="flex w-fit gap-1 rounded-full bg-surface p-1"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === 'grid'}
+        className={tabClassName(tab === 'grid')}
+        onClick={() => selectTab('grid')}
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'grid'}
-          className={tabClassName(tab === 'grid')}
-          onClick={() => selectTab('grid')}
-        >
-          {RIDE_DISCOVERY_TERMS.viewGridLabel}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'map'}
-          className={tabClassName(tab === 'map')}
-          onClick={() => selectTab('map')}
-        >
-          {RIDE_DISCOVERY_TERMS.viewMapLabel}
-        </button>
-      </div>
-      {tab === 'grid' ? <RideGrid /> : <DiscoveryList />}
+        {RIDE_DISCOVERY_TERMS.viewGridLabel}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === 'map'}
+        className={tabClassName(tab === 'map')}
+        onClick={() => selectTab('map')}
+      >
+        {RIDE_DISCOVERY_TERMS.viewMapLabel}
+      </button>
     </div>
+  );
+
+  return tab === 'grid' ? (
+    <RideGrid viewSwitch={viewSwitch} />
+  ) : (
+    <DiscoveryList viewSwitch={viewSwitch} />
   );
 }

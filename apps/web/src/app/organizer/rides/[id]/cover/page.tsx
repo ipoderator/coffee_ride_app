@@ -20,9 +20,7 @@ export default async function RideCoverPage({
         href="/organizer/rides"
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
-      <h1 className="text-2xl font-semibold text-text">
-        {RIDE_COVER_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{RIDE_COVER_TERMS.pageTitle}</h1>
       <CoverImageUploadForm rideId={id} />
     </div>
   );

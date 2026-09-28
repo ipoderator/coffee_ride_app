@@ -63,7 +63,7 @@ export function AppHeader({
       >
         <Link
           href="/"
-          className="mr-2 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="mr-2 inline-flex min-h-11 items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           <Wordmark />
         </Link>
@@ -185,7 +185,7 @@ export function AppHeader({
       {logoutFailed && (
         <p
           role="alert"
-          className="mx-auto max-w-300 px-4 pb-3 text-sm text-danger"
+          className="mx-auto max-w-300 px-4 pb-3 text-body-sm text-danger"
         >
           {SITE_HEADER_TERMS.logoutError}
         </p>
@@ -337,7 +337,7 @@ function MobileLink({
 
 function MobileGroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="px-3 pt-3 text-xs font-medium tracking-wider text-text-muted uppercase">
+    <span className="px-3 pt-3 font-mono text-label text-text-muted uppercase">
       {children}
     </span>
   );

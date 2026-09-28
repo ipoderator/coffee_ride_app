@@ -21,17 +21,45 @@
   * {
     @apply border-border;
   }
-  body {
-    @apply bg-bg text-text;
+  html {
+    /* CR-152: never fake a bold/italic the face doesn't ship — a synthesized
+       Unbounded/Golos weight smears, especially in Cyrillic. */
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
-  /* ADR-024 («Ночной старт», docs/design.md §4): headings are set in the
-     title face (Unbounded); body text stays Golos Text, `font-display`
-     (Sofia Sans Condensed) is now reserved for labels/eyebrows. Russian
-     letterforms depend on `<html lang="ru">` (see layout.tsx). */
+  /* Light text on a near-black ground renders heavier under subpixel
+     smoothing; greyscale keeps its weight true to the light theme's. */
+  html.dark {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-bg text-body text-text;
+  }
+  /* Role type scale (CR-152, ADR-026, docs/design.md §4): only the page
+     title (`h1`) and the display role are set in the title face (Unbounded);
+     `h2`/`h3` are Golos 600 — Unbounded is wide enough that long Russian
+     titles break into 3–4 lines at card/section sizes. Every heading gets
+     its role size by default, so a bare `<h2>` already matches the scale;
+     a component adds a class only to deviate (e.g. an uppercase label). */
+  h1 {
+    @apply font-title text-h1;
+  }
+  h2 {
+    @apply text-h2;
+  }
+  h3 {
+    @apply text-h3;
+  }
   h1,
   h2,
   h3 {
-    @apply font-title;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
   :focus-visible {
     /* docs/design.md §12: visible focus ring on every interactive element. */

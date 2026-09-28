@@ -162,12 +162,12 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
   if (status === 'not-found') {
     return (
       <Card className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-sm font-medium text-text">
+        <p className="text-body-sm font-medium text-text">
           {RIDE_COVER_TERMS.pageTitle}
         </p>
         <Link
           href="/organizer/rides"
-          className="text-sm font-medium text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {RIDE_COVER_TERMS.backToEdit}
         </Link>
@@ -190,14 +190,14 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
     <div className="flex flex-col gap-4">
       <Link
         href={`/organizer/rides/${rideId}/edit`}
-        className="text-sm font-medium text-primary hover:underline"
+        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
       >
         {RIDE_COVER_TERMS.backToEdit}
       </Link>
 
       <Card className="flex flex-col gap-4">
         {!isDraft && (
-          <p role="status" className="text-sm text-warning">
+          <p role="status" className="text-body-sm text-warning">
             {RIDE_COVER_TERMS.notEditable}
           </p>
         )}
@@ -213,10 +213,10 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-text">
+            <p className="text-body-sm font-medium text-text">
               {RIDE_COVER_TERMS.emptyTitle}
             </p>
-            <p className="text-sm text-text-secondary">
+            <p className="text-body-sm text-text-secondary">
               {RIDE_COVER_TERMS.emptyDescription}
             </p>
           </div>
@@ -226,7 +226,7 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
           <div className="flex flex-col gap-2">
             <label
               htmlFor="cover-image-file"
-              className="text-sm font-medium text-text"
+              className="text-body-sm font-medium text-text"
             >
               {RIDE_COVER_TERMS.uploadLabel}
             </label>
@@ -248,13 +248,13 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
         )}
 
         {formError && !storageUnavailable && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
 
         {successMessage && !formError && !storageUnavailable && (
-          <p role="status" className="text-sm text-success">
+          <p role="status" className="text-body-sm text-success">
             {successMessage}
           </p>
         )}

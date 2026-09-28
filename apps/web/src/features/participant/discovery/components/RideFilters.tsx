@@ -20,8 +20,8 @@ export function RideFilters({
   onChange: (value: BicycleType | undefined) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-xs font-medium text-text-secondary">
+    <label className="flex flex-col gap-1 text-body-sm">
+      <span className="font-mono text-label text-text-secondary uppercase">
         {RIDE_CREATE_TERMS.bicycleTypeLabel}
       </span>
       <select
@@ -33,7 +33,7 @@ export function RideFilters({
               : (event.target.value as BicycleType),
           )
         }
-        className="min-h-11 w-fit rounded-lg border border-border-input bg-bg-raised px-3 text-base text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="min-h-11 w-fit rounded-lg border border-border-input bg-bg-raised px-3 text-body text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <option value="">{RIDE_DISCOVERY_TERMS.filterAllOption}</option>
         {BICYCLE_TYPES.map((type) => (

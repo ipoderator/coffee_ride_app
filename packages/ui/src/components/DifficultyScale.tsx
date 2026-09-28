@@ -53,7 +53,7 @@ export function DifficultyScale({
         className={
           small
             ? 'text-xs text-text-secondary'
-            : 'text-sm font-medium text-text'
+            : 'text-body-sm font-medium text-text'
         }
       >
         {label}

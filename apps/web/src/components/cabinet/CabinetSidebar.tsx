@@ -52,7 +52,7 @@ export function CabinetSidebar({
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex min-h-12 items-center gap-3 rounded-xl px-3 text-base font-semibold text-text-secondary transition-colors hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+                'flex min-h-12 items-center gap-3 rounded-xl px-3 text-body font-semibold text-text-secondary transition-colors hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
                 active && 'bg-surface text-text',
               )}
             >
@@ -87,7 +87,7 @@ export function NavBadge({
     <>
       <span
         aria-hidden="true"
-        className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-fill px-1.5 font-num text-sm font-bold text-on-primary-fill tabular-nums"
+        className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-fill px-1.5 font-num text-body-sm font-bold text-on-primary-fill tabular-nums"
       >
         {count}
       </span>

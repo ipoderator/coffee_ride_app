@@ -74,15 +74,13 @@ export function VerifyEmailStatus({ token }: { token: string | null }) {
 
   return (
     <Card role="status" aria-live="polite">
-      <h2 className="text-xl font-semibold text-text">
-        {VERIFY_EMAIL_TERMS.successTitle}
-      </h2>
+      <h2 className="text-h2 text-text">{VERIFY_EMAIL_TERMS.successTitle}</h2>
       <p className="mt-2 text-text-secondary">
         {VERIFY_EMAIL_TERMS.successBody}
       </p>
       <Link
         href="/login"
-        className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+        className="mt-4 inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
       >
         {VERIFY_EMAIL_TERMS.loginLink}
       </Link>

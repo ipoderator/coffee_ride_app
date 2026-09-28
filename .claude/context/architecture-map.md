@@ -967,6 +967,15 @@ components/RidersSection.tsx` now links each rider to that route.
   `RIDER_PROFILE_TERMS` blocks, plus additive keys on `PROFILE_TERMS`/
   `BACK_LINK_TERMS`.
 
+CR-152 (ADR-026, typography): `packages/ui/src/tokens.css` now owns the role type
+scale (`--fs-*` + `--text-*` → `text-display/h1/h2/h3/body/body-sm/label/metric`);
+`packages/ui/src/lib/cn.ts` owns the one tailwind-merge config that knows those
+names, and `apps/web/src/lib/utils.ts` re-exports it (no second `twMerge`). Four
+self-hosted faces remain (Golos Text, IBM Plex Mono, Unbounded, Sofia Sans Extra
+Condensed); Sofia Sans Condensed / `font-display` is gone. Discovery: `RideGrid`
+and `DiscoveryList` take an optional `viewSwitch` node rendered beside their `h1`
+(`DiscoveryTabs` supplies it).
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the

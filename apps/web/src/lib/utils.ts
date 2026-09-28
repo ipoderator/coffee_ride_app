@@ -1,8 +1,4 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-// shadcn/ui's standard class-name helper: merges conditional classes (clsx)
-// and resolves conflicting Tailwind utility classes (tailwind-merge).
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+// shadcn/ui's standard class-name helper (clsx + tailwind-merge). Re-exported
+// from `packages/ui` so both know the role type scale's `text-*` names
+// (CR-152) — one tailwind-merge configuration, not two that can drift.
+export { cn } from 'ui';

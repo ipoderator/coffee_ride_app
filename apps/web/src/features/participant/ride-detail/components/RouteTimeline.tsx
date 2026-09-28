@@ -65,7 +65,7 @@ export function RouteTimeline({ items }: { items: TimelineItem[] }) {
                 {km !== null ? (
                   <>
                     {km}
-                    <span className="ml-0.5 font-mono text-[11px] font-normal text-text-secondary">
+                    <span className="ml-0.5 font-mono text-xs font-normal text-text-secondary">
                       {RIDE_POSTER_TERMS.kmUnit}
                     </span>
                     <span className="sr-only"> — </span>
@@ -94,7 +94,7 @@ export function RouteTimeline({ items }: { items: TimelineItem[] }) {
                 {item.title}
               </span>
               {item.subtitle ? (
-                <span className="block text-sm text-text-secondary">
+                <span className="block text-body-sm text-text-secondary">
                   {item.subtitle}
                 </span>
               ) : null}

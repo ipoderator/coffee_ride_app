@@ -71,10 +71,10 @@ describe('MetricTile note (CR-131)', () => {
     expect(screen.getByText('вс').className).toContain('text-success');
   });
 
-  it('sets the value a step larger with size="lg" (CR-132)', () => {
+  it('sets the value in the metric role with size="lg" (CR-132, CR-152)', () => {
     render(<MetricTile label="Рейтинг" value="4,8" size="lg" />);
     expect(screen.getByText('4,8').parentElement?.className).toContain(
-      'md:text-5xl',
+      'text-metric',
     );
   });
 });

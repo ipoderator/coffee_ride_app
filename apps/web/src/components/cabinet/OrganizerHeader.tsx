@@ -45,7 +45,7 @@ export function OrganizerHeader() {
       >
         <Link
           href="/"
-          className="mr-auto rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="mr-auto inline-flex min-h-11 items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           <Wordmark />
         </Link>
@@ -78,14 +78,14 @@ export function OrganizerHeader() {
                 <Avatar
                   name={name ?? user.email}
                   size="sm"
-                  className="size-11 bg-surface text-sm font-semibold text-text"
+                  className="size-11 bg-surface text-body-sm font-semibold text-text"
                 />
               </span>
             }
           >
             <div role="none" className="px-3 pt-2 pb-2.5">
               {name && (
-                <p className="truncate text-sm font-semibold text-text">
+                <p className="truncate text-body-sm font-semibold text-text">
                   {name}
                 </p>
               )}
@@ -123,7 +123,7 @@ export function OrganizerHeader() {
         )}
       </nav>
       {failed && (
-        <p role="alert" className="px-4 pb-3 text-sm text-danger md:px-6">
+        <p role="alert" className="px-4 pb-3 text-body-sm text-danger md:px-6">
           {ORGANIZER_HEADER_TERMS.logoutError}
         </p>
       )}

@@ -83,11 +83,11 @@ export function Dialog({
           'focus-visible:outline-offset-2 focus-visible:outline-primary',
         )}
       >
-        <p id={titleId} className="text-lg font-semibold text-text">
+        <p id={titleId} className="text-h3 text-text">
           {title}
         </p>
         {description ? (
-          <p id={descriptionId} className="mt-2 text-sm text-text-secondary">
+          <p id={descriptionId} className="mt-2 text-body text-text-secondary">
             {description}
           </p>
         ) : null}

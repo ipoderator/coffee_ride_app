@@ -21,7 +21,7 @@ export function CabinetAccountBar({ user }: { user: User }) {
       aria-label={CABINET_TERMS.accountBarLabel}
       className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border pb-4"
     >
-      <p className="min-w-0 text-sm text-text-secondary">
+      <p className="min-w-0 text-body-sm text-text-secondary">
         {CABINET_TERMS.signedInAs}{' '}
         <span className="font-medium break-words text-text">
           {name ?? user.email}
@@ -35,7 +35,7 @@ export function CabinetAccountBar({ user }: { user: User }) {
         {CABINET_TERMS.logoutButton}
       </Button>
       {failed && (
-        <p role="alert" className="w-full text-sm text-danger">
+        <p role="alert" className="w-full text-body-sm text-danger">
           {SITE_HEADER_TERMS.logoutError}
         </p>
       )}

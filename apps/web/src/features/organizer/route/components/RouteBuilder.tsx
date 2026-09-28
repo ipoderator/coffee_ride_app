@@ -215,10 +215,10 @@ export function RouteBuilder({
   return (
     <Card className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold text-text">
+        <h2 className="text-h2 text-text">
           {RIDE_ROUTE_BUILDER_TERMS.sectionTitle}
         </h2>
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           {RIDE_ROUTE_BUILDER_TERMS.description}
         </p>
       </div>
@@ -239,14 +239,14 @@ export function RouteBuilder({
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-text-secondary tabular-nums">
+        <p className="text-body-sm text-text-secondary tabular-nums">
           {RIDE_ROUTE_BUILDER_TERMS.pointsCount(
             waypoints.length,
             ROUTE_BUILDER_MAX_POINTS,
           )}
         </p>
         {waypoints.length === 0 ? (
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {RIDE_ROUTE_BUILDER_TERMS.emptyPoints}
           </p>
         ) : (
@@ -255,7 +255,7 @@ export function RouteBuilder({
               <li
                 // Points are positional — index is their identity here.
                 key={index}
-                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 px-3 py-2 text-body-sm"
               >
                 <span className="text-text">
                   {RIDE_ROUTE_BUILDER_TERMS.pointLabel(index + 1)}
@@ -279,14 +279,14 @@ export function RouteBuilder({
           </ol>
         )}
         {limitReached && (
-          <p role="status" className="text-sm text-warning">
+          <p role="status" className="text-body-sm text-warning">
             {RIDE_ROUTE_BUILDER_TERMS.tooManyPoints(ROUTE_BUILDER_MAX_POINTS)}
           </p>
         )}
       </div>
 
       {buildError === 'not-buildable' && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {RIDE_ROUTE_BUILDER_TERMS.notBuildable}
         </p>
       )}
@@ -298,7 +298,7 @@ export function RouteBuilder({
         />
       )}
       {buildError === 'generic' && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {RIDE_ROUTE_BUILDER_TERMS.unavailable}
         </p>
       )}
@@ -340,7 +340,7 @@ export function RouteBuilder({
         </Button>
       </div>
       {waypoints.length === 1 && (
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           {RIDE_ROUTE_BUILDER_TERMS.needMorePoints}
         </p>
       )}

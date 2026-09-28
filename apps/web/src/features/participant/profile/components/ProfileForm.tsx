@@ -33,7 +33,7 @@ const PROFILE_VISIBILITY_LABELS: Record<ProfileVisibility, string> = {
 
 function selectClassName(hasError: boolean): string {
   return [
-    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-base text-text',
+    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-body text-text',
     hasError ? 'border-danger' : 'border-border-input',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     'disabled:cursor-not-allowed disabled:opacity-60',
@@ -331,13 +331,13 @@ export function ProfileForm({ initialUser }: { initialUser: User }) {
         </FormField>
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
 
         {savedAt && !formError && (
-          <p role="status" className="text-sm text-success">
+          <p role="status" className="text-body-sm text-success">
             {PROFILE_TERMS.saveSuccess}
           </p>
         )}

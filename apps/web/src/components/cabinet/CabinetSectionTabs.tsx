@@ -42,7 +42,7 @@ export function CabinetSectionTabs({
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-11 items-center gap-2 rounded-full px-3.5 text-sm font-semibold whitespace-nowrap text-text-secondary transition-colors hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+                  'flex min-h-11 items-center gap-2 rounded-full px-3.5 text-body-sm font-semibold whitespace-nowrap text-text-secondary transition-colors hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
                   active && 'bg-surface text-text',
                 )}
               >

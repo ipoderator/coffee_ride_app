@@ -95,7 +95,7 @@ export function RideLegendRow({
             rows ("Регистрация открыта"), so it sits beside the when, not in the
             chip row where it would crowd the facts that differ per ride. */}
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <p className="font-display text-xs leading-4 font-semibold tracking-[0.06em] text-text-secondary uppercase tabular-nums">
+          <p className="font-mono text-label text-text-secondary uppercase tabular-nums">
             {startLine}
           </p>
           <StatusBadge
@@ -105,7 +105,7 @@ export function RideLegendRow({
           />
         </div>
 
-        <h2 className="font-sans text-xl leading-tight font-semibold">
+        <h2 className="text-h3">
           <Link
             href={`/rides/${ride.id}`}
             onFocus={onFocus ? () => onFocus(ride.id) : undefined}
@@ -119,11 +119,13 @@ export function RideLegendRow({
         </h2>
 
         {startText && !compact ? (
-          <p className="truncate text-sm text-text-secondary">{startText}</p>
+          <p className="truncate text-body-sm text-text-secondary">
+            {startText}
+          </p>
         ) : null}
 
         {metrics.length > 0 ? (
-          <p className="mt-1 flex flex-wrap items-baseline gap-x-2 font-display text-lg leading-6 font-semibold text-text tabular-nums">
+          <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-body font-semibold text-text tabular-nums">
             {metrics.map((metric, index) => (
               <span key={metric.key} className="inline-flex items-baseline">
                 {index > 0 ? (
@@ -136,13 +138,13 @@ export function RideLegendRow({
                 ) : null}
                 <span className={metric.className}>{metric.parts.value}</span>
                 {metric.parts.unit ? (
-                  <span className="text-sm font-normal text-text-secondary">
+                  <span className="text-body-sm font-normal text-text-secondary">
                     {NBSP}
                     {metric.parts.unit}
                   </span>
                 ) : null}
                 {metric.suffix ? (
-                  <span className="ml-2 text-sm font-normal text-text-secondary">
+                  <span className="ml-2 text-body-sm font-normal text-text-secondary">
                     {`· ${metric.suffix}`}
                   </span>
                 ) : null}

@@ -15,7 +15,7 @@ export function Textarea({ className, rows = 4, ...props }: TextareaProps) {
         // Same border-input/44px-minimum-height/8px-radius/16px-text tokens as
         // `Input` (docs/design.md §3-§5) — `min-h-11` here is a floor, not the
         // resting height; `rows` sets the real one.
-        'min-h-11 w-full resize-y rounded-lg border border-border-input bg-bg-raised px-3 py-2 text-base text-text placeholder:text-text-muted',
+        'min-h-11 w-full resize-y rounded-lg border border-border-input bg-bg-raised px-3 py-2 text-body text-text placeholder:text-text-muted',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         'aria-invalid:border-danger',
         'disabled:cursor-not-allowed disabled:opacity-60',

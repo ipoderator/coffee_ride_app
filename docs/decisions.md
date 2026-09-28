@@ -1255,3 +1255,48 @@ Swap the image/ports/env back in the three files. The data volume is new
 If production ever self-hosts its object store, choose that server on its own merits
 (this ADR is about dev/CI only). If SeaweedFS's `mini` defaults change in a way that
 breaks the `services:` usage, pin a command via a `docker run` step instead.
+
+## ADR-026 — Typography: one role scale; Sofia Sans Condensed retired; Unbounded for display/`h1` only
+
+Status: Accepted (2026-09-28, owner decision, CR-152). Amends ADR-024's typography
+(§4 of `docs/design.md`); ADR-024's palette, radii and layout stand.
+
+### Context
+
+An audit of `apps/web` + `packages/ui` found no type scale at all: `tokens.css` had
+faces but no sizes, so `text-sm` (14px) was used 242 times — body text below
+`docs/design.md` §4's own 16px floor — plus 10–11px text in seven places, eight
+arbitrary sizes, three `h1` styles and ten `h2` styles. Five faces were loaded, and two
+of them — Sofia Sans Condensed (`font-display`) and IBM Plex Mono — shared the
+small-label role. Unbounded set every `h1`–`h3`, including card titles, where its
+width broke long Russian titles into 3–4 lines. The owner approved a proposal
+(mockup: claude.ai/artifact/D9o9QsXikDVbMbDkDTsZxt) with three decisions.
+
+### Decision
+
+1. **A role scale in tokens, not sizes per component.** `tokens.css` defines eight
+   roles as Tailwind v4 `--text-*` theme tokens (`display`, `h1`, `h2`, `h3`, `body`,
+   `body-sm`, `label`, `metric`) with their own line height/tracking/weight; phone
+   values on `:root`, desktop from `md`. Body is 16px, the secondary line 15px, and
+   nothing renders under 12px. `h1`/`h2`/`h3`/`body` get their role by default in
+   `globals.css`. Both `cn()` helpers share one tailwind-merge config that knows the
+   role names (apps/web's `lib/utils.ts` re-exports `packages/ui`'s `cn`).
+2. **Sofia Sans Condensed is retired.** Labels are IBM Plex Mono (`font-mono
+text-label uppercase`); `font-display`, its `.woff2` and licence are removed.
+   Four faces remain: Golos Text, IBM Plex Mono, Unbounded, Sofia Sans Extra Condensed.
+3. **Unbounded only for the display role and `h1`.** `h2`/`h3`/card titles are Golos 600.
+
+The ride page's mobile sticky «Записаться» bar — the third open question — was
+already shipped by CR-151 (`TicketBar`, tab bar hidden on `/rides/[id]`).
+
+### Consequences
+
+- Every screen changes size slightly; all visual-regression baselines must be refreshed.
+- One fewer webfont download on every page.
+- New code picks a role (`text-h2`, `text-body-sm`) instead of a size; `text-sm`,
+  `text-base` and arbitrary `text-[…]` sizes are not used for text any more.
+
+### Rollback
+
+Revert the CR-152 commit: the old faces and sizes return together; no data or API
+contract is involved.

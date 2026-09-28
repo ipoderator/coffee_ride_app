@@ -93,7 +93,7 @@ function toNullableNumber(raw: string): number | null {
 
 function selectClassName(hasError: boolean): string {
   return [
-    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-base text-text',
+    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-body text-text',
     hasError ? 'border-danger' : 'border-border-input',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     'disabled:cursor-not-allowed disabled:opacity-60',
@@ -397,15 +397,15 @@ export function EditRideForm({
   if (status === 'not-found') {
     return (
       <Card className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-sm font-medium text-text">
+        <p className="text-body-sm font-medium text-text">
           {RIDE_EDIT_TERMS.notFoundTitle}
         </p>
-        <p className="max-w-sm text-sm text-text-secondary">
+        <p className="max-w-sm text-body-sm text-text-secondary">
           {RIDE_EDIT_TERMS.notFoundDescription}
         </p>
         <Link
           href="/organizer/rides"
-          className="text-sm font-medium text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {RIDE_EDIT_TERMS.backToList}
         </Link>
@@ -434,7 +434,7 @@ export function EditRideForm({
             <Link
               key={section.segment}
               href={`/organizer/rides/${rideId}/${section.segment}`}
-              className="text-sm font-medium text-primary hover:underline"
+              className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
             >
               {section.label}
             </Link>
@@ -442,7 +442,7 @@ export function EditRideForm({
         </div>
 
         {!isDraft && (
-          <p role="status" className="text-sm text-warning">
+          <p role="status" className="text-body-sm text-warning">
             {RIDE_EDIT_TERMS.notEditable}
           </p>
         )}
@@ -718,19 +718,19 @@ export function EditRideForm({
         </FormField>
 
         {publishVerificationRequired && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {RIDE_EDIT_TERMS.publishEmailVerificationRequired}
           </p>
         )}
 
         {formError && !publishVerificationRequired && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
 
         {successMessage && !formError && !publishVerificationRequired && (
-          <p role="status" className="text-sm text-success">
+          <p role="status" className="text-body-sm text-success">
             {successMessage}
           </p>
         )}

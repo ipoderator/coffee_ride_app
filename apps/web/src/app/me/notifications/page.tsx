@@ -12,9 +12,7 @@ export default function NotificationsPage() {
   return (
     <div className="flex flex-col gap-6">
       <BackLink href="/me" label={BACK_LINK_TERMS.toParticipantCabinet} />
-      <h1 className="text-2xl font-semibold text-text">
-        {NOTIFICATIONS_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{NOTIFICATIONS_TERMS.pageTitle}</h1>
       <NotificationList />
     </div>
   );

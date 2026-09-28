@@ -11,9 +11,7 @@ import { OrganizerProfileForm } from '@/features/organizer/profile/components/Or
 export default function OrganizerProfilePage() {
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-text">
-        {ORGANIZER_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{ORGANIZER_TERMS.pageTitle}</h1>
       <OrganizerProfileForm />
     </div>
   );

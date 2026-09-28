@@ -110,9 +110,9 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
             />
           </FormField>
 
-          {formError && <p className="text-sm text-danger">{formError}</p>}
+          {formError && <p className="text-body-sm text-danger">{formError}</p>}
           {successMessage && (
-            <p role="status" className="text-sm text-success">
+            <p role="status" className="text-body-sm text-success">
               {successMessage}
             </p>
           )}
@@ -126,7 +126,7 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
       </Card>
 
       <Card className="flex flex-col gap-4">
-        <p className="text-sm font-medium text-text">
+        <p className="text-body-sm font-medium text-text">
           {RIDE_UPDATES_TERMS.historyTitle}
         </p>
 
@@ -160,8 +160,8 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
                   key={item.id}
                   className="flex flex-col gap-1 border-b border-border pb-3 last:border-none last:pb-0"
                 >
-                  <p className="text-sm text-text">{item.message}</p>
-                  <p className="text-xs text-text-secondary">
+                  <p className="text-body text-text">{item.message}</p>
+                  <p className="text-body-sm text-text-secondary">
                     {formatDate(createdAt)} {formatTime(createdAt)}
                   </p>
                 </li>

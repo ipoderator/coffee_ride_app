@@ -45,9 +45,11 @@ export function EmptyState({
           {icon}
         </div>
       ) : null}
-      <p className="text-sm font-medium text-text">{title}</p>
+      <p className="text-body font-semibold text-text">{title}</p>
       {description ? (
-        <p className="max-w-sm text-sm text-text-secondary">{description}</p>
+        <p className="max-w-sm text-body-sm text-text-secondary">
+          {description}
+        </p>
       ) : null}
       {action ? <div className="mt-1">{action}</div> : null}
     </div>

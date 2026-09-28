@@ -13,10 +13,8 @@ export default function ParticipantCabinetHomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-text">
-        {CABINET_TERMS.homeTitle}
-      </h1>
-      <p className="text-sm text-text-secondary">{user.email}</p>
+      <h1 className="text-h1 text-text">{CABINET_TERMS.homeTitle}</h1>
+      <p className="text-body-sm text-text-secondary">{user.email}</p>
       <EmptyState
         title={CABINET_TERMS.homeEmptyTitle}
         description={CABINET_TERMS.homeEmptyDescription}
@@ -25,15 +23,13 @@ export default function ParticipantCabinetHomePage() {
           dashboard exists — without this, `/organizer/profile` would only be
           reachable by typing the URL by hand. */}
       <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-        <h2 className="text-lg font-medium text-text">
-          {CABINET_TERMS.organizerCtaTitle}
-        </h2>
-        <p className="text-sm text-text-secondary">
+        <h2 className="text-h2 text-text">{CABINET_TERMS.organizerCtaTitle}</h2>
+        <p className="text-body-sm text-text-secondary">
           {CABINET_TERMS.organizerCtaDescription}
         </p>
         <Link
           href="/organizer/profile"
-          className="self-start text-sm font-medium text-primary hover:underline"
+          className="self-start inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {CABINET_TERMS.organizerCtaLink}
         </Link>

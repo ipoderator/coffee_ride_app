@@ -229,15 +229,17 @@ scale**, not by hue. The route line itself is `route` over `route-casing`, 6px.
 - **Body/UI: Golos Text** (Paratype) — a grotesque drawn for Russian text, with Cyrillic
   as a first-class script — over the system stack (`-apple-system, "Segoe UI", Roboto,
 sans-serif`). Utility class `font-sans` (the default).
-- **Labels/eyebrows: Sofia Sans Condensed** — small uppercase labels (`MetricTile`'s
-  `<dt>`, section eyebrows). Utility class `font-display`, token `--font-display`;
-  fallback `"Arial Narrow"` then the body stack. Loaded as a variable font (the whole
-  weight axis). Since ADR-024 it no longer
-  sets headings or metric numerals — see the two new faces below.
-- **Titles/headings: Unbounded** (ADR-024, new) — ride titles and screen headings
-  (`h1`–`h3` by default, `globals.css`). Utility class `font-title`, token `--font-title`.
-  Weights 500/600/700.
-- **Metric numerals: Sofia Sans Extra Condensed** (ADR-024, new) — the large tabular
+- **Labels/eyebrows: IBM Plex Mono** (CR-152, ADR-026) — small uppercase labels
+  (`MetricTile`'s `<dt>`, section eyebrows, dates on cards): `font-mono text-label
+uppercase`. Sofia Sans Condensed held this role until ADR-026 retired it; the mono
+  face reads better at 12–13px and was already the data face, so one face now covers
+  both.
+- **Titles: Unbounded** (ADR-024, narrowed by ADR-026) — only the display role (a
+  ride's title on its own page) and `h1` (every page's title). Utility class
+  `font-title`, token `--font-title`; `h1` gets it by default (`globals.css`).
+  `h2`/`h3`/card titles are **Golos 600** — Unbounded is wide enough that a long
+  Russian title breaks into 3–4 lines at card/section sizes.
+- **Metric numerals: Sofia Sans Extra Condensed** (ADR-024) — the large tabular
   numerals in `MetricTile` and the route cover. Utility class `font-num`, token
   `--font-num`. Weights 700/800.
 - **Self-hosted, never fetched at build time** (CR-146, KI-074): every face above is
@@ -250,26 +252,45 @@ sans-serif`). Utility class `font-sans` (the default).
   the Bulgarian style (в/д/и/т look like b/g/u/m); the Russian forms come from its
   `locl` OpenType feature, which browsers apply only when the text's language is Russian.
   `<html lang="ru">` in `app/layout.tsx` guarantees that — never remove it and never set
-  another `lang` on an element rendered in `font-display`/`font-num` (verified in the
-  browser for CR-115: the same string renders Russian forms under `ru`, Bulgarian under
-  `bg`; Sofia Sans Extra Condensed shares the same family's `locl` dependency).
-- **IBM Plex Mono** stays the utility face for hex values, IDs, units and other data
-  scanned in columns (`font-mono`) — including a `MetricTile`'s unit suffix (ADR-024;
-  it previously inherited the numeral face).
+  another `lang` on an element rendered in `font-num` (Sofia Sans Extra Condensed;
+  verified in the browser for CR-115).
+- **IBM Plex Mono** is also the utility face for hex values, IDs, units and other data
+  scanned in columns (`font-mono`) — including a `MetricTile`'s unit suffix.
 - Cyrillic coverage is a hard requirement: verify any added face renders Russian text
   (including `locl`-dependent forms) before adopting it.
-- **Numerals: `font-variant-numeric: tabular-nums` on every metric**, in `font-display`
+- **Numerals: `font-variant-numeric: tabular-nums` on every metric**, in labels
   as well. Non-tabular figures make numbers jitter between states and misalign in
   tables.
-- **Scale** (mobile → desktop): 12 / 14 / 16 / 18 / 20 / 24 / 30 / 36 px. Body is 16px
-  minimum — never 14px for reading text on mobile. A condensed display face reads
-  smaller than Golos at the same size; prefer the next step up for headings rather than a
-  heavier weight.
-- **Weights:** Golos 400 body, 500 labels/UI, 600 emphasis. Golos 800 only for the wordmark.
-  Unbounded 500/600/700 for headings; Sofia Sans Extra Condensed 700/800 for metric
-  numerals. All-caps only for small labels (12px, letter-spacing ≈0.06em) in
-  `font-display`.
-- **Line height:** 1.5 body, ~1.15 headings/titles, 0.9–1 metric numerals.
+- **Role scale (CR-152, ADR-026)** — one utility per role, defined in
+  `packages/ui/src/tokens.css` (`--fs-*` values, `--text-*` theme tokens carrying
+  line height/tracking/weight). Phone values below `md` (768px), desktop from `md`:
+
+  | Utility        | Face / weight              | Phone | Desktop    | Line height | Use                                          |
+  | -------------- | -------------------------- | ----- | ---------- | ----------- | -------------------------------------------- |
+  | `text-display` | Unbounded 600, −2%         | 32    | 52 (fluid) | 1.08        | a ride's title on its page                   |
+  | `text-h1`      | Unbounded 600, −1.5%       | 28    | 36         | 1.12        | every page title (`h1` default)              |
+  | `text-h2`      | Golos 600, −1%             | 20    | 24         | 1.25        | sections (`h2` default)                      |
+  | `text-h3`      | Golos 600                  | 18    | 18         | 1.3         | cards, list items (`h3` default)             |
+  | `text-body`    | Golos 400                  | 16    | 16         | 1.55        | descriptions, forms, inputs (`body` default) |
+  | `text-body-sm` | Golos 400                  | 15    | 15         | 1.45        | second lines, hints, form labels, chips      |
+  | `text-label`   | Plex Mono 500, caps, +6%   | 13    | 12         | 1.3         | dates, metric labels, eyebrows               |
+  | `text-metric`  | Sofia Sans Extra Cond. 800 | 36    | 44         | 0.95        | large metric numerals                        |
+
+  Buttons: Golos 600, 16px/48px tall on a phone, 15px/44px from `md`. Tailwind's own
+  `text-xs` (12px) is the floor — badges, compact chips, chart axis ticks. **Nothing
+  renders under 12px**; `text-sm`/`text-base`/arbitrary `text-[…]` sizes are not used for
+  text in `apps/web`/`packages/ui` (relative `em` sizes inside a numeral — a unit suffix —
+  are the one exception). Both `cn()` helpers register the role names with
+  tailwind-merge (`packages/ui/src/lib/cn.ts`), so `cn('text-h2', 'text-text')` keeps both.
+
+- **Rendering (CR-152):** `font-synthesis: none` (no faux bold/italic), greyscale
+  antialiasing in the dark theme (light-on-dark text otherwise looks heavier),
+  `text-wrap: balance` on `h1`–`h3`, `text-wrap: pretty` on `p`. Every face is loaded
+  through `next/font/local`, which also generates a metric-matched fallback, so the font
+  swap doesn't shift layout.
+- **Weights:** Golos 400 body, 500 labels/UI, 600 headings/buttons/emphasis. Golos 800
+  only for the wordmark. Unbounded 600 for display/`h1`; Sofia Sans Extra Condensed
+  700/800 for metric numerals. All-caps only in the `label` role.
 - **Wordmark (CR-121, updated by ADR-024):** `packages/ui`'s `Wordmark` — an
   elevation-profile mark (2:1, 0.8em tall, bottom on the baseline) in `brand` (the
   logo/graphics role, not the AA-text `primary`), then lowercase «кофе•райд» in Golos
@@ -302,7 +323,9 @@ sans-serif`). Utility class `font-sans` (the default).
   button only.
 - **Touch targets:** minimum 48px tall on mobile and 44px from `md` for buttons/primary
   actions; 44×44 px minimum for every other target. Cyclists tap this with cold hands
-  and gloves on.
+  and gloves on. A standalone text action («Изменить», «Удалить», «Забыли пароль?»)
+  is `inline-flex min-h-11 items-center`, not bare text (CR-152); a link inside a
+  sentence is exempt (WCAG 2.5.8's inline exception).
 - **Focus:** a 2px `primary` outline with 2px offset on every interactive element
   (§12) — unchanged.
 
@@ -318,8 +341,8 @@ in the product.
 The atom. Three parts, always in this order:
 
 ```
-ДИСТАНЦИЯ          ← label:  12px, font-display, text-secondary, uppercase, 0.06em
-42,3 км            ← value:  30–36px, font-num 800, text, tabular-nums
+ДИСТАНЦИЯ          ← label:  text-label (13/12px), font-mono, text-secondary, uppercase
+42,3 км            ← value:  30–36px (size="lg": text-metric 36/44px), font-num 800, tabular-nums
                       unit:   inline, ~0.45em of value size, font-mono, text-secondary
 ```
 

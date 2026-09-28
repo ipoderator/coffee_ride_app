@@ -31,7 +31,7 @@ export function ForgotPasswordForm() {
   if (succeeded) {
     return (
       <Card role="status" aria-live="polite">
-        <h2 className="text-xl font-semibold text-text">
+        <h2 className="text-h2 text-text">
           {FORGOT_PASSWORD_TERMS.successTitle}
         </h2>
         <p className="mt-2 text-text-secondary">
@@ -96,7 +96,7 @@ export function ForgotPasswordForm() {
         </FormField>
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}

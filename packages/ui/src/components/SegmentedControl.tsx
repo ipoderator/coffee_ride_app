@@ -57,7 +57,7 @@ export function SegmentedControl<T extends string>({
       <legend
         className={
           showLegend
-            ? 'mb-2 font-display text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase'
+            ? 'mb-2 font-mono text-label text-text-secondary uppercase'
             : 'sr-only'
         }
       >
@@ -98,7 +98,7 @@ export function SegmentedControl<T extends string>({
                 'has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-primary has-[:disabled]:cursor-not-allowed',
                 tall
                   ? 'min-h-14 flex-col gap-px rounded-xl px-2 py-1.5'
-                  : 'min-h-9 rounded-full px-3.5 py-1.5 text-[13px] font-medium whitespace-nowrap',
+                  : 'min-h-11 rounded-full px-4 py-1.5 text-body-sm font-medium whitespace-nowrap',
                 onCover
                   ? checked
                     ? 'text-cover-bg'
@@ -122,7 +122,7 @@ export function SegmentedControl<T extends string>({
                 <>
                   <span
                     className={cn(
-                      'block max-w-full truncate font-title text-sm font-semibold',
+                      'block max-w-full truncate text-body-sm font-semibold',
                       checked && 'text-primary',
                     )}
                   >

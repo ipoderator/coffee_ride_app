@@ -20,8 +20,8 @@ export function FileInput({ className, ref, ...props }: FileInputProps) {
       ref={ref}
       type="file"
       className={cn(
-        'block w-full max-w-full cursor-pointer text-sm text-text-secondary',
-        'file:mr-3 file:inline-flex file:min-h-11 file:cursor-pointer file:items-center file:rounded-lg file:border file:border-border-input file:bg-bg file:px-4 file:text-sm file:font-medium file:text-text',
+        'block w-full max-w-full cursor-pointer text-body-sm text-text-secondary',
+        'file:mr-3 file:inline-flex file:min-h-11 file:cursor-pointer file:items-center file:rounded-lg file:border file:border-border-input file:bg-bg file:px-4 file:text-body-sm file:font-medium file:text-text',
         'hover:file:bg-bg-raised',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         'disabled:cursor-not-allowed disabled:opacity-60 disabled:file:cursor-not-allowed',

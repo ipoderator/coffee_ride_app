@@ -88,7 +88,7 @@ export function RideHero({
           ) : null}
         </div>
         {shownView === 'track' && caption ? (
-          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-cover-bg px-2.5 py-1 font-mono text-[13px] whitespace-nowrap text-text-muted">
+          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-cover-bg px-2.5 py-1 font-mono text-label whitespace-nowrap text-text-muted">
             {caption}
           </p>
         ) : null}

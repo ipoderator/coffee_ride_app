@@ -104,7 +104,7 @@ export function RegistrationActivityWidget() {
       aria-busy={isLoading || undefined}
     >
       <Card className="flex flex-col gap-3 rounded-2xl p-5">
-        <h2 className="font-display text-sm font-semibold tracking-[0.06em] text-text-secondary uppercase">
+        <h2 className="font-mono text-label text-text-secondary uppercase">
           {REGISTRATION_ACTIVITY_TERMS.recentTitle}
         </h2>
         {isLoading ? (
@@ -114,7 +114,7 @@ export function RegistrationActivityWidget() {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : state.recent.length === 0 ? (
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {REGISTRATION_ACTIVITY_TERMS.recentEmpty}
           </p>
         ) : (
@@ -133,7 +133,7 @@ export function RegistrationActivityWidget() {
 
       <Card className="flex flex-col gap-3 rounded-2xl p-5">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="font-display text-sm font-semibold tracking-[0.06em] text-text-secondary uppercase">
+          <h2 className="font-mono text-label text-text-secondary uppercase">
             {REGISTRATION_ACTIVITY_TERMS.perDayTitle}
           </h2>
           <span className="font-mono text-xs text-text-muted">
@@ -203,12 +203,12 @@ function RecentRow({
         {/* CR-149: the name opens the rider's profile card. */}
         <Link
           href={riderProfileHref(entry.rideId, entry.id, 'overview')}
-          className="rounded-sm text-base text-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="rounded-sm text-body text-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           {name}
         </Link>
         {meta.map((part) => (
-          <span key={part} className="font-mono text-sm text-text-muted">
+          <span key={part} className="font-mono text-body-sm text-text-muted">
             {' · '}
             {part}
           </span>
@@ -216,7 +216,7 @@ function RecentRow({
       </p>
       <time
         dateTime={entry.createdAt.toISOString()}
-        className="font-mono text-sm text-text-muted tabular-nums"
+        className="font-mono text-body-sm text-text-muted tabular-nums"
       >
         {formatElapsedShort(entry.createdAt, now)}
       </time>

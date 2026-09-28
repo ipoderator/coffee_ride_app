@@ -210,12 +210,12 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   if (status === 'not-found') {
     return (
       <Card className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-sm font-medium text-text">
+        <p className="text-body-sm font-medium text-text">
           {RIDE_ROUTE_TERMS.pageTitle}
         </p>
         <Link
           href="/organizer/rides"
-          className="text-sm font-medium text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {RIDE_ROUTE_TERMS.backToEdit}
         </Link>
@@ -250,7 +250,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     <div className="flex flex-col gap-4">
       <Link
         href={`/organizer/rides/${rideId}/edit`}
-        className="text-sm font-medium text-primary hover:underline"
+        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
       >
         {RIDE_ROUTE_TERMS.backToEdit}
       </Link>
@@ -269,7 +269,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
 
       <Card className="flex flex-col gap-4">
         {!isDraft && (
-          <p role="status" className="text-sm text-warning">
+          <p role="status" className="text-body-sm text-warning">
             {RIDE_ROUTE_TERMS.notEditable}
           </p>
         )}
@@ -296,23 +296,23 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
                 value={String(route.pointCount)}
               />
             </div>
-            <p className="text-sm text-text-secondary">
+            <p className="text-body-sm text-text-secondary">
               {RIDE_ROUTE_TERMS.fileNameLabel}: {route.gpxFileName}
             </p>
             <div className="flex flex-wrap gap-3">
               <a
                 href={routeDownloadUrl(rideId)}
-                className="text-sm font-medium text-primary hover:underline"
+                className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
               >
                 {RIDE_ROUTE_TERMS.download}
               </a>
             </div>
             {hasMetricsMismatch && (
               <div className="flex flex-col gap-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
-                <p className="text-sm text-warning">
+                <p className="text-body-sm text-warning">
                   {RIDE_ROUTE_TERMS.metricsMismatch}
                 </p>
-                <p className="text-sm text-text-secondary">
+                <p className="text-body-sm text-text-secondary">
                   {RIDE_ROUTE_TERMS.metricsMismatchRide}:{' '}
                   {formatDistanceParts(rideDistanceKm).value}{' '}
                   {formatDistanceParts(rideDistanceKm).unit} ·{' '}
@@ -338,10 +338,10 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
           </>
         ) : (
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-text">
+            <p className="text-body-sm font-medium text-text">
               {RIDE_ROUTE_TERMS.emptyTitle}
             </p>
-            <p className="text-sm text-text-secondary">
+            <p className="text-body-sm text-text-secondary">
               {RIDE_ROUTE_TERMS.emptyDescription}
             </p>
           </div>
@@ -351,7 +351,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
           <div className="flex flex-col gap-2">
             <label
               htmlFor="route-gpx-file"
-              className="text-sm font-medium text-text"
+              className="text-body-sm font-medium text-text"
             >
               {RIDE_ROUTE_TERMS.uploadLabel}
             </label>
@@ -373,13 +373,13 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
         )}
 
         {formError && !storageUnavailable && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
 
         {successMessage && !formError && !storageUnavailable && (
-          <p role="status" className="text-sm text-success">
+          <p role="status" className="text-body-sm text-success">
             {successMessage}
           </p>
         )}

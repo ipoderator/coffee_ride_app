@@ -22,9 +22,7 @@ export default async function LoginPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
-      <h1 className="text-2xl font-semibold text-text">
-        {AUTH_TERMS.loginTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{AUTH_TERMS.loginTitle}</h1>
       <LoginForm next={next} />
     </main>
   );

@@ -98,7 +98,7 @@ export function RidesList() {
         action={
           <Link
             href="/organizer/rides/new"
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
           >
             {RIDE_LIST_TERMS.createLink}
           </Link>
@@ -111,14 +111,14 @@ export function RidesList() {
     <div className="flex flex-col gap-6">
       <Link
         href="/organizer/rides/new"
-        className="self-start text-sm font-medium text-primary hover:underline"
+        className="self-start inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
       >
         {RIDE_LIST_TERMS.createLink}
       </Link>
 
       {groupByStatus(rides).map(([groupStatus, groupRides]) => (
         <section key={groupStatus} className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-text-secondary">
+          <h2 className="text-body-sm font-medium text-text-secondary">
             {RIDE_STATUS_TERMS[groupStatus].label}
           </h2>
           <div className="flex flex-col gap-3">
@@ -128,7 +128,7 @@ export function RidesList() {
                 <Link key={ride.id} href={`/organizer/rides/${ride.id}/edit`}>
                   <Card className="flex flex-col gap-3 transition-opacity hover:opacity-90">
                     <div className="flex items-center gap-3">
-                      <p className="text-sm font-medium text-text">
+                      <p className="text-body-sm font-medium text-text">
                         {ride.title}
                       </p>
                       <StatusBadge

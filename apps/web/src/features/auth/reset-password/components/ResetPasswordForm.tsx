@@ -45,7 +45,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   if (succeeded) {
     return (
       <Card role="status" aria-live="polite">
-        <h2 className="text-xl font-semibold text-text">
+        <h2 className="text-h2 text-text">
           {RESET_PASSWORD_TERMS.successTitle}
         </h2>
         <p className="mt-2 text-text-secondary">
@@ -53,7 +53,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
         </p>
         <Link
           href="/login"
-          className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+          className="mt-4 inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {RESET_PASSWORD_TERMS.loginLink}
         </Link>
@@ -128,7 +128,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
         </FormField>
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}

@@ -32,15 +32,15 @@ export function MyRideCard({ item }: { item: MyRegistrationSummary }) {
     <Link href={`/rides/${ride.id}`}>
       <Card className="flex flex-col gap-3 transition-opacity hover:opacity-90">
         <div className="flex items-center gap-3">
-          <p className="text-sm font-medium text-text">{ride.title}</p>
+          <p className="text-body font-semibold text-text">{ride.title}</p>
           <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
         </div>
 
-        <p className="text-sm text-text-secondary">
+        <p className="text-body-sm text-text-secondary">
           {RIDE_DISCOVERY_TERMS.organizedByLabel}: {ride.organizer.name}
         </p>
 
-        <p className="text-sm text-text">
+        <p className="text-body-sm text-text">
           {formatDate(startDate, { timeZone: ride.startTimezone })}
           {', '}
           {formatTime(startDate, { timeZone: ride.startTimezone })}

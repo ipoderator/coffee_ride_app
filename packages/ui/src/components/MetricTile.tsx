@@ -66,16 +66,16 @@ export function MetricTile({
         className,
       )}
     >
-      {/* ADR-024: label stays in `font-display` (Sofia Sans Condensed); the
-          value moves to `font-num` (Sofia Sans Extra Condensed) — the large
+      {/* CR-152 (ADR-026): the label is the mono `text-label` role; the
+          value is `font-num` (Sofia Sans Extra Condensed) — the large
           tabular-numeral face the mockup uses for every metric. */}
-      <dt className="font-display text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">
+      <dt className="font-mono text-label uppercase text-text-secondary">
         {label}
       </dt>
       <dd
         className={cn(
           'flex items-baseline gap-1 whitespace-nowrap font-num leading-none font-extrabold tabular-nums text-text',
-          size === 'lg' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl',
+          size === 'lg' ? 'text-metric' : 'text-3xl md:text-4xl',
           valueClassName,
         )}
       >

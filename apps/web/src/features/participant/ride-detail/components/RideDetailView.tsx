@@ -81,10 +81,9 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 const MAP_SURFACE_CLASSNAME = 'absolute inset-0 h-full rounded-none';
 
 const CHIP_CLASSNAME =
-  'inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-raised px-3 py-1 text-[13px] font-medium whitespace-nowrap text-text-secondary';
+  'inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-raised px-3 py-1 text-body-sm font-medium whitespace-nowrap text-text-secondary';
 
-const SECTION_TITLE_CLASSNAME =
-  'font-title text-lg leading-tight font-medium text-text';
+const SECTION_TITLE_CLASSNAME = 'text-h2 text-text';
 
 /**
  * CR-042 ("Review"): the "Отзывы" section, shown only once the ride is `finished`.
@@ -354,10 +353,10 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   if (status === 'not-found') {
     return (
       <Card className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-sm font-medium text-text">
+        <p className="text-body-sm font-medium text-text">
           {RIDE_DETAIL_TERMS.notFoundTitle}
         </p>
-        <p className="max-w-sm text-sm text-text-secondary">
+        <p className="max-w-sm text-body-sm text-text-secondary">
           {RIDE_DETAIL_TERMS.notFoundDescription}
         </p>
       </Card>
@@ -526,7 +525,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     <div className="mx-auto flex w-full max-w-310 flex-col">
       <header className="flex flex-col gap-3.5 pt-1.5 pb-5.5">
         <div className="flex flex-wrap items-center gap-2.5">
-          <p className="font-display text-sm font-semibold tracking-[0.06em] text-text-secondary uppercase tabular-nums">
+          <p className="font-mono text-label text-text-secondary uppercase tabular-nums">
             <span className="sr-only">{RIDE_DETAIL_TERMS.startLabel}: </span>
             {startLine}
           </p>
@@ -539,7 +538,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         </div>
         <h1
           className={cn(
-            'max-w-[17ch] font-title text-[clamp(30px,5.2vw,58px)] leading-[1.08] font-bold tracking-[-0.015em] text-balance',
+            'max-w-[17ch] font-title text-display text-balance',
             cancelled ? 'text-text-muted' : 'text-text',
           )}
         >
@@ -550,9 +549,9 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             src={organizer.avatarUrl ? apiAssetUrl(organizer.avatarUrl) : null}
             name={organizer.name}
             size="sm"
-            className="h-9 w-9 bg-primary-tint text-sm font-semibold text-primary"
+            className="h-9 w-9 bg-primary-tint text-body-sm font-semibold text-primary"
           />
-          <p className="text-sm">
+          <p className="text-body-sm">
             <span className="text-text-secondary">
               {RIDE_POSTER_TERMS.organizedBy}
             </span>{' '}
@@ -661,7 +660,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
               </div>
             ) : null}
             {ride.description ? (
-              <p className="max-w-[62ch] text-[17px] leading-relaxed whitespace-pre-wrap text-text">
+              <p className="max-w-[62ch] text-body whitespace-pre-wrap text-text">
                 {ride.description}
               </p>
             ) : null}
@@ -706,7 +705,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                   </a>
                   <Button
                     variant="secondary"
-                    className="border-0 px-3 text-sm text-text-secondary hover:text-text"
+                    className="border-0 px-3 text-body-sm text-text-secondary hover:text-text"
                     onClick={() => void shareRide()}
                   >
                     <Share2 className="size-4" aria-hidden="true" />

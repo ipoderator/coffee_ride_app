@@ -51,7 +51,7 @@ export function AvatarStack({
           aria-hidden="true"
           className={cn(
             '-ml-2 inline-flex shrink-0 items-center justify-center rounded-full bg-primary-tint font-mono font-semibold text-primary ring-2 ring-bg-raised',
-            size === 'sm' ? 'h-8 w-8 text-[10px]' : 'h-12 w-12 text-xs',
+            size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-xs',
           )}
         >
           +{overflow}

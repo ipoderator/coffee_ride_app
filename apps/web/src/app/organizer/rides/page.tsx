@@ -8,9 +8,7 @@ import { RidesList } from '@/features/organizer/rides/components/RidesList';
 export default function OrganizerRidesPage() {
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-text">
-        {RIDE_LIST_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{RIDE_LIST_TERMS.pageTitle}</h1>
       <RidesList />
     </div>
   );

@@ -118,7 +118,7 @@ export function ElevationProfileChart({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase">
+        <h3 className="font-mono text-label text-text-secondary uppercase">
           {label}
         </h3>
         <span
@@ -166,7 +166,7 @@ export function ElevationProfileChart({
                 x={PAD.left - 6}
                 y={y(value) + 4}
                 textAnchor="end"
-                className="fill-text-muted font-mono text-[11px]"
+                className="fill-text-muted font-mono text-xs"
               >
                 {value}
               </text>
@@ -178,7 +178,7 @@ export function ElevationProfileChart({
               x={x(km)}
               y={HEIGHT - 5}
               textAnchor={i === 0 ? 'start' : 'middle'}
-              className="fill-text-muted font-mono text-[11px]"
+              className="fill-text-muted font-mono text-xs"
             >
               {i === kmTicks.length - 1 ? `${km} км` : km}
             </text>

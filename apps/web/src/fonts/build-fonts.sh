@@ -42,15 +42,12 @@ build() {
 }
 
 fetch golostext 'GolosText[wght].ttf'
-fetch sofiasanscondensed 'SofiaSansCondensed[wght].ttf'
 fetch sofiasansextracondensed 'SofiaSansExtraCondensed[wght].ttf'
 fetch unbounded 'Unbounded[wght].ttf'
 fetch ibmplexmono IBMPlexMono-Regular.ttf
 fetch ibmplexmono IBMPlexMono-Medium.ttf
 
 for w in 400 500 600 800; do build 'GolosText[wght].ttf' "GolosText-$w" "$w"; done
-# Variable (the full axis) — `next/font/google` loaded it without a weight list.
-build 'SofiaSansCondensed[wght].ttf' SofiaSansCondensed-Variable
 for w in 700 800; do
   build 'SofiaSansExtraCondensed[wght].ttf' "SofiaSansExtraCondensed-$w" "$w"
 done
@@ -59,6 +56,6 @@ build IBMPlexMono-Regular.ttf IBMPlexMono-400
 build IBMPlexMono-Medium.ttf IBMPlexMono-500
 
 mkdir -p "$OUT/licenses"
-for family in golostext sofiasanscondensed sofiasansextracondensed unbounded ibmplexmono; do
+for family in golostext sofiasansextracondensed unbounded ibmplexmono; do
   curl -fsSL -o "$OUT/licenses/OFL-$family.txt" "$BASE/$family/OFL.txt"
 done

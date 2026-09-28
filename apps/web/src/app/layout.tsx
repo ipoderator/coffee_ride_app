@@ -20,7 +20,8 @@ import './globals.css';
 // served before. A new weight means re-running that script, not a new import.
 //
 // docs/design.md §4: Golos Text (Cyrillic-first grotesque) for UI text, IBM
-// Plex Mono for tabular/data text (hex values, IDs). `variable` binds the
+// Plex Mono for labels and tabular/data text (dates, units, IDs) — the label
+// role Sofia Sans Condensed held until CR-152 (ADR-026). `variable` binds the
 // loaded webfont to the CSS custom property packages/ui's tokens.css reads as
 // its `--font-sans`/`--font-mono` source (see tokens.css's
 // `var(--font-golos, ...)` fallback).
@@ -36,23 +37,6 @@ const golosText = localFont({
   display: 'swap',
 });
 
-// ADR-024 («Ночной старт»): the display face — labels/eyebrows only now
-// (`font-display`; ride titles/headings moved to `font-title`/Unbounded
-// below). Variable font — the whole weight axis, one file. Sofia Sans' default
-// Cyrillic is the Bulgarian form set (в/д/и/т drawn like b/g/u/m); the Russian
-// forms come from its `locl` OpenType feature, which browsers apply only when
-// the text's language is Russian. That is what `<html lang="ru">` below
-// guarantees — do not remove it, and do not set a different `lang` on any
-// element rendered in this face (same caveat applies to Sofia Sans Extra
-// Condensed below).
-const sofiaSansCondensed = localFont({
-  src: '../fonts/SofiaSansCondensed-Variable.woff2',
-  weight: '1 1000',
-  style: 'normal',
-  variable: '--font-sofia-condensed',
-  display: 'swap',
-});
-
 const ibmPlexMono = localFont({
   src: [
     { path: '../fonts/IBMPlexMono-400.woff2', weight: '400', style: 'normal' },
@@ -62,9 +46,8 @@ const ibmPlexMono = localFont({
   display: 'swap',
 });
 
-// ADR-024: `font-title` — ride titles and screen headings (`h1`/`h2`/`h3`,
-// `globals.css`). Weights 500/600/700 cover the mockup's clamp(34-58px) hero
-// through 21px card titles.
+// ADR-024: `font-title` — the display role (ride title) and `h1` only since
+// CR-152 (ADR-026, `globals.css`).
 const unbounded = localFont({
   src: [
     { path: '../fonts/Unbounded-500.woff2', weight: '500', style: 'normal' },
@@ -76,7 +59,12 @@ const unbounded = localFont({
 });
 
 // ADR-024: `font-num` — large tabular metric numerals (route cover,
-// `MetricTile`). Weights 700/800 cover the mockup's 30-44px numerals.
+// `MetricTile`). Weights 700/800 cover the mockup's 30-44px numerals. Sofia
+// Sans' default Cyrillic is the Bulgarian form set (в/д/и/т drawn like
+// b/g/u/m); the Russian forms come from its `locl` OpenType feature, which
+// browsers apply only when the text's language is Russian. That is what
+// `<html lang="ru">` below guarantees — do not remove it, and do not set a
+// different `lang` on any element rendered in this face.
 const sofiaSansExtraCondensed = localFont({
   src: [
     {
@@ -113,7 +101,7 @@ export default function RootLayout({
     <html
       lang="ru"
       suppressHydrationWarning
-      className={`${golosText.variable} ${sofiaSansCondensed.variable} ${ibmPlexMono.variable} ${unbounded.variable} ${sofiaSansExtraCondensed.variable}`}
+      className={`${golosText.variable} ${ibmPlexMono.variable} ${unbounded.variable} ${sofiaSansExtraCondensed.variable}`}
     >
       <head>
         <Script

@@ -125,7 +125,7 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
         </FormField>
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
@@ -134,16 +134,16 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
           {isPending ? AUTH_TERMS.loginSubmitPending : AUTH_TERMS.loginSubmit}
         </Button>
 
-        <div className="flex flex-col gap-1 text-sm">
+        <div className="flex flex-col items-start text-body-sm">
           <Link
             href="/forgot-password"
-            className="text-primary hover:underline"
+            className="inline-flex min-h-11 items-center text-primary hover:underline"
           >
             {AUTH_TERMS.forgotPasswordLink}
           </Link>
           <Link
             href={registerHref(next)}
-            className="text-primary hover:underline"
+            className="inline-flex min-h-11 items-center text-primary hover:underline"
           >
             {AUTH_TERMS.registerLink}
           </Link>

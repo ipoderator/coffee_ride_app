@@ -82,7 +82,7 @@ export function ReviewForm({
         <div className="flex flex-col gap-1.5">
           <span
             id="review-rating-label"
-            className="text-sm font-medium text-text"
+            className="text-body-sm font-medium text-text"
           >
             {REVIEWS_TERMS.ratingLabel}
           </span>
@@ -101,7 +101,7 @@ export function ReviewForm({
                 disabled={isPending}
                 onClick={() => setRating(value)}
                 className={
-                  'flex h-11 w-11 items-center justify-center rounded-lg border text-base font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 ' +
+                  'flex h-11 w-11 items-center justify-center rounded-lg border text-body font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 ' +
                   (rating !== null && value <= rating
                     ? 'border-primary bg-primary text-on-primary'
                     : 'border-border-input bg-bg-raised text-text')
@@ -112,7 +112,7 @@ export function ReviewForm({
             ))}
           </div>
           {ratingError && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-body-sm text-danger">
               {ratingError}
             </p>
           )}
@@ -128,12 +128,12 @@ export function ReviewForm({
         </FormField>
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
         {successMessage && !formError && (
-          <p role="status" className="text-sm text-success">
+          <p role="status" className="text-body-sm text-success">
             {successMessage}
           </p>
         )}

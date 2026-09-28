@@ -231,10 +231,10 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
   if (status === 'not-found') {
     return (
       <Card className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-sm font-medium text-text">
+        <p className="text-body-sm font-medium text-text">
           {RIDE_EDIT_TERMS.notFoundTitle}
         </p>
-        <p className="max-w-sm text-sm text-text-secondary">
+        <p className="max-w-sm text-body-sm text-text-secondary">
           {RIDE_EDIT_TERMS.notFoundDescription}
         </p>
       </Card>
@@ -261,10 +261,10 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
 
   return (
     <div ref={rootRef} className="flex flex-col gap-4">
-      <p className="text-sm text-text-secondary">{T.hint}</p>
+      <p className="text-body-sm text-text-secondary">{T.hint}</p>
 
       {readOnly && (
-        <p role="status" className="text-sm text-warning">
+        <p role="status" className="text-body-sm text-warning">
           {T.notEditable}
         </p>
       )}
@@ -301,15 +301,15 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
                   <div className="flex min-w-0 gap-3">
                     <span
                       aria-hidden="true"
-                      className="flex size-8 shrink-0 items-center justify-center rounded-full border-[1.5px] border-frame text-sm font-semibold tabular-nums text-text"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full border-[1.5px] border-frame text-body-sm font-semibold tabular-nums text-text"
                     >
                       {index + 1}
                     </span>
                     <div className="flex min-w-0 flex-col gap-1">
-                      <p className="break-words text-base font-semibold text-text">
+                      <p className="break-words text-h3 text-text">
                         {group.name}
                       </p>
-                      <p className="text-sm text-text-secondary">
+                      <p className="text-body-sm text-text-secondary">
                         <span className="font-medium tabular-nums text-text">
                           {pace.value}
                         </span>
@@ -322,7 +322,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
                         </span>
                       </p>
                       {group.description && (
-                        <p className="break-words text-sm text-text-secondary">
+                        <p className="break-words text-body-sm text-text-secondary">
                           {group.description}
                         </p>
                       )}
@@ -385,7 +385,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
         {mode.kind === 'add' && formNode}
 
         {formError && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-body-sm text-danger">
             {formError}
           </p>
         )}
@@ -401,17 +401,17 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
           </Button>
         )}
         {!readOnly && atLimit && mode.kind !== 'edit' && (
-          <p className="text-sm text-text-secondary">{T.limitNotice}</p>
+          <p className="text-body-sm text-text-secondary">{T.limitNotice}</p>
         )}
       </Card>
 
       {listError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {listError}
         </p>
       )}
       {success && !formError && !listError && (
-        <p role="status" className="text-sm text-success">
+        <p role="status" className="text-body-sm text-success">
           {success}
         </p>
       )}

@@ -82,6 +82,18 @@ describe('DiscoveryTabs', () => {
     );
   });
 
+  it('puts the view switch beside the page heading in both views (CR-152)', async () => {
+    render(<DiscoveryTabs />);
+    await screen.findByText('Тестовый заезд на выходные');
+    const headingRow = () =>
+      screen.getByRole('heading', { level: 1, name: 'Заезды' }).parentElement;
+    expect(headingRow()).toContainElement(screen.getByRole('tablist'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
+    await screen.findByTestId('discovery-map-panel');
+    expect(headingRow()).toContainElement(screen.getByRole('tablist'));
+  });
+
   it('switches to the map-first list on the "Карта" tab', async () => {
     render(<DiscoveryTabs />);
     await screen.findByText('Тестовый заезд на выходные');

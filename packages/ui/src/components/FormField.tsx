@@ -40,7 +40,7 @@ export function FormField({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-sm font-medium text-text">
+      <label htmlFor={id} className="text-body-sm font-medium text-text">
         {label}
       </label>
       {cloneElement(children, {
@@ -49,12 +49,12 @@ export function FormField({
         'aria-invalid': Boolean(error),
       })}
       {hint && !error && (
-        <p id={hintId} className="text-sm text-text-muted">
+        <p id={hintId} className="text-body-sm text-text-muted">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} role="alert" className="text-sm text-danger">
+        <p id={errorId} role="alert" className="text-body-sm text-danger">
           {error}
         </p>
       )}

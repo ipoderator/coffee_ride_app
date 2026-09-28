@@ -22,12 +22,12 @@ export default async function RideGroupsPage({
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-text">
+        <h1 className="text-h1 text-text">
           {ORGANIZER_GROUPS_TERMS.pageTitle}
         </h1>
         <Link
           href={`/organizer/rides/${id}/edit`}
-          className="self-start text-sm font-medium text-primary hover:underline"
+          className="self-start inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
         >
           {ORGANIZER_GROUPS_TERMS.backToEdit}
         </Link>

@@ -48,7 +48,7 @@ export function GroupForm({
       aria-label={title}
       className="flex flex-col gap-4 rounded-md border-[1.5px] border-frame p-4"
     >
-      <p className="text-base font-semibold text-text">{title}</p>
+      <p className="text-h3 text-text">{title}</p>
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
         <FormField id="group-name" label={T.nameLabel} error={errors.name}>
           <Input

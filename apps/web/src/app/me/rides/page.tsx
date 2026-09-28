@@ -12,9 +12,7 @@ export default function MyRegistrationsPage() {
   return (
     <div className="flex flex-col gap-6">
       <BackLink href="/me" label={BACK_LINK_TERMS.toParticipantCabinet} />
-      <h1 className="text-2xl font-semibold text-text">
-        {MY_REGISTRATIONS_TERMS.pageTitle}
-      </h1>
+      <h1 className="text-h1 text-text">{MY_REGISTRATIONS_TERMS.pageTitle}</h1>
       <MyRidesView />
     </div>
   );

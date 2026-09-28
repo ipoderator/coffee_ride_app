@@ -204,10 +204,10 @@ export function RoutePointsSection({
   ) {
     return (
       <div className="flex flex-col gap-3 rounded-md border border-border-input p-4">
-        <label className="flex flex-col gap-1 text-sm text-text">
+        <label className="flex flex-col gap-1 text-body-sm text-text">
           {ROUTE_POINT_TERMS.typeLabel}
           <select
-            className="rounded-md border border-border-input px-3 py-2 text-sm"
+            className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
             value={form.type}
             onChange={(e) =>
               setForm({ ...form, type: e.target.value as RoutePointType })
@@ -221,60 +221,66 @@ export function RoutePointsSection({
             ))}
           </select>
           {fieldErrors.type && (
-            <span className="text-sm text-danger">{fieldErrors.type}</span>
+            <span className="text-body-sm text-danger">{fieldErrors.type}</span>
           )}
         </label>
-        <label className="flex flex-col gap-1 text-sm text-text">
+        <label className="flex flex-col gap-1 text-body-sm text-text">
           {ROUTE_POINT_TERMS.labelLabel}
           <input
-            className="rounded-md border border-border-input px-3 py-2 text-sm"
+            className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
             value={form.label}
             onChange={(e) => setForm({ ...form, label: e.target.value })}
             disabled={isPending}
           />
           {fieldErrors.label && (
-            <span className="text-sm text-danger">{fieldErrors.label}</span>
+            <span className="text-body-sm text-danger">
+              {fieldErrors.label}
+            </span>
           )}
         </label>
-        <label className="flex flex-col gap-1 text-sm text-text">
+        <label className="flex flex-col gap-1 text-body-sm text-text">
           {ROUTE_POINT_TERMS.descriptionLabel}
           <input
-            className="rounded-md border border-border-input px-3 py-2 text-sm"
+            className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             disabled={isPending}
           />
           {fieldErrors.description && (
-            <span className="text-sm text-danger">
+            <span className="text-body-sm text-danger">
               {fieldErrors.description}
             </span>
           )}
         </label>
         <div className="flex flex-wrap gap-3">
-          <label className="flex flex-col gap-1 text-sm text-text">
+          <label className="flex flex-col gap-1 text-body-sm text-text">
             {ROUTE_POINT_TERMS.latLabel}
             <input
-              className="rounded-md border border-border-input px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
               value={form.lat}
               onChange={(e) => setForm({ ...form, lat: e.target.value })}
               disabled={isPending}
               inputMode="decimal"
             />
             {fieldErrors.lat && (
-              <span className="text-sm text-danger">{fieldErrors.lat}</span>
+              <span className="text-body-sm text-danger">
+                {fieldErrors.lat}
+              </span>
             )}
           </label>
-          <label className="flex flex-col gap-1 text-sm text-text">
+          <label className="flex flex-col gap-1 text-body-sm text-text">
             {ROUTE_POINT_TERMS.lngLabel}
             <input
-              className="rounded-md border border-border-input px-3 py-2 text-sm"
+              className="min-h-11 rounded-md border border-border-input px-3 py-2 text-body"
               value={form.lng}
               onChange={(e) => setForm({ ...form, lng: e.target.value })}
               disabled={isPending}
               inputMode="decimal"
             />
             {fieldErrors.lng && (
-              <span className="text-sm text-danger">{fieldErrors.lng}</span>
+              <span className="text-body-sm text-danger">
+                {fieldErrors.lng}
+              </span>
             )}
           </label>
         </div>
@@ -297,22 +303,22 @@ export function RoutePointsSection({
 
   return (
     <Card className="flex flex-col gap-4">
-      <p className="text-sm font-medium text-text">
+      <p className="text-body-sm font-medium text-text">
         {ROUTE_POINT_TERMS.sectionTitle}
       </p>
 
       {!isDraft && (
-        <p role="status" className="text-sm text-warning">
+        <p role="status" className="text-body-sm text-warning">
           {ROUTE_POINT_TERMS.notEditable}
         </p>
       )}
 
       {routePoints.length === 0 && !addForm && (
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-text">
+          <p className="text-body-sm font-medium text-text">
             {ROUTE_POINT_TERMS.emptyTitle}
           </p>
-          <p className="text-sm text-text-secondary">
+          <p className="text-body-sm text-text-secondary">
             {ROUTE_POINT_TERMS.emptyDescription}
           </p>
         </div>
@@ -339,7 +345,7 @@ export function RoutePointsSection({
                 className="flex flex-col gap-1 border-b border-border pb-3 last:border-none last:pb-0"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-text">
+                  <p className="text-body-sm font-medium text-text">
                     {ROUTE_POINT_TYPE_TERMS[routePoint.type]}
                     {routePoint.label && ` · ${routePoint.label}`}
                   </p>
@@ -347,7 +353,7 @@ export function RoutePointsSection({
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        className="text-sm font-medium text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
                         onClick={() => {
                           setEditingId(routePoint.id);
                           setEditForm(routePointToForm(routePoint));
@@ -358,7 +364,7 @@ export function RoutePointsSection({
                       </button>
                       <button
                         type="button"
-                        className="text-sm font-medium text-danger hover:underline"
+                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-danger hover:underline"
                         onClick={() => handleDelete(routePoint.id)}
                       >
                         {ROUTE_POINT_TERMS.delete}
@@ -367,11 +373,11 @@ export function RoutePointsSection({
                   )}
                 </div>
                 {routePoint.description && (
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-body-sm text-text-secondary">
                     {routePoint.description}
                   </p>
                 )}
-                <p className="text-sm text-text-secondary">
+                <p className="text-body-sm text-text-secondary">
                   {routePoint.lat.toFixed(6)}, {routePoint.lng.toFixed(6)}
                 </p>
               </li>
@@ -402,12 +408,12 @@ export function RoutePointsSection({
         ))}
 
       {formError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-body-sm text-danger">
           {formError}
         </p>
       )}
       {successMessage && !formError && (
-        <p role="status" className="text-sm text-success">
+        <p role="status" className="text-body-sm text-success">
           {successMessage}
         </p>
       )}

@@ -60,10 +60,10 @@ export function TicketBar({
     >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1 leading-tight">
-          <b className="block truncate text-[15px] text-text">
+          <b className="block truncate text-body font-semibold text-text">
             {content.title}
           </b>
-          <span className="block truncate text-[13px] text-text-secondary">
+          <span className="block truncate text-body-sm text-text-secondary">
             {content.subtitle}
           </span>
         </div>
