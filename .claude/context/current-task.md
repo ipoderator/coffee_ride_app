@@ -1,43 +1,41 @@
 # Current task
 
-## CR-147 — First live 2GIS contract run (KI-056 via GitHub Actions)
+## CR-146 — Self-hosted web fonts (+ known-issues sweep)
 
-Status: complete, committed.
+Status: done (committed). See `docs/changelog.md` → CR-146. Pending: CI's
+visual-regression job is the first x86_64 check of the new font files.
+
+## CR-150 — Organizer sidebar highlight on ride sub-pages
+
+Status: done (committed). «Участники»/«Обновления» redirect to
+`/organizer/rides/[id]/participants|updates`; the prefix rule lit «Заезды».
+Fix: `CabinetNavItem.activeOn`. Validation: web 444/444, typecheck/lint green.
+See `docs/changelog.md` → CR-150.
+
+## CR-149 — Organizer cabinet → rider profile card
+
+Status: done (committed).
 
 ### Goal
 
-Run `provider.contract.test.ts` on GitHub's runners (the dev machine's VPN egress
-can't reach 2GIS REST, KI-056) and fix what the live answers show.
+From the organizer cabinet, open a participant's profile directly (owner's
+screenshot: the name in «Новые записи»). Owner chose «профиль участника по
+клику» over a more visible switch to their own `/me` (that link already exists
+in the avatar menu).
 
-### Done so far
+### Acceptance criteria
 
-- Environment `maps-2gis-contract` (branch policy: `main` only) created via `gh`;
-  owner added the `MAPS_2GIS_API_KEY` secret and dispatched the workflow.
-- Run `36386689239`: 2GIS reachable from GitHub. geocode + reverseGeocode pass;
-  3 failures:
-  1. getRoute elevation `15820` for Moscow — 2GIS altitudes are centimetres, the
-     adapter passed them through as metres (built routes' gain ×100).
-  2. Invalid key → geocode resolved `[]` — Catalog API answers HTTP 200 with the
-     error in `meta.code`; the adapter never read `meta`, so a bad/expired key
-     looked like "nothing found".
-  3. Moscow → Reykjavik → HTTP 403 → `unavailable`, not `no_route`. Body unknown
-     (adapter never surfaces it); likely "outside coverage".
-
-### Plan
-
-- route.ts: centimetres → metres. geocode.ts: read `meta.code` (200 ok, 404 empty,
-  else `MapProviderError` with that status). Unit tests for both.
-- Contract test: log the raw status/body of the out-of-coverage answer so the
-  next run shows what 2GIS says; decide the 403 mapping after that.
-- Validation: maps-2gis test/typecheck/lint; re-run the workflow after push
-  (needs owner approval to push to `main`).
+- Name in `/organizer` «Новые записи» → `/rides/[id]/riders/[registrationId]`.
+- Same in `/organizer/rides/[id]/participants`.
+- Card's back link returns to where it was opened from.
+- Works for the organizer even when the ride's riders list is hidden.
 
 ### Result
 
-- Fixes committed (`21ea128`, `ea297ed`, `0d8d57c`); the 403 was the demo
-  key's 50 km limit (KI-075); unroutable pairs answer HTTP 200
-  `ROUTE_DOES_NOT_EXISTS`, now `no_route`.
-- Final contract run `36387478533`: 5/5 green. CR-114 checked off.
-- Validation: maps-2gis tests (45), typecheck, lint. apps/api suites not run
-  locally at first; CI caught the route-builder fixture (metres) — fixed, rides
-  suites 197 passed locally.
+See `docs/changelog.md` → CR-149. Validation: api registrations 60/60, web
+443/443, ui 155/155, typecheck/lint green, dev-server check of back links.
+
+## Pending from CR-148
+
+`pnpm seed:demo` with routes once 2GIS is reachable (KI-056); then check
+CR-148 off in `docs/tasks.md`.

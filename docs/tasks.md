@@ -1161,8 +1161,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (`TRUST_PROXY_HOPS` + private-hop trust, smoke-checked). KI-045 narrowed
       (Caddyfile validated); KI-074 recorded (Google Fonts at build time). See
       `docs/changelog.md`.
-- [ ] CR-146 Self-host the web fonts (KI-074) — `next/font/local` instead of
-      `next/font/google`, so `next build` needs no network.
+- [x] CR-146 Self-host the web fonts (KI-074) — `next/font/local` instead of
+      `next/font/google`, so `next build` needs no network. Done 2026-09-28,
+      see `docs/changelog.md`.
 - [x] CR-147 First live 2GIS contract run — done 2026-09-28: `maps-2gis-contract`
       environment + secret, run on GitHub's runners. Fixed: routing altitudes
       are centimetres, Catalog `meta.code` errors, HTTP 200

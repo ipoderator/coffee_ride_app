@@ -1672,3 +1672,288 @@ jammy` (arm64): with the dark `--bg-raised` set equal to `--bg`, the old config
 passed all 16 screenshots; at 0.02, 7 fail (11–58 % of pixels). With the token
 restored, 16/16 on two consecutive runs; baselines unchanged. Not yet run on CI's
 x86_64 runner — the first CI run is the check.
+
+### KI-008 — CI fails at `pnpm install --frozen-lockfile`
+
+Status: resolved 2026-09-12 (CR-001). Discovered: 2026-09-10.
+Problem: no `pnpm-lock.yaml` until CR-001 initialized the workspace tooling.
+Impact: red CI until Foundation lands. Not a regression.
+Resolution: `pnpm-lock.yaml` generated and committed; `pnpm install
+--frozen-lockfile`, `format:check`, `lint:root`, and turbo-delegated
+`lint`/`typecheck`/`test`/`build` all verified locally against zero
+workspace packages. CI will still have nothing to actually build/test until
+`apps/*`/`packages/*` exist (CR-002..CR-007), but the install step itself is
+no longer the blocker.
+
+### KI-011 — The repository has never matched its own Prettier config
+
+Status: resolved 2026-09-12 (CR-087). Discovered: 2026-09-11.
+Problem: `prettier --check .` failed on 37 files, and it failed identically on the initial
+commit — this predated any current work. The differences were cosmetic (blank lines
+after headings/before lists, markdown emphasis style, YAML quote style) but touched every
+matched file end to end.
+Impact: CI's `Format check` step failed before it ever reached lint/typecheck, for
+reasons unrelated to whatever change was being tested.
+Resolution: ran `prettier --write .` as one isolated formatting-only commit; `prettier
+--check .` now passes on the whole repository. No content/behavior changed.
+
+### KI-017 — `packages/maps-2gis`/`packages/db`/`packages/types` export raw TS source, not compiled `dist`
+
+Status: resolved 2026-09-17 (ADR-017, `docs/decisions.md`). Discovered:
+2026-09-12 (CR-007). Confirmed live-blocking: 2026-09-13 (CR-011).
+Problem: `packages/db`, `packages/types`, and `packages/maps-2gis`'s
+`package.json` `main`/`types`/`exports` all point at `./src/*.ts`, not
+`./dist/*.js`. `tsx` (dev, `vitest`) and `tsc` (typecheck, and build-time type
+resolution) both handle that fine. But `packages/db`'s `createDbClient` and
+`packages/types`' `registerRequestSchema`/`verifyEmailRequestSchema` (real
+runtime values, not types — unlike `ProblemDetails`/`Paginated<T>`, which are
+`import type` and fully erased) are not: a plain `node` process resolving
+either package's package.json `main`/`exports` lands on a `.ts` file, and
+Node has no loader registered to understand that extension outside `tsx`.
+`packages/maps-core` is unaffected by construction (100% type-only
+interfaces).
+Impact: **confirmed this session (CR-011)**, not hypothetical — `apps/api`
+got its first real runtime consumer of `db` (the auth module) and of `types`'
+Zod schemas (`auth.routes.ts`). Live-tested `NODE_ENV=production node
+dist/server.js` (mirroring CR-003's original compiled-boot smoke test) after
+`pnpm --filter api build`: it crashes immediately —
+`ERR_MODULE_NOT_FOUND: Cannot find module '.../packages/db/src/schema/
+index.js' imported from '.../packages/db/src/client.ts'` (Node's native
+`.ts` type-stripping loads `client.ts` itself, since that's the literal file
+`db`'s `exports` names, but does not rewrite `client.ts`'s own `.js`-suffixed
+relative import of its NodeNext-style sibling `schema/index.ts`). `types`
+would very likely fail the identical way immediately after (untested past the
+first crash — `db` resolves first in `apps/api`'s import graph).
+`apps/web`'s equivalent problem (webpack, not plain `node`, trying to bundle
+`types`' `.js`-suffixed relative imports) was fixed differently and does not
+need this: a `resolve.extensionAlias` entry in `next.config.ts` teaches
+webpack the same `.js`→`.ts` mapping `tsc`/`tsx` already understand. That
+fix is scoped to webpack/`apps/web` only — it does nothing for `apps/api`'s
+compiled output running under plain `node`.
+Workaround: none for production (until resolved below). `apps/api`'s actual
+CR-011 acceptance criteria (dev-mode live check via `tsx`, all four `vitest`
+suites, `tsc` typecheck/build) were unaffected — none of them execute
+`dist/server.js` under plain `node`.
+Resolution: ADR-017 — `apps/api`'s own `build` script now bundles
+`src/server.ts` plus `db`/`types`/`resilience`'s source into one
+`dist/server.js` via `esbuild` (`apps/api/scripts/build.mjs`) — a bundler,
+chosen over declaration-based `dist` exports specifically to avoid adding
+dev/test-path complexity to packages that already work correctly for every
+consumer (full reasoning in ADR-017 itself). Every real npm dependency stays external, resolved from
+`node_modules` at runtime as before — never bundling a native addon
+(`argon2`) mattered, not just avoiding unnecessary work. `db`/`types`/
+`maps-core`/`maps-2gis`/`resilience` themselves are completely untouched.
+Live-verified, not just built without error: `NODE_ENV=test node
+dist/server.js` against this environment's real local Postgres booted
+cleanly (previously crashed with the exact `ERR_MODULE_NOT_FOUND` above),
+`GET /health` responded, and a real `POST /v1/auth/register` round-tripped
+through the bundle (argon2 hash, Drizzle insert, helmet headers, rate
+limiting) with `201 Created`. Separately confirmed the unrelated,
+already-correct production placeholder guard (CR-073) still fires under a
+real `NODE_ENV=production` with this environment's local-only config — the
+two are orthogonal, and conflating them would have made the wrong test look
+like a pass. Found and fixed one more real gap along the way: marking
+`postgres` external in the bundle wasn't sufficient by itself under pnpm's
+strict `node_modules` (a package's own dependencies aren't visible to a
+workspace consumer that doesn't declare them directly) — `apps/api/
+package.json` now lists `postgres` as a direct dependency, documented in
+`build.mjs`'s own comment so a future similar gap is recognized, not
+re-debugged from scratch. Full `apps/api` test suite (283 tests) and
+`pnpm turbo run lint typecheck build` (24/24) confirmed zero effect on the
+dev/test paths.
+Next action: none for this gap. CR-074 (Dockerfile) can now proceed —
+`pnpm --filter api build && node dist/server.js` is a real, working
+production boot to build a Docker image around. If a future workspace
+package needs bundling into `apps/api`'s production artifact too, see
+ADR-017's "When to revisit."
+
+### KI-018 — `packages/config`'s shared tsconfig fragment broke under Vite 8's oxc transform
+
+Status: resolved 2026-09-12 (CR-008, same session it was discovered in).
+Problem: `packages/types`/`maps-core`/`maps-2gis`'s `tsconfig.json` extended
+`config/tsconfig/node-library.json` (a bare package specifier, resolved
+through the pnpm workspace symlink), which itself extended
+`../../../tsconfig.base.json`. `tsc` resolves each hop of a chained
+`extends` relative to the file that defines it and handles this fine (this
+is how CR-007 shipped it) — but Vite 8's default `vite:oxc` transform plugin
+(used by Vitest 5, only exercised once `packages/maps-2gis` got a
+`vitest.config.ts` in CR-008) resolves a nested `extends` relative to the
+_original_ consuming tsconfig's directory instead, and failed with
+`TSCONFIG_ERROR: Failed to load tsconfig 'tsconfig.base.json': Tsconfig not
+found`.
+Impact: blocked `packages/maps-2gis`'s Vitest suite entirely (0 tests
+collected); `apps/api`/`apps/web` were unaffected since neither's tsconfig
+goes through `packages/config` at all.
+Resolution: `packages/config/tsconfig/node-library.json` no longer extends
+`tsconfig.base.json` itself; every consumer (`packages/types`, `maps-core`,
+`maps-2gis`) now extends both directly as a TS 5+ array —
+`"extends": ["../../tsconfig.base.json", "config/tsconfig/node-library.json"]`
+— so no hop is ever chained through an intermediate file. Verified: `turbo
+build`/`typecheck` still green for all three (unaffected by construction),
+and `packages/maps-2gis`'s Vitest suite now collects and passes.
+
+### KI-034 — `routes.distanceKm`/`elevationGainMeters` (GPX-computed) and `rides.distanceKm`/`elevationGainMeters` (organizer-entered) are not reconciled
+
+Status: resolved 2026-09-15 (CR-029, "Route metadata" — its own named "next
+action"). Discovered: 2026-09-15 (CR-027, "GPX upload" session).
+Problem: `PATCH /v1/rides/:id` (CR-018) lets an organizer manually enter
+`distanceKm`/`elevationGainMeters` on the `Ride` row itself. CR-027 adds a
+second, independent computation of the same two figures on the new `Route`
+row, derived from the actual uploaded GPX track (haversine distance sum,
+positive-elevation-delta sum). Neither writes to the other — an organizer who
+uploads a GPX after already entering manual figures (or vice versa) can end
+up with two different numbers for the same ride, shown in different places
+(`EditRideForm`'s fields vs. `RouteUploadForm`'s summary card).
+Impact: low today — `/rides/[id]` (ride detail) still only reads `Ride`'s own
+fields (CR-023 predates `Route`), so a viewer never sees both numbers side by
+side yet; the mismatch is only visible to the organizer across two screens.
+Will matter more once a ride-detail screen shows route data too (CR-028/029).
+Workaround: none needed — both figures are individually correct for what
+they measure (one is the organizer's stated summary, the other is the GPX's
+actual measurement); nothing currently conflates them.
+Resolution: `POST /v1/rides/:id/route` (first upload only) now auto-fills
+whichever of `Ride.distanceKm`/`elevationGainMeters` is still `null` from
+the parsed GPX, in the same DB transaction as the route insert — this
+resolves the common case (most rides never accumulate two numbers at all).
+For the remaining edge case (an organizer's already-entered figure that
+turns out to differ from the track), the organizer's own route screen
+(`RouteUploadForm`) shows both values with an explicit "Использовать данные
+трека" action that reuses the existing `PATCH /v1/rides/:id` (no new
+endpoint) — a deliberate opt-in, never a silent overwrite.
+`PATCH .../route` (replace) still never touches `Ride`'s fields, so
+replacing a track with a very different one cannot silently change numbers
+the organizer already relied on. Live-verified against a real Postgres +
+browser: a failed upload (S3 unreachable, KI-015) leaves `Ride`'s fields
+untouched; a manually created mismatch shows the note with both values; the
+sync action updates `Ride` to match and the note disappears.
+
+### KI-035 — No live 2GIS/route-rendering read of `Route.geometry` yet; only a summary is exposed
+
+Status: resolved 2026-09-15 (CR-028, "Route rendering" — the "next action" this
+entry itself named). Discovered: 2026-09-15 (CR-027, "GPX upload" session).
+Problem: `GET /v1/rides/:id`'s additive `route` field is a summary only
+(`RouteSummary` — id/fileName/size/distance/elevation/pointCount), not the
+full `geometry` polyline (`.claude/context/current-task.md`'s CR-027 scoping
+note: no consumer for the full point array exists yet, and shipping it on
+every ride-detail response would needlessly bloat the payload).
+Resolution: new `GET /v1/rides/:id/route/geometry` endpoint (`{ points:
+RouteGeometryPoint[] }`), a separate, opt-in fetch only `/rides/[id]`'s route
+section makes — same viewer-visibility rule as `GET /v1/rides/:id`/`.../
+route/download`, no S3 call (`Route.geometry` is already in the DB row).
+Live-verified against a real Postgres: owner sees a draft ride's geometry, a
+stranger gets `404 ride_not_found` for the same draft ride, and any viewer
+(including no session) sees it once published — cross-checked byte-for-byte
+against the inserted `routes.geometry` value.
+
+### KI-051 — Native dev `DATABASE_URL` database was missing CR-097's migration, 500ing every ride read
+
+Status: resolved same session, 2026-09-20 (CR-098 session). Discovered:
+2026-09-20 (CR-098 session), while starting local dev servers to live-verify
+the discovery map.
+Problem: `GET /v1/rides` 500'd with a `DrizzleQueryError`: `column
+organizer_profiles.avatar_key does not exist`. CR-097 (prior session) added
+that column via migration `0016_avatar_columns.sql` and validated against
+`TEST_DATABASE_URL` (Docker Compose Postgres) — its own live end-to-end
+verification apparently also went through a different Postgres than this
+session's `.env`-configured native `DATABASE_URL` (`coffee_ride_dev`, the
+same native Homebrew Postgres KI-049 already documents as distinct from
+Docker's, both on port 5432 under different address families), which never
+had migration `0016` applied.
+Impact: high for this session's immediate task (blocked live-verifying any
+ride-listing endpoint, including the new discovery map) — zero for CI/tests
+(both go through `TEST_DATABASE_URL`, already migrated) and zero for actual
+avatar functionality (CR-097's own feature code is correct; only this one
+native database's applied-migrations state was stale).
+Workaround: none needed — see Resolution.
+Resolution: ran `pnpm --filter db db:migrate` with `DATABASE_URL` sourced
+from `.env`, applying the pending migration to `coffee_ride_dev` directly.
+`GET /v1/rides` confirmed working immediately after (`{"items":[],
+"nextCursor":null}`, no error). No data loss — an ordinary additive
+migration, not the KI-049 incident's destructive `DELETE FROM` pattern.
+Next action: none for this specific occurrence. Worth remembering: this
+native database needs its own `pnpm --filter db db:migrate` run after any
+session that adds a migration but only validated/live-verified against
+`TEST_DATABASE_URL` — the same two-Postgres-instances setup KI-049 already
+flagged, one more concrete consequence of it.
+
+### KI-074 — `apps/web`'s production build fetches five font families from Google Fonts
+
+Status: resolved 2026-09-28 (CR-146 — fonts self-hosted via `next/font/local`). Discovered: 2026-09-27 (CI run `36345478610`, CR-144's push).
+Problem: `app/layout.tsx` loads Golos Text, Sofia Sans Condensed, IBM Plex Mono,
+Unbounded and Sofia Sans Extra Condensed through `next/font/google`, which
+downloads them from `fonts.googleapis.com` during `next build`. When a response
+isn't the expected CSS, `next/font` crashes (`Cannot read properties of null
+(reading '1')`) and the whole build fails. Second occurrence in a day — the first
+hit `docker-smoke` (`docs/changelog.md`, CR-140 entry), this one `ci`'s Build step;
+both went green on re-run with no code change.
+Impact: medium — CI goes red for reasons unrelated to the change under test, and
+a production image build depends on an external service at build time
+(`.claude/rules/resilience.md`).
+Workaround: re-run the failed job.
+Next action: self-host the fonts — commit the `.woff2` files (all SIL OFL) and
+switch to `next/font/local`, keeping the `cyrillic`/`latin` subsets, the weights,
+the CSS variables and Sofia Sans' `locl` behaviour (`<html lang="ru">`).
+
+### KI-015 — `apps/api`'s S3 client was never connected to a live MinIO
+
+Status: resolved 2026-09-28 (CR-146 known-issues sweep) — the live round trip
+this entry asked for has existed since CR-137: `route-storage.live.test.ts` and
+`file-storage.live.test.ts` (upload → object → download → replace → delete over
+HTTP against the local S3 service, SeaweedFS since ADR-025) run in CI's `ci` job
+(`RUN_LIVE_S3_TESTS=1`) and passed 3/3 locally on 2026-09-28. Discovered: 2026-09-12
+(CR-006). Widened: 2026-09-15 (CR-027).
+Problem: same root cause as KI-014 — Docker's daemon did not come up in this
+environment (confirmed across CR-004/CR-005/CR-006/CR-027; recorded as a
+standing environment constraint, not re-litigated per task — see
+`docker-desktop-unavailable` in Claude's project memory). `src/s3.ts`
+(`createS3Client`) was only typechecked/linted/built through CR-006.
+Update 2026-09-15 (CR-027, "GPX upload"): this is now `apps/api`'s first real
+S3 consumer (`plugins/s3.ts`, `modules/rides/route-storage.ts`) — a real,
+non-trivial code path (upload/download/delete with a timeout + bounded
+retry, ADR-015) exists and is exercised by 18 `route.routes.test.ts` tests,
+but every one of them mocks `@aws-sdk/client-s3`'s `S3Client.send` (same
+technique CR-008 used for `maps-2gis`'s `fetch`) — none has ever run against
+a real MinIO. Live-verified via curl instead that the _degraded_ path is
+correct: with no `S3_*` env configured, `POST /v1/rides/:id/route` returns
+`503 route_storage_unavailable` (not a 500, not a hang), and no orphaned
+`routes` row was left behind (upload happens before the DB insert).
+Impact: medium now (was low) — a real feature (GPX upload) depends on this
+client actually working against production S3/MinIO, unlike CR-006's
+dormant wrapper. `CR-086`'s cover image pipeline will hit the identical gap.
+Workaround: none needed for correctness — the degraded-response contract
+(`503 route_storage_unavailable`) is itself verified; only the _successful_
+upload/download/delete round trip against a real store is unverified.
+Next action: the first session with a working Docker daemon should run
+`docker compose up -d minio`, confirm a real `PutObject`/`GetObject`/
+`DeleteObject` round trip against it (e.g. via `route-storage.ts`'s
+functions directly, or a full `POST /v1/rides/:id/route` → download → delete
+walkthrough), before trusting this in any CR-086 or production-facing work.
+Update 2026-09-19: Docker worked this session; `docker compose up -d minio`
+started cleanly, but the `coffee-ride` bucket did not exist yet (fresh
+container/volume) — `apps/api`'s `/health` reported `s3: "error"` until it was
+created manually (`mc mb local/coffee-ride`), after which `/health` reported
+`s3: "ok"`. Note for next time: nothing in this repo auto-creates the bucket
+on first boot — a fresh `minio_data` volume needs this one-time `mc mb` step.
+Health-check-level connectivity is now confirmed; a real
+`PutObject`/`GetObject`/`DeleteObject` round trip through
+`route-storage.ts` itself (e.g. an actual GPX upload) was not exercised this
+session — that remains the next action.
+Update 2026-09-20 (CR-097): a real `PutObject`/`GetObject`/`DeleteObject`
+round trip was exercised end to end this session, through `lib/
+image-storage.ts` (the module `route-storage.ts`'s cover-image/avatar
+siblings share, relocated from `cover-image-storage.ts` — see
+`docs/changelog.md`), via a live avatar upload/download/delete against the
+real `coffee-ride` MinIO bucket (confirmed with `mc find` before and after).
+This proves the S3 client/credential/bucket path genuinely works, but
+`route-storage.ts`'s own GPX-specific code path is still, narrowly,
+unexercised — leaving this open rather than resolving it outright.
+Update 2026-09-24: owner hit «Загрузка недоступна» on avatar upload — Docker
+Desktop was off, so MinIO was down (`/health` → `s3: "error"`); the degraded
+UI state behaved as designed. Fixed by starting Docker + `docker compose up
+-d minio` + `mc mb --ignore-existing local/coffee-ride`; a live avatar
+upload/download/delete then returned 201/200/204. Still nothing auto-creates
+the bucket — a `minio-init` compose service would remove that manual step.
+Update 2026-09-24 (CR-129): done — `docker-compose.yml`'s one-shot
+`minio-init` creates the bucket (`mc mb --ignore-existing`) once `minio` is
+healthy; verified on a fresh isolated volume (bucket created, exit 0, re-run
+exit 0). What keeps this open is only `route-storage.ts`'s GPX path above.
