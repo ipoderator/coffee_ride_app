@@ -418,9 +418,15 @@ describe('RideDetailView', () => {
 
     render(<RideDetailView rideId="ride-1" />);
 
+    const cover = await screen.findByRole('img', {
+      name: 'Обложка с треком маршрута',
+    });
+    // The track sits centred in the window (800px fallback width → x 400),
+    // with no elevation silhouette drawn under it — the chart below has that.
     expect(
-      await screen.findByRole('img', { name: 'Обложка с треком маршрута' }),
-    ).toBeInTheDocument();
+      cover.querySelector('path.stroke-cover-route')?.getAttribute('d'),
+    ).toMatch(/^M400\.0 /);
+    expect(cover.querySelector('.fill-cover-elevation')).toBeNull();
     expect(getRouteGeometryMock).toHaveBeenCalledWith('ride-1');
     expect(
       screen.queryByText('Маршрут пока не загружен'),

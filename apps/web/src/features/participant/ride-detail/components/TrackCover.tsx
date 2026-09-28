@@ -20,7 +20,6 @@ export interface CoverMark {
 
 // A real track is thousands of GPX points; a few hundred draw the same line.
 const MAX_TRACK_POINTS = 600;
-const MAX_SILHOUETTE_POINTS = 200;
 // With no track, a lone start pin shouldn't fill the cover: frame at least
 // ~2 km around the pins.
 const POINTS_ONLY_MIN_SPAN_KM = 2;
@@ -44,44 +43,51 @@ function markClassName(kind: MarkKind): { className: string; r: number } {
   }
 }
 
-/** Two sets of wobbly concentric rings — the cover's decorative «isolines»
- * (ADR-024), deterministic per ride so it never reshuffles on a re-render. */
-function isolinePaths(width: number, height: number, seed: string): string[] {
+const ISOLINE_RINGS = 7;
+
+/** One set of sparse, wobbly concentric rings around the track's own centre —
+ * the cover's decorative «isolines» (ADR-024), fading outwards so they frame
+ * the route instead of competing with it. Deterministic per ride, so it never
+ * reshuffles on a re-render. */
+function isolinePaths(
+  width: number,
+  height: number,
+  centre: [number, number],
+  seed: string,
+): Array<{ d: string; opacity: number }> {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
   const phase = (Math.abs(hash) % 628) / 100;
-  const centres: Array<[number, number, number, number]> = [
-    [width * 0.74, height * 0.38, 18, phase],
-    [width * 0.16, height * 1.02, 11, phase + 2.3],
-  ];
-  const paths: string[] = [];
-  for (const [cx, cy, rings, offset] of centres) {
-    for (let k = 1; k <= rings; k += 1) {
-      const r0 = k * Math.max(width, height) * 0.028;
-      let d = '';
-      for (let j = 0; j <= 72; j += 1) {
-        const theta = (j / 72) * 2 * Math.PI;
-        const r =
-          r0 *
-          (1 +
-            0.14 * Math.sin(3 * theta + k * 0.4 + offset) +
-            0.07 * Math.sin(7 * theta - k * 0.6));
-        d += `${j ? 'L' : 'M'}${(cx + r * Math.cos(theta) * 1.35).toFixed(1)} ${(cy + r * Math.sin(theta)).toFixed(1)}`;
-      }
-      paths.push(`${d}Z`);
+  const [cx, cy] = centre;
+  const step = Math.max(width, height) * 0.07;
+  const paths: Array<{ d: string; opacity: number }> = [];
+  for (let k = 1; k <= ISOLINE_RINGS; k += 1) {
+    const r0 = k * step;
+    let d = '';
+    for (let j = 0; j <= 72; j += 1) {
+      const theta = (j / 72) * 2 * Math.PI;
+      const r =
+        r0 *
+        (1 +
+          0.1 * Math.sin(3 * theta + k * 0.4 + phase) +
+          0.05 * Math.sin(7 * theta - k * 0.6));
+      d += `${j ? 'L' : 'M'}${(cx + r * Math.cos(theta) * 1.6).toFixed(1)} ${(cy + r * Math.sin(theta)).toFixed(1)}`;
     }
+    paths.push({ d: `${d}Z`, opacity: 1 - (k - 1) / ISOLINE_RINGS });
   }
   return paths;
 }
 
 /**
  * CR-151: the hero's «Трек» face — the real route geometry on the dark cover
- * (ADR-024 `cover-*` inks, the same in both UI themes), an elevation
- * silhouette along its foot, the typed pins, and a dot that follows the
- * pointer over the elevation profile (`hoverKm`). Without a track only the
- * pins are drawn — never joined by straight lines (they are not a route).
+ * (ADR-024 `cover-*` inks, the same in both UI themes), centred in the window
+ * with even margins over a few faint isolines, the typed pins, and a dot that
+ * follows the pointer over the elevation profile (`hoverKm`). No elevation
+ * silhouette here: the profile chart below the hero already draws it, and on
+ * the cover it sat under the track. Without a track only the pins are drawn —
+ * never joined by straight lines (they are not a route).
  */
 export function TrackCover({
   track,
@@ -103,15 +109,17 @@ export function TrackCover({
 
   const drawing = useMemo(() => {
     const narrow = width < 640;
-    const top = narrow ? 64 : 70;
-    const box = narrow
-      ? { x: 24, y: top, width: width - 48, height: height - top - 24 }
-      : {
-          x: width * 0.3,
-          y: top,
-          width: width * 0.62,
-          height: height - top - 28,
-        };
+    // Top clears the status chip and the «Трек/Карта» switch; the bottom
+    // keeps the same air, so the route sits centred in what's left.
+    const top = narrow ? 64 : 76;
+    const bottom = narrow ? 28 : 36;
+    const side = narrow ? 24 : Math.max(56, width * 0.08);
+    const box = {
+      x: side,
+      y: top,
+      width: width - side * 2,
+      height: height - top - bottom,
+    };
     const geo = track ? track.points : marks.map((mark) => mark.point);
     const project = fitProjection(
       geo,
@@ -119,42 +127,25 @@ export function TrackCover({
       track ? 0 : POINTS_ONLY_MIN_SPAN_KM,
     );
 
-    let trackPath: string | null = null;
-    let silhouette: string | null = null;
-    if (track && project) {
-      trackPath = downsample(track.points, MAX_TRACK_POINTS)
-        .map((point, i) => {
-          const [x, y] = project(point);
-          return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
-        })
-        .join('');
-
-      const indices = downsample(
-        track.points.map((_, i) => i),
-        MAX_SILHOUETTE_POINTS,
-      ).filter((i) => track.points[i]!.elevationMeters !== null);
-      if (indices.length >= 2) {
-        const elevations = indices.map(
-          (i) => track.points[i]!.elevationMeters!,
-        );
-        const min = Math.min(...elevations);
-        const spread = Math.max(...elevations) - min || 1;
-        silhouette = `M0 ${height}${indices
-          .map((i, n) => {
-            const x = (track.cumulativeKm[i]! / track.totalKm) * width;
-            const y =
-              height - 8 - ((elevations[n]! - min) / spread) * height * 0.3;
-            return `L${x.toFixed(1)} ${y.toFixed(1)}`;
-          })
-          .join('')}L${width} ${height}Z`;
-      }
-    }
+    const trackPath =
+      track && project
+        ? downsample(track.points, MAX_TRACK_POINTS)
+            .map((point, i) => {
+              const [x, y] = project(point);
+              return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+            })
+            .join('')
+        : null;
 
     return {
       project,
       trackPath,
-      silhouette,
-      isolines: isolinePaths(width, height, seed),
+      isolines: isolinePaths(
+        width,
+        height,
+        [box.x + box.width / 2, box.y + box.height / 2],
+        seed,
+      ),
     };
   }, [track, marks, width, height, seed]);
 
@@ -183,17 +174,10 @@ export function TrackCover({
           strokeWidth={1.2}
           data-isolines
         >
-          {drawing.isolines.map((d, i) => (
-            <path key={i} d={d} />
+          {drawing.isolines.map(({ d, opacity }, i) => (
+            <path key={i} d={d} opacity={opacity} />
           ))}
         </g>
-        {drawing.silhouette ? (
-          <path
-            d={drawing.silhouette}
-            className="fill-cover-elevation"
-            opacity={0.22}
-          />
-        ) : null}
         {drawing.trackPath ? (
           <>
             <path

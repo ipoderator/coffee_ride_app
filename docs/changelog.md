@@ -1831,3 +1831,17 @@ runs `36413572568` (organizer-dashboard, discovery-map — mobile) and
 identical across all three attempts (≤11 px of edge anti-aliasing), checked by
 eye — only the CR-151 layout and the new fonts, no layout breakage.
 KI-076 archived.
+
+## 2026-09-28 — CR-151 follow-up — Hero track cover: centred, uncluttered
+
+What: owner feedback on `/rides/[id]`'s «Трек» face — the track was pushed into
+the right 62 % of the window (left half empty), two dense ring sets (29 rings)
+crossed it, and the elevation silhouette sat under its lower half. `TrackCover`
+now centres the track with even margins (top clears the chip/switch), draws one
+set of 7 sparse isolines around the track's centre fading outwards, and no
+longer draws the silhouette (the elevation chart below the hero already shows
+it and keeps the scrub-dot link). `docs/design.md` §Ride page hero updated.
+
+Validation: ride-detail unit tests 74/74 incl. a new assertion (track centred,
+no silhouette — fails on the old cover); web typecheck/eslint/prettier clean;
+checked on the dev server at 1440 and 390 px on a seeded ride with a route.

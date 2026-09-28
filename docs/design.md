@@ -382,8 +382,10 @@ after the ADR-024 card read as cluttered — every fact was stacked over the rou
 - **Hero** (`RideHero`): the always-dark cover window, full-bleed on a phone, 28px
   radius from `sm`. Two faces behind a «Трек / Карта» `SegmentedControl` on the cover
   (shown only when there is something to map): the drawn track (`TrackCover` —
-  decorative isolines, an elevation silhouette at 22 % along the foot, the real
-  geometry, typed pins) or the live 2GIS `RouteMap` (placeholder when degraded).
+  the real geometry centred in the window with even margins, typed pins, and one
+  sparse set of isolines around the track's centre fading outwards; no elevation
+  silhouette — the profile chart below carries it, and nothing is drawn over the
+  track) or the live 2GIS `RouteMap` (placeholder when degraded).
   No track → pins only, never joined, plus «Маршрут пока не загружен». Status chip
   top-left (same derivation as the grid card). Under the picture, the **numbers
   band**: distance / набор высоты (elevation ink) / средний темп (+ «N группы») /
