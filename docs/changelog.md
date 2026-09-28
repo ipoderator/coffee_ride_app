@@ -1577,3 +1577,17 @@ they mock `MapProvider` and no apps/api code changed — CI covers them.
 Found: KI-075 (demo key: routing refuses points over 50 km apart, surfaced as
 503 "unavailable"); bicycle routes may include ferries (Vladivostok → Popova
 island). KI-056 narrowed to local reachability only.
+
+## 2026-09-28 — CR-147 follow-up — route-builder test fixture in centimetres
+
+Summary: CI run `36387610343` on `b207fd8` failed in `Test (with coverage)`:
+`route-builder.routes.test.ts` feeds the real 2GIS adapter a mocked Routing
+answer whose altitudes were written in metres (100/130/120), so after CR-147's
+÷100 the ride's elevation gain came out 0 instead of 30. The CR-147 entry's
+assumption that apps/api only mocks `MapProvider` was wrong for this suite. The
+fixture now uses centimetres (10000/13000/12000), as 2GIS sends them.
+
+Files: `apps/api/src/modules/rides/route-builder.routes.test.ts`.
+
+Validation: `src/modules/rides` against the Docker test database — 197 passed,
+3 skipped (live suites); route-builder 12/12.

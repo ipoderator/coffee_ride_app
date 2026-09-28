@@ -126,10 +126,11 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
 }
 
 // A 2GIS Routing answer: one maneuver whose path bends (it follows a road,
-// unlike the straight line between the two requested points).
+// unlike the straight line between the two requested points). Altitudes in
+// centimetres, as 2GIS sends them (CR-147): 100 m, 130 m, 120 m.
 function routingAnswer({ withAltitudes }: { withAltitudes: boolean }) {
   const selection = withAltitudes
-    ? 'LINESTRING Z(37.6000 55.7500 100, 37.6100 55.7550 130, 37.6000 55.7600 120)'
+    ? 'LINESTRING Z(37.6000 55.7500 10000, 37.6100 55.7550 13000, 37.6000 55.7600 12000)'
     : 'LINESTRING(37.6000 55.7500, 37.6100 55.7550, 37.6000 55.7600)';
   return [
     {

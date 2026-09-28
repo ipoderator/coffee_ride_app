@@ -39,4 +39,5 @@ can't reach 2GIS REST, KI-056) and fix what the live answers show.
   `ROUTE_DOES_NOT_EXISTS`, now `no_route`.
 - Final contract run `36387478533`: 5/5 green. CR-114 checked off.
 - Validation: maps-2gis tests (45), typecheck, lint. apps/api suites not run
-  locally (no `TEST_DATABASE_URL`; no apps/api code changed) — left to CI.
+  locally at first; CI caught the route-builder fixture (metres) — fixed, rides
+  suites 197 passed locally.
