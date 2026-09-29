@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ride } from 'types';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
@@ -87,16 +87,25 @@ function fillMinimalValidForm() {
   fireEvent.change(screen.getByLabelText('Название'), {
     target: { value: 'Утренний гравийный заезд' },
   });
-  fireEvent.change(screen.getByLabelText('Дата'), {
-    target: { value: '2027-05-01' },
-  });
+  // CR-157: «Дата» is a calendar popover now. The CreateRideForm tests pin
+  // «today» to 2027-04-20, so 1 May 2027 is one month ahead.
+  fireEvent.click(screen.getByLabelText('Дата'));
+  fireEvent.click(screen.getByRole('button', { name: 'Следующий месяц' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Сб, 1 мая 2027' }));
   fireEvent.change(screen.getByLabelText('Время старта'), {
     target: { value: '08:00' },
   });
 }
 
 describe('CreateRideForm', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    // Only `Date` is faked — `waitFor`/`findBy*` still need real timers.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2027-04-20T12:00:00'));
     createRideMock.mockReset();
     updateRideMock.mockReset();
     getRideMock.mockReset();
@@ -223,7 +232,7 @@ describe('CreateRideForm', () => {
     expect(
       await screen.findByDisplayValue('Утренний гравийный заезд'),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Дата')).toHaveValue('2027-05-01');
+    expect(screen.getByLabelText('Дата')).toHaveTextContent('Сб, 1 мая 2027');
     expect(screen.getByLabelText('Время старта')).toHaveValue('08:00');
     expect(screen.getByLabelText('Сложность')).toHaveValue('3');
     expect(screen.getByLabelText('Описание')).toHaveValue('Круг по центру');

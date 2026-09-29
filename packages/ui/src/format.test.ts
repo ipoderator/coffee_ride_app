@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatCalendarDate,
   countdownParts,
   formatCountdownShort,
   formatRelativeDay,
@@ -88,6 +89,21 @@ describe('formatDuration', () => {
 
   it('renders missing data as an em dash, never 0', () => {
     expect(formatDuration(null)).toBe(EM_DASH);
+  });
+});
+
+describe('formatCalendarDate (CR-157)', () => {
+  it('formats a calendar date with a capitalized weekday', () => {
+    expect(formatCalendarDate('2026-10-01')).toBe('Чт, 1 октября 2026');
+    expect(formatCalendarDate('2026-10-04', { withYear: false })).toBe(
+      'Вс, 4 октября',
+    );
+  });
+
+  it('returns an em dash for an empty or impossible date', () => {
+    expect(formatCalendarDate('')).toBe('—');
+    expect(formatCalendarDate(null)).toBe('—');
+    expect(formatCalendarDate('2026-02-30')).toBe('—');
   });
 });
 

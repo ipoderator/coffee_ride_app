@@ -449,6 +449,30 @@ export function formatPaceRangeParts(paces: readonly number[]): MetricParts {
 // registered viewer's start countdown. Additive only.
 // ---------------------------------------------------------------------------
 
+/**
+ * CR-157: a calendar date with no instant behind it (`<input type="date">`'s
+ * `"2026-10-01"`), for the date picker — `Чт, 1 октября 2026`; `withYear:
+ * false` → `Чт, 1 октября`. No timezone: the string already *is* the local
+ * day. An unparseable value → `—`.
+ */
+export function formatCalendarDate(
+  value: Maybe<string>,
+  options: { withYear?: boolean } = {},
+): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? '');
+  if (!match) return EM_DASH;
+  const [year, month, day] = [
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+  ];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCMonth() !== month - 1) return EM_DASH;
+  const weekday = SHORT_WEEKDAYS[date.getUTCDay()] ?? SHORT_WEEKDAYS[0];
+  const head = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${day} ${GENITIVE_MONTHS[month - 1]}`;
+  return options.withYear === false ? head : `${head} ${year}`;
+}
+
 /** Short lower-case Russian weekday of `date` as seen in `timeZone` — `пн`. */
 export function formatShortWeekday(
   date: Date,

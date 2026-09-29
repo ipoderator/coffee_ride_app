@@ -579,6 +579,42 @@ export const RIDE_CREATE_TERMS = {
   loadError: 'Не удалось сохранить заезд. Попробуйте ещё раз.',
 } as const;
 
+/** CR-157: `DatePicker` (the new-ride wizard's «Дата»). Monday-first, like
+ * every Russian calendar. */
+export const DATE_PICKER_TERMS = {
+  placeholder: 'Выберите дату',
+  dialogLabel: 'Выбор даты',
+  prevMonth: 'Предыдущий месяц',
+  nextMonth: 'Следующий месяц',
+  close: 'Закрыть',
+  today: 'Сегодня',
+  tomorrow: 'Завтра',
+  months: [
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
+  ],
+  weekdaysShort: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+  weekdaysLong: [
+    'понедельник',
+    'вторник',
+    'среда',
+    'четверг',
+    'пятница',
+    'суббота',
+    'воскресенье',
+  ],
+} as const;
+
 /** CR-156: the four-step new-ride wizard (`/organizer/rides/new` →
  * `.../[id]/route` → `.../[id]/groups` → `.../[id]/edit`, each with
  * `?wizard=1`). Steps 2–4 are the existing screens inside the same frame. */

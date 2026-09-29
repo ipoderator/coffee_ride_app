@@ -10,6 +10,7 @@ import {
   BICYCLE_TYPE_TERMS,
   Button,
   Card,
+  DatePicker,
   DIFFICULTY_LEVEL_TERMS,
   ErrorState,
   FormField,
@@ -143,6 +144,11 @@ export function CreateRideForm({
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const isPending = pendingIntent !== null;
+  // CR-157: no picking a start day that has already passed (browser-local).
+  const [todayLocal] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
 
   const loadDraft = useCallback(async (id: string) => {
     setLoadState('loading');
@@ -359,12 +365,11 @@ export function CreateRideForm({
             label={RIDE_CREATE_TERMS.startDateLabel}
             error={fieldErrors.startDate}
           >
-            <Input
-              type="date"
+            <DatePicker
               value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
+              onChange={setStartDate}
+              min={todayLocal}
               disabled={isPending}
-              className={CONTROL_CLASS}
             />
           </FormField>
 

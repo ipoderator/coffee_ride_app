@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  DATE_PICKER_TERMS,
   PARTICIPANTS_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_CREATE_TERMS,
@@ -78,15 +79,13 @@ test('organizer creates and publishes a ride', async ({ page }) => {
   await page.goto('/organizer/rides/new');
   const rideTitle = `E2E заезд ${Date.now()}`;
   await page.getByLabel(RIDE_CREATE_TERMS.titleLabel).fill(rideTitle);
-  const startLocal = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 16);
-  await page
-    .getByLabel(RIDE_CREATE_TERMS.startDateLabel)
-    .fill(startLocal.slice(0, 10));
+  // CR-157: the date is picked in the calendar popover — «Завтра» is always
+  // a future day, and 08:00 tomorrow is always a future start.
+  await page.getByLabel(RIDE_CREATE_TERMS.startDateLabel).click();
+  await page.getByRole('button', { name: DATE_PICKER_TERMS.tomorrow }).click();
   await page
     .getByLabel(RIDE_CREATE_TERMS.startTimeLabel, { exact: true })
-    .fill(startLocal.slice(11, 16));
+    .fill('08:00');
 
   // CR-156: the new-ride wizard — step 1 saves the draft, steps 2–4 are
   // the route/groups/edit screens inside the same frame.

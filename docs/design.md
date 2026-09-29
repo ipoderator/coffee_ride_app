@@ -651,7 +651,18 @@ URL with no history behind it. A cabinet sidebar section itself (`/organizer/rid
 `Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `AvatarStack` (ADR-024, new — overlapping
 avatars + `+N` overflow), `Pagination`, `MetricTile`, `MetricRow`, `StatusBadge`,
 `DifficultyScale`, `Wordmark`, `NavMenu`, `SegmentedControl` (CR-151 — native radios in a
-`fieldset`, a sliding thumb; `tall` two-line and `cover` dark-window variants).
+`fieldset`, a sliding thumb; `tall` two-line and `cover` dark-window variants),
+`DatePicker` (CR-157 — see below).
+
+`DatePicker` (CR-157) replaces the native `<input type="date">` wherever a
+calendar day is picked (today: the new-ride wizard's «Дата»). The trigger shows
+`formatCalendarDate` («Чт, 1 октября 2026»); the calendar is Monday-first with
+48px day cells, quick picks «Сегодня / Завтра / Сб / Вс» (group rides are mostly
+weekend mornings), `min` to disable past days, today ringed (not colour alone —
+`aria-current="date"`), and a popover from `sm`, a bottom sheet over the scrim
+on a phone. Keyboard: arrows, PageUp/PageDown, Home/End, Enter, Escape (focus
+back to the trigger). Value is a plain `"YYYY-MM-DD"` — the caller still turns
+day + time + zone into an instant (ADR-012).
 
 `NavMenu` (CR-108) is the accessible dropdown the global header's sections, theme
 control and account menu are all built from — `aria-haspopup="menu"`/`aria-expanded`,
