@@ -441,6 +441,24 @@ CR-114 questions answered. Also seen: bicycle routing takes ferries
 ["dirt_road","ferry"]`). What stays open here is only local reachability:
 the seed route rebuild still needs this machine to reach 2GIS (VPN off or
 split-tunnel `*.2gis.com`); live adapter checks go through `maps-contract.yml`.
+Update 2026-09-29 (CR-148/CR-160): this machine could reach 2GIS again this
+session (TCP connect + a real geocode call both succeeded; egress path/VPN
+state not otherwise diagnosed — no action taken here, it was simply
+reachable). Used the window to run `pnpm seed:demo` without `--no-routes`
+for the first time: found and fixed a real, separate route-builder bug
+(CR-160, `packages/maps-2gis/src/route.ts`) — every point was sent as
+`type: 'stop'`, but 2GIS only honors a `stop` at the first/last position and
+silently drops one in the middle, so a closed-loop ride (shared start/end
+point) collapsed to a near-zero-length route instead of touring all
+waypoints. Fixed by sending `type: 'pref'` for intermediate points; live-
+verified against the real API (7-point loop went from 51 m to a correct
+22.4 km) and against all 9 seed rides end to end (`pnpm seed:demo` fully
+green, routes built on real roads, e.g. 1014-point dense polyline with real
+elevation for "Кофейный круг"). CR-148 is now fully done — no more
+`--no-routes` fallback needed when 2GIS is reachable. This entry stays open
+only for the reachability question itself: still no split-tunnel/VPN-off
+procedure has been established as a standing fix, so a future session may
+still find 2GIS unreachable again.
 
 ### KI-057 — The 2GIS basemap stays light in the dark theme
 

@@ -2208,3 +2208,47 @@ rules disabled (previously 7 stories had `color-contrast` off); visually
 checked `ui-button--danger` and `rides-ridecard--load-error` via the running
 Storybook (`storybook-mcp`) — same visual weight, no other regression.
 KI-080 moved to `.claude/context/known-issues-archive.md` as resolved.
+
+## 2026-09-29 — CR-160 (found while finishing CR-148) — Fix 2GIS multi-stop routing bug; complete CR-148's full route-based seed
+
+Why: 2GIS became reachable from this machine again this session (KI-056);
+used the window to run `pnpm seed:demo` without `--no-routes` for the first
+time. The first ride ("Кофейный круг", a closed loop of 7 waypoints sharing
+its start/end point) failed with `422 route_not_buildable`.
+
+What: `packages/maps-2gis/src/route.ts`'s `getRoute` sent every waypoint as
+`type: 'stop'`. Verified live against the real Routing API
+(`routing.api.2gis.com/routing/7.0.0/global`) that 2GIS only honors a `stop`
+at the first/last position — a `stop` in the middle is silently dropped, so
+the request degenerates into a point-to-point route between the first and
+last point. For a closed loop (first == last) that collapsed to a ~51 m
+route instead of the real ~22 km loop. 2GIS's own docs (`docs.2gis.com`
+Routing API, "points" examples) confirm the intended shape: first/last =
+`stop`, intermediate = `pref` (all transport types except public transport).
+Fixed: intermediate points now sent as `type: 'pref'`. Live-verified the
+same 7-point loop went from 51 m / 2 waypoints honored to 22 417 m / all 7
+waypoints honored; confirmed no seed ride exceeds 2GIS's 8-intermediate-point
+limit for cycling (max is 5 intermediate points).
+
+New regression test in `packages/maps-2gis/src/provider.test.ts` asserting
+the outgoing request marks only index 0 and the last index as `stop`, every
+other index as `pref`.
+
+Completed CR-148 with this fix in place: `pnpm seed:demo` (no `--no-routes`)
+now runs fully green end to end — 3 organizers, 8 riders, 9 rides in every
+lifecycle state, every route built on real 2GIS roads (spot-checked:
+"Кофейный круг" is a 1014-point dense polyline with real per-vertex
+elevation, 22.6 km, matching the live test). `--no-routes` stays available
+as a fallback for whenever 2GIS is unreachable again (KI-056 is a standing
+environment condition, not resolved by this session — see its updated
+entry).
+
+Validation: `packages/maps-2gis` typecheck/lint/test 48/48 (1 new);
+`RUN_2GIS_CONTRACT_TESTS=1` live contract suite 5/5 against the real API;
+`apps/api` typecheck/lint/test 495/495 (no regressions); `pnpm seed:demo`
+live-verified end to end against the real running dev stack.
+Files: `packages/maps-2gis/src/route.ts`, `packages/maps-2gis/src/
+provider.test.ts`.
+Decisions: none (bug fix, no ADR).
+Follow-up: none for CR-148/CR-160. KI-056 (2GIS reachability from this
+machine) stays open as a standing, unresolved environment condition.

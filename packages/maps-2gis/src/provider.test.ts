@@ -264,6 +264,48 @@ describe('getRoute', () => {
     ]);
   });
 
+  // Regression (2026-09-29, live-verified against a real key): 2GIS only
+  // routes through the first/last point if it's `type: 'stop'` — a `stop` in
+  // the middle is silently dropped, collapsing a closed loop (shared
+  // start/end point) to a near-zero-length route instead of touring every
+  // waypoint. Intermediate points must be `type: 'pref'`.
+  it('sends only the first and last point as `stop`; every intermediate point as `pref`', async () => {
+    const fetchMock = mockFetchOnce({
+      json: async () => [
+        {
+          total_distance: 22417,
+          total_duration: 4500,
+          maneuvers: [
+            {
+              outcoming_path: {
+                geometry: [{ selection: 'LINESTRING(2 1, 4 3)' }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const provider = create2GisMapProvider(config);
+    await provider.getRoute({
+      points: [
+        { lat: 1, lng: 2 },
+        { lat: 1.1, lng: 2.1 },
+        { lat: 1.2, lng: 2.2 },
+        { lat: 1, lng: 2 },
+      ],
+      profile: 'cycling',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body.points.map((point: { type: string }) => point.type)).toEqual([
+      'stop',
+      'pref',
+      'pref',
+      'stop',
+    ]);
+  });
+
   // CR-147: the live answer for points no road connects.
   it('maps an HTTP 200 ROUTE_DOES_NOT_EXISTS error to no_route', async () => {
     mockFetchOnce({

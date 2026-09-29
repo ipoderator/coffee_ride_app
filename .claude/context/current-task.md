@@ -1,5 +1,28 @@
 # Current task
 
+## CR-160 — Fix 2GIS multi-stop routing bug (found finishing CR-148)
+
+Status: **done, committed** (2026-09-29). Details: `docs/changelog.md` CR-160.
+
+- [x] Found: 2GIS became reachable from this machine; ran `pnpm seed:demo`
+      without `--no-routes` for the first time — first ride (a closed loop)
+      failed `422 route_not_buildable`.
+- [x] Root cause confirmed live against the real Routing API: every point was
+      sent as `type: 'stop'`; 2GIS only honors `stop` at the first/last
+      position, silently drops one in the middle.
+- [x] Fix: `packages/maps-2gis/src/route.ts` sends `type: 'pref'` for
+      intermediate points, `type: 'stop'` for first/last only.
+- [x] Regression test added (`provider.test.ts`).
+- [x] Live-verified: 7-point loop 51 m → 22 417 m (all waypoints honored).
+- [x] `pnpm seed:demo` (no `--no-routes`) now green end to end — completes
+      **CR-148**.
+- [x] `packages/maps-2gis` typecheck/lint/test 48/48; live contract suite
+      5/5; `apps/api` typecheck/lint/test 495/495.
+- [x] `docs/tasks.md` (CR-148 checked off, CR-160 added), `docs/changelog.md`,
+      `.claude/context/known-issues.md` (KI-056 updated), `project-state.md`
+      updated.
+- [x] Committed/pushed.
+
 ## CR-159 — Fix KI-080: light-theme `--danger` contrast
 
 Status: **done, committed** (2026-09-29). Details: `docs/changelog.md` CR-159.

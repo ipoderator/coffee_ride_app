@@ -37,7 +37,18 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-CR-159 (2026-09-29, not committed yet): fixed KI-080 — light-theme `--danger`
+CR-160 (2026-09-29, committed): fixed a real 2GIS route-builder bug
+found while finishing CR-148 — `packages/maps-2gis/src/route.ts` sent every
+waypoint as `type: 'stop'`, but 2GIS only honors a `stop` at the first/last
+position and silently drops one in the middle, collapsing a closed-loop
+ride to a near-zero-length route. Fixed by sending `type: 'pref'` for
+intermediate points. This also completes **CR-148** (demo data seed):
+`pnpm seed:demo` now runs fully green with real routes (no `--no-routes`)
+now that 2GIS is reachable from this machine again — 9 rides across every
+lifecycle state, every route built on real roads. KI-056 (2GIS reachability)
+stays open as a standing environment condition, not resolved by this fix.
+
+CR-159 (2026-09-29, committed): fixed KI-080 — light-theme `--danger`
 darkened `#D42B20` → `#B92A1E` (`packages/ui/src/tokens.css`) so it clears
 WCAG AA against the real `--bg`/`ErrorState` tint, not just white
 (`docs/design.md` §3 updated). Storybook's `KI_080_DANGER_CONTRAST` axe

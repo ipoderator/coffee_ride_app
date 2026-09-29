@@ -120,10 +120,16 @@ export function createGetRoute(
     url.searchParams.set('key', config.apiKey);
 
     const requestBody = {
-      points: request.points.map((point) => ({
+      points: request.points.map((point, index) => ({
         lat: point.lat,
         lon: point.lng,
-        type: 'stop',
+        // Only the first/last point is a `stop`; a `stop` in the middle is
+        // silently dropped from routing (2GIS collapses the whole request to
+        // a point-to-point route between the first and last `stop`, verified
+        // live 2026-09-29 — a closed loop's shared start/end point came back
+        // as a near-zero-length route). Intermediate points must be `pref`.
+        type:
+          index === 0 || index === request.points.length - 1 ? 'stop' : 'pref',
       })),
       transport: PROFILE_TO_TRANSPORT[request.profile],
       // Terrain altitude per vertex, for the elevation profile/gain.
