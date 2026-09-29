@@ -4,6 +4,8 @@ import {
   REGISTRATION_ACTION_TERMS,
   RIDE_CREATE_TERMS,
   RIDE_EDIT_TERMS,
+  RIDE_ROUTE_TERMS,
+  RIDE_WIZARD_TERMS,
 } from 'ui';
 import {
   createOrganizerProfile,
@@ -76,21 +78,24 @@ test('organizer creates and publishes a ride', async ({ page }) => {
   await page.goto('/organizer/rides/new');
   const rideTitle = `E2E заезд ${Date.now()}`;
   await page.getByLabel(RIDE_CREATE_TERMS.titleLabel).fill(rideTitle);
+  const startLocal = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
   await page
-    .getByLabel(RIDE_CREATE_TERMS.startsAtLabel)
-    .fill(
-      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 16),
-    );
-  await page.getByRole('button', { name: RIDE_CREATE_TERMS.submit }).click();
-  await expect(
-    page.getByRole('heading', { name: RIDE_CREATE_TERMS.successTitle }),
-  ).toBeVisible();
+    .getByLabel(RIDE_CREATE_TERMS.startDateLabel)
+    .fill(startLocal.slice(0, 10));
+  await page
+    .getByLabel(RIDE_CREATE_TERMS.startTimeLabel, { exact: true })
+    .fill(startLocal.slice(11, 16));
 
-  await page
-    .getByRole('link', { name: RIDE_CREATE_TERMS.editRideLink })
-    .click();
+  // CR-156: the new-ride wizard — step 1 saves the draft, steps 2–4 are
+  // the route/groups/edit screens inside the same frame.
+  await page.getByRole('button', { name: RIDE_CREATE_TERMS.next }).click();
+  await expect(
+    page.getByRole('heading', { name: RIDE_ROUTE_TERMS.pageTitle }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: RIDE_WIZARD_TERMS.nextGroups }).click();
+  await page.getByRole('link', { name: RIDE_WIZARD_TERMS.nextPublish }).click();
   await expect(
     page.getByRole('heading', { name: RIDE_EDIT_TERMS.pageTitle }),
   ).toBeVisible();

@@ -241,3 +241,44 @@ export async function finishRide(id: string): Promise<FinishRideResponse> {
 
   return body as FinishRideResponse;
 }
+
+/**
+ * CR-156: the wizard's step-1 GPX drop zone. Same `POST`/`PATCH
+ * /v1/rides/:id/route` endpoints `RouteUploadForm` uses (kept here rather
+ * than imported from the route feature — ADR-009, no feature-to-feature
+ * imports). A draft saved twice from step 1 may already have a route, so a
+ * 409 `route_already_exists` falls through to a replace.
+ */
+export async function uploadRideGpx(rideId: string, file: File): Promise<void> {
+  try {
+    await sendGpx('POST', rideId, file);
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.problem.code === 'route_already_exists'
+    ) {
+      await sendGpx('PATCH', rideId, file);
+      return;
+    }
+    throw error;
+  }
+}
+
+async function sendGpx(
+  method: 'POST' | 'PATCH',
+  rideId: string,
+  file: File,
+): Promise<void> {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/route`, {
+    method,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
+}

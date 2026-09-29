@@ -2064,3 +2064,53 @@ the dev and test databases; four requirements added by SQL to the dev ride
 «Тестовый заезд на выходные» (already published, so not PATCH-able) for the
 check. Coverage baseline not re-measured (needs the CI environment).
 Follow-up: KI-079 — ride-detail visual baselines from CI.
+
+## 2026-09-29 — CR-156 — Ride creation wizard to the owner's mockup
+
+What: `/organizer/rides/new` is now step 1 of a four-step wizard («Новый заезд ·
+шаг N из 4»: Основное / Маршрут / Группы и места / Публикация), matching the
+owner's «Ночной старт» screenshot.
+
+- Step 1 «Основное о заезде» (`CreateRideForm`, rewritten): title with an example
+  hint, separate date and time inputs (the start timezone is a compact select
+  beside the time label — ADR-012 unchanged), bike type, difficulty (optional),
+  description, GPX drop zone (`GpxDropzone`: drag-and-drop or a real button;
+  `.gpx` and ≤ 10 MB checked early, server stays authoritative). Footer:
+  «Сохранить черновик» (stays, shows «Черновик сохранён в HH:MM») and «Далее:
+  маршрут →».
+- The first save creates the draft and rewrites the URL to `?ride=<id>`
+  (`history.replaceState`), so a reload or «Назад» from step 2 reopens the same
+  draft (prefilled from `GET /v1/rides/:id`, saved with `PATCH`) instead of
+  creating a second one. The GPX file uploads after the save (`POST`, falling
+  back to `PATCH` on `route_already_exists`); if it fails the draft is kept and
+  the error says so. The old inline success view is gone.
+- Steps 2–4 reuse the existing screens — `/organizer/rides/[id]/route`,
+  `.../groups`, `.../edit` — when opened with `?wizard=1`: the same content
+  inside `RideWizardFrame` (step list + «Назад» / «Далее: …» links). Without
+  the flag they render exactly as before. The step list lives in the rides
+  feature (`wizard-steps.ts`, `RideWizardSteps`), so no feature imports
+  another; the GPX client call is duplicated in `rides/api.ts` for the same
+  reason.
+- Terms: `RIDE_CREATE_TERMS` reworked (removed `startsAtLabel`, `submit*`,
+  `success*`, `editRideLink`, `allRidesLink`, `backToDashboard`,
+  `startsAtRequired` from `RIDE_CREATE_TERMS` only), new `RIDE_WIZARD_TERMS`.
+
+API (additive): `POST /v1/rides` accepts optional `description` (≤ 2000,
+trimmed, empty → `null`) and `difficulty` (1–5 | `null`) — same rules as
+`PATCH`; the owner chose one atomic create over create + PATCH.
+
+Not taken from the mockup: the top-bar cabinet nav and the header's «Черновик
+сохранён» (the cabinet shell/sidebar stays — separate task); the save time is
+shown in the form footer instead.
+
+Validation: prettier; lint + typecheck for types/ui/api/web; Vitest — web 490
+(new: wizard create/update/GPX/prefill/ownership/step-list tests), ui 176, api
+`rides.routes.test.ts` 92 (new: description/difficulty at creation + 400 on
+difficulty 6); Playwright (functional) critical-journeys (organizer journey now
+goes through all four steps), discovery-states, mobile-cabinets — 10/10 against
+the dev stack. Screenshots at 1440/390/320 (dark) checked against the mockup.
+Found while checking: `RideWizardFrame` called `buttonClassName` (from a
+`'use client'` module) during server render — fixed by making the frame a client
+component. The 320px page scroll (329px) comes from the header account menu and
+exists on `/organizer/rides` too — not from this change. No visual baselines
+cover these screens.

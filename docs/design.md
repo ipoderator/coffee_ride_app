@@ -567,7 +567,7 @@ Organizer cabinet:
 | `/organizer/participants`            | → nearest ride's participants (CR-131)        |
 | `/organizer/updates`                 | → nearest ride's updates (CR-131)             |
 | `/organizer/rides`                   | My rides, grouped by status                   |
-| `/organizer/rides/new`               | Create ride                                   |
+| `/organizer/rides/new`               | Create ride — wizard step 1 (CR-156)          |
 | `/organizer/rides/[id]/edit`         | Edit draft                                    |
 | `/organizer/rides/[id]/route`        | Route, GPX upload, stops, route points        |
 | `/organizer/rides/[id]/participants` | Participants + waitlist                       |

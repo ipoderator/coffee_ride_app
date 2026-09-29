@@ -477,6 +477,9 @@ export async function createRide(
       bicycleType: input.bicycleType,
       startsAt: new Date(input.startsAt),
       startTimezone: input.startTimezone,
+      // CR-156: optional at creation; an empty description is stored as `null`.
+      description: input.description || null,
+      difficulty: input.difficulty ?? null,
       updatedBy: userId,
     })
     .returning();

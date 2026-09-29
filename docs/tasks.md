@@ -1210,3 +1210,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `PATCH /v1/rides/:id` `requirements`, `GET /v1/rides/:id` `requirements`
       (additive), organizer form textarea. See `docs/changelog.md`. Follow-up:
       KI-079 (baselines).
+- [x] CR-156 Ride creation as a four-step wizard (owner's «Ночной старт»
+      mockup): step 1 «Основное о заезде» (date/time split, difficulty,
+      description, GPX drop zone, «Сохранить черновик» / «Далее: маршрут»,
+      `?ride=<id>` re-edit); steps 2–4 = route/groups/edit screens with
+      `?wizard=1` in the same step frame. API (additive): `POST /v1/rides`
+      `description`/`difficulty`. See `docs/changelog.md`.

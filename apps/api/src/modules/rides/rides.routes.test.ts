@@ -194,6 +194,49 @@ describe('/v1/rides', () => {
       await app.close();
     });
 
+    it('stores the optional description and difficulty sent at creation (CR-156)', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken } = await registerAndLogin(app, {
+        withOrganizerProfile: true,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: {
+          ...VALID_PAYLOAD,
+          description: '  Спокойный круг с кофе.  ',
+          difficulty: 2,
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.ride.description).toBe('Спокойный круг с кофе.');
+      expect(body.ride.difficulty).toBe(2);
+
+      const [row] = await app.db
+        .select()
+        .from(rides)
+        .where(eq(rides.id, body.ride.id));
+      expect(row?.description).toBe('Спокойный круг с кофе.');
+      expect(row?.difficulty).toBe(2);
+
+      const outOfRange = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+        payload: { ...VALID_PAYLOAD, difficulty: 6 },
+      });
+      expect(outOfRange.statusCode).toBe(400);
+      expect(outOfRange.json().code).toBe('validation_error');
+
+      await app.close();
+    });
+
     it('rejects an empty title with 400', async () => {
       const app = await buildApp(testEnv);
       const { rawToken } = await registerAndLogin(app, {

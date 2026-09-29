@@ -933,6 +933,18 @@ ADR-022). No new package and no new dependency-direction edge; one new domain en
   implemented in `maps-2gis/src/render.ts` (`.claude/rules/maps.md` updated). The
   `create-map-renderer.ts` composition point is unchanged.
 
+CR-156 (ride creation wizard, 2026-09-29). No new package or module.
+
+- **apps/web** `features/organizer/rides/`: `wizard-steps.ts` (step
+  descriptors, `?wizard=1` flag, step hrefs), `RideWizardSteps` (step list),
+  `RideWizardFrame` (`'use client'`; step list + content + back/next links —
+  the route/groups/edit pages wrap themselves in it only with `?wizard=1`),
+  `GpxDropzone`, `CreateRideForm` (create or `?ride=<id>` re-edit),
+  `api.ts` `uploadRideGpx`.
+- **packages/types**: `createRideRequestSchema` optional `description`/
+  `difficulty`; **apps/api** `createRide` stores them.
+- **packages/ui**: `RIDE_CREATE_TERMS` reworked, `RIDE_WIZARD_TERMS`.
+
 CR-155 (ride page to the owner's mockup + requirements, 2026-09-29). No new
 package or module.
 

@@ -220,6 +220,8 @@ later mutation). Body: `{ title, bicycleType, startsAt, startTimezone }` —
 only what a minimal, valid draft needs (`.claude/context/current-task.md`);
 `title` 1-140 chars, `bicycleType` one of `road`/`gravel`/`mtb`/`any`,
 `startsAt` an ISO 8601 instant, `startTimezone` any IANA zone identifier.
+CR-156 (additive): optional `description` (≤2000 chars, trimmed; empty →
+`null`) and `difficulty` (1–5 or `null`), same rules as `PATCH`.
 `201` → `{ ride }` with `status: 'draft'`, `organizerId` set to the caller's
 own profile, `updatedBy` set to the caller, and every other field `null`.
 `400 validation_error` on an invalid field.

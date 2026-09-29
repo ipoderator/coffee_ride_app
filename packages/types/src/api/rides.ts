@@ -55,6 +55,16 @@ export const createRideRequestSchema = z.object({
       isValidIanaTimeZone,
       'Start timezone must be a valid IANA time zone identifier.',
     ),
+  // CR-156 (the «Основное о заезде» wizard step): additive, optional — the
+  // step-1 form collects both, so the draft is written in one request instead
+  // of a create + PATCH pair. Same rules as `updateRideRequestSchema`'s.
+  description: z
+    .string()
+    .trim()
+    .max(2000, 'Description must be at most 2000 characters.')
+    .nullable()
+    .optional(),
+  difficulty: z.number().int().min(1).max(5).nullable().optional(),
 });
 export type CreateRideRequest = z.infer<typeof createRideRequestSchema>;
 

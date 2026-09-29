@@ -1,103 +1,225 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type FormEvent } from 'react';
-import type { Ride } from 'types';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
+import type { BicycleType, DifficultyLevel } from 'types';
+import { BICYCLE_TYPES, DIFFICULTY_LEVELS } from 'types';
 import {
   BICYCLE_TYPE_TERMS,
   Button,
   Card,
+  DIFFICULTY_LEVEL_TERMS,
+  ErrorState,
   FormField,
   Input,
-  MetricRow,
-  MetricTile,
   RIDE_CREATE_TERMS,
-  RIDE_STATUS_TERMS,
+  RIDE_ROUTE_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
-  StatusBadge,
-  formatDate,
+  Skeleton,
+  Textarea,
+  cn,
   formatTime,
 } from 'ui';
-import type { BicycleType } from 'types';
-import { zonedTimeToUtcIso } from '@/lib/datetime/zoned-time';
-import { ApiError, createRide, createRideRequestSchema } from '../api';
-
-const BICYCLE_TYPE_OPTIONS: readonly BicycleType[] = [
-  'road',
-  'gravel',
-  'mtb',
-  'any',
-];
+import {
+  utcIsoToZonedLocalInput,
+  zonedTimeToUtcIso,
+} from '@/lib/datetime/zoned-time';
+import {
+  ApiError,
+  createRide,
+  createRideRequestSchema,
+  getRide,
+  updateRide,
+  updateRideRequestSchema,
+  uploadRideGpx,
+} from '../api';
+import { RIDE_WIZARD_STEPS, wizardStepHref } from '../wizard-steps';
+import { GpxDropzone } from './GpxDropzone';
 
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
+// Mirrors apps/api's `GPX_MAX_UPLOAD_BYTES` (ADR-015) — a friendlier early
+// check; the server's own limit stays authoritative.
+const GPX_MAX_BYTES = 10 * 1024 * 1024;
+
+type Intent = 'draft' | 'next';
 
 interface FieldErrors {
   title?: string;
   bicycleType?: string;
-  startsAt?: string;
+  startDate?: string;
+  startTime?: string;
   startTimezone?: string;
+  difficulty?: string;
+  description?: string;
 }
 
+/** Server/Zod issue path → the field that shows it. `startsAt` is built from
+ * the date + time inputs, so its errors land under the date. */
+function fieldForPath(path: unknown): keyof FieldErrors | null {
+  switch (path) {
+    case 'title':
+    case 'bicycleType':
+    case 'startTimezone':
+    case 'difficulty':
+    case 'description':
+      return path;
+    case 'startsAt':
+      return 'startDate';
+    default:
+      return null;
+  }
+}
+
+const CONTROL_CLASS = 'min-h-12 rounded-xl bg-bg';
+
 function selectClassName(hasError: boolean): string {
-  return [
-    'min-h-11 w-full rounded-lg border bg-bg-raised px-3 text-body text-text',
+  return cn(
+    'min-h-12 w-full rounded-xl border bg-bg px-3 text-body text-text',
     hasError ? 'border-danger' : 'border-border-input',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     'disabled:cursor-not-allowed disabled:opacity-60',
-  ].join(' ');
+  );
+}
+
+function gpxErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    switch (error.problem.code) {
+      case 'gpx_invalid':
+        return RIDE_ROUTE_TERMS.gpxInvalid;
+      case 'gpx_file_too_large':
+        return RIDE_ROUTE_TERMS.gpxFileTooLarge;
+      case 'route_storage_unavailable':
+        return RIDE_ROUTE_TERMS.storageUnavailable;
+    }
+  }
+  return RIDE_ROUTE_TERMS.loadError;
+}
+
+function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+interface CreateRideFormProps {
+  /** CR-156: an existing draft to keep editing (`/organizer/rides/new?ride=`),
+   * e.g. after «Назад» from step 2. Absent → the first save creates it. */
+  rideId?: string | null;
 }
 
 /**
- * `/organizer/rides/new` (`docs/design.md` §8, CR-017). Only the fields a valid draft
- * needs at creation — see `.claude/context/current-task.md`. This screen only ever
- * creates (not the create-or-edit-in-one-screen pattern `OrganizerProfileForm` uses),
- * but its success view links straight into `/organizer/rides/[id]/edit` and
- * `/organizer/rides` (both built by CR-018/CR-088) to close the loop.
+ * Step 1 of the new-ride wizard, «Основное о заезде» (CR-156, the owner's
+ * «Ночной старт» mockup; originally CR-017's create form). The first save
+ * creates the draft in one `POST` (title, type, start, difficulty,
+ * description) and moves the URL to `?ride=<id>` so a reload or a second save
+ * updates it instead of creating another. A chosen GPX file is uploaded right
+ * after — the draft stays saved if that upload fails.
  */
-export function CreateRideForm() {
+export function CreateRideForm({
+  rideId: initialRideId = null,
+}: CreateRideFormProps) {
+  const router = useRouter();
+  const [rideId, setRideId] = useState<string | null>(initialRideId);
+  // The id this form itself just created — its URL change must not reload it.
+  const createdIdRef = useRef<string | null>(null);
+  const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>(
+    initialRideId ? 'loading' : 'ready',
+  );
+
   const [title, setTitle] = useState('');
   const [bicycleType, setBicycleType] = useState<BicycleType>('gravel');
-  const [localStartsAt, setLocalStartsAt] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('');
   const [startTimezone, setStartTimezone] = useState(DEFAULT_TIMEZONE);
+  const [difficulty, setDifficulty] = useState('');
+  const [description, setDescription] = useState('');
+  const [gpxFile, setGpxFile] = useState<File | null>(null);
+  const [gpxError, setGpxError] = useState<string | undefined>(undefined);
+
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [organizerProfileRequired, setOrganizerProfileRequired] =
     useState(false);
-  const [isPending, setIsPending] = useState(false);
-  const [createdRide, setCreatedRide] = useState<Ride | null>(null);
+  const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const isPending = pendingIntent !== null;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const loadDraft = useCallback(async (id: string) => {
+    setLoadState('loading');
+    try {
+      const { ride, isOwner } = await getRide(id);
+      if (!isOwner) {
+        setLoadState('error');
+        return;
+      }
+      const local = utcIsoToZonedLocalInput(ride.startsAt, ride.startTimezone);
+      setTitle(ride.title);
+      setBicycleType(ride.bicycleType);
+      setStartDate(local.slice(0, 10));
+      setStartTime(local.slice(11, 16));
+      setStartTimezone(ride.startTimezone);
+      setDifficulty(ride.difficulty === null ? '' : String(ride.difficulty));
+      setDescription(ride.description ?? '');
+      setRideId(ride.id);
+      setLoadState('ready');
+    } catch {
+      setLoadState('error');
+    }
+  }, []);
 
-    // Duplicate-submit protection (`.claude/rules/frontend.md`): a disabled button
-    // doesn't stop an Enter-key resubmit before React re-renders.
+  useEffect(() => {
+    if (!initialRideId || initialRideId === createdIdRef.current) return;
+    void loadDraft(initialRideId);
+  }, [initialRideId, loadDraft]);
+
+  function handleGpxChange(file: File | null) {
+    setGpxError(undefined);
+    if (file && !file.name.toLowerCase().endsWith('.gpx')) {
+      setGpxFile(null);
+      setGpxError(RIDE_CREATE_TERMS.gpxWrongType);
+      return;
+    }
+    if (file && file.size > GPX_MAX_BYTES) {
+      setGpxFile(null);
+      setGpxError(RIDE_CREATE_TERMS.gpxTooLarge);
+      return;
+    }
+    setGpxFile(file);
+  }
+
+  async function save(intent: Intent) {
+    // Duplicate-submit protection (`.claude/rules/frontend.md`): a disabled
+    // button doesn't stop an Enter-key resubmit before React re-renders.
     if (isPending) return;
 
-    if (!localStartsAt) {
-      setFieldErrors({ startsAt: RIDE_CREATE_TERMS.startsAtRequired });
+    const clientErrors: FieldErrors = {};
+    if (!startDate)
+      clientErrors.startDate = RIDE_CREATE_TERMS.startDateRequired;
+    if (!startTime)
+      clientErrors.startTime = RIDE_CREATE_TERMS.startTimeRequired;
+    if (Object.keys(clientErrors).length > 0) {
+      setFieldErrors(clientErrors);
+      setFormError(null);
       return;
     }
 
     const payload = {
       title: title.trim(),
       bicycleType,
-      startsAt: zonedTimeToUtcIso(localStartsAt, startTimezone),
+      startsAt: zonedTimeToUtcIso(`${startDate}T${startTime}`, startTimezone),
       startTimezone,
+      description: description.trim() || null,
+      difficulty: difficulty ? (Number(difficulty) as DifficultyLevel) : null,
     };
 
-    const parsed = createRideRequestSchema.safeParse(payload);
+    const parsed = rideId
+      ? updateRideRequestSchema.safeParse(payload)
+      : createRideRequestSchema.safeParse(payload);
     if (!parsed.success) {
       const nextErrors: FieldErrors = {};
       for (const issue of parsed.error.issues) {
-        const field = issue.path[0];
-        if (
-          field === 'title' ||
-          field === 'bicycleType' ||
-          field === 'startsAt' ||
-          field === 'startTimezone'
-        ) {
-          nextErrors[field] ??= issue.message;
-        }
+        const field = fieldForPath(issue.path[0]);
+        if (field) nextErrors[field] ??= issue.message;
       }
       setFieldErrors(nextErrors);
       setFormError(null);
@@ -107,98 +229,114 @@ export function CreateRideForm() {
     setFieldErrors({});
     setFormError(null);
     setOrganizerProfileRequired(false);
-    setIsPending(true);
+    setPendingIntent(intent);
 
+    let savedId: string;
     try {
-      const response = await createRide(parsed.data);
-      setCreatedRide(response.ride);
-    } catch (error) {
-      if (
-        error instanceof ApiError &&
-        error.problem.code === 'organizer_profile_required'
-      ) {
-        setOrganizerProfileRequired(true);
-      } else if (
-        error instanceof ApiError &&
-        error.problem.code === 'validation_error' &&
-        error.problem.errors
-      ) {
-        const nextErrors: FieldErrors = {};
-        for (const issue of error.problem.errors) {
-          if (
-            issue.path === 'title' ||
-            issue.path === 'bicycleType' ||
-            issue.path === 'startsAt' ||
-            issue.path === 'startTimezone'
-          ) {
-            nextErrors[issue.path] ??= issue.message;
-          }
-        }
-        setFieldErrors(nextErrors);
+      if (rideId) {
+        await updateRide(rideId, payload);
+        savedId = rideId;
       } else {
-        setFormError(RIDE_CREATE_TERMS.loadError);
+        const response = await createRide(payload);
+        savedId = response.ride.id;
+        createdIdRef.current = savedId;
+        setRideId(savedId);
+        // Keeps a reload/«Назад» on this draft instead of a blank form that
+        // would create a second one. Native `replaceState` (synced by the
+        // App Router) — no server round trip for the page.
+        window.history.replaceState(
+          null,
+          '',
+          RIDE_WIZARD_STEPS[0]!.href(savedId),
+        );
       }
-    } finally {
-      setIsPending(false);
+    } catch (error) {
+      handleSaveError(error);
+      setPendingIntent(null);
+      return;
+    }
+
+    setSavedAt(formatTime(new Date(), { timeZone: browserTimeZone() }));
+
+    if (gpxFile) {
+      try {
+        await uploadRideGpx(savedId, gpxFile);
+        setGpxFile(null);
+      } catch (error) {
+        setGpxError(RIDE_CREATE_TERMS.gpxUploadFailed(gpxErrorMessage(error)));
+        setPendingIntent(null);
+        return;
+      }
+    }
+
+    if (intent === 'next') {
+      router.push(wizardStepHref('route', savedId));
+      return;
+    }
+    setPendingIntent(null);
+  }
+
+  function handleSaveError(error: unknown) {
+    if (
+      error instanceof ApiError &&
+      error.problem.code === 'organizer_profile_required'
+    ) {
+      setOrganizerProfileRequired(true);
+    } else if (
+      error instanceof ApiError &&
+      error.problem.code === 'validation_error' &&
+      error.problem.errors
+    ) {
+      const nextErrors: FieldErrors = {};
+      for (const issue of error.problem.errors) {
+        const field = fieldForPath(issue.path);
+        if (field) nextErrors[field] ??= issue.message;
+      }
+      setFieldErrors(nextErrors);
+    } else {
+      setFormError(RIDE_CREATE_TERMS.loadError);
     }
   }
 
-  if (createdRide) {
-    const statusTerm = RIDE_STATUS_TERMS[createdRide.status];
-    const startDate = new Date(createdRide.startsAt);
+  if (loadState === 'loading') {
     return (
-      <Card className="flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <h2 className="text-h2 text-text">
-            {RIDE_CREATE_TERMS.successTitle}
-          </h2>
-          <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-        </div>
-        <p className="text-body-sm font-medium text-text">
-          {createdRide.title}
-        </p>
-        <MetricRow>
-          <MetricTile
-            label={RIDE_CREATE_TERMS.summaryBicycleTypeLabel}
-            value={BICYCLE_TYPE_TERMS[createdRide.bicycleType]}
-          />
-          <MetricTile
-            label={RIDE_CREATE_TERMS.summaryStartLabel}
-            value={formatDate(startDate, {
-              timeZone: createdRide.startTimezone,
-            })}
-            unit={formatTime(startDate, {
-              timeZone: createdRide.startTimezone,
-            })}
-          />
-        </MetricRow>
-        <div className="flex flex-wrap gap-4">
-          <Link
-            href={`/organizer/rides/${createdRide.id}/edit`}
-            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_CREATE_TERMS.editRideLink}
-          </Link>
-          <Link
-            href="/organizer/rides"
-            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_CREATE_TERMS.allRidesLink}
-          </Link>
-          <Link
-            href="/organizer"
-            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_CREATE_TERMS.backToDashboard}
-          </Link>
-        </div>
+      <Card className="flex flex-col gap-6 rounded-3xl p-5 md:p-10">
+        <Skeleton className="h-10 w-2/3" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-32 w-full" />
       </Card>
     );
   }
 
+  if (loadState === 'error') {
+    return (
+      <ErrorState
+        message={RIDE_CREATE_TERMS.draftLoadError}
+        onRetry={
+          initialRideId ? () => void loadDraft(initialRideId) : undefined
+        }
+      />
+    );
+  }
+
   return (
-    <Card>
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+    <Card className="rounded-3xl p-5 md:p-10">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save('next');
+        }}
+        noValidate
+        className="flex flex-col gap-6"
+      >
+        <header className="flex flex-col gap-2">
+          <h1 className="text-h1 text-text">{RIDE_CREATE_TERMS.stepTitle}</h1>
+          <p className="max-w-2xl text-body text-text-secondary">
+            {RIDE_CREATE_TERMS.stepLead}
+          </p>
+        </header>
+
         <FormField
           id="ride-title"
           label={RIDE_CREATE_TERMS.titleLabel}
@@ -208,63 +346,144 @@ export function CreateRideForm() {
           <Input
             type="text"
             value={title}
+            maxLength={140}
             onChange={(event) => setTitle(event.target.value)}
             disabled={isPending}
+            className={CONTROL_CLASS}
           />
         </FormField>
 
-        <FormField
-          id="ride-bicycle-type"
-          label={RIDE_CREATE_TERMS.bicycleTypeLabel}
-          error={fieldErrors.bicycleType}
-        >
-          <select
-            value={bicycleType}
-            onChange={(event) =>
-              setBicycleType(event.target.value as BicycleType)
-            }
-            disabled={isPending}
-            className={selectClassName(Boolean(fieldErrors.bicycleType))}
+        <div className="grid gap-6 md:grid-cols-2">
+          <FormField
+            id="ride-start-date"
+            label={RIDE_CREATE_TERMS.startDateLabel}
+            error={fieldErrors.startDate}
           >
-            {BICYCLE_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>
-                {BICYCLE_TYPE_TERMS[type]}
-              </option>
-            ))}
-          </select>
-        </FormField>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              disabled={isPending}
+              className={CONTROL_CLASS}
+            />
+          </FormField>
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-1.5">
+              <label
+                htmlFor="ride-start-time"
+                className="text-body-sm font-medium text-text"
+              >
+                {RIDE_CREATE_TERMS.startTimeLabel}
+              </label>
+              <span aria-hidden="true" className="text-text-muted">
+                ·
+              </span>
+              {/* The zone the time is entered in (ADR-012) — beside the
+                  label as in the mockup («Время старта · МСК»); negative
+                  margin keeps the 44px target without pushing the row. */}
+              <select
+                aria-label={RIDE_CREATE_TERMS.startTimezoneLabel}
+                value={startTimezone}
+                onChange={(event) => setStartTimezone(event.target.value)}
+                disabled={isPending}
+                className="-my-3 min-h-11 max-w-full cursor-pointer [field-sizing:content] rounded-lg bg-transparent text-body-sm text-text-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                {RUSSIAN_TIMEZONE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Input
+              id="ride-start-time"
+              type="time"
+              value={startTime}
+              onChange={(event) => setStartTime(event.target.value)}
+              disabled={isPending}
+              aria-invalid={Boolean(fieldErrors.startTime)}
+              aria-describedby={
+                fieldErrors.startTime ? 'ride-start-time-error' : undefined
+              }
+              className={CONTROL_CLASS}
+            />
+            {(fieldErrors.startTime ?? fieldErrors.startTimezone) && (
+              <p
+                id="ride-start-time-error"
+                role="alert"
+                className="text-body-sm text-danger"
+              >
+                {fieldErrors.startTime ?? fieldErrors.startTimezone}
+              </p>
+            )}
+          </div>
+
+          <FormField
+            id="ride-bicycle-type"
+            label={RIDE_CREATE_TERMS.bicycleTypeLabel}
+            error={fieldErrors.bicycleType}
+          >
+            <select
+              value={bicycleType}
+              onChange={(event) =>
+                setBicycleType(event.target.value as BicycleType)
+              }
+              disabled={isPending}
+              className={selectClassName(Boolean(fieldErrors.bicycleType))}
+            >
+              {BICYCLE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {BICYCLE_TYPE_TERMS[type]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField
+            id="ride-difficulty"
+            label={RIDE_CREATE_TERMS.difficultyLabel}
+            error={fieldErrors.difficulty}
+          >
+            <select
+              value={difficulty}
+              onChange={(event) => setDifficulty(event.target.value)}
+              disabled={isPending}
+              className={selectClassName(Boolean(fieldErrors.difficulty))}
+            >
+              <option value="">{RIDE_CREATE_TERMS.difficultyUnset}</option>
+              {DIFFICULTY_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {DIFFICULTY_LEVEL_TERMS[level]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
 
         <FormField
-          id="ride-starts-at"
-          label={RIDE_CREATE_TERMS.startsAtLabel}
-          error={fieldErrors.startsAt}
+          id="ride-description"
+          label={RIDE_CREATE_TERMS.descriptionLabel}
+          hint={RIDE_CREATE_TERMS.descriptionHint}
+          error={fieldErrors.description}
         >
-          <Input
-            type="datetime-local"
-            value={localStartsAt}
-            onChange={(event) => setLocalStartsAt(event.target.value)}
+          <Textarea
+            value={description}
+            rows={4}
+            maxLength={2000}
+            onChange={(event) => setDescription(event.target.value)}
             disabled={isPending}
+            className="rounded-xl bg-bg py-3"
           />
         </FormField>
 
-        <FormField
-          id="ride-start-timezone"
-          label={RIDE_CREATE_TERMS.startTimezoneLabel}
-          error={fieldErrors.startTimezone}
-        >
-          <select
-            value={startTimezone}
-            onChange={(event) => setStartTimezone(event.target.value)}
-            disabled={isPending}
-            className={selectClassName(Boolean(fieldErrors.startTimezone))}
-          >
-            {RUSSIAN_TIMEZONE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </FormField>
+        <GpxDropzone
+          id="ride-gpx"
+          file={gpxFile}
+          onFileChange={handleGpxChange}
+          error={gpxError}
+          disabled={isPending}
+        />
 
         {organizerProfileRequired && (
           <p role="alert" className="text-body-sm text-danger">
@@ -281,11 +500,36 @@ export function CreateRideForm() {
           </p>
         )}
 
-        <Button type="submit" isLoading={isPending} className="self-start">
-          {isPending
-            ? RIDE_CREATE_TERMS.submitPending
-            : RIDE_CREATE_TERMS.submit}
-        </Button>
+        <div className="flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={pendingIntent === 'draft'}
+              disabled={isPending}
+              onClick={() => void save('draft')}
+            >
+              {pendingIntent === 'draft'
+                ? RIDE_CREATE_TERMS.saveDraftPending
+                : RIDE_CREATE_TERMS.saveDraft}
+            </Button>
+            <p role="status" className="text-body-sm text-text-muted">
+              {savedAt ? RIDE_CREATE_TERMS.draftSavedAt(savedAt) : ''}
+            </p>
+          </div>
+          <Button
+            type="submit"
+            isLoading={pendingIntent === 'next'}
+            disabled={isPending}
+          >
+            {pendingIntent === 'next'
+              ? RIDE_CREATE_TERMS.nextPending
+              : RIDE_CREATE_TERMS.next}
+            {pendingIntent !== 'next' && (
+              <ArrowRight aria-hidden="true" className="size-4" />
+            )}
+          </Button>
+        </div>
       </form>
     </Card>
   );

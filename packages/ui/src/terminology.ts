@@ -538,26 +538,64 @@ export const RUSSIAN_TIMEZONE_OPTIONS: readonly TimezoneOption[] = [
  * fields a valid draft needs at creation — see `.claude/context/current-task.md`. */
 export const RIDE_CREATE_TERMS = {
   pageTitle: 'Новый заезд',
+  // CR-156: step 1 of the new-ride wizard («Основное о заезде», the owner's
+  // «Ночной старт» mockup) — the form's own heading and lead.
+  stepTitle: 'Основное о заезде',
+  stepLead:
+    'Сначала то, что помогает участнику понять характер поездки. Всё можно поменять до публикации.',
   titleLabel: 'Название',
-  titleHint: 'До 140 символов.',
+  titleHint:
+    'Место и характер, до 140 символов: «Гравий на выходные: Крылатское — Архангельское»',
   bicycleTypeLabel: 'Тип велосипеда',
-  startsAtLabel: 'Дата и время старта',
-  startsAtRequired: 'Укажите дату и время старта.',
+  startDateLabel: 'Дата',
+  startTimeLabel: 'Время старта',
+  startDateRequired: 'Укажите дату старта.',
+  startTimeRequired: 'Укажите время старта.',
   startTimezoneLabel: 'Часовой пояс старта',
+  difficultyLabel: 'Сложность',
+  difficultyUnset: 'Не указана',
+  descriptionLabel: 'Описание',
+  descriptionHint: 'До 2000 символов.',
   summaryBicycleTypeLabel: 'Тип велосипеда',
   summaryStartLabel: 'Старт',
-  submit: 'Создать черновик',
-  submitPending: 'Создание…',
+  saveDraft: 'Сохранить черновик',
+  saveDraftPending: 'Сохранение…',
+  next: 'Далее: маршрут',
+  nextPending: 'Сохранение…',
+  draftSavedAt: (time: string) => `Черновик сохранён в ${time}`,
+  gpxDropTitle: 'Перетащите GPX-файл или',
+  gpxDropPick: 'выберите на компьютере',
+  gpxDropHint: 'Дистанция, набор высоты и обложка посчитаются сами · до 10 МБ',
+  gpxSelected: (name: string) => `Выбран файл «${name}»`,
+  gpxRemove: 'Убрать файл',
+  gpxWrongType: 'Нужен файл в формате GPX.',
+  gpxTooLarge: 'Файл больше 10 МБ.',
+  gpxUploadFailed: (reason: string) =>
+    `Черновик сохранён, но GPX не загрузился: ${reason}`,
+  draftLoadError: 'Не удалось загрузить черновик. Попробуйте ещё раз.',
   organizerProfileRequired:
     'Чтобы создать заезд, сначала создайте профиль организатора.',
   createOrganizerProfileLink: 'Создать профиль организатора',
-  loadError: 'Не удалось создать заезд. Попробуйте ещё раз.',
-  successTitle: 'Черновик заезда создан',
-  backToDashboard: 'Вернуться в кабинет',
-  // CR-088: both the edit screen and the rides list exist now — the success view
-  // closes the loop instead of only pointing back at the dashboard.
-  editRideLink: 'Редактировать заезд',
-  allRidesLink: 'Все мои заезды',
+  loadError: 'Не удалось сохранить заезд. Попробуйте ещё раз.',
+} as const;
+
+/** CR-156: the four-step new-ride wizard (`/organizer/rides/new` →
+ * `.../[id]/route` → `.../[id]/groups` → `.../[id]/edit`, each with
+ * `?wizard=1`). Steps 2–4 are the existing screens inside the same frame. */
+export const RIDE_WIZARD_TERMS = {
+  navLabel: 'Шаги создания заезда',
+  stepCounter: (step: number, total: number) =>
+    `Новый заезд · шаг ${step} из ${total}`,
+  steps: {
+    basics: { title: 'Основное', hint: 'Название, дата, тип' },
+    route: { title: 'Маршрут', hint: 'GPX, старт, остановки' },
+    groups: { title: 'Группы и места', hint: 'Темп, лимиты, лист ожидания' },
+    publish: { title: 'Публикация', hint: 'Проверка и запуск записи' },
+  },
+  stepLockedHint: 'Доступно после сохранения черновика',
+  back: 'Назад',
+  nextGroups: 'Далее: группы и места',
+  nextPublish: 'Далее: публикация',
 } as const;
 
 /** `/organizer/rides` (CR-088, `docs/design.md` §8 "My rides, grouped by status"). */

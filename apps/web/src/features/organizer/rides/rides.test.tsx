@@ -4,6 +4,9 @@ import type { Ride } from 'types';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
 import { EditRideForm } from './components/EditRideForm';
+import { RideWizardFrame } from './components/RideWizardFrame';
+import { RideWizardSteps } from './components/RideWizardSteps';
+import { isWizardMode, wizardStepHref } from './wizard-steps';
 import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 import {
   ApiError,
@@ -17,7 +20,13 @@ import {
   publishRide,
   startRide,
   updateRide,
+  uploadRideGpx,
 } from './api';
+
+const routerPushMock = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
+}));
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -33,6 +42,7 @@ vi.mock('./api', async () => {
     cancelRide: vi.fn(),
     startRide: vi.fn(),
     finishRide: vi.fn(),
+    uploadRideGpx: vi.fn(),
   };
 });
 
@@ -46,6 +56,7 @@ const closeRegistrationMock = vi.mocked(closeRegistration);
 const cancelRideMock = vi.mocked(cancelRide);
 const startRideMock = vi.mocked(startRide);
 const finishRideMock = vi.mocked(finishRide);
+const uploadRideGpxMock = vi.mocked(uploadRideGpx);
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -76,51 +87,175 @@ function fillMinimalValidForm() {
   fireEvent.change(screen.getByLabelText('Название'), {
     target: { value: 'Утренний гравийный заезд' },
   });
-  fireEvent.change(screen.getByLabelText('Дата и время старта'), {
-    target: { value: '2027-05-01T08:00' },
+  fireEvent.change(screen.getByLabelText('Дата'), {
+    target: { value: '2027-05-01' },
+  });
+  fireEvent.change(screen.getByLabelText('Время старта'), {
+    target: { value: '08:00' },
   });
 }
 
 describe('CreateRideForm', () => {
   beforeEach(() => {
     createRideMock.mockReset();
+    updateRideMock.mockReset();
+    getRideMock.mockReset();
+    uploadRideGpxMock.mockReset();
+    routerPushMock.mockReset();
+    window.history.replaceState(null, '', '/organizer/rides/new');
   });
 
-  it('shows a client-side validation error without calling the API', async () => {
+  it('shows client-side validation errors without calling the API', async () => {
     render(<CreateRideForm />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Создать черновик' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
 
-    await waitFor(() =>
-      expect(
-        screen.getByText('Укажите дату и время старта.'),
-      ).toBeInTheDocument(),
-    );
+    expect(await screen.findByText('Укажите дату старта.')).toBeInTheDocument();
+    expect(screen.getByText('Укажите время старта.')).toBeInTheDocument();
     expect(createRideMock).not.toHaveBeenCalled();
   });
 
-  it('creates a ride and shows the inline success view', async () => {
+  it('creates the draft in one request, then moves to the route step', async () => {
     createRideMock.mockResolvedValue({ ride: baseRide });
 
     render(<CreateRideForm />);
     fillMinimalValidForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Создать черновик' }));
+    fireEvent.change(screen.getByLabelText('Сложность'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('Описание'), {
+      target: { value: '  Спокойный круг с кофе.  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+
+    await waitFor(() =>
+      expect(routerPushMock).toHaveBeenCalledWith(
+        '/organizer/rides/ride-1/route?wizard=1',
+      ),
+    );
+    // The default timezone (Europe/Moscow) converts 08:00 local to 05:00 UTC.
+    expect(createRideMock).toHaveBeenCalledWith({
+      title: 'Утренний гравийный заезд',
+      bicycleType: 'gravel',
+      startsAt: '2027-05-01T05:00:00.000Z',
+      startTimezone: 'Europe/Moscow',
+      description: 'Спокойный круг с кофе.',
+      difficulty: 2,
+    });
+    expect(window.location.search).toBe('?ride=ride-1');
+    expect(uploadRideGpxMock).not.toHaveBeenCalled();
+  });
+
+  it('«Сохранить черновик» stays on step 1, and a second save updates instead of creating', async () => {
+    createRideMock.mockResolvedValue({ ride: baseRide });
+    updateRideMock.mockResolvedValue({ ride: baseRide, requirements: [] });
+
+    render(<CreateRideForm />);
+    fillMinimalValidForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
 
     expect(
-      await screen.findByText('Черновик заезда создан'),
+      await screen.findByText(/^Черновик сохранён в \d{2}:\d{2}$/),
     ).toBeInTheDocument();
-    expect(screen.getByText('Утренний гравийный заезд')).toBeInTheDocument();
-    expect(screen.getByText('Черновик')).toBeInTheDocument();
+    expect(routerPushMock).not.toHaveBeenCalled();
 
-    // The default timezone (Europe/Moscow) converts 08:00 local to 05:00 UTC.
-    expect(createRideMock).toHaveBeenCalledWith(
-      expect.objectContaining({
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+    await waitFor(() => expect(updateRideMock).toHaveBeenCalledOnce());
+    expect(updateRideMock).toHaveBeenCalledWith(
+      'ride-1',
+      expect.objectContaining({ title: 'Утренний гравийный заезд' }),
+    );
+    expect(createRideMock).toHaveBeenCalledOnce();
+  });
+
+  it('uploads a chosen GPX after saving; a failed upload keeps the draft and stays put', async () => {
+    createRideMock.mockResolvedValue({ ride: baseRide });
+    uploadRideGpxMock.mockRejectedValue(
+      new ApiError({
+        type: 'https://coffee-ride.example/errors/gpx_invalid',
+        title: 'Invalid GPX',
+        status: 400,
+        detail: 'Not a GPX file.',
+        instance: '/v1/rides/ride-1/route',
+        code: 'gpx_invalid',
+      }),
+    );
+
+    const { container } = render(<CreateRideForm />);
+    fillMinimalValidForm();
+    const file = new File(['<gpx></gpx>'], 'krug.gpx', {
+      type: 'application/gpx+xml',
+    });
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    });
+    expect(screen.getByText('Выбран файл «krug.gpx»')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+
+    expect(
+      await screen.findByText(
+        'Черновик сохранён, но GPX не загрузился: Файл не распознан как корректный GPX-трек.',
+      ),
+    ).toBeInTheDocument();
+    expect(uploadRideGpxMock).toHaveBeenCalledWith('ride-1', file);
+    expect(routerPushMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-GPX file before any request', () => {
+    const { container } = render(<CreateRideForm />);
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['x'], 'photo.jpg')] },
+    });
+    expect(screen.getByText('Нужен файл в формате GPX.')).toBeInTheDocument();
+  });
+
+  it('prefills an existing draft from ?ride= and saves it with PATCH', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, difficulty: 3, description: 'Круг по центру' },
+      isOwner: true,
+      requirements: [],
+    });
+    updateRideMock.mockResolvedValue({ ride: baseRide, requirements: [] });
+
+    render(<CreateRideForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByDisplayValue('Утренний гравийный заезд'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Дата')).toHaveValue('2027-05-01');
+    expect(screen.getByLabelText('Время старта')).toHaveValue('08:00');
+    expect(screen.getByLabelText('Сложность')).toHaveValue('3');
+    expect(screen.getByLabelText('Описание')).toHaveValue('Круг по центру');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+    await waitFor(() =>
+      expect(updateRideMock).toHaveBeenCalledWith('ride-1', {
         title: 'Утренний гравийный заезд',
         bicycleType: 'gravel',
         startsAt: '2027-05-01T05:00:00.000Z',
         startTimezone: 'Europe/Moscow',
+        description: 'Круг по центру',
+        difficulty: 3,
       }),
     );
+    expect(createRideMock).not.toHaveBeenCalled();
+  });
+
+  it('shows an error state for a draft the caller does not own', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: false,
+      requirements: [],
+    });
+
+    render(<CreateRideForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить черновик. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('ignores a second submit while a request is already pending', async () => {
@@ -128,10 +263,10 @@ describe('CreateRideForm', () => {
 
     render(<CreateRideForm />);
     fillMinimalValidForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Создать черновик' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
 
     const pendingButton = await screen.findByRole('button', {
-      name: 'Создание…',
+      name: 'Сохранение…',
     });
     expect(pendingButton).toBeDisabled();
 
@@ -154,7 +289,7 @@ describe('CreateRideForm', () => {
 
     render(<CreateRideForm />);
     fillMinimalValidForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Создать черновик' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
 
     expect(
       await screen.findByText(
@@ -164,6 +299,7 @@ describe('CreateRideForm', () => {
     expect(
       screen.getByRole('link', { name: 'Создать профиль организатора' }),
     ).toHaveAttribute('href', '/organizer/profile');
+    expect(routerPushMock).not.toHaveBeenCalled();
   });
 
   it('maps a server validation error onto the matching field', async () => {
@@ -181,11 +317,75 @@ describe('CreateRideForm', () => {
 
     render(<CreateRideForm />);
     fillMinimalValidForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Создать черновик' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
 
     expect(
       await screen.findByText('Title cannot be empty.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('ride wizard (CR-156)', () => {
+  it('locks steps 2–4 until a draft exists', () => {
+    render(<RideWizardSteps current="basics" rideId={null} />);
+
+    expect(screen.getByText('Новый заезд · шаг 1 из 4')).toBeInTheDocument();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(
+      screen.getByText('Основное').closest('[aria-current="step"]'),
+    ).not.toBeNull();
+  });
+
+  it('links every other step once the draft exists', () => {
+    render(<RideWizardSteps current="groups" rideId="ride-1" />);
+
+    expect(screen.getByText('Новый заезд · шаг 3 из 4')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Основное/ })).toHaveAttribute(
+      'href',
+      '/organizer/rides/new?ride=ride-1',
+    );
+    expect(screen.getByRole('link', { name: /Маршрут/ })).toHaveAttribute(
+      'href',
+      '/organizer/rides/ride-1/route?wizard=1',
+    );
+    expect(screen.getByRole('link', { name: /Публикация/ })).toHaveAttribute(
+      'href',
+      '/organizer/rides/ride-1/edit?wizard=1',
+    );
+    expect(
+      screen.queryByRole('link', { name: /Группы и места/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders back/next links around a wrapped screen', () => {
+    render(
+      <RideWizardFrame
+        current="route"
+        rideId="ride-1"
+        back={{ step: 'basics', label: 'Назад' }}
+        next={{ step: 'groups', label: 'Далее: группы и места' }}
+      >
+        <p>Экран маршрута</p>
+      </RideWizardFrame>,
+    );
+
+    expect(screen.getByText('Экран маршрута')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Назад' })).toHaveAttribute(
+      'href',
+      '/organizer/rides/new?ride=ride-1',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Далее: группы и места' }),
+    ).toHaveAttribute('href', '/organizer/rides/ride-1/groups?wizard=1');
+  });
+
+  it('parses the wizard query flag and builds step hrefs', () => {
+    expect(isWizardMode('1')).toBe(true);
+    expect(isWizardMode(undefined)).toBe(false);
+    expect(isWizardMode(['1'])).toBe(false);
+    expect(wizardStepHref('publish', 'ride-1')).toBe(
+      '/organizer/rides/ride-1/edit?wizard=1',
+    );
   });
 });
 

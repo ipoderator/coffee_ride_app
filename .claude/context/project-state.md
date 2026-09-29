@@ -37,6 +37,18 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-156 (2026-09-29, committed and pushed): ride creation is a four-step wizard
+(owner's «Ночной старт» mockup, «Новый заезд · шаг 1 из 4»). Step 1
+`/organizer/rides/new` — «Основное о заезде»: title, date + start time (timezone
+select beside the time label), bike type, difficulty, description, GPX drop zone;
+«Сохранить черновик» / «Далее: маршрут». First save creates the draft and moves the
+URL to `?ride=<id>` (reload/back edits it via `PATCH`); a chosen GPX uploads right
+after (a failed upload keeps the draft). Steps 2–4 are the existing route / groups /
+edit screens opened with `?wizard=1` inside the same step frame (`RideWizardFrame`,
+back/next links). API (additive): `POST /v1/rides` optional `description`/
+`difficulty`. Not taken: the mockup's top nav/«Черновик сохранён» in the header
+(cabinet shell stays).
+
 CR-155 (2026-09-29, committed and pushed): `/rides/[id]` brought to the owner's
 ride-page mockup + a new `RideRequirement` entity. Layout: hero in the left column
 with the sticky «Стартовый лист» ticket beside it (status badge moved from the cover
@@ -1045,4 +1057,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-29 (CR-155)
+2026-09-29 (CR-156)
