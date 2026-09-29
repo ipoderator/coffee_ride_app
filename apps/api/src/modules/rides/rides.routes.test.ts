@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { organizerProfiles, rides, users } from 'db/schema';
+import { organizerProfiles, rideRequirements, rides, users } from 'db/schema';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
@@ -1330,6 +1330,122 @@ describe('/v1/rides', () => {
   });
 
   describe('PATCH /v1/rides/:id', () => {
+    describe('requirements (CR-155)', () => {
+      async function draftRide() {
+        const app = await buildApp(testEnv);
+        const owner = await registerAndLogin(app, {
+          withOrganizerProfile: true,
+        });
+        const created = await app.inject({
+          method: 'POST',
+          url: '/v1/rides',
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: owner.rawToken },
+          payload: VALID_PAYLOAD,
+        });
+        const rideId: string = created.json().ride.id;
+        const patch = (payload: object, rawToken = owner.rawToken) =>
+          app.inject({
+            method: 'PATCH',
+            url: `/v1/rides/${rideId}`,
+            headers: { origin: WEB_ORIGIN },
+            cookies: { session: rawToken },
+            payload,
+          });
+        return { app, owner, rideId, patch };
+      }
+
+      it('sets, replaces and clears the list, trimmed and in order', async () => {
+        const { app, owner, rideId, patch } = await draftRide();
+
+        const set = await patch({
+          requirements: ['  Шлем обязателен ', 'С собой: вода, камера'],
+        });
+        expect(set.statusCode).toBe(200);
+        expect(set.json().requirements).toEqual([
+          'Шлем обязателен',
+          'С собой: вода, камера',
+        ]);
+
+        const detail = await app.inject({
+          method: 'GET',
+          url: `/v1/rides/${rideId}`,
+          cookies: { session: owner.rawToken },
+        });
+        expect(detail.json().requirements).toEqual([
+          'Шлем обязателен',
+          'С собой: вода, камера',
+        ]);
+
+        const replaced = await patch({
+          requirements: ['Опыт заездов от 40 км'],
+        });
+        expect(replaced.json().requirements).toEqual(['Опыт заездов от 40 км']);
+
+        // A patch without the key leaves the list alone.
+        const untouched = await patch({ title: 'Новое название' });
+        expect(untouched.json().requirements).toEqual([
+          'Опыт заездов от 40 км',
+        ]);
+
+        const cleared = await patch({ requirements: [] });
+        expect(cleared.json().requirements).toEqual([]);
+        const rows = await app.db
+          .select()
+          .from(rideRequirements)
+          .where(eq(rideRequirements.rideId, rideId));
+        expect(rows).toHaveLength(0);
+
+        await app.close();
+      });
+
+      it('rejects an empty, too long or 11th line with 400 validation_error', async () => {
+        const { app, patch } = await draftRide();
+
+        for (const requirements of [
+          ['   '],
+          ['а'.repeat(121)],
+          Array.from({ length: 11 }, (_, i) => `Пункт ${i + 1}`),
+        ]) {
+          const response = await patch({ requirements });
+          expect(response.statusCode).toBe(400);
+          expect(response.json().code).toBe('validation_error');
+        }
+
+        await app.close();
+      });
+
+      it('leaves the list unchanged on a non-draft ride (409) or for a stranger (404)', async () => {
+        const { app, rideId, patch } = await draftRide();
+        await patch({ requirements: ['Шлем обязателен'] });
+        const stranger = await registerAndLogin(app, {
+          withOrganizerProfile: true,
+        });
+
+        const foreign = await patch(
+          { requirements: ['Чужой пункт'] },
+          stranger.rawToken,
+        );
+        expect(foreign.statusCode).toBe(404);
+
+        await app.db
+          .update(rides)
+          .set({ status: 'published' })
+          .where(eq(rides.id, rideId));
+        const published = await patch({ requirements: [] });
+        expect(published.statusCode).toBe(409);
+        expect(published.json().code).toBe('ride_not_editable');
+
+        const detail = await app.inject({
+          method: 'GET',
+          url: `/v1/rides/${rideId}`,
+        });
+        expect(detail.json().requirements).toEqual(['Шлем обязателен']);
+
+        await app.close();
+      });
+    });
+
     it('rejects a request with no session cookie with 401', async () => {
       const app = await buildApp(testEnv);
       const { rawToken } = await registerAndLogin(app, {

@@ -72,6 +72,17 @@ export function formatDistanceParts(km: Maybe<number>): MetricParts {
   return { value: toFixedComma(km, 1), unit: 'км' };
 }
 
+/** A km mark along a route (CR-155): whole km without `,0` — `20 км`,
+ * `69,5 км`. */
+export function formatDistanceMarkParts(km: Maybe<number>): MetricParts {
+  if (isMissing(km)) return MISSING_PARTS;
+  const tenths = Math.round(km * 10);
+  return {
+    value: tenths % 10 === 0 ? String(tenths / 10) : toFixedComma(km, 1),
+    unit: 'км',
+  };
+}
+
 /** Distance in kilometers: 1 decimal, comma separator — `42,3 км`. */
 export function formatDistance(km: Maybe<number>): string {
   return joinParts(formatDistanceParts(km));

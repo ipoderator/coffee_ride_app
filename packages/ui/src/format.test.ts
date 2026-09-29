@@ -9,6 +9,7 @@ import {
   formatShortStart,
   formatShortWeekday,
   formatDistance,
+  formatDistanceMarkParts,
   formatDistanceParts,
   formatDuration,
   formatDurationParts,
@@ -178,6 +179,16 @@ describe('formatRating', () => {
 });
 
 describe('*Parts helpers (CR-065)', () => {
+  it('formatDistanceMarkParts drops a trailing ,0 (CR-155)', () => {
+    expect(formatDistanceMarkParts(0)).toEqual({ value: '0', unit: 'км' });
+    expect(formatDistanceMarkParts(19.96)).toEqual({ value: '20', unit: 'км' });
+    expect(formatDistanceMarkParts(69.48)).toEqual({
+      value: '69,5',
+      unit: 'км',
+    });
+    expect(formatDistanceMarkParts(null).value).toBe('—');
+  });
+
   it('formatDistanceParts splits value and unit', () => {
     expect(formatDistanceParts(42.3)).toEqual({ value: '42,3', unit: 'км' });
     expect(formatDistanceParts(null)).toEqual({ value: EM_DASH, unit: '' });

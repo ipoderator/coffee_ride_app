@@ -37,6 +37,19 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-155 (2026-09-29, committed and pushed): `/rides/[id]` brought to the owner's
+ride-page mockup + a new `RideRequirement` entity. Layout: hero in the left column
+with the sticky «Стартовый лист» ticket beside it (status badge moved from the cover
+to the ticket head; seats as the big figure; pace groups as stacked radio cards;
+«Записаться»; GPX / «Добавить в календарь» (client-side `.ics`) / «Поделиться» rows);
+«Маршрут по точкам» restyled (km marks, rings, hazard in warning); «Профиль высоты»
+its own section; «О заезде» beside «Требования». DB: `ride_requirements`, migration
+`0021_ride_requirements` (dev DB now at 22 migrations, `0000`–`0021`). API
+(additive): `PATCH /v1/rides/:id` `requirements: string[]` (whole list, draft-only),
+`requirements` on its response and on `GET /v1/rides/:id`. Organizer edit form: a
+«Требования» textarea, one line per requirement. Open: KI-079 — ride-detail visual
+baselines must be refreshed from CI after the push.
+
 CR-154 (2026-09-28): global `AppHeader` brought to the discovery mockup's header —
 full-width raised bar, pill sections «Заезды / Мои заезды / Организатору» (links
 signed out, registry dropdowns signed in), icon-only theme control (also in the
@@ -650,24 +663,20 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None.
+None — CR-155 is committed; KI-079 (baselines from CI) is the follow-up.
 
 ## Next
 
-1. **Confirm CI after the CR-145 follow-up**: the first run failed five
-   screenshots (arm64-rendered baselines vs CI's x86_64); they were replaced
-   with CI's own renders. Baselines are x86_64-only from now on
-   (`.claude/rules/testing.md`).
-2. **CR-146 — self-host the web fonts (KI-074)**: `next build` fails whenever
-   Google Fonts answers oddly (twice on 2026-09-27).
-3. **CR-114 live verification (KI-056)** once 2GIS REST is reachable (VPN off
-   or `*.2gis.com` split-tunnelled) — or create the `maps-2gis-contract` GitHub
-   environment + secret and run `maps-contract.yml`.
-4. KI-045/KI-001 — first real deployment (ACME/TLS, `backup`).
+1. **KI-079**: refresh the ride-detail visual baselines from
+   the failed CI run's `*-actual.png` (KI-079, `.claude/rules/testing.md`).
+2. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is reachable
+   from this machine (KI-056); the seed could also fill requirements.
+3. KI-078 — hide the discovery map's fullscreen toggle while the map is degraded.
+4. Before launch: a commercial 2GIS key (KI-075); first real deployment
+   (KI-045/KI-001).
 5. 2GIS dark basemap style (KI-057).
 
-Every other `docs/tasks.md` section is complete; CR-114 and CR-146 are the only
-unchecked tickets.
+CR-148 is the only other unchecked ticket in `docs/tasks.md`.
 
 ## Important decisions
 
@@ -1036,4 +1045,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-28 (CR-152)
+2026-09-29 (CR-155)

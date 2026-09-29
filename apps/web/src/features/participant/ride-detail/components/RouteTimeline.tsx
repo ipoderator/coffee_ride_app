@@ -1,47 +1,13 @@
-import {
-  Coffee,
-  Droplet,
-  Flag,
-  type LucideIcon,
-  MapPin,
-  Pause,
-  TriangleAlert,
-  Wrench,
-} from 'lucide-react';
-import { cn, RIDE_POSTER_TERMS } from 'ui';
-import {
-  type MarkKind,
-  ROUTE_POINT_MARKER_COLOR_VAR,
-  STOP_MARKER_COLOR_VAR,
-} from '../lib/route-point-colors';
+import { TriangleAlert } from 'lucide-react';
+import { cn, formatDistanceMarkParts } from 'ui';
 import type { TimelineItem } from '../lib/timeline';
 
-const ICONS: Record<MarkKind, LucideIcon> = {
-  'ride-start': Flag,
-  start: Flag,
-  finish: Flag,
-  'named-stop': Coffee,
-  food: Coffee,
-  stop: Pause,
-  water: Droplet,
-  danger: TriangleAlert,
-  technical: Wrench,
-  other: MapPin,
-};
-
-/** The same token colour the map's pin of that kind uses (§14: a token, never
- * a literal), so the list reads as the map's key. */
-function colorVar(kind: MarkKind): string {
-  if (kind === 'ride-start') return ROUTE_POINT_MARKER_COLOR_VAR.start;
-  if (kind === 'named-stop') return STOP_MARKER_COLOR_VAR;
-  return ROUTE_POINT_MARKER_COLOR_VAR[kind];
-}
-
 /**
- * CR-151: «Маршрут по точкам» (after 21st ln-dev7/how-it-works-02: a dashed
- * rail through icon nodes) — replaces CR-119's «Условные знаки» legend and is
- * still the map's non-visual equivalent (§12). Each node repeats its map pin's
- * colour with an icon; the words carry the meaning, the colour never alone.
+ * CR-151, restyled by CR-155 to the owner's mockup: «Маршрут по точкам» — a km
+ * column, hollow rings on a dashed rail, the title and a quiet subtitle. Only a
+ * dangerous section stands out (warning ring and an icon before its subtitle);
+ * the words carry the meaning, the colour never alone (§12). Still the map's
+ * non-visual equivalent.
  */
 export function RouteTimeline({ items }: { items: TimelineItem[] }) {
   if (items.length === 0) return null;
@@ -50,24 +16,23 @@ export function RouteTimeline({ items }: { items: TimelineItem[] }) {
   return (
     <ol className="flex flex-col" data-testid="route-timeline">
       {items.map((item, index) => {
-        const Icon = ICONS[item.kind];
-        const km = item.km !== null ? Math.round(item.km) : null;
+        const danger = item.kind === 'danger';
+        const km = item.km !== null ? formatDistanceMarkParts(item.km) : null;
         return (
           <li
             key={item.id}
             className={cn(
               'relative grid gap-x-3',
-              withKm ? 'grid-cols-[3.5rem_2rem_1fr]' : 'grid-cols-[2rem_1fr]',
+              withKm
+                ? 'grid-cols-[4.5rem_1.25rem_1fr]'
+                : 'grid-cols-[1.25rem_1fr]',
             )}
           >
             {withKm ? (
-              <span className="text-right font-num text-2xl leading-[1.1] font-bold text-text tabular-nums">
-                {km !== null ? (
+              <span className="pt-0.5 text-right font-mono text-xs text-text-secondary tabular-nums">
+                {km ? (
                   <>
-                    {km}
-                    <span className="ml-0.5 font-mono text-xs font-normal text-text-secondary">
-                      {RIDE_POSTER_TERMS.kmUnit}
-                    </span>
+                    {km.value} {km.unit}
                     <span className="sr-only"> — </span>
                   </>
                 ) : null}
@@ -75,26 +40,39 @@ export function RouteTimeline({ items }: { items: TimelineItem[] }) {
             ) : null}
             <span
               aria-hidden="true"
-              className="relative z-10 grid size-8 place-items-center rounded-full text-on-primary shadow-[0_0_0_4px_var(--bg)]"
-              style={{ background: `var(${colorVar(item.kind)})` }}
-            >
-              <Icon className="size-4" strokeWidth={2} />
-            </span>
+              className={cn(
+                'relative z-10 mt-0.5 size-4.5 rounded-full border-2 bg-bg',
+                danger ? 'border-warning' : 'border-brand',
+              )}
+            />
             {index < items.length - 1 ? (
               <span
                 aria-hidden="true"
                 className={cn(
-                  'absolute top-[34px] bottom-0 border-l-2 border-dashed border-brand opacity-60',
-                  withKm ? 'left-[calc(3.5rem+0.75rem+15px)]' : 'left-[15px]',
+                  'absolute top-6 bottom-0.5 border-l border-dashed border-border-input',
+                  withKm ? 'left-[calc(4.5rem+0.75rem+8.5px)]' : 'left-[8.5px]',
                 )}
               />
             ) : null}
-            <span className="min-w-0 pt-1 pb-5.5">
+            <span className="min-w-0 pb-6">
               <span className="block leading-snug font-semibold text-text">
                 {item.title}
               </span>
               {item.subtitle ? (
-                <span className="block text-body-sm text-text-secondary">
+                <span
+                  className={cn(
+                    'mt-0.5 block text-body-sm',
+                    danger
+                      ? 'font-semibold text-warning'
+                      : 'text-text-secondary',
+                  )}
+                >
+                  {danger ? (
+                    <TriangleAlert
+                      className="mr-1.5 inline size-4 align-[-3px]"
+                      aria-hidden="true"
+                    />
+                  ) : null}
                   {item.subtitle}
                 </span>
               ) : null}

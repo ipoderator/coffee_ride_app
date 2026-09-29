@@ -1,6 +1,13 @@
 'use client';
 
-import { Clock, Download, Share2, Star } from 'lucide-react';
+import {
+  CalendarPlus,
+  Check,
+  Clock,
+  Download,
+  Share2,
+  Star,
+} from 'lucide-react';
 import Image from 'next/image';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -12,8 +19,6 @@ import type {
 import {
   Avatar,
   BICYCLE_TYPE_TERMS,
-  Button,
-  buttonClassName,
   Card,
   cn,
   DifficultyScale,
@@ -37,7 +42,7 @@ import {
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
   RIDE_DETAIL_TERMS,
-  RIDE_DISCOVERY_ROW_TERMS,
+  RIDE_PAGE_TERMS,
   RIDE_POSTER_TERMS,
   RIDE_TICKET_TERMS,
   REVIEWS_TERMS,
@@ -53,6 +58,7 @@ import {
   getRideReviews,
   routeDownloadUrl,
 } from '../api';
+import { downloadIcs } from '../lib/calendar';
 import { buildRouteTrack } from '../lib/route-track';
 import {
   posterStatusTerm,
@@ -84,6 +90,11 @@ const CHIP_CLASSNAME =
   'inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-raised px-3 py-1 text-body-sm font-medium whitespace-nowrap text-text-secondary';
 
 const SECTION_TITLE_CLASSNAME = 'text-h2 text-text';
+
+// CR-155: the ticket's action rows (GPX, calendar, share) — full-width 44px
+// rows split by hairlines, as in the owner's mockup.
+const ACTION_ROW_CLASSNAME =
+  'flex min-h-11 w-full items-center gap-3 rounded-sm border-t border-border py-2.5 text-left text-body-sm font-medium text-text transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 /**
  * CR-042 ("Review"): the "Отзывы" section, shown only once the ride is `finished`.
@@ -145,9 +156,8 @@ function metric(
   label: string,
   parts: MetricParts,
   missing: boolean,
-  extra: Partial<HeroMetric> = {},
 ): HeroMetric {
-  return { key, label, parts, missing, ...extra };
+  return { key, label, parts, missing };
 }
 
 /** The phone bar's content for the ticket's face — `null` where there is
@@ -382,6 +392,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     waitlistCount,
     viewerStartNumber,
     viewerWaitlistPosition,
+    requirements,
   } = detail;
   const timeZone = ride.startTimezone;
   const startsAt = new Date(ride.startsAt);
@@ -435,16 +446,13 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const distanceKm = ride.distanceKm ?? route?.distanceKm ?? null;
   const elevationGain =
     ride.elevationGainMeters ?? route?.elevationGainMeters ?? null;
-  const pace: { parts: MetricParts; note?: string } | null =
+  const pace: MetricParts | null =
     groups.length >= 2
-      ? {
-          parts: formatPaceRangeParts(groups.map((group) => group.paceKmh)),
-          note: RIDE_DISCOVERY_ROW_TERMS.groupsCount(groups.length),
-        }
+      ? formatPaceRangeParts(groups.map((group) => group.paceKmh))
       : groups.length === 1
-        ? { parts: formatGroupPaceParts(groups[0]!.paceKmh) }
+        ? formatGroupPaceParts(groups[0]!.paceKmh)
         : ride.paceKmh !== null
-          ? { parts: formatSpeedParts(ride.paceKmh) }
+          ? formatSpeedParts(ride.paceKmh)
           : null;
   const metrics: HeroMetric[] = [
     metric(
@@ -458,18 +466,16 @@ export function RideDetailView({ rideId }: { rideId: string }) {
       METRIC_TERMS.elevation,
       formatElevationParts(elevationGain),
       elevationGain === null,
-      { tone: 'elevation' },
     ),
     metric(
       'pace',
-      METRIC_TERMS.pace,
-      pace?.parts ?? formatSpeedParts(null),
+      RIDE_PAGE_TERMS.metricPace,
+      pace ?? formatSpeedParts(null),
       pace === null,
-      { note: pace?.note },
     ),
     metric(
       'duration',
-      METRIC_TERMS.duration,
+      RIDE_PAGE_TERMS.metricDuration,
       formatDurationParts(ride.durationMinutes),
       ride.durationMinutes === null,
     ),
@@ -520,6 +526,58 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     seatsLine,
     countdown: upcoming ? formatCountdownShort(startsAt, new Date()) : null,
   });
+
+  const ticketActions = (
+    <ul className="-mb-2 flex flex-col">
+      {route ? (
+        <li>
+          <a
+            href={routeDownloadUrl(rideId)}
+            download
+            className={ACTION_ROW_CLASSNAME}
+          >
+            <Download className="size-4.5 shrink-0" aria-hidden="true" />
+            {RIDE_DETAIL_REGISTRATION_TERMS.downloadGpx}
+          </a>
+        </li>
+      ) : null}
+      {upcoming ? (
+        <li>
+          <button
+            type="button"
+            className={ACTION_ROW_CLASSNAME}
+            onClick={() =>
+              downloadIcs(
+                {
+                  uid: `${ride.id}@coffee-ride`,
+                  title: ride.title,
+                  startsAt,
+                  durationMinutes: ride.durationMinutes,
+                  location: startPointLabel,
+                  url: window.location.href,
+                  description: ride.description,
+                },
+                `coffee-ride-${ride.id}.ics`,
+              )
+            }
+          >
+            <CalendarPlus className="size-4.5 shrink-0" aria-hidden="true" />
+            {RIDE_PAGE_TERMS.addToCalendar}
+          </button>
+        </li>
+      ) : null}
+      <li>
+        <button
+          type="button"
+          className={ACTION_ROW_CLASSNAME}
+          onClick={() => void shareRide()}
+        >
+          <Share2 className="size-4.5 shrink-0" aria-hidden="true" />
+          {RIDE_POSTER_TERMS.share}
+        </button>
+      </li>
+    </ul>
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-310 flex-col">
@@ -572,22 +630,23 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         </div>
       </header>
 
-      <RideHero
-        view={view}
-        onViewChange={setView}
-        canShowMap={hasMapContent}
-        statusTerm={posterStatusTerm(ride.status, seatsLeft)}
-        track={trackFace}
-        map={mapFace}
-        caption={route ? null : RIDE_POSTER_TERMS.routeMissing}
-        metrics={metrics}
-      />
+      <div className="flex flex-col gap-7 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-x-8 lg:gap-y-12">
+        <div className="lg:col-start-1 lg:row-start-1">
+          <RideHero
+            view={view}
+            onViewChange={setView}
+            canShowMap={hasMapContent}
+            track={trackFace}
+            map={mapFace}
+            caption={route ? null : RIDE_POSTER_TERMS.routeMissing}
+            metrics={metrics}
+          />
+        </div>
 
-      <div className="mt-6 flex flex-col gap-7 lg:mt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-14">
         <aside
           ref={ticketRef}
           aria-labelledby="ride-ticket-title"
-          className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1"
+          className="lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1"
         >
           <h2 id="ride-ticket-title" className="sr-only">
             {RIDE_TICKET_TERMS.title}
@@ -596,6 +655,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             rideId={rideId}
             rideStatus={ride.status}
             state={ticketState}
+            statusTerm={posterStatusTerm(ride.status, seatsLeft)}
             participantLimit={ride.participantLimit}
             registrationsCount={registrationsCount}
             waitlistCount={waitlistCount}
@@ -609,7 +669,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             startsAt={ride.startsAt}
             priceRub={ride.priceRub}
             startPointLabel={startPointLabel}
-            onShare={() => void shareRide()}
+            footer={ticketActions}
             onChange={(registration) => {
               setViewerRegistration(registration);
               if (registration) setViewerWaitlistEntry(null);
@@ -622,99 +682,118 @@ export function RideDetailView({ rideId }: { rideId: string }) {
           />
         </aside>
 
-        <div className="flex min-w-0 flex-col gap-10 lg:col-start-1 lg:row-start-1">
-          <section className="flex flex-col gap-3.5" data-testid="ride-facts">
-            <h2 className="sr-only">
-              {RIDE_DETAIL_REGISTRATION_TERMS.aboutTitle}
-            </h2>
-            <div className="flex flex-wrap items-center gap-2">
-              {ride.difficulty !== null ? (
-                <Chip>
-                  <span className="sr-only">{METRIC_TERMS.difficulty}: </span>
-                  <DifficultyScale level={ride.difficulty} size="sm" />
-                </Chip>
-              ) : null}
-              <Chip>
-                <span className="sr-only">
-                  {RIDE_DETAIL_TERMS.bicycleTypeLabel}:{' '}
-                </span>
-                {BICYCLE_TYPE_TERMS[ride.bicycleType]}
-              </Chip>
-              <Chip>
-                <span className="sr-only">
-                  {RIDE_DETAIL_TERMS.priceLabel}:{' '}
-                </span>
-                {formatPrice(ride.priceRub)}
-              </Chip>
-            </div>
-            {ride.coverImageUrl ? (
-              // ADR-019/CR-086: `coverImageUrl` is the API's bare `/v1/...` path
-              // (ADR-011) — `apiAssetUrl` adds the `/api` same-origin prefix.
-              <div className="relative h-56 w-full overflow-hidden rounded-2xl">
-                <Image
-                  src={apiAssetUrl(ride.coverImageUrl)}
-                  alt=""
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            ) : null}
-            {ride.description ? (
-              <p className="max-w-[62ch] text-body whitespace-pre-wrap text-text">
-                {ride.description}
-              </p>
-            ) : null}
-          </section>
-
-          {(timeline.length > 0 || route) && (
+        <div className="flex min-w-0 flex-col gap-12 lg:col-start-1 lg:row-start-2">
+          {timeline.length > 0 && (
             <section
-              className="flex flex-col gap-3.5"
+              className="flex flex-col gap-4"
               aria-labelledby="ride-route-title"
             >
               <h2 id="ride-route-title" className={SECTION_TITLE_CLASSNAME}>
                 {RIDE_POSTER_TERMS.timelineTitle}
               </h2>
               <RouteTimeline items={timeline} />
-              {route && geometry.status === 'loading' ? (
-                <Skeleton className="h-40 w-full" />
-              ) : null}
-              {route && geometry.status === 'error' ? (
-                <ErrorState
-                  message={ROUTE_RENDERING_TERMS.elevationProfileLoadError}
-                  tone="warning"
-                  variant="inline"
-                  onRetry={geometry.retry}
-                />
-              ) : null}
-              {track ? (
-                <ElevationProfileChart
-                  track={track}
-                  label={ROUTE_RENDERING_TERMS.elevationProfileLabel}
-                  onHoverKm={setHoverKm}
-                />
-              ) : null}
-              {route ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <a
-                    href={routeDownloadUrl(rideId)}
-                    download
-                    className={buttonClassName('secondary')}
-                  >
-                    <Download className="size-4" aria-hidden="true" />
-                    {RIDE_DETAIL_REGISTRATION_TERMS.downloadGpx}
-                  </a>
-                  <Button
-                    variant="secondary"
-                    className="border-0 px-3 text-body-sm text-text-secondary hover:text-text"
-                    onClick={() => void shareRide()}
-                  >
-                    <Share2 className="size-4" aria-hidden="true" />
-                    {RIDE_POSTER_TERMS.share}
-                  </Button>
-                </div>
-              ) : null}
             </section>
           )}
+
+          {route && geometry.status === 'loading' ? (
+            <Skeleton className="h-52 w-full" />
+          ) : null}
+          {route && geometry.status === 'error' ? (
+            <ErrorState
+              message={ROUTE_RENDERING_TERMS.elevationProfileLoadError}
+              tone="warning"
+              variant="inline"
+              onRetry={geometry.retry}
+            />
+          ) : null}
+          {track ? (
+            <ElevationProfileChart track={track} onHoverKm={setHoverKm} />
+          ) : null}
+
+          <div
+            className={cn(
+              'grid gap-12 md:gap-10',
+              requirements.length > 0 && 'md:grid-cols-2',
+            )}
+          >
+            <section
+              className="flex min-w-0 flex-col gap-3.5"
+              aria-labelledby="ride-about-title"
+              data-testid="ride-facts"
+            >
+              <h2 id="ride-about-title" className={SECTION_TITLE_CLASSNAME}>
+                {RIDE_DETAIL_REGISTRATION_TERMS.aboutTitle}
+              </h2>
+              {ride.description ? (
+                <p className="max-w-[62ch] text-body whitespace-pre-wrap text-text-secondary">
+                  {ride.description}
+                </p>
+              ) : null}
+              {ride.coverImageUrl ? (
+                // ADR-019/CR-086: `coverImageUrl` is the API's bare `/v1/...` path
+                // (ADR-011) — `apiAssetUrl` adds the `/api` same-origin prefix.
+                <div className="relative h-56 w-full overflow-hidden rounded-2xl">
+                  <Image
+                    src={apiAssetUrl(ride.coverImageUrl)}
+                    alt=""
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                {ride.difficulty !== null ? (
+                  <Chip>
+                    <span className="sr-only">{METRIC_TERMS.difficulty}: </span>
+                    <DifficultyScale level={ride.difficulty} size="sm" />
+                  </Chip>
+                ) : null}
+                <Chip>
+                  <span className="sr-only">
+                    {RIDE_DETAIL_TERMS.bicycleTypeLabel}:{' '}
+                  </span>
+                  {BICYCLE_TYPE_TERMS[ride.bicycleType]}
+                </Chip>
+                <Chip>
+                  <span className="sr-only">
+                    {RIDE_DETAIL_TERMS.priceLabel}:{' '}
+                  </span>
+                  {formatPrice(ride.priceRub)}
+                </Chip>
+              </div>
+            </section>
+
+            {requirements.length > 0 ? (
+              <section
+                className="flex min-w-0 flex-col gap-3.5"
+                aria-labelledby="ride-requirements-title"
+              >
+                <h2
+                  id="ride-requirements-title"
+                  className={SECTION_TITLE_CLASSNAME}
+                >
+                  {RIDE_PAGE_TERMS.requirementsTitle}
+                </h2>
+                <ul
+                  className="flex flex-col gap-3"
+                  data-testid="ride-requirements"
+                >
+                  {requirements.map((requirement, index) => (
+                    <li
+                      key={`${index}-${requirement}`}
+                      className="flex items-start gap-3 text-body text-text"
+                    >
+                      <Check
+                        className="mt-1 size-4 shrink-0 text-success"
+                        aria-hidden="true"
+                      />
+                      {requirement}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
 
           {!cancelled && (
             <RidersSection

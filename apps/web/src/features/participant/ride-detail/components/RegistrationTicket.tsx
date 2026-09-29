@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleX, Share2 } from 'lucide-react';
+import { CircleX } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import type {
@@ -21,12 +21,12 @@ import {
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_GROUP_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
-  RIDE_DETAIL_RIDERS_TERMS,
   RIDE_DETAIL_TERMS,
-  RIDE_POSTER_TERMS,
+  RIDE_PAGE_TERMS,
   RIDE_TICKET_TERMS,
-  SegmentedControl,
+  StatusBadge,
   useToast,
+  type StatusTone,
 } from 'ui';
 import { loginHref } from '@/lib/auth/next-path';
 import {
@@ -81,100 +81,93 @@ const FRAME_TONE = {
 } as const;
 
 /**
- * The ticket's outline (shape after 21st larsen66/admit-one-ticket; its
- * shader/glare left out — no gradients or glow, `docs/design.md` §1): a raised
- * card whose perforation row bites a half-circle out of each side. The bites
- * are page-coloured half discs drawn over the border, so no measuring is
- * needed.
+ * CR-155 (owner's mockup): a plain raised card — a head row with what this
+ * block is («Стартовый лист», «Вы записаны», …) and the ride's status badge,
+ * then the state's content, then the page's actions (GPX, calendar, share)
+ * passed in as `footer`. Replaces CR-151's perforated ticket stub.
  */
-function TicketFrame({
+function TicketCard({
   tone,
-  stub,
+  title,
+  titleClassName,
+  status,
+  footer,
   children,
 }: {
   tone: keyof typeof FRAME_TONE;
-  stub: ReactNode;
+  title: string;
+  titleClassName?: string;
+  status: { label: string; tone: StatusTone };
+  footer: ReactNode;
   children: ReactNode;
 }) {
-  const border = FRAME_TONE[tone];
   return (
     <div
       data-testid="ride-ticket"
       className={cn(
-        'relative flex flex-col gap-4 rounded-3xl border-[1.5px] bg-bg-raised px-5 pt-5.5 pb-5',
-        border,
+        'flex flex-col gap-4 rounded-3xl border-[1.5px] bg-bg-raised p-5',
+        FRAME_TONE[tone],
       )}
     >
-      <div className="flex min-h-23 items-end justify-between gap-3">
-        {stub}
-      </div>
-      <div aria-hidden="true" className="relative -mx-5 h-0">
-        <span className="absolute inset-x-6.5 top-0 border-t-[1.5px] border-dashed border-border-input" />
-        <span
+      <div className="flex min-h-7 flex-wrap items-center justify-between gap-2">
+        <h3
           className={cn(
-            'absolute -top-[11px] -left-[11.75px] size-[22px] rounded-full border-[1.5px] bg-bg [clip-path:inset(0_0_0_50%)]',
-            border,
+            'font-mono text-label text-text-secondary uppercase',
+            titleClassName,
           )}
-        />
-        <span
-          className={cn(
-            'absolute -top-[11px] -right-[11.75px] size-[22px] rounded-full border-[1.5px] bg-bg [clip-path:inset(0_50%_0_0)]',
-            border,
-          )}
+        >
+          {title}
+        </h3>
+        <StatusBadge
+          label={status.label}
+          tone={status.tone}
+          className="rounded-full px-2.5 py-1 text-xs leading-4 font-semibold"
         />
       </div>
       {children}
+      {footer}
     </div>
   );
 }
 
-function StubText({
-  title,
-  titleClassName,
-  children,
-}: {
-  title: string;
-  titleClassName?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <h3
-        className={cn(
-          'font-mono text-label text-text-secondary uppercase',
-          titleClassName,
-        )}
-      >
-        {title}
-      </h3>
-      {children ? (
-        <p className="text-body-sm text-text-secondary">{children}</p>
-      ) : null}
-    </div>
-  );
+function Hint({ children }: { children: ReactNode }) {
+  return <p className="text-body-sm text-text-secondary">{children}</p>;
 }
 
-function BigNumber({
+/** A big figure with a small caption on its baseline — «13 из 20 участников»,
+ * «№ 7», «# 3». */
+function Figure({
   sign,
   value,
+  caption,
   className,
 }: {
-  sign: string;
+  sign?: string;
   value: number;
+  caption?: string;
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        'shrink-0 font-num text-8xl leading-[0.78] font-extrabold tracking-[-0.01em] text-text tabular-nums',
-        className,
-      )}
-    >
-      <span className="mr-0.5 text-[0.36em] font-bold text-text-muted">
-        {sign}
+    <p className="flex flex-wrap items-baseline gap-x-2">
+      <span
+        className={cn(
+          'font-num text-metric leading-none font-extrabold text-text tabular-nums',
+          className,
+        )}
+      >
+        {sign ? (
+          <span className="mr-0.5 text-[0.5em] font-bold text-text-muted">
+            {sign}
+          </span>
+        ) : null}
+        {value}
       </span>
-      {value}
-    </span>
+      {caption ? (
+        <span className="font-mono text-body-sm text-text-secondary">
+          {caption}
+        </span>
+      ) : null}
+    </p>
   );
 }
 
@@ -209,18 +202,21 @@ function Seats({
   state,
   participantLimit,
   registrationsCount,
+  waitlistCount,
 }: {
   state: TicketState;
   participantLimit: number | null;
   registrationsCount: number;
+  waitlistCount: number;
 }) {
   if (participantLimit === null) {
     return (
-      <div className="flex items-baseline justify-between gap-3 text-body-sm">
-        <span className="text-text tabular-nums">
-          {RIDE_DETAIL_RIDERS_TERMS.ridersCount(registrationsCount)}
-        </span>
-        <span className="text-text-secondary">{RIDE_TICKET_TERMS.noLimit}</span>
+      <div className="flex flex-col gap-1.5">
+        <Figure
+          value={registrationsCount}
+          caption={RIDE_PAGE_TERMS.ridersWord(registrationsCount)}
+        />
+        <Hint>{RIDE_TICKET_TERMS.noLimit}</Hint>
       </div>
     );
   }
@@ -231,30 +227,12 @@ function Seats({
       : 0;
   const few = state === 'few';
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-body-sm">
-        <span>
-          <b className="font-semibold text-text tabular-nums">
-            {RIDE_TICKET_TERMS.participantsOf(
-              registrationsCount,
-              participantLimit,
-            )}
-          </b>{' '}
-          <span className="text-text-secondary">
-            {RIDE_TICKET_TERMS.participantsWord}
-          </span>
-        </span>
-        <span
-          className={cn(
-            few ? 'font-semibold text-warning' : 'text-text-secondary',
-          )}
-        >
-          {left > 0
-            ? RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(left)
-            : REGISTRATION_ACTION_TERMS.full}
-        </span>
-      </div>
-      {/* ADR-024: the fill bar reinforces the text above it — colour never
+    <div className="flex flex-col gap-2.5">
+      <Figure
+        value={registrationsCount}
+        caption={RIDE_PAGE_TERMS.ofLimit(participantLimit)}
+      />
+      {/* ADR-024: the fill bar reinforces the text around it — colour never
           carries the meaning alone (§12). */}
       <div
         role="progressbar"
@@ -272,22 +250,89 @@ function Seats({
           style={{ width: `${percent}%` }}
         />
       </div>
+      <p
+        className={cn(
+          'text-body-sm',
+          few ? 'font-semibold text-warning' : 'text-text-secondary',
+        )}
+      >
+        {left > 0
+          ? RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(left)
+          : RIDE_PAGE_TERMS.seatsFull(waitlistCount)}
+      </p>
     </div>
   );
 }
 
-function groupOptions(groups: RideGroupSummary[]) {
-  return groups.map((group) => ({
-    value: group.id,
-    label: group.name,
-    description: formatGroupPace(group.paceKmh),
-  }));
+/** CR-155: pace groups as stacked radio cards — name · pace, and how many
+ * have already chosen it (groups have no seat limit of their own). */
+function GroupPicker({
+  name,
+  legend,
+  groups,
+  value,
+  onChange,
+  disabled,
+}: {
+  name: string;
+  legend: string;
+  groups: RideGroupSummary[];
+  value: string | null;
+  onChange: (groupId: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-2" disabled={disabled}>
+      <legend className="mb-2 font-mono text-label text-text-secondary uppercase">
+        {legend}
+      </legend>
+      {groups.map((group) => {
+        const checked = value === group.id;
+        return (
+          <label
+            key={group.id}
+            className={cn(
+              'flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border px-4 py-2.5 transition-colors',
+              checked
+                ? 'border-primary bg-surface'
+                : 'border-border hover:border-border-input',
+              disabled && 'cursor-not-allowed opacity-60',
+            )}
+          >
+            {/* The native radio itself, restyled: a ring, filled with a
+                knocked-out dot once checked — clickable and focusable as is. */}
+            <input
+              type="radio"
+              name={name}
+              value={group.id}
+              checked={checked}
+              onChange={() => onChange(group.id)}
+              className="size-5 shrink-0 cursor-pointer appearance-none rounded-full border-2 border-border-input checked:border-primary checked:bg-primary checked:shadow-[inset_0_0_0_3px_var(--surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed"
+            />
+            <span className="flex min-w-0 flex-col">
+              <span className="font-semibold text-text tabular-nums">
+                {RIDE_PAGE_TERMS.groupOption(
+                  group.name,
+                  formatGroupPace(group.paceKmh),
+                )}
+              </span>
+              <span className="text-body-sm text-text-secondary tabular-nums">
+                {RIDE_PAGE_TERMS.groupRiders(group.registrationsCount)}
+              </span>
+            </span>
+          </label>
+        );
+      })}
+    </fieldset>
+  );
 }
 
 export interface RegistrationTicketProps {
   rideId: string;
   rideStatus: RideStatus;
   state: TicketState;
+  /** The ride's status badge in the card's head. */
+  statusTerm: { label: string; tone: StatusTone };
   participantLimit: number | null;
   registrationsCount: number;
   waitlistCount: number;
@@ -296,21 +341,22 @@ export interface RegistrationTicketProps {
   viewerStartNumber: number | null;
   viewerWaitlistPosition: number | null;
   groups: RideGroupSummary[];
-  /** «Сб, 3 окт» / «07:30» for the date/time cells. */
+  /** «Сб, 3 окт» / «07:30» for a registered viewer's date/time cells. */
   dateLabel: string;
   timeLabel: string;
   startsAt: string;
   priceRub: number | null;
   startPointLabel: string | null;
-  onShare: () => void;
+  /** The page's actions under the card's content (GPX, calendar, share). */
+  footer: ReactNode;
   onChange: (registration: Registration | null) => void;
   onWaitlistChange: (waitlistEntry: WaitlistEntry | null) => void;
 }
 
 /**
- * CR-151 («Постер заезда v2»): the registration ticket — every registration
- * state on one card: a stub (what this is + a big «№ N» / «#N»), a
- * perforation, then the facts and the one action. Replaces CR-119's
+ * CR-151 («Постер заезда v2»), laid out to the owner's mockup by CR-155: the
+ * registration card beside the hero — every registration state on one card,
+ * the seats count as its big figure, and the one action. Replaces CR-119's
  * `RegistrationButton`; its behaviour is unchanged — same API calls
  * (CR-032/033/036/117), `ConfirmDialog` before cancelling/leaving and a
  * `Toast` after every action (CR-103), and an anonymous viewer is sent to
@@ -324,6 +370,7 @@ export function RegistrationTicket({
   rideId,
   rideStatus,
   state,
+  statusTerm,
   participantLimit,
   registrationsCount,
   waitlistCount,
@@ -337,7 +384,7 @@ export function RegistrationTicket({
   startsAt,
   priceRub,
   startPointLabel,
-  onShare,
+  footer,
   onChange,
   onWaitlistChange,
 }: RegistrationTicketProps) {
@@ -356,8 +403,6 @@ export function RegistrationTicket({
 
   const hasGroups = groups.length > 0;
   const needsGroupChoice = hasGroups && !selectedGroupId;
-  const selectedGroup =
-    groups.find((group) => group.id === selectedGroupId) ?? null;
 
   async function run(
     action: () => Promise<void>,
@@ -474,118 +519,64 @@ export function RegistrationTicket({
     </>
   );
 
-  const dateCells = (
-    <div className="grid grid-cols-2 gap-2">
-      <Cell label={RIDE_TICKET_TERMS.dateLabel}>
-        <b className="font-semibold text-text tabular-nums">{dateLabel}</b>
-      </Cell>
-      <Cell label={RIDE_TICKET_TERMS.startTimeLabel}>
-        <b className="font-semibold text-text tabular-nums">{timeLabel}</b>
-      </Cell>
-    </div>
-  );
-
   const seats = (
     <Seats
       state={state}
       participantLimit={participantLimit}
       registrationsCount={registrationsCount}
+      waitlistCount={waitlistCount}
     />
-  );
-
-  const shareButton = (
-    <Button
-      variant="secondary"
-      className="min-h-11 border-0 px-3 text-body-sm text-text-secondary hover:text-text"
-      onClick={onShare}
-    >
-      <Share2 className="size-4" aria-hidden="true" />
-      {RIDE_POSTER_TERMS.share}
-    </Button>
   );
 
   // ---- open / few / full: pick a group, register or join the queue --------
   if (state === 'open' || state === 'few' || state === 'full') {
     const full = state === 'full';
-    const place = registrationsCount + 1;
     return (
-      <TicketFrame
+      <TicketCard
         tone="frame"
-        stub={
-          full ? (
-            <>
-              <StubText title={RIDE_TICKET_TERMS.waitlistLabel}>
-                {RIDE_TICKET_TERMS.queueSize(waitlistCount)}
-                <br />
-                {RIDE_TICKET_TERMS.queueHint}
-              </StubText>
-              <BigNumber
-                sign={RIDE_TICKET_TERMS.queueSign}
-                value={waitlistCount + 1}
-                className="text-7xl text-info"
-              />
-            </>
-          ) : (
-            <>
-              <StubText title={RIDE_TICKET_TERMS.startListLabel}>
-                {RIDE_TICKET_TERMS.youWillBe(place, participantLimit)}
-              </StubText>
-              <BigNumber sign={RIDE_TICKET_TERMS.numberSign} value={place} />
-            </>
-          )
-        }
+        title={RIDE_TICKET_TERMS.startListLabel}
+        status={statusTerm}
+        footer={footer}
       >
-        {dateCells}
-        {hasGroups ? (
-          <div className="flex flex-col gap-2">
-            <SegmentedControl
-              id="ride-groups"
-              name="ride-group"
-              legend={RIDE_TICKET_TERMS.groupLegend}
-              showLegend
-              variant="tall"
-              options={groupOptions(groups)}
-              value={selectedGroupId}
-              onChange={setSelectedGroupId}
-              disabled={isPending}
-            />
-            {selectedGroup ? (
-              <p className="text-body-sm text-text-secondary tabular-nums">
-                {RIDE_TICKET_TERMS.groupNote(
-                  selectedGroup.name,
-                  selectedGroup.registrationsCount,
-                )}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
         {seats}
-        <Button
-          className="w-full"
-          isLoading={isPending}
-          disabled={needsGroupChoice}
-          aria-describedby={needsGroupChoice ? hintId : undefined}
-          onClick={full ? handleJoinWaitlist : handleRegister}
-        >
-          {full
-            ? REGISTRATION_ACTION_TERMS.joinWaitlist
-            : REGISTRATION_ACTION_TERMS.register}
-        </Button>
-        {needsGroupChoice ? (
-          <p
-            id={hintId}
-            className="text-center text-body-sm text-text-secondary"
-          >
-            {RIDE_DETAIL_GROUP_TERMS.pickHint}
-          </p>
+        {hasGroups ? (
+          <GroupPicker
+            name="ride-group"
+            legend={RIDE_TICKET_TERMS.groupLegend}
+            groups={groups}
+            value={selectedGroupId}
+            onChange={setSelectedGroupId}
+            disabled={isPending}
+          />
         ) : null}
-        {errorAlert}
-        <p className="text-center text-body-sm text-text-secondary">
-          {full
-            ? RIDE_TICKET_TERMS.waitlistNote
-            : RIDE_TICKET_TERMS.registerNote(formatPrice(priceRub))}
-        </p>
-      </TicketFrame>
+        <div className="flex flex-col gap-2.5">
+          <Button
+            className="w-full"
+            isLoading={isPending}
+            disabled={needsGroupChoice}
+            aria-describedby={needsGroupChoice ? hintId : undefined}
+            onClick={full ? handleJoinWaitlist : handleRegister}
+          >
+            {full
+              ? REGISTRATION_ACTION_TERMS.joinWaitlist
+              : REGISTRATION_ACTION_TERMS.register}
+          </Button>
+          {needsGroupChoice ? (
+            <p
+              id={hintId}
+              className="text-center text-body-sm text-text-secondary"
+            >
+              {RIDE_DETAIL_GROUP_TERMS.pickHint}
+            </p>
+          ) : null}
+          {errorAlert}
+          <p className="text-center text-body-sm text-text-secondary">
+            {full
+              ? RIDE_TICKET_TERMS.waitlistNote
+              : RIDE_TICKET_TERMS.registerNote(formatPrice(priceRub))}
+          </p>
+        </div>
+      </TicketCard>
     );
   }
 
@@ -603,26 +594,34 @@ export function RegistrationTicket({
     const pace = viewerGroup ? formatGroupPaceParts(viewerGroup.paceKmh) : null;
 
     return (
-      <TicketFrame
+      <TicketCard
         tone="success"
-        stub={
-          <>
-            <StubText
-              title={RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle}
-              titleClassName="text-success"
-            >
-              {countdown ? RIDE_TICKET_TERMS.countdown(countdown) : null}
-            </StubText>
+        title={RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle}
+        titleClassName="text-success"
+        status={statusTerm}
+        footer={footer}
+      >
+        {viewerStartNumber !== null || countdown ? (
+          <div className="flex flex-col gap-1.5">
             {viewerStartNumber !== null ? (
-              <BigNumber
+              <Figure
                 sign={RIDE_TICKET_TERMS.numberSign}
                 value={viewerStartNumber}
               />
             ) : null}
-          </>
-        }
-      >
-        {dateCells}
+            {countdown ? (
+              <Hint>{RIDE_TICKET_TERMS.countdown(countdown)}</Hint>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          <Cell label={RIDE_TICKET_TERMS.dateLabel}>
+            <b className="font-semibold text-text tabular-nums">{dateLabel}</b>
+          </Cell>
+          <Cell label={RIDE_TICKET_TERMS.startTimeLabel}>
+            <b className="font-semibold text-text tabular-nums">{timeLabel}</b>
+          </Cell>
+        </div>
         {viewerGroup && pace && !isChangingGroup ? (
           <Cell
             label={RIDE_TICKET_TERMS.yourGroupLabel}
@@ -646,20 +645,16 @@ export function RegistrationTicket({
         {showPicker ? (
           <div className="flex flex-col gap-3">
             {mustPickGroup ? (
-              <p className="text-body-sm text-text-secondary">
-                {RIDE_DETAIL_GROUP_TERMS.noGroupDescription}
-              </p>
+              <Hint>{RIDE_DETAIL_GROUP_TERMS.noGroupDescription}</Hint>
             ) : null}
-            <SegmentedControl
+            <GroupPicker
               name={`${hintId}-change-group`}
               legend={
                 mustPickGroup
                   ? RIDE_DETAIL_GROUP_TERMS.noGroupTitle
                   : RIDE_DETAIL_GROUP_TERMS.changeGroup
               }
-              showLegend
-              variant="tall"
-              options={groupOptions(groups)}
+              groups={groups}
               value={pendingGroupId}
               onChange={setPendingGroupId}
               disabled={isPending}
@@ -693,22 +688,19 @@ export function RegistrationTicket({
           </Cell>
         ) : null}
         {errorAlert}
-        <div className="flex flex-wrap justify-center gap-1">
-          {canChangeGroup && viewerGroup && !isChangingGroup ? (
-            <Button
-              variant="secondary"
-              className="min-h-11 border-0 px-3 text-body-sm text-text-secondary hover:text-text"
-              onClick={() => {
-                setError(null);
-                setPendingGroupId(viewerGroup.id);
-                setIsChangingGroup(true);
-              }}
-            >
-              {RIDE_DETAIL_GROUP_TERMS.changeGroup}
-            </Button>
-          ) : null}
-          {shareButton}
-        </div>
+        {canChangeGroup && viewerGroup && !isChangingGroup ? (
+          <Button
+            variant="secondary"
+            className="min-h-11 self-center border-0 px-3 text-body-sm text-text-secondary hover:text-text"
+            onClick={() => {
+              setError(null);
+              setPendingGroupId(viewerGroup.id);
+              setIsChangingGroup(true);
+            }}
+          >
+            {RIDE_DETAIL_GROUP_TERMS.changeGroup}
+          </Button>
+        ) : null}
         {!rideOver ? (
           <Button
             variant="danger"
@@ -721,7 +713,7 @@ export function RegistrationTicket({
           </Button>
         ) : null}
         {dialogs}
-      </TicketFrame>
+      </TicketCard>
     );
   }
 
@@ -730,27 +722,23 @@ export function RegistrationTicket({
     const waitlistGroup =
       groups.find((group) => group.id === viewerWaitlistEntry.groupId) ?? null;
     return (
-      <TicketFrame
+      <TicketCard
         tone="frame"
-        stub={
-          <>
-            <StubText
-              title={RIDE_TICKET_TERMS.waitlistedTitle}
-              titleClassName="text-info"
-            >
-              {RIDE_TICKET_TERMS.waitlistedHint}
-            </StubText>
-            {viewerWaitlistPosition !== null ? (
-              <BigNumber
-                sign={RIDE_TICKET_TERMS.queueSign}
-                value={viewerWaitlistPosition}
-                className="text-7xl text-info"
-              />
-            ) : null}
-          </>
-        }
+        title={RIDE_TICKET_TERMS.waitlistedTitle}
+        titleClassName="text-info"
+        status={statusTerm}
+        footer={footer}
       >
-        {dateCells}
+        <div className="flex flex-col gap-1.5">
+          {viewerWaitlistPosition !== null ? (
+            <Figure
+              sign={RIDE_TICKET_TERMS.queueSign}
+              value={viewerWaitlistPosition}
+              className="text-info"
+            />
+          ) : null}
+          <Hint>{RIDE_TICKET_TERMS.waitlistedHint}</Hint>
+        </div>
         {waitlistGroup ? (
           <Cell label={RIDE_TICKET_TERMS.yourGroupLabel}>
             <b className="font-semibold text-text">
@@ -769,37 +757,26 @@ export function RegistrationTicket({
           {REGISTRATION_ACTION_TERMS.leaveWaitlist}
         </Button>
         {dialogs}
-      </TicketFrame>
+      </TicketCard>
     );
   }
 
   // ---- cancelled ------------------------------------------------------------
   if (state === 'cancelled') {
     return (
-      <TicketFrame
+      <TicketCard
         tone="danger"
-        stub={
-          <>
-            <StubText
-              title={RIDE_TICKET_TERMS.cancelledTitle}
-              titleClassName="text-danger"
-            >
-              {RIDE_TICKET_TERMS.cancelledHint}
-            </StubText>
-            <CircleX
-              aria-hidden="true"
-              className="size-14 shrink-0 text-danger"
-              strokeWidth={1.6}
-            />
-          </>
-        }
+        title={RIDE_TICKET_TERMS.cancelledTitle}
+        titleClassName="text-danger"
+        status={statusTerm}
+        footer={footer}
       >
         <p className="flex items-start gap-2 rounded-xl bg-danger px-3 py-2.5 text-body-sm font-medium text-on-danger">
           <CircleX className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {RIDE_TICKET_TERMS.cancelledBanner}
         </p>
-        {dateCells}
-      </TicketFrame>
+        <Hint>{RIDE_TICKET_TERMS.cancelledHint}</Hint>
+      </TicketCard>
     );
   }
 
@@ -812,25 +789,9 @@ export function RegistrationTicket({
   } as const;
   const [title, hint] = quiet[state as keyof typeof quiet] ?? quiet.notOpen;
   return (
-    <TicketFrame
-      tone="frame"
-      stub={
-        <>
-          <StubText title={title}>{hint}</StubText>
-          {state === 'closed' && participantLimit !== null ? (
-            <span className="shrink-0 font-num text-7xl leading-[0.78] font-extrabold text-text-muted tabular-nums">
-              {registrationsCount}
-              <span className="ml-1 text-[0.36em] font-bold">
-                /{participantLimit}
-              </span>
-            </span>
-          ) : null}
-        </>
-      }
-    >
-      {dateCells}
+    <TicketCard tone="frame" title={title} status={statusTerm} footer={footer}>
       {state === 'notOpen' || state === 'closed' ? seats : null}
-      <div className="flex justify-center">{shareButton}</div>
-    </TicketFrame>
+      <Hint>{hint}</Hint>
+    </TicketCard>
   );
 }

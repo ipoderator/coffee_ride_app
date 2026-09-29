@@ -86,6 +86,14 @@ function toFormState(ride: Ride): FormState {
 /** Empty text field -> `null` (clear); non-empty -> the number. Not `undefined` in
  * either case — this form always submits its full current state, same convention as
  * `OrganizerProfileForm`, not a sparse diff. */
+/** CR-155: the requirements textarea holds one `RideRequirement` per line. */
+function toRequirementLines(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 function toNullableNumber(raw: string): number | null {
   const trimmed = raw.trim();
   return trimmed.length > 0 ? Number(trimmed) : null;
@@ -124,6 +132,9 @@ export function EditRideForm({
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [ride, setRide] = useState<Ride | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
+  // Kept apart from `form`: the lifecycle actions below reset `form` from the
+  // `Ride` they get back, which carries no requirements.
+  const [requirementsText, setRequirementsText] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -157,6 +168,7 @@ export function EditRideForm({
         }
         setRide(response.ride);
         setForm(toFormState(response.ride));
+        setRequirementsText(response.requirements.join('\n'));
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -201,6 +213,7 @@ export function EditRideForm({
       startLat: toNullableNumber(form.startLat),
       startLng: toNullableNumber(form.startLng),
       participantsVisible: form.participantsVisible,
+      requirements: toRequirementLines(requirementsText),
     };
 
     const parsed = updateRideRequestSchema.safeParse(payload);
@@ -224,6 +237,7 @@ export function EditRideForm({
       const response = await updateRide(rideId, parsed.data);
       setRide(response.ride);
       setForm(toFormState(response.ride));
+      setRequirementsText(response.requirements.join('\n'));
       setSuccessMessage(RIDE_EDIT_TERMS.saveSuccess);
     } catch (error) {
       if (
@@ -233,7 +247,8 @@ export function EditRideForm({
       ) {
         const nextErrors: FieldErrors = {};
         for (const issue of error.problem.errors) {
-          nextErrors[issue.path] ??= issue.message;
+          // `requirements.3` → the one requirements field.
+          nextErrors[issue.path.split('.')[0]!] ??= issue.message;
         }
         setFieldErrors(nextErrors);
       } else {
@@ -473,6 +488,19 @@ export function EditRideForm({
             onChange={(event) =>
               setForm({ ...form, description: event.target.value })
             }
+            disabled={isPending || !isDraft}
+          />
+        </FormField>
+
+        <FormField
+          id="ride-requirements"
+          label={RIDE_EDIT_TERMS.requirementsLabel}
+          hint={RIDE_EDIT_TERMS.requirementsHint}
+          error={fieldErrors.requirements}
+        >
+          <Textarea
+            value={requirementsText}
+            onChange={(event) => setRequirementsText(event.target.value)}
             disabled={isPending || !isDraft}
           />
         </FormField>

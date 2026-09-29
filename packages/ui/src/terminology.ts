@@ -152,7 +152,8 @@ export type RegistrationActionKey =
 
 export const REGISTRATION_ACTION_TERMS: Record<RegistrationActionKey, string> =
   {
-    register: 'Зарегистрироваться',
+    // CR-155: the owner's mockup — shorter, same verb as «Записаться» everywhere.
+    register: 'Записаться',
     cancel: 'Отменить регистрацию',
     waitlisted: 'В списке ожидания',
     full: 'Мест не осталось',
@@ -300,7 +301,7 @@ export const SITE_HEADER_TERMS = {
  * a shared URL has nothing to go back *to*.
  */
 export const BACK_LINK_TERMS = {
-  toDiscovery: 'Ко всем заездам',
+  toDiscovery: 'Все заезды',
   toOrganizerRides: 'К моим заездам',
   toParticipantCabinet: 'В личный кабинет',
   // CR-126: `/rides/[id]/riders/[registrationId]` back to the ride it was
@@ -582,6 +583,10 @@ export const RIDE_EDIT_TERMS = {
   titleLabel: 'Название',
   descriptionLabel: 'Описание',
   descriptionHint: 'До 2000 символов.',
+  // CR-155: `RideRequirement` lines, one per textarea line.
+  requirementsLabel: 'Требования',
+  requirementsHint:
+    'По одному пункту в строке, до 10 пунктов по 120 символов: шлем, велосипед, опыт, что взять с собой.',
   bicycleTypeLabel: 'Тип велосипеда',
   startsAtLabel: 'Дата и время старта',
   startsAtRequired: 'Укажите дату и время старта.',
@@ -1441,7 +1446,7 @@ export const RIDE_TICKET_TERMS = {
       : `Вы будете ${place}-м из ${limit} ${pluralRu(limit, 'места', 'мест', 'мест')}`,
   dateLabel: 'Дата',
   startTimeLabel: 'Старт',
-  groupLegend: 'Группа по темпу',
+  groupLegend: 'Выберите группу',
   groupNote: (name: string, count: number) =>
     `${name} · ${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
   participantsOf: (count: number, limit: number) => `${count} из ${limit}`,
@@ -1480,3 +1485,32 @@ export const RIDE_TICKET_TERMS = {
 } as const;
 
 // --------------------------- end CR-151 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-155 — `/rides/[id]` to the owner's mockup: hero beside the ticket,
+// «Профиль высоты» and «Требования» as sections, calendar export.
+// ---------------------------------------------------------------------------
+
+export const RIDE_PAGE_TERMS = {
+  metricPace: 'Темп',
+  metricDuration: 'В пути',
+  /** A pace-group radio card: «Группа 1 · 25 км/ч». */
+  groupOption: (name: string, pace: string) => `${name} · ${pace}`,
+  groupRiders: (count: number) =>
+    count === 0
+      ? 'Пока никого'
+      : `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
+  /** «из 20 участников», «из 21 участника» — genitive after «из». */
+  ofLimit: (limit: number) =>
+    `из ${limit} ${pluralRu(limit, 'участника', 'участников', 'участников')}`,
+  ridersWord: (count: number) =>
+    pluralRu(count, 'участник', 'участника', 'участников'),
+  seatsFull: (queue: number) =>
+    queue === 0 ? 'Мест нет' : `Мест нет · ${queue} в очереди`,
+  addToCalendar: 'Добавить в календарь',
+  elevationTitle: 'Профиль высоты',
+  elevationRange: (max: string, min: string) => `макс. ${max} · мин. ${min}`,
+  requirementsTitle: 'Требования',
+} as const;
+
+// --------------------------- end CR-155 block ------------------------------

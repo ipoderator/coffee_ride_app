@@ -163,6 +163,12 @@ const rideDetailResponseSchema = z.object({
   waitlistCount: z.number(),
   viewerStartNumber: z.number().nullable(),
   viewerWaitlistPosition: z.number().nullable(),
+  // CR-155: additive — see `GetRideResponse.requirements`.
+  requirements: z.array(z.string()),
+});
+// CR-155: `PATCH /:id` — `{ ride }` plus the ride's requirements after the update.
+const updateRideResponseSchema = rideResponseWrapper.extend({
+  requirements: z.array(z.string()),
 });
 const routeResponseWrapper = z.object({ route: routeSummaryResponseSchema });
 
@@ -324,18 +330,18 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         params: rideIdParamsSchema,
         body: updateRideRequestSchema,
-        response: { 200: rideResponseWrapper },
+        response: { 200: updateRideResponseSchema },
       },
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const ride = await updateRideDraft(
+      const result = await updateRideDraft(
         app.db,
         request.user!.id,
         request.params.id,
         request.body,
       );
-      return reply.status(200).send({ ride });
+      return reply.status(200).send(result);
     },
   );
 

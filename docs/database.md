@@ -129,7 +129,16 @@ registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
   `Registration`/`WaitlistEntry`. At most 6 per ride — service-enforced under the
   `rides` row lock (a CHECK on `position` would leave no free slot for the two-phase
   renumbering a reorder needs). Capacity stays ride-level; no per-group limit.
-- RideRequirement — participation rules.
+- RideRequirement — participation rules (CR-155, table `ride_requirements`): `id`,
+  `rideId` (FK → Ride, `ON DELETE CASCADE`), `text` (not null, CHECK 1–120 chars —
+  free text such as «Шлем обязателен», «С собой: вода, камера»), `position` (not null,
+  CHECK `>= 0`, unique per `(rideId, position)` — the unique index also serves the
+  per-ride read in order), `createdAt`. Always written as the whole list
+  (`PATCH /v1/rides/:id`'s `requirements`: delete + re-insert inside the ride update's
+  transaction, under a `FOR UPDATE` lock on the ride row, so `position` stays dense
+  `0..n-1`). At most 10 per ride — request-schema limit, the whole list arrives in one
+  request. Migration `0021_ride_requirements`. Exposed as `requirements: string[]` on
+  `GET /v1/rides/:id`.
 - RideService — included logistics/services.
 - Bike — a participant's "garage" entry (CR-126): `id`, `userId` (FK → User,
   `ON DELETE CASCADE`), `bikeType` (reuses `Ride.bicycleType`'s pg enum

@@ -6,11 +6,11 @@ import {
   type CreateRideRequest,
   type CreateRideResponse,
   type FinishRideResponse,
+  type GetRideResponse,
   type ListRidesResponse,
   type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
-  type Ride,
   type StartRideResponse,
   type UpdateRideRequest,
   type UpdateRideResponse,
@@ -90,19 +90,18 @@ export async function listMyRides(
  * ride-detail endpoint, so a published/non-draft ride owned by someone else answers
  * 200. `isOwner` (KI-069) is what `EditRideForm` uses to show its own not-found state
  * for that case instead of rendering the edit form/lifecycle controls. */
-export async function getRide(
-  id: string,
-): Promise<{ ride: Ride; isOwner: boolean }> {
+type EditableRide = Pick<GetRideResponse, 'ride' | 'isOwner' | 'requirements'>;
+
+export async function getRide(id: string): Promise<EditableRide> {
   const response = await fetch(`${RIDES_ENDPOINT}/${id}`);
 
-  const body = (await response.json()) as
-    { ride: Ride; isOwner: boolean } | ProblemDetails;
+  const body = (await response.json()) as EditableRide | ProblemDetails;
 
   if (!response.ok) {
     throw new ApiError(body as ProblemDetails);
   }
 
-  return body as { ride: Ride; isOwner: boolean };
+  return body as EditableRide;
 }
 
 export async function updateRide(

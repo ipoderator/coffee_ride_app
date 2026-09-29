@@ -2007,3 +2007,60 @@ e2e (format, lint, typecheck, coverage gate, build) was green.
 Review: each actual was compared with its old baseline — only the intended changes.
 One older defect noticed in `discovery-map`: the desktop fullscreen toggle covers
 the map-unavailable banner's first word — recorded as KI-078, not fixed here.
+
+## 2026-09-29 — CR-155 — Ride page to the owner's mockup + ride requirements
+
+What: `/rides/[id]` rebuilt to the owner's ride-page mockup (dark, desktop 1440),
+and a new `RideRequirement` entity for its «Требования» block.
+
+- Layout: from `lg` the hero sits in the left column and the «Стартовый лист»
+  ticket is a sticky aside level with it; phone order unchanged.
+- Hero: status chip removed (now the ticket's badge); numbers band is four equal
+  columns in one ink — «Дистанция / Набор высоты / Темп / В пути».
+- Ticket: plain card instead of CR-151's perforated stub — head label + status
+  badge, seats as the big figure with bar and «Осталось N мест» / «Мест нет · N в
+  очереди», pace groups as stacked radio cards (native radio restyled — the first
+  `sr-only` version was unclickable for Playwright because the decorative circle
+  intercepted the pointer), «Записаться», note, then «Скачать GPX» / «Добавить в
+  календарь» / «Поделиться» rows. «Вы будете N-м из M мест» and the next queue
+  place are gone (not in the mockup); a registered viewer keeps «№ N».
+- «Маршрут по точкам»: 12px mono km marks («69,5 км»), hollow rings, a dangerous
+  section in `warning` with ⚠. «Профиль высоты» is its own section («макс. · мин.»,
+  chart on a card). «О заезде» (description, photo, chips) beside «Требования».
+- «Добавить в календарь»: RFC 5545 `.ics` built in the browser
+  (`lib/calendar.ts` — UTC times, escaping, 75-octet folding); no endpoint.
+- Terms: `REGISTRATION_ACTION_TERMS.register` «Зарегистрироваться» → «Записаться»
+  (and `docs/design.md` §13), back link «Все заезды», group legend «Выберите
+  группу», new `RIDE_PAGE_TERMS`; `formatDistanceMarkParts`.
+
+Why: the owner asked to redo the page to the mockup and chose (2026-09-29) real,
+organizer-entered requirements over deriving them from bike/difficulty.
+
+DB: `ride_requirements` (`id`, `ride_id` FK cascade, `text` CHECK 1–120,
+`position` CHECK ≥ 0 unique per ride, `created_at`), migration
+`0021_ride_requirements` — additive, no backfill.
+
+API (additive): `PATCH /v1/rides/:id` optional `requirements: string[]` (whole
+list; `[]` clears; ≤ 10 lines of 1–120 chars; draft-only like every field) —
+written in one transaction with the ride fields under a `FOR UPDATE` lock on the
+ride row, so concurrent PATCHes can't collide on `(ride_id, position)`. Response
+`{ ride, requirements }`; `GET /v1/rides/:id` gains `requirements`.
+
+Organizer: `EditRideForm` «Требования» textarea, one requirement per line (blank
+lines dropped); server errors on `requirements.N` map to that field.
+
+Not taken from the mockup: text under 12px, the header bell/avatar (CR-154 header
+stays), dropping the «Трек / Карта» switch. Per-group «Осталось N мест» became
+«N участников» — groups have no seat limit (ADR-022).
+
+Validation: format; lint + typecheck for db/types/api/ui/web; Vitest — api 494
+passed / 8 skipped (3 new requirements route tests), ui 176, web 481 (new:
+requirements section, calendar export, no calendar when cancelled, organizer
+requirements editing, `.ics` builder); functional Playwright (non-visual) 39/39
+against the dev stack (`registration-waitlist.spec.ts` updated to «Мест нет · 1 в
+очереди»). Screenshots at 1440 (dark/light) and 390 checked against the mockup —
+no horizontal scroll, no text under 12px, no page errors. Migration applied to
+the dev and test databases; four requirements added by SQL to the dev ride
+«Тестовый заезд на выходные» (already published, so not PATCH-able) for the
+check. Coverage baseline not re-measured (needs the CI environment).
+Follow-up: KI-079 — ride-detail visual baselines from CI.

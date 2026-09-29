@@ -933,6 +933,23 @@ ADR-022). No new package and no new dependency-direction edge; one new domain en
   implemented in `maps-2gis/src/render.ts` (`.claude/rules/maps.md` updated). The
   `create-map-renderer.ts` composition point is unchanged.
 
+CR-155 (ride page to the owner's mockup + requirements, 2026-09-29). No new
+package or module.
+
+- **packages/db**: `src/schema/ride-requirement.ts` (`ride_requirements`, FK →
+  `rides` cascade, unique `(ride_id, position)`), migration
+  `0021_ride_requirements` (22 migrations total).
+- **packages/types**: `api/rides.ts` — `updateRideRequestSchema.requirements`,
+  `UpdateRideResponse.requirements`, `GetRideResponse.requirements`,
+  `RIDE_REQUIREMENTS_MAX`/`RIDE_REQUIREMENT_MAX_LENGTH`.
+- **apps/api**: `rides.service.ts` — `updateRideDraft` now one transaction
+  (ride row `FOR UPDATE` + list replace), `listRideRequirements`.
+- **apps/web**: `features/participant/ride-detail/lib/calendar.ts` (`.ics`
+  export); `RegistrationTicket` (`TicketCard`, `GroupPicker`), `RideHero`,
+  `RouteTimeline`, `ElevationProfileChart` restyled; `EditRideForm` requirements
+  textarea.
+- **packages/ui**: `RIDE_PAGE_TERMS`, `formatDistanceMarkParts`.
+
 CR-126 (rider profile: privacy tiers, garage, self-reported distance stats, recent
 rides, 2026-09-24, ADR-023). No new package; one new domain entity, one new
 cross-participant access pattern (`resolveRiderAccess`) that any future
@@ -1007,7 +1024,7 @@ Ride
 → RoutePoint
 → Stop
 → RideGroup (ADR-022; Registration/WaitlistEntry → RideGroup of the same Ride)
-→ RideRequirement
+→ RideRequirement (CR-155; `ride_requirements`, ordered free-text lines)
 → RideService
 → Registration
 → WaitlistEntry

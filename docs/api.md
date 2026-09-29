@@ -303,12 +303,17 @@ each `null` to clear; `startLat` in `[-90, 90]`, `startLng` in
 `elevationGainMeters`, `paceKmh`, `durationMinutes`, `difficulty` — every
 field CR-017 left `null` at creation — plus `participantsVisible` (CR-125, not
 nullable, default `true`; toggles `GET /v1/rides/:id/riders` for the whole
-ride, same draft-only gate as every other field here). `coverImageUrl` stays
+ride, same draft-only gate as every other field here) and `requirements` (CR-155:
+`string[]`, the whole «Требования» list replacing the stored one — `[]` clears it,
+omitted leaves it; each line trimmed, 1–120 chars, at most 10 lines; written in the
+same transaction as the ride fields). `coverImageUrl` stays
 out — it is
 computed, not settable, from the dedicated `.../cover` endpoints below
 (ADR-019/CR-086); `startLat`/`startLng` are entered manually —
-no geocode-by-address UI exists yet (KI-016). `200` → `{ ride }` with the
-updated fields, `400 validation_error` on an invalid field.
+no geocode-by-address UI exists yet (KI-016). `200` → `{ ride, requirements }`
+with the updated fields (CR-155: `requirements` additive — the list after the
+update, in order), `400 validation_error` on an invalid field (a bad requirement
+line reports path `requirements.N`).
 
 POST `/v1/rides/:id/publish` — **implemented (CR-019)**. Requires a valid session
 cookie (`401` otherwise) and ownership of the ride: `404 ride_not_found` both when the
@@ -401,6 +406,10 @@ registrations by `(createdAt, id)`; `null` without an active registration or a s
 and `viewerWaitlistPosition` (the same over `waiting` entries — the FIFO promotion
 order; `null` when not queued). Places move up as earlier riders cancel; the ride page
 shows them as the ticket's «№ N» / «#N».
+
+CR-155 (additive): `requirements` — the ride's «Требования» lines (`RideRequirement`)
+as `string[]` in the organizer's order, `[]` when none. Public with the rest of the
+ride (same visibility rule).
 
 ## Registration
 

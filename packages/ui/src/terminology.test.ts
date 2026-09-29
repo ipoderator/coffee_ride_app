@@ -113,7 +113,7 @@ describe('DIFFICULTY_LEVEL_TERMS', () => {
 describe('REGISTRATION_ACTION_TERMS', () => {
   it('matches docs/design.md §13', () => {
     expect(REGISTRATION_ACTION_TERMS).toEqual({
-      register: 'Зарегистрироваться',
+      register: 'Записаться',
       cancel: 'Отменить регистрацию',
       waitlisted: 'В списке ожидания',
       full: 'Мест не осталось',

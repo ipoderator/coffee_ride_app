@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useMemo, useRef, useState } from 'react';
-import { formatDistance, formatElevation, RIDE_POSTER_TERMS } from 'ui';
+import { formatDistance, formatElevation, RIDE_PAGE_TERMS } from 'ui';
 import { downsample } from '../lib/elevation-profile';
 import type { RouteTrack } from '../lib/route-track';
 import { useElementSize } from '../lib/use-element-size';
@@ -24,21 +24,21 @@ interface Sample {
 }
 
 /**
- * `/rides/[id]`'s elevation profile (CR-028; CR-151 «Постер заезда v2»): an
- * area chart in `elevation` ink (40%→12% gradient over a `border-input`
- * ground line, CR-128) drawn in real pixels with a metres grid and a km axis.
- * Hover/touch shows the distance and height at the pointer in the header and
- * reports the distance (`onHoverKm`) so the hero can put a dot on the track.
- * The `<svg>` is `role="img"` with a summary label — the headline distance and
- * elevation figures in the hero are the numbers' accessible form (§12).
+ * `/rides/[id]`'s elevation profile (CR-028; CR-151 «Постер заезда v2»; CR-155
+ * its own «Профиль высоты» section with the chart on a raised card): an area
+ * chart in `elevation` ink (40%→12% gradient over a `border-input` ground
+ * line, CR-128) drawn in real pixels with a metres grid and a km axis. The
+ * header reads «макс. · мин.»; hover/touch replaces it with the distance and
+ * height at the pointer and reports the distance (`onHoverKm`) so the hero can
+ * put a dot on the track. The `<svg>` is `role="img"` with a summary label —
+ * the headline distance and elevation figures in the hero are the numbers'
+ * accessible form (§12).
  */
 export function ElevationProfileChart({
   track,
-  label,
   onHoverKm,
 }: {
   track: RouteTrack;
-  label: string;
   onHoverKm?: (km: number | null) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -68,7 +68,7 @@ export function ElevationProfileChart({
   const elevations = samples.map((sample) => sample.elevation);
   const min = Math.min(...elevations);
   const max = Math.max(...elevations);
-  const yStep = niceStep(Math.max(max - min, 10), 4);
+  const yStep = niceStep(Math.max(max - min, 10), 3);
   const lo = Math.floor((min - yStep * 0.2) / yStep) * yStep;
   const hi = Math.ceil((max + yStep * 0.1) / yStep) * yStep;
   const innerWidth = Math.max(width - PAD.left - PAD.right, 10);
@@ -89,7 +89,7 @@ export function ElevationProfileChart({
   for (let value = lo; value <= hi; value += yStep) yTicks.push(value);
   const kmStep = niceStep(
     track.totalKm,
-    Math.max(2, Math.floor(innerWidth / 70)),
+    Math.max(2, Math.floor(innerWidth / 160)),
   );
   const kmTicks: number[] = [];
   for (let km = 0; km <= track.totalKm; km += kmStep) kmTicks.push(km);
@@ -116,120 +116,128 @@ export function ElevationProfileChart({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-mono text-label text-text-secondary uppercase">
-          {label}
-        </h3>
+    <section
+      className="flex flex-col gap-3.5"
+      aria-labelledby="ride-elevation-title"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="ride-elevation-title" className="text-h2 text-text">
+          {RIDE_PAGE_TERMS.elevationTitle}
+        </h2>
         <span
-          className="font-mono text-xs text-text-secondary tabular-nums"
+          className="text-body-sm text-text-secondary tabular-nums"
           data-testid="elevation-readout"
         >
           {hover
             ? `${formatDistance(hover.km)} · ${formatElevation(hover.elevation)}`
-            : RIDE_POSTER_TERMS.elevationHint}
+            : RIDE_PAGE_TERMS.elevationRange(
+                formatElevation(max),
+                formatElevation(min),
+              )}
         </span>
       </div>
-      <div ref={ref} className="relative h-40 touch-pan-y">
-        <svg
-          role="img"
-          aria-label={`Профиль высоты: от ${Math.round(min)} до ${Math.round(max)} м на протяжении ${formatDistance(track.totalKm)}`}
-          width={width}
-          height={HEIGHT}
-          viewBox={`0 0 ${width} ${HEIGHT}`}
-          className="block h-full w-full"
-        >
-          <defs>
-            <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="0"
-                className="[stop-color:var(--elevation)]"
-                stopOpacity={0.4}
-              />
-              <stop
-                offset="1"
-                className="[stop-color:var(--elevation)]"
-                stopOpacity={0.12}
-              />
-            </linearGradient>
-          </defs>
-          {yTicks.map((value) => (
-            <g key={`y-${value}`}>
-              <line
-                x1={PAD.left}
-                x2={width - PAD.right}
-                y1={y(value)}
-                y2={y(value)}
-                className="stroke-border"
-              />
+      <div className="rounded-3xl border border-border bg-bg-raised px-3 py-4 sm:px-5">
+        <div ref={ref} className="relative h-40 touch-pan-y">
+          <svg
+            role="img"
+            aria-label={`Профиль высоты: от ${Math.round(min)} до ${Math.round(max)} м на протяжении ${formatDistance(track.totalKm)}`}
+            width={width}
+            height={HEIGHT}
+            viewBox={`0 0 ${width} ${HEIGHT}`}
+            className="block h-full w-full"
+          >
+            <defs>
+              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="0"
+                  className="[stop-color:var(--elevation)]"
+                  stopOpacity={0.4}
+                />
+                <stop
+                  offset="1"
+                  className="[stop-color:var(--elevation)]"
+                  stopOpacity={0.12}
+                />
+              </linearGradient>
+            </defs>
+            {yTicks.map((value) => (
+              <g key={`y-${value}`}>
+                <line
+                  x1={PAD.left}
+                  x2={width - PAD.right}
+                  y1={y(value)}
+                  y2={y(value)}
+                  className="stroke-border"
+                />
+                <text
+                  x={PAD.left - 6}
+                  y={y(value) + 4}
+                  textAnchor="end"
+                  className="fill-text-muted font-mono text-xs"
+                >
+                  {value}
+                </text>
+              </g>
+            ))}
+            {kmTicks.map((km, i) => (
               <text
-                x={PAD.left - 6}
-                y={y(value) + 4}
-                textAnchor="end"
+                key={`x-${km}`}
+                x={x(km)}
+                y={HEIGHT - 5}
+                textAnchor={i === 0 ? 'start' : 'middle'}
                 className="fill-text-muted font-mono text-xs"
               >
-                {value}
+                {i === kmTicks.length - 1 ? `${km} км` : km}
               </text>
-            </g>
-          ))}
-          {kmTicks.map((km, i) => (
-            <text
-              key={`x-${km}`}
-              x={x(km)}
-              y={HEIGHT - 5}
-              textAnchor={i === 0 ? 'start' : 'middle'}
-              className="fill-text-muted font-mono text-xs"
-            >
-              {i === kmTicks.length - 1 ? `${km} км` : km}
-            </text>
-          ))}
-          <path d={area} fill={`url(#${fillId})`} />
-          <line
-            x1={PAD.left}
-            x2={width - PAD.right}
-            y1={PAD.top + innerHeight}
-            y2={PAD.top + innerHeight}
-            className="stroke-border-input"
-          />
-          <path
-            d={line}
-            className="fill-none stroke-elevation"
-            strokeWidth={2}
-            strokeLinejoin="round"
-          />
-          {hover ? (
-            <g pointerEvents="none">
-              <line
-                x1={x(hover.km)}
-                x2={x(hover.km)}
-                y1={PAD.top}
-                y2={PAD.top + innerHeight}
-                className="stroke-text-muted"
-                strokeDasharray="3 3"
-              />
-              <circle
-                cx={x(hover.km)}
-                cy={y(hover.elevation)}
-                r={5}
-                className="fill-elevation stroke-bg"
-                strokeWidth={2}
-              />
-            </g>
-          ) : null}
-          <rect
-            data-testid="elevation-hit"
-            x={PAD.left}
-            y={0}
-            width={innerWidth}
-            height={HEIGHT}
-            fill="transparent"
-            className="cursor-crosshair"
-            onPointerMove={handlePointer}
-            onPointerDown={handlePointer}
-            onPointerLeave={handleLeave}
-          />
-        </svg>
+            ))}
+            <path d={area} fill={`url(#${fillId})`} />
+            <line
+              x1={PAD.left}
+              x2={width - PAD.right}
+              y1={PAD.top + innerHeight}
+              y2={PAD.top + innerHeight}
+              className="stroke-border-input"
+            />
+            <path
+              d={line}
+              className="fill-none stroke-elevation"
+              strokeWidth={2}
+              strokeLinejoin="round"
+            />
+            {hover ? (
+              <g pointerEvents="none">
+                <line
+                  x1={x(hover.km)}
+                  x2={x(hover.km)}
+                  y1={PAD.top}
+                  y2={PAD.top + innerHeight}
+                  className="stroke-text-muted"
+                  strokeDasharray="3 3"
+                />
+                <circle
+                  cx={x(hover.km)}
+                  cy={y(hover.elevation)}
+                  r={5}
+                  className="fill-elevation stroke-bg"
+                  strokeWidth={2}
+                />
+              </g>
+            ) : null}
+            <rect
+              data-testid="elevation-hit"
+              x={PAD.left}
+              y={0}
+              width={innerWidth}
+              height={HEIGHT}
+              fill="transparent"
+              className="cursor-crosshair"
+              onPointerMove={handlePointer}
+              onPointerDown={handlePointer}
+              onPointerLeave={handleLeave}
+            />
+          </svg>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -153,6 +153,7 @@ function baseDetailResponse(
     waitlistCount: 0,
     viewerStartNumber: null,
     viewerWaitlistPosition: null,
+    requirements: [],
     ...overrides,
   };
 }
@@ -268,9 +269,8 @@ describe('RideDetailView', () => {
     expect(screen.getByText('Опубликован')).toBeInTheDocument();
     expect(screen.getByText('Гравийный клуб')).toBeInTheDocument();
     expect(screen.getByText(baseRide.description!)).toBeInTheDocument();
-    // startsAt is 05:00 UTC; the ride's own zone is Europe/Moscow (UTC+3) —
-    // in the start line and the ticket's «Старт» cell.
-    expect(screen.getAllByText(/08:00/).length).toBeGreaterThanOrEqual(2);
+    // startsAt is 05:00 UTC; the ride's own zone is Europe/Moscow (UTC+3).
+    expect(screen.getByText(/08:00/)).toBeInTheDocument();
     const hero = screen.getByRole('region', {
       name: 'Маршрут и главные цифры',
     });
@@ -283,10 +283,12 @@ describe('RideDetailView', () => {
     const facts = screen.getByTestId('ride-facts');
     expect(within(facts).getByText('500 ₽')).toBeInTheDocument();
     expect(within(facts).getByText('Гравийный')).toBeInTheDocument();
-    // CR-151: «12 из 20 участников» on the ticket.
-    expect(
-      within(screen.getByTestId('ride-ticket')).getByText('12 из 20'),
-    ).toBeInTheDocument();
+    // CR-155: «12 из 20 участников» as the ticket's big figure, with the
+    // ride status in its head.
+    const ticket = screen.getByTestId('ride-ticket');
+    expect(within(ticket).getByText('12')).toBeInTheDocument();
+    expect(within(ticket).getByText('из 20 участников')).toBeInTheDocument();
+    expect(within(ticket).getByText('Опубликован')).toBeInTheDocument();
   });
 
   it('shows «—» for headline metrics that are still null, never 0', async () => {
@@ -309,12 +311,7 @@ describe('RideDetailView', () => {
     const hero = screen.getByRole('region', {
       name: 'Маршрут и главные цифры',
     });
-    for (const label of [
-      'Дистанция',
-      'Набор высоты',
-      'Средний темп',
-      'Длительность',
-    ]) {
+    for (const label of ['Дистанция', 'Набор высоты', 'Темп', 'В пути']) {
       expect(within(hero).getByText(label)).toBeInTheDocument();
     }
     expect(within(hero).getAllByText('—')).toHaveLength(4);
@@ -523,7 +520,7 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       await screen.findByText(baseRide.title);
-      expect(screen.queryByText('Зарегистрироваться')).not.toBeInTheDocument();
+      expect(screen.queryByText('Записаться')).not.toBeInTheDocument();
       expect(
         screen.queryByText('Отменить регистрацию'),
       ).not.toBeInTheDocument();
@@ -540,13 +537,14 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       expect(
-        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+        await screen.findByRole('button', { name: 'Записаться' }),
       ).toBeInTheDocument();
-      // CR-151: the ticket stub — the viewer would be seventh in the start list.
+      // CR-155: «Стартовый лист» — how many are in and how many seats are left.
       const ticket = screen.getByTestId('ride-ticket');
       expect(
-        within(ticket).getByText('Вы будете 7-м из 20 мест'),
+        within(ticket).getByRole('heading', { name: 'Стартовый лист' }),
       ).toBeInTheDocument();
+      expect(within(ticket).getByText('Осталось 14 мест')).toBeInTheDocument();
       expect(
         within(ticket).getByText('500 ₽ · отменить можно до старта'),
       ).toBeInTheDocument();
@@ -571,7 +569,7 @@ describe('RideDetailView', () => {
     });
 
     // CR-151: the ticket's faces for the states with no register action.
-    it('shows the queue size and the next queue place on a full ride', async () => {
+    it('shows «Мест нет» with the queue size on a full ride', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: {
@@ -586,20 +584,13 @@ describe('RideDetailView', () => {
 
       render(<RideDetailView rideId="ride-1" />);
 
-      const ticket = (
-        await screen.findByRole('heading', { name: 'Список ожидания' })
-      ).closest('[data-testid="ride-ticket"]') as HTMLElement;
+      const ticket = await screen.findByTestId('ride-ticket');
       expect(
-        within(ticket).getByText(/В очереди 3 человека\./),
+        within(ticket).getByText('Мест нет · 3 в очереди'),
       ).toBeInTheDocument();
-      expect(within(ticket).getByText('4')).toBeInTheDocument();
-      expect(within(ticket).getByText('Мест не осталось')).toBeInTheDocument();
-      // The cover chip reads the waitlist, not a green «open».
-      expect(
-        within(
-          screen.getByRole('region', { name: 'Маршрут и главные цифры' }),
-        ).getByText('Список ожидания'),
-      ).toBeInTheDocument();
+      expect(within(ticket).getByText('из 5 участников')).toBeInTheDocument();
+      // The status badge reads the waitlist, not a green «open».
+      expect(within(ticket).getByText('Список ожидания')).toBeInTheDocument();
     });
 
     it('shows a closed ride as its final count, with no action', async () => {
@@ -615,9 +606,10 @@ describe('RideDetailView', () => {
       const ticket = (
         await screen.findByRole('heading', { name: 'Регистрация закрыта' })
       ).closest('[data-testid="ride-ticket"]') as HTMLElement;
-      expect(within(ticket).getByText('/20')).toBeInTheDocument();
+      expect(within(ticket).getByText('12')).toBeInTheDocument();
+      expect(within(ticket).getByText('из 20 участников')).toBeInTheDocument();
       expect(
-        within(ticket).queryByRole('button', { name: 'Зарегистрироваться' }),
+        within(ticket).queryByRole('button', { name: 'Записаться' }),
       ).not.toBeInTheDocument();
     });
 
@@ -737,7 +729,7 @@ describe('RideDetailView', () => {
       );
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+        await screen.findByRole('button', { name: 'Записаться' }),
       );
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -763,7 +755,7 @@ describe('RideDetailView', () => {
       );
 
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+        await screen.findByRole('button', { name: 'Записаться' }),
       );
 
       await waitFor(() =>
@@ -864,7 +856,7 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       const button = await screen.findByRole('button', {
-        name: 'Зарегистрироваться',
+        name: 'Записаться',
       });
       const ticket = screen.getByTestId('ride-ticket');
       expect(ticket).toContainElement(button);
@@ -881,7 +873,7 @@ describe('RideDetailView', () => {
       expect(within(bar).getByText('№ 15')).toBeInTheDocument();
       // Only one real register button — the bar's is out of the a11y tree.
       expect(
-        screen.getAllByRole('button', { name: 'Зарегистрироваться' }),
+        screen.getAllByRole('button', { name: 'Записаться' }),
       ).toHaveLength(1);
     });
 
@@ -1029,27 +1021,31 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       const picker = await screen.findByRole('group', {
-        name: 'Группа по темпу',
+        name: 'Выберите группу',
       });
       const radios = within(picker).getAllByRole('radio');
       expect(radios).toHaveLength(2);
-      expect(within(picker).getByText('Группа 1')).toBeInTheDocument();
-      // Group pace in the compact form: «25 км/ч», not «25,0».
-      expect(within(picker).getByText('25 км/ч')).toBeInTheDocument();
+      // CR-155: name · pace in the compact form («25 км/ч», not «25,0»),
+      // and how many already ride in the group.
+      expect(
+        within(picker).getByText('Группа 1 · 25 км/ч'),
+      ).toBeInTheDocument();
+      expect(within(picker).getByText('7 участников')).toBeInTheDocument();
 
-      const button = screen.getByRole('button', { name: 'Зарегистрироваться' });
+      const button = screen.getByRole('button', { name: 'Записаться' });
       expect(button).toBeDisabled();
       expect(
         screen.getByText('Выберите группу, чтобы записаться'),
       ).toBeInTheDocument();
 
-      fireEvent.click(within(picker).getByRole('radio', { name: /Группа 1/ }));
+      const radio = within(picker).getByRole('radio', { name: /Группа 1/ });
+      fireEvent.click(radio);
 
+      expect(radio).toBeChecked();
       expect(button).not.toBeDisabled();
       expect(
         screen.queryByText('Выберите группу, чтобы записаться'),
       ).not.toBeInTheDocument();
-      expect(screen.getByText('Группа 1 · 7 участников')).toBeInTheDocument();
     });
 
     it('sends the chosen groupId when registering', async () => {
@@ -1065,9 +1061,7 @@ describe('RideDetailView', () => {
       );
 
       fireEvent.click(await screen.findByRole('radio', { name: /Группа 2/ }));
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Зарегистрироваться' }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Записаться' }));
 
       await waitFor(() => {
         expect(registerForRideMock).toHaveBeenCalledWith('ride-1', 'group-2');
@@ -1107,7 +1101,8 @@ describe('RideDetailView', () => {
         </ToastProvider>,
       );
 
-      expect(await screen.findByText('Мест не осталось')).toBeInTheDocument();
+      const ticket = await screen.findByTestId('ride-ticket');
+      expect(within(ticket).getByText('Мест нет')).toBeInTheDocument();
       const join = screen.getByRole('button', {
         name: 'Встать в список ожидания',
       });
@@ -1138,7 +1133,7 @@ describe('RideDetailView', () => {
 
       expect(screen.queryByRole('radio')).not.toBeInTheDocument();
       fireEvent.click(
-        await screen.findByRole('button', { name: 'Зарегистрироваться' }),
+        await screen.findByRole('button', { name: 'Записаться' }),
       );
       await waitFor(() => {
         expect(registerForRideMock).toHaveBeenCalledTimes(1);
@@ -1163,9 +1158,7 @@ describe('RideDetailView', () => {
       );
 
       fireEvent.click(await screen.findByRole('radio', { name: /Группа 1/ }));
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Зарегистрироваться' }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Записаться' }));
 
       expect(await screen.findByRole('alert')).toHaveTextContent(message);
     });
@@ -1227,7 +1220,7 @@ describe('RideDetailView', () => {
       expect(cancel.className).not.toContain('bg-danger ');
       // No registration group picker next to the registered ticket.
       expect(
-        screen.queryByRole('group', { name: 'Группа по темпу' }),
+        screen.queryByRole('group', { name: 'Выберите группу' }),
       ).not.toBeInTheDocument();
       // The start point is also the timeline's first item.
       expect(screen.getAllByText('Кофейня «Зерно»').length).toBeGreaterThan(1);
@@ -1561,6 +1554,79 @@ describe('RideDetailView', () => {
     expect(
       await screen.findByRole('link', { name: 'Скачать GPX' }),
     ).toHaveAttribute('href', '/api/v1/rides/ride-1/route/download');
+  });
+
+  describe('CR-155', () => {
+    it('lists the requirements beside «О заезде», and omits the block without them', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          requirements: ['Шлем обязателен', 'С собой: вода, камера'],
+        }),
+      );
+
+      const { unmount } = render(<RideDetailView rideId="ride-1" />);
+
+      const list = await screen.findByTestId('ride-requirements');
+      expect(
+        screen.getByRole('heading', { name: 'Требования' }),
+      ).toBeInTheDocument();
+      expect(
+        within(list)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual(['Шлем обязателен', 'С собой: вода, камера']);
+      unmount();
+
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+      render(<RideDetailView rideId="ride-1" />);
+      await screen.findByRole('heading', { name: 'О заезде' });
+      expect(
+        screen.queryByRole('heading', { name: 'Требования' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('downloads an .ics file from «Добавить в календарь» for an upcoming ride', async () => {
+      const createObjectURL = vi.fn(() => 'blob:ride');
+      const revokeObjectURL = vi.fn();
+      const original = {
+        createObjectURL: URL.createObjectURL,
+        revokeObjectURL: URL.revokeObjectURL,
+      };
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+      const click = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {});
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Добавить в календарь' }),
+      );
+
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      const blob = (createObjectURL.mock.calls[0] as unknown as [Blob])[0];
+      expect(blob.type).toBe('text/calendar;charset=utf-8');
+      expect(await blob.text()).toContain('DTSTART:');
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:ride');
+      click.mockRestore();
+      Object.assign(URL, original);
+    });
+
+    it('offers no calendar export once the ride is cancelled', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({ ride: { ...baseRide, status: 'cancelled' } }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByRole('button', { name: 'Поделиться' });
+      expect(
+        screen.queryByRole('button', { name: 'Добавить в календарь' }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('shows the start line with weekday, time and zone hint', async () => {

@@ -3,6 +3,7 @@ import {
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
   RIDE_DETAIL_TERMS,
+  RIDE_PAGE_TERMS,
 } from 'ui';
 import {
   createOrganizerProfile,
@@ -62,7 +63,11 @@ test('cancelling a registration promotes the first waitlisted rider', async ({
   // The freed seat went straight to `first` — the ride is full again, so the
   // canceller is offered the waitlist, not a seat.
   await page.reload();
-  await expect(page.getByText(REGISTRATION_ACTION_TERMS.full)).toBeVisible();
+  await expect(
+    page
+      .getByTestId('ride-ticket')
+      .getByText(RIDE_PAGE_TERMS.seatsFull(1), { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: REGISTRATION_ACTION_TERMS.joinWaitlist }),
   ).toBeVisible();

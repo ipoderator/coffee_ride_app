@@ -137,7 +137,15 @@ export interface GetRideResponse {
   waitlistCount: number;
   viewerStartNumber: number | null;
   viewerWaitlistPosition: number | null;
+  // CR-155: additive — the ride's «Требования» lines (`RideRequirement`), in the
+  // organizer's order; `[]` when none.
+  requirements: string[];
 }
+
+// CR-155: `RideRequirement` limits, shared by the request schema and the
+// organizer form.
+export const RIDE_REQUIREMENTS_MAX = 10;
+export const RIDE_REQUIREMENT_MAX_LENGTH = 120;
 
 // CR-088 ("Organizer rides list", `.claude/context/current-task.md`): first real
 // collection endpoint (`GET /v1/rides/mine`) — cursor pagination per ADR-011.
@@ -411,6 +419,24 @@ export const updateRideRequestSchema = z
     // CR-125: not nullable — unlike the fields above, this setting always has a
     // value (default `true`), so there is no "clear it" state to express.
     participantsVisible: z.boolean().optional(),
+    // CR-155: the whole «Требования» list, replacing the stored one (`[]` clears
+    // it). Not nullable — an empty list already means "none".
+    requirements: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, 'Requirement must not be empty.')
+          .max(
+            RIDE_REQUIREMENT_MAX_LENGTH,
+            `Requirement must be at most ${RIDE_REQUIREMENT_MAX_LENGTH} characters.`,
+          ),
+      )
+      .max(
+        RIDE_REQUIREMENTS_MAX,
+        `At most ${RIDE_REQUIREMENTS_MAX} requirements.`,
+      )
+      .optional(),
   })
   .refine(
     (value) =>
@@ -436,6 +462,8 @@ export type UpdateRideRequest = z.infer<typeof updateRideRequestSchema>;
 
 export interface UpdateRideResponse {
   ride: Ride;
+  // CR-155: additive — the ride's requirements after the update, position order.
+  requirements: string[];
 }
 
 // CR-019 ("Publish ride"): no request body — `draft -> published` is the only

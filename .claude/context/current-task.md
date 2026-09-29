@@ -1,87 +1,67 @@
 # Current task
 
-## CR-154 — Global header to the discovery mockup
+## CR-155 — Ride page `/rides/[id]` to the owner's mockup + ride requirements
 
-Status: **done, committed** (2026-09-28) together with CR-153 below.
-Goal: owner asked «переделай шапку как на референсе» (screenshot = the mockup's
-`.hdr`, `Discovery-Desktop.dc.html`: 72px raised bar, `padding 0 48px`, wordmark
-24px, pill nav 44px/500/`surface` active, `.ib` theme 44px, ghost «Войти», filled
-«Регистрация»; phone: 60px, wordmark 22px, theme + menu buttons).
+Status: **done, committed** (2026-09-29). Validation: see `docs/changelog.md` CR-155; follow-up KI-079. Previous tasks CR-153/CR-154 are done and
+recorded in `docs/changelog.md`.
 
-Gap table:
+Mockup: owner's screenshot (dark theme, desktop 1440) — «Гравий на выходные:
+Крылатское — Архангельское». No phone mockup: phone keeps today's order (ticket under
+the hero, bottom bar).
 
-| In mockup                                  | Was                                    | Done                                            |
-| ------------------------------------------ | -------------------------------------- | ----------------------------------------------- |
-| Full-width raised bar 72/60px              | `bg`, 1200px-capped, `p-4`             | done                                            |
-| Wordmark 24/22px                           | 28.8px                                 | done (`Wordmark` `className`)                   |
-| Pills «Заезды / Мои заезды / Организатору» | «Заезды» link; cabinet menus signed-in | done (terms); signed-in keep dropdown + chevron |
-| Theme icon button, no chevron              | `NavMenu` icon + chevron               | done; also in phone bar                         |
-| Ghost «Войти», filled «Регистрация»        | text links with icons                  | done (`buttonClassName('primary')`)             |
+### Decision (owner, 2026-09-29)
 
-Validation: see `docs/changelog.md` CR-154. Follow-up: KI-077.
+«Требования» is a real new ride field (not derived from bike/difficulty): DB + API +
+organizer form + ride page.
 
-## CR-153 — Discovery «Заезды» to the owner's mockup (variant B: frontend + API)
+### Gap table
 
-Status: **done, committed** (2026-09-28). Previous task CR-152 is done and recorded in
-`docs/changelog.md`. Handoff with the gap table: `.claude/context/handoff-cr-153.md`.
+| In mockup                                                      | Was                                                | Needs                               |
+| -------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------- |
+| Hero card in the left column, ticket beside it at the same top | full-width hero, ticket below                      | frontend                            |
+| 4 equal metric columns, all white; «Темп», «В пути»            | amber elevation, «Средний темп» + «2 группы» note  | frontend + terms                    |
+| Ticket head «СТАРТОВЫЙ ЛИСТ» + status badge                    | big «№ 14» stub, perforation, status chip on cover | frontend                            |
+| Big «13 из 20 участников», bar, «Осталось 7 мест»              | small seats line, date/start cells                 | frontend                            |
+| «Выберите группу» — stacked radio cards                        | horizontal segments                                | frontend                            |
+| per-group «Осталось 4 места»                                   | —                                                  | no per-group limit → «записались N» |
+| «Записаться»                                                   | «Зарегистрироваться»                               | terms                               |
+| GPX / «Добавить в календарь» / «Поделиться» rows in ticket     | GPX/share in main column, no calendar              | frontend + terms (client .ics)      |
+| Timeline: small «69,5 км», rings, hazard in warning + ⚠        | big km numbers, filled icon nodes                  | frontend                            |
+| «Профиль высоты» own section: h2, «макс. · мин.», card         | label inside the route section                     | frontend + terms                    |
+| «О заезде» h2 + description                                    | description without heading, chips above           | frontend                            |
+| «Требования» check list                                        | no data                                            | DB + API + organizer form           |
+| «Все заезды» back link                                         | «Ко всем заездам»                                  | terms                               |
 
-Mockup: claude.ai/artifact/D9o9QsXikDVbMbDkDTsZxt → `project/Discovery-Desktop.dc.html`
-(1440) and `project/Discovery-Mobile.dc.html` (390).
-
-### Decision (owner, 2026-09-28)
-
-Variant B from the handoff: everything frontend-only plus additive optional params on
-`GET /v1/rides` and a `total`. Header nav (handoff question 3) is **not** in scope —
-`AppHeader` stays as is.
+Not taken: text under 12px, header bell/avatar (CR-154 header stays), dropping the
+«Трек / Карта» switch. «Кто едет» and reviews stay below.
 
 ### Requirements
 
-API (additive, ADR-011 pagination unchanged):
-
-- `GET /v1/rides` query: `startsFrom`/`startsTo` (ISO datetime with offset; lower
-  bound never earlier than now), `paceMin`/`paceMax` (km/h; matches a ride whose
-  pace groups include one in range, or — without groups — whose `paceKmh` is in
-  range; same derivation as the cards), `difficulty` (1–5), `free` (`true` = price
-  null/0, `false` = paid). Invalid ranges → 400 `validation_error`.
-- Response: `total` (all rides matching the filters, cursor ignored); each item gains
-  `waitlistCount` (count of `waiting` entries — already public on `GET /v1/rides/:id`).
-
-Frontend (`features/participant/discovery`):
-
-- Page head: `h1` + description, «Список / Карта» segments with icons on the right
-  (full width on a phone).
-- Filter chips row (both views): bicycle ▾, «Эта неделя», Темп ▾, Сложность ▾,
-  «Бесплатные»; «N заездов» on the right; horizontal scroll on a phone.
-- Featured card «Ближайший»: first ride with open registration (else the first ride),
-  cover with the track + distance/start tag, date, title, «Старт: …», three big
-  metrics, seats line + bar, «Подробнее и запись».
-- «Все заезды» + «Сначала ближайшие» (count on a phone).
-- Compact cards: metrics in one line, seats «4 из 10 · Запись закрыта / Мест нет · 2 в
-  очереди / Осталось 15 мест» + bar, tags (bike, difficulty, groups, price).
-- «Показать ещё N заездов» via `nextCursor` + `total`.
-
-Not taken: header nav change, text under 12px, controls under 44/48px, colours outside
-tokens, Unbounded below `h1`, «кофе у …» (stops not in the list payload).
+- DB: `ride_requirements` (`RideRequirement`): `id`, `ride_id` FK cascade, `text`
+  (1–120 chars, CHECK), `position` (0..n-1, unique per ride), `created_at`. Max 10 per
+  ride (service + Zod).
+- API (additive): `PATCH /v1/rides/:id` optional `requirements: string[]` (replace
+  the whole list, draft-only like every field, same transaction as the ride update);
+  `UpdateRideResponse.requirements`, `GetRideResponse.requirements` (`string[]`,
+  position order).
+- Organizer: requirements list editor in `EditRideForm` (add/remove lines).
+- Ride page: layout/ticket/timeline/profile/about+requirements per the gap table.
 
 ### Acceptance criteria
 
-- New params filter correctly (route tests), invalid ranges rejected, `total` and
-  `waitlistCount` correct.
-- Discovery renders featured + grid + load-more; filters drive the query; loading /
-  empty / error states kept. Unit tests updated/added.
-- typecheck/lint/tests green for api/web/ui/types; screenshots at 390/1440 checked.
-- Docs: `docs/api.md`, `docs/design.md`, changelog, tasks, project-state.
+- Route tests: set/replace/clear requirements, >10 or empty/too-long line → 400,
+  non-draft → 409, non-owner → 404, detail returns them in order.
+- Ride page renders the new layout; every ticket state still works (existing tests
+  updated, new ones for calendar/requirements).
+- typecheck/lint/tests green for db/types/api/web/ui; screenshots 390/1440 checked.
+- Docs: `docs/api.md`, `docs/database.md`, `docs/design.md`, changelog, tasks,
+  project-state, known-issues (KI for visual baselines).
 
 ### Progress
 
-- [x] API + types + tests
-- [x] terminology
-- [x] frontend components + tests
-- [x] validation + screenshots (see changelog CR-153)
+- [x] DB schema + migration
+- [x] types + API + tests
+- [x] organizer form
+- [x] ride page
+- [x] validation + screenshots
 - [x] docs/context
-
-### Result
-
-Implemented as specified; validation in `docs/changelog.md` → CR-153. Open:
-KI-077 baselines after push; ride page at 320px overflowed by 31px in the
-screenshot run (ride-detail untouched by this task — not investigated).

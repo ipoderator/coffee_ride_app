@@ -1202,3 +1202,11 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       sections «Заезды / Мои заезды / Организатору» (links signed out, registry
       dropdowns signed in), icon-only theme control, ghost «Войти» + filled
       «Регистрация». Follow-up: KI-077 (baselines).
+- [x] CR-155 Ride page `/rides/[id]` to the owner's mockup + ride requirements
+      — hero beside the sticky «Стартовый лист» ticket (status badge, seats figure,
+      group radio cards, «Записаться», GPX / «Добавить в календарь» / «Поделиться»),
+      restyled «Маршрут по точкам», «Профиль высоты» section, «О заезде» +
+      «Требования». New `RideRequirement` (`ride_requirements`, migration `0021`),
+      `PATCH /v1/rides/:id` `requirements`, `GET /v1/rides/:id` `requirements`
+      (additive), organizer form textarea. See `docs/changelog.md`. Follow-up:
+      KI-079 (baselines).

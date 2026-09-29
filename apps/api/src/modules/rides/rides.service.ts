@@ -19,6 +19,7 @@ import {
   registrations,
   reviews,
   rideGroups,
+  rideRequirements,
   rides,
   routePoints,
   routes,
@@ -45,6 +46,7 @@ import {
   type RouteSummary,
   type Stop,
   type UpdateRideRequest,
+  type UpdateRideResponse,
   type UpdateRoutePointRequest,
   type UpdateStopRequest,
 } from 'types';
@@ -1085,6 +1087,7 @@ export async function getRideForViewer(
   // CR-117 ("Pace groups"): additive `groups`, `position` order, each with its live
   // active-registration count — same embedding precedent as `stops` above.
   const groups = await listRideGroupSummaries(db, rideId);
+  const requirements = await listRideRequirements(db, rideId);
 
   return {
     ride: toPublicRide(row.ride),
@@ -1113,7 +1116,21 @@ export async function getRideForViewer(
     waitlistCount: waitlistCountRow?.count ?? 0,
     viewerStartNumber: startNumberRow?.rank ?? null,
     viewerWaitlistPosition: waitlistPositionRow?.rank ?? null,
+    requirements,
   };
+}
+
+/** CR-155: a ride's «Требования» lines in the organizer's order. */
+async function listRideRequirements(
+  db: Pick<DbClient, 'select'>,
+  rideId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ text: rideRequirements.text })
+    .from(rideRequirements)
+    .where(eq(rideRequirements.rideId, rideId))
+    .orderBy(asc(rideRequirements.position));
+  return rows.map((row) => row.text);
 }
 
 /**
@@ -1134,24 +1151,56 @@ export async function updateRideDraft(
   userId: string,
   rideId: string,
   patch: UpdateRideRequest,
-): Promise<Ride> {
+): Promise<UpdateRideResponse> {
   const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
   if (!organizerProfileId) {
     throw RIDE_NOT_FOUND();
   }
 
-  const [existing] = await db
-    .select({ status: rides.status })
-    .from(rides)
-    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
-    .limit(1);
-  if (!existing) {
-    throw RIDE_NOT_FOUND();
-  }
-  if (existing.status !== 'draft') {
-    throw RIDE_NOT_EDITABLE();
-  }
+  // CR-155: one transaction for the ride row and its requirements list. The row
+  // lock serializes two concurrent PATCHes, so one's delete + re-insert of the
+  // list can't collide with the other's on `(ride_id, position)`.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ status: rides.status })
+      .from(rides)
+      .where(
+        and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)),
+      )
+      .limit(1)
+      .for('update');
+    if (!existing) {
+      throw RIDE_NOT_FOUND();
+    }
+    if (existing.status !== 'draft') {
+      throw RIDE_NOT_EDITABLE();
+    }
+    const ride = await applyRideDraftPatch(tx, userId, rideId, patch);
 
+    if (patch.requirements !== undefined) {
+      await tx
+        .delete(rideRequirements)
+        .where(eq(rideRequirements.rideId, rideId));
+      if (patch.requirements.length > 0) {
+        await tx.insert(rideRequirements).values(
+          patch.requirements.map((text, position) => ({
+            rideId,
+            text,
+            position,
+          })),
+        );
+      }
+    }
+    return { ride, requirements: await listRideRequirements(tx, rideId) };
+  });
+}
+
+async function applyRideDraftPatch(
+  db: Pick<DbClient, 'update'>,
+  userId: string,
+  rideId: string,
+  patch: UpdateRideRequest,
+): Promise<Ride> {
   const values: Partial<typeof rides.$inferInsert> = {
     updatedAt: new Date(),
     updatedBy: userId,

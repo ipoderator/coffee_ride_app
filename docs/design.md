@@ -463,6 +463,34 @@ phone 390), top to bottom:
   with name tooltips, group split chips, «Весь список участников» expands the
   grouped list); reviews once finished.
 
+**CR-155 — to the owner's mockup (supersedes the layout above where they differ):**
+
+- Grid from `lg`: `minmax(0,1fr) 380px`, 32px gutter. The **hero** is the left
+  column's first row (24px radius, `cover-line` hairline, picture 420px tall from
+  `lg`); the **ticket** is a sticky aside spanning both rows, so it starts level
+  with the hero. Phone order unchanged: head → hero → ticket → main column.
+- Hero: no status chip (the status moved to the ticket's head); the numbers band is
+  four equal columns in `cover-ink` — «Дистанция / Набор высоты / Темп / В пути»,
+  no «N группы» note, elevation no longer amber.
+- Ticket: a plain raised card (no stub/perforation) — head row «СТАРТОВЫЙ ЛИСТ» (or
+  the state's title) + the ride's `StatusBadge`; the seats as the big figure
+  («13» `text-metric` + «из 20 участников» mono) with the fill bar and «Осталось N
+  мест» / «Мест нет · N в очереди»; «Выберите группу» as stacked radio cards
+  (native radio restyled; «Группа 1 · 25 км/ч», «7 участников» — groups have no
+  seat limit of their own); full-width «Записаться»; the note; then hairline action
+  rows «Скачать GPX» (with a route) / «Добавить в календарь» (upcoming rides — an
+  RFC 5545 `.ics` built in the browser) / «Поделиться». A registered viewer keeps
+  «№ N» + countdown and the date/start cells; a queued one «#N».
+- Main column, in order: «Маршрут по точкам» (km mark in mono 12px — «20 км»,
+  «69,5 км»; hollow `brand` rings on a dashed `border-input` rail; a dangerous
+  section gets a `warning` ring and a ⚠ before its subtitle, text in `warning`) →
+  «Профиль высоты» (own section: `h2` + «макс. · мин.» readout, chart on a raised
+  card) → «О заезде» (description, cover photo, difficulty/bike/price chips) beside
+  «Требования» (✓ list, `success` ticks; the block and the second column only when
+  the ride has requirements) → «Кто едет» → reviews.
+- Registration action copy is «Записаться» (§13). Not taken: the mockup's header
+  bell/avatar (the CR-154 header stays), dropping the «Трек / Карта» switch.
+
 ### Elevation profile
 
 - Area chart: x = distance, y = elevation; single `contour` ink (ADR-021 — elevation is
@@ -478,6 +506,8 @@ phone 390), top to bottom:
 - CR-151: drawn in real pixels (measured width) with a metres grid and a km axis; the
   readout sits in the header («43,2 км · 212 м», else «наведите — точка на обложке»),
   and the hovered distance moves a dot along the hero's track.
+- CR-155: its own «Профиль высоты» section; the resting readout is «макс. 214 м · мин.
+  126 м»; about three metre ticks and a km tick every ~160px.
 
 ### Difficulty
 
@@ -734,7 +764,7 @@ maps through this table. Do not invent synonyms per screen.
 **Metrics:** Дистанция · Набор высоты · Средний темп · Длительность · Сложность ·
 Участники.
 
-**Registration:** Зарегистрироваться · Отменить регистрацию · В списке ожидания ·
+**Registration:** Записаться (CR-155; was «Зарегистрироваться») · Отменить регистрацию · В списке ожидания ·
 Мест не осталось · Встать в список ожидания (CR-036) · Покинуть список ожидания
 (CR-036).
 
