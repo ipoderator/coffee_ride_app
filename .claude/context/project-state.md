@@ -37,14 +37,21 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-159 (2026-09-29, not committed yet): fixed KI-080 — light-theme `--danger`
+darkened `#D42B20` → `#B92A1E` (`packages/ui/src/tokens.css`) so it clears
+WCAG AA against the real `--bg`/`ErrorState` tint, not just white
+(`docs/design.md` §3 updated). Storybook's `KI_080_DANGER_CONTRAST` axe
+exception removed entirely — `test:storybook` is 59/59 with zero rules
+disabled. KI-080 archived as resolved.
+
 CR-158 (2026-09-29, committed): Storybook 10.6 in `apps/web`
 (`pnpm --filter web storybook` → :6006, `/mcp` for Claude Code via `.mcp.json`'s
 `storybook-mcp`). Stories in `apps/web/src/stories/` (Button, Input, Badge,
 RideStatus, RideCard, RideFilters); `pnpm --filter web test:storybook` runs them in
 Chromium (render + `play` + axe, 59 tests). `pnpm test` is `--project unit` only.
-Not yet in CI. Open: KI-080 (light `--danger` text contrast).
+Not yet in CI.
 
-CR-157 (2026-09-29, not committed yet): the create-ride «Дата» is `packages/ui`'s
+CR-157 (2026-09-29, committed): the create-ride «Дата» is `packages/ui`'s
 new `DatePicker` (48px day cells, «Сегодня / Завтра / Сб / Вс» quick picks, past
 days disabled, bottom sheet on a phone, full keyboard) instead of the native date
 input; `formatCalendarDate` («Чт, 1 октября 2026»). `EditRideForm` still uses

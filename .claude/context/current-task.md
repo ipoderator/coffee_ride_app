@@ -1,5 +1,18 @@
 # Current task
 
+## CR-159 — Fix KI-080: light-theme `--danger` contrast
+
+Status: **done, committed** (2026-09-29). Details: `docs/changelog.md` CR-159.
+
+- [x] Light `--danger` `#D42B20` → `#B92A1E` (`packages/ui/src/tokens.css`),
+      AA against `--bg` and `ErrorState`'s tint, not just white.
+- [x] `docs/design.md` §3 swatch table/prose updated.
+- [x] Storybook's `KI_080_DANGER_CONTRAST` axe exception removed (file
+      deleted, 4 story files no longer import it).
+- [x] ui/web typecheck+lint+test green; `test:storybook` 59/59, zero axe
+      rules disabled; visually checked via `storybook-mcp`.
+- [x] KI-080 archived as resolved.
+
 ## CR-158 — Storybook for UI primitives and ride components
 
 Status: **done, committed** (2026-09-29). Details: `docs/changelog.md` CR-158.

@@ -8,7 +8,6 @@ import {
   NO_DISCOVERY_FILTERS,
   type DiscoveryFilters as Filters,
 } from '@/features/participant/discovery/lib/discovery-filters';
-import { KI_080_DANGER_CONTRAST } from './a11y-known-issues';
 import { SAMPLE_RIDES, listResponse } from './fixtures';
 
 // `/`'s filter chips (`DiscoveryFilters`, CR-153). Standalone stories drive
@@ -198,7 +197,6 @@ export const InListLoading: Story = {
 
 export const InListError: Story = {
   ...inList,
-  parameters: { ...inList.parameters, ...KI_080_DANGER_CONTRAST },
   beforeEach: stubRides(() =>
     json(
       {

@@ -2007,3 +2007,22 @@ Resolution: all 12 baselines replaced with the `*-actual.png` files of CI run
 36450107547 (commit `97f5f23`, x86_64 `ubuntu-latest`); every screenshot was checked
 against the old baseline — only the new type scale, header and discovery layout
 differ. The one defect spotted there is older than this work (KI-078).
+
+### KI-080 — Light-theme `--danger` text is just under WCAG AA contrast
+
+Status: resolved 2026-09-29 (CR-159). Discovered: 2026-09-29 (CR-158, Storybook
+axe checks).
+Problem: `--danger` `#D42B20` as text was 4.49:1 on `--bg` `#F3F1F5` (the
+`danger` Button variant, `FormField`'s error line, «Показать ещё»'s error) and
+3.87:1 on `ErrorState`'s `bg-danger/10` tint (its «Повторить» button inherits
+`text-danger`). AA needs 4.5:1. The dark theme passed already.
+Impact: low-vision users on the light theme; the text was never the only
+signal (role="alert", wording), but it failed the §12 AA target.
+Resolution: `packages/ui/src/tokens.css`'s light `--danger` changed from
+`#D42B20` to `#B92A1E` (5.48:1 on `--bg`, 4.69:1 on the `danger/10` tint,
+6.15:1 filled with `on-danger`) — the same red, just dark enough to clear AA
+against its actual grounds instead of only a plain white one.
+`docs/design.md` §3 updated to match. The Storybook axe exception
+(`apps/web/src/stories/a11y-known-issues.ts`'s `KI_080_DANGER_CONTRAST`,
+7 stories) removed and the file deleted — `pnpm --filter web test:storybook`
+passes 59/59 with no rule disabled.

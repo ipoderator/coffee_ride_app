@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn } from 'storybook/test';
 import { Button, EmptyState, RIDE_DISCOVERY_TERMS } from 'ui';
-import { KI_080_DANGER_CONTRAST } from './a11y-known-issues';
 
 const meta = {
   title: 'UI/Button',
@@ -42,7 +41,6 @@ export const Secondary: Story = {
 };
 
 export const Danger: Story = {
-  parameters: KI_080_DANGER_CONTRAST,
   args: { variant: 'danger', children: 'Отменить заезд' },
 };
 
@@ -76,7 +74,6 @@ export const Disabled: Story = {
 /** The error pattern used under «Показать ещё» (`RideGrid`): an alert line
  * above the button, which stays enabled so the user can retry. */
 export const WithError: Story = {
-  parameters: KI_080_DANGER_CONTRAST,
   args: {
     variant: 'secondary',
     children: RIDE_DISCOVERY_TERMS.showMoreFallback,
@@ -151,7 +148,6 @@ export const Dark: Story = {
 
 /** Every variant × default/loading/disabled, light and dark side by side. */
 export const BothThemes: Story = {
-  parameters: KI_080_DANGER_CONTRAST,
   globals: { theme: 'both' },
   render: () => <Matrix />,
 };

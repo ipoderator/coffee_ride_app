@@ -59,8 +59,10 @@ genuinely bright red.** A cancelled ride is the one thing a participant must not
 past, and a whisper-quiet cancellation badge is a missed-ride support ticket waiting to
 happen. ADR-024 leaves this exception exactly as written.
 
-- `danger` is a saturated red — `#D42B20` light / `#FF5A4F` dark, both AA against their
-  ground (5.04:1 on `#FFFFFF`, 6.05:1 on `#111315`);
+- `danger` is a saturated red — `#B92A1E` light / `#FF5A4F` dark, both AA against
+  their actual ground, `--bg` (5.48:1 on `#F3F1F5`, 6.05:1 on `#111315`) and against
+  the `danger/10` tint `ErrorState`'s retry button sits on (4.69:1) — KI-080:
+  `#D42B20` cleared AA only on a plain white ground, not the real `--bg`/tint;
 - it is used for cancellation, destructive actions **and validation errors**;
 - it may be used as text, icon, border **or a filled badge** — a filled "Отменён" badge is
   the intended treatment, not a violation of the direction. An in-page destructive
@@ -147,7 +149,7 @@ ADR-021's "no card fill" rule, where `bg-raised` equalled `bg`.
 | `on-warning-fill`    | `#17141A` | on `warning-fill`     | Ink text on the warning fill                                   |
 | `info`               | `#0B65A6` | ~6:1                  | Neutral informational notes, ride updates                      |
 | `info-tint`          | `#E3F0FA` | `info` on it          | Info notice background                                         |
-| `danger`             | `#D42B20` | 5.04:1                | Cancellation, destructive action, validation error (unchanged) |
+| `danger`             | `#B92A1E` | 5.48:1                | Cancellation, destructive action, validation error (KI-080)    |
 | `on-danger`          | `#FFFFFF` | on `danger`           | Text on a filled danger badge/button                           |
 
 ### Dark theme (the default — §1)

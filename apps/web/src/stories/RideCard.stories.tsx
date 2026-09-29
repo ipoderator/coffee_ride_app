@@ -3,7 +3,6 @@ import { expect, fn } from 'storybook/test';
 import { ErrorState, RIDE_DISCOVERY_TERMS, Skeleton } from 'ui';
 import { RideGridCard } from '@/features/participant/discovery/components/RideGridCard';
 import { makeRide } from './fixtures';
-import { KI_080_DANGER_CONTRAST } from './a11y-known-issues';
 
 // The discovery grid card (`RideGridCard`, CR-153) — one link to the ride
 // page. Loading and error are how `RideGrid` renders the card's slot while
@@ -108,7 +107,6 @@ const onRetry = fn();
 
 /** The list failed to load: a plain-language message and «Повторить». */
 export const LoadError: Story = {
-  parameters: KI_080_DANGER_CONTRAST,
   render: () => (
     <ErrorState message={RIDE_DISCOVERY_TERMS.loadError} onRetry={onRetry} />
   ),

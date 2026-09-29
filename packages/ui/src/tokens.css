@@ -64,7 +64,11 @@
   --warning: #7a5300;
   --warning-fill: #ffc94d;
   --on-warning-fill: #17141a;
-  --danger: #d42b20;
+  /* KI-080: darkened from #D42B20 — that hex cleared AA (4.5:1) only against
+     a plain white ground, not the actual `--bg` (#F3F1F5, 4.49:1) or
+     `ErrorState`'s `danger/10` tint (3.87:1). #B92A1E clears both (5.48:1 /
+     4.69:1) and still exceeds AA filled with `--on-danger` (6.15:1). */
+  --danger: #b92a1e;
   --on-danger: #ffffff;
   --info: #0b65a6;
   --info-tint: #e3f0fa;

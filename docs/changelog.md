@@ -2181,3 +2181,30 @@ Validation: web typecheck, lint; unit Vitest 490/490; `test:storybook` 59/59;
 `/mcp` answers `tools/list`.
 Follow-up: KI-080; run `test:storybook` in CI (needs `playwright install
 chromium` in the unit job) — not done here.
+
+## 2026-09-29 — CR-159 — Fix KI-080: light-theme `--danger` contrast
+
+What: `packages/ui/src/tokens.css`'s light `--danger` darkened from `#D42B20`
+to `#B92A1E`. The old hex only cleared WCAG AA's 4.5:1 against a plain white
+ground (5.04:1); against the app's actual `--bg` (`#F3F1F5`) it was 4.49:1,
+and against `ErrorState`'s `danger/10` retry-button tint it was 3.87:1 — both
+under AA. `#B92A1E` clears both (5.48:1 on `--bg`, 4.69:1 on the tint) and
+still exceeds AA filled with white `on-danger` (6.15:1, up from 5.04:1). Same
+red, same role (cancellation, destructive actions, validation errors,
+`danger-filled`'s solid fill) — no new token, no variant renamed. Dark theme
+(`#FF5A4F`) was already AA and is unchanged.
+
+`docs/design.md` §3's light-theme swatch table and prose updated to the new
+hex/ratios and to note they're measured against the real ground, not white.
+
+Removed the now-unneeded Storybook axe exception: `apps/web/src/stories/
+a11y-known-issues.ts` (`KI_080_DANGER_CONTRAST`, scoped to 7 stories) deleted,
+along with its imports/`parameters` overrides in `Button.stories.tsx`,
+`Input.stories.tsx`, `RideCard.stories.tsx`, `RideFilters.stories.tsx`.
+
+Validation: `packages/ui` typecheck/lint/test 185/185; `apps/web` typecheck/
+lint/test 490/490; `pnpm --filter web test:storybook` 59/59 with zero axe
+rules disabled (previously 7 stories had `color-contrast` off); visually
+checked `ui-button--danger` and `rides-ridecard--load-error` via the running
+Storybook (`storybook-mcp`) — same visual weight, no other regression.
+KI-080 moved to `.claude/context/known-issues-archive.md` as resolved.

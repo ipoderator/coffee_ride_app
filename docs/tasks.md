@@ -1224,3 +1224,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       RideStatus, RideFilters with light/dark/both themes and loading/error/
       empty/disabled; `play` interaction + axe tests via `test:storybook`.
       Found KI-080. See `docs/changelog.md`.
+- [x] CR-159 Fix KI-080 — light-theme `--danger` `#D42B20` → `#B92A1E`
+      (`packages/ui/src/tokens.css`, `docs/design.md` §3), clears WCAG AA
+      against `--bg`/`ErrorState`'s tint; Storybook axe exception removed.
+      See `docs/changelog.md`.

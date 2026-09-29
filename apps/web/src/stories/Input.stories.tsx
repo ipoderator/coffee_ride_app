@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn } from 'storybook/test';
 import { FormField, Input, Skeleton, type InputProps } from 'ui';
-import { KI_080_DANGER_CONTRAST } from './a11y-known-issues';
 
 // `Input` is always used inside `FormField` (a real `<label>`, the hint/error
 // wired through `aria-describedby`/`aria-invalid`) — the stories do the same,
@@ -70,7 +69,6 @@ export const Empty: Story = {
 
 /** Validation error: replaces the hint, announced, linked to the field. */
 export const WithError: Story = {
-  parameters: KI_080_DANGER_CONTRAST,
   args: { error: 'Укажите место старта', defaultValue: '' },
   play: async ({ canvas }) => {
     const input = canvas.getByLabelText('Место старта');
@@ -129,7 +127,6 @@ export const Dark: Story = {
 };
 
 export const BothThemes: Story = {
-  parameters: KI_080_DANGER_CONTRAST,
   globals: { theme: 'both' },
   render: () => <AllStates />,
 };
