@@ -2114,3 +2114,70 @@ Found while checking: `RideWizardFrame` called `buttonClassName` (from a
 component. The 320px page scroll (329px) comes from the header account menu and
 exists on `/organizer/rides` too — not from this change. No visual baselines
 cover these screens.
+
+## 2026-09-29 — CR-157 — Larger, easier date picker on the create-ride page
+
+What: the owner found the native date popup on «Основное о заезде» small and
+awkward (Safari's). «Дата» is now `packages/ui`'s new `DatePicker`:
+
+- trigger shows «Чт, 1 октября 2026» (new `formatCalendarDate`) instead of the
+  browser's locale-dependent `29.09.2026`;
+- popover (`sm`+) / bottom sheet (phone) with 48px day cells in the body font,
+  Monday-first, month title + prev/next, quick picks «Сегодня», «Завтра» and the
+  coming Saturday/Sunday; past days disabled (`min` = today, browser-local);
+  today ringed; Escape/outside click close; full keyboard navigation;
+- `DATE_PICKER_TERMS` (month names, weekdays, labels) in `terminology.ts`;
+  icons inline (lucide stays `apps/web`'s dependency, as with `NavMenu`).
+
+The value stays a `"YYYY-MM-DD"` string, so the date + time + timezone → UTC
+conversion (ADR-012) is unchanged. `EditRideForm` still uses its single
+`datetime-local` field — not in this request.
+
+First try used `font-num` for the day numbers; it's the extra-condensed metric
+face and read tiny — switched to the body font with tabular numerals.
+
+Validation: prettier; lint + typecheck ui/web; Vitest — ui 185 (new: 7
+`DatePicker` tests, `formatCalendarDate`), web 490 (`CreateRideForm` tests pick the
+date through the calendar with `Date` pinned to 2027-04-20); Playwright
+`critical-journeys` 3/3 (the organizer journey picks «Завтра»; one earlier run
+hit the shared 5/min login limit after my screenshot runs, green on re-run).
+Screenshots at 1440 and 390 checked: no horizontal scroll.
+
+## 2026-09-29 — CR-158 — Storybook for UI primitives and ride components
+
+What: Storybook 10.6 (`@storybook/nextjs-vite`) in `apps/web`, set up with
+`create storybook --features docs test a11y` plus `@storybook/addon-mcp`, and
+`features.componentsManifest` on. Why apps/web and not packages/ui: packages/ui
+has no CSS build — its Tailwind classes only exist once apps/web's `globals.css`
+compiles them — and the ride components are apps/web feature modules.
+
+- `.storybook/preview.tsx`: `globals.css`, the four self-hosted faces
+  (`.storybook/fonts.ts`, mirrors `layout.tsx`), `lang="ru"`, a «Тема» toolbar
+  (light / dark / both side by side — `.dark` on `<html>` or on a wrapper, which
+  works because `tokens.css` maps through `@theme inline`), axe limited to WCAG
+  2.1 A/AA with `a11y.test: 'error'`.
+- `src/stories/`: Button, Input (inside `FormField`), Badge (= `StatusBadge`; no
+  generic `Badge` exists), RideStatus (`RIDE_STATUS_TERMS` + `RideStatusPill` in
+  the cover's `dark` scope), RideCard (`RideGridCard`), RideFilters
+  (`DiscoveryFilters`; loading/error/empty are the real `RideGrid` with
+  `GET /api/v1/rides` stubbed per story). Each has loading/error/empty/disabled,
+  dark and both-themes stories; `play` functions test clicks, keyboard, typing,
+  `aria-*`, and that chip changes re-query the API.
+- `vitest.config.mts` now has two projects: `unit` (jsdom, unchanged) and
+  `storybook` (Chromium via `@vitest/browser-playwright`). `pnpm test` /
+  `test:coverage` run `--project unit` only, so CI needs no browser for them;
+  `pnpm --filter web test:storybook` runs the stories.
+- `playwright` pinned to 1.63.0 (same as `@playwright/test`); the CLI's
+  unrequested Chromatic addon removed; its demo stories deleted.
+- `.mcp.json`: `storybook-mcp` → `http://localhost:6006/mcp` (needs
+  `pnpm --filter web storybook` running).
+
+Product UI unchanged. The axe checks found KI-080 (light `--danger` text 4.49:1
+on `--bg`, `ErrorState` retry 3.87:1) — `color-contrast` is off for exactly those
+7 stories (`src/stories/a11y-known-issues.ts`) until the token is fixed.
+
+Validation: web typecheck, lint; unit Vitest 490/490; `test:storybook` 59/59;
+`build-storybook` OK (`manifests/components.json` emitted); dev server on :6006,
+`/mcp` answers `tools/list`.
+Follow-up: KI-080; run `test:storybook` in CI (needs `playwright install
+chromium` in the unit job) — not done here.

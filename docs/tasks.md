@@ -1216,3 +1216,11 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `?ride=<id>` re-edit); steps 2–4 = route/groups/edit screens with
       `?wizard=1` in the same step frame. API (additive): `POST /v1/rides`
       `description`/`difficulty`. See `docs/changelog.md`.
+- [x] CR-157 Larger, easier date picker on the create-ride page — new
+      `packages/ui` `DatePicker` (48px days, quick picks, past days disabled,
+      phone bottom sheet, keyboard), `formatCalendarDate`. See `docs/changelog.md`.
+- [x] CR-158 Storybook in `apps/web` (nextjs-vite, docs/test/a11y + MCP addon,
+      components manifest): stories for Button, Input, Badge, RideCard,
+      RideStatus, RideFilters with light/dark/both themes and loading/error/
+      empty/disabled; `play` interaction + axe tests via `test:storybook`.
+      Found KI-080. See `docs/changelog.md`.

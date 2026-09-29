@@ -1,7 +1,12 @@
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
+import { playwright } from '@vitest/browser-playwright';
 import { coverageConfig } from 'config/vitest/coverage';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // CR-140: one time zone for every run. Several component tests freeze a
 // local wall-clock "now" (greetings, countdowns), so results depended on the
@@ -12,6 +17,12 @@ process.env.TZ = 'Europe/Moscow';
 // apps/web's own config, not the packages/config node-library fragment:
 // component tests need jsdom + a React plugin, a different shape entirely
 // from the plain-Node packages that fragment targets (CR-008).
+//
+// CR-158: two projects. `unit` is the jsdom suite `pnpm test`/
+// `test:coverage` run (scoped with `--project unit`, so CI's unit job needs
+// no browser). `storybook` runs every story as a test in real Chromium —
+// render, `play` interactions and axe a11y checks — via `pnpm
+// test:storybook` or Storybook's own «Run tests» panel.
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -27,9 +38,33 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'jsdom',
-    setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
     coverage: coverageConfig(),
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'jsdom',
+          setupFiles: ['./vitest.setup.ts'],
+          include: ['src/**/*.test.{ts,tsx}'],
+        },
+      },
+      {
+        // Not `extends: true`: the Storybook framework brings its own Vite
+        // setup (React, Next.js shims, tsconfig paths).
+        plugins: [
+          storybookTest({ configDir: path.join(dirname, '.storybook') }),
+        ],
+        test: {
+          name: 'storybook',
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({}),
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      },
+    ],
   },
 });

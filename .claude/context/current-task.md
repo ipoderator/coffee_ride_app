@@ -1,38 +1,32 @@
 # Current task
 
-## CR-156 — Ride creation as a four-step wizard (owner's mockup)
+## CR-158 — Storybook for UI primitives and ride components
 
-Status: **done, committed** (2026-09-29). Validation: see `docs/changelog.md`
-CR-156. Previous task CR-155 is done and recorded in `docs/changelog.md`.
+Status: **done, committed** (2026-09-29). Details: `docs/changelog.md` CR-158.
 
-Mockup: owner's screenshot (dark, desktop) — «Новый заезд · шаг 1 из 4»,
-«Основное о заезде». No phone mockup.
+Request (owner): Storybook via `create storybook --features docs test a11y` +
+`@storybook/addon-mcp`, `componentsManifest` on; stories for Button, Input, Badge,
+RideCard, RideStatus, RideFilters with light/dark themes and loading/error/empty/
+disabled; a11y + interaction tests; no product UI change; run it and connect it to
+Claude Code (`storybook-mcp`, project scope).
 
-### Decision (owner, 2026-09-29)
+- [x] Storybook in `apps/web` (nextjs-vite); addons vitest/a11y/docs/mcp.
+- [x] Six story files, every state + dark + both-themes; `play` tests.
+- [x] `test:storybook` 59/59 (axe WCAG 2.1 AA as errors); unit 490/490.
+- [x] Dev server on :6006, `/mcp` answers; `.mcp.json` has `storybook-mcp`.
+- Found: KI-080 (light `--danger` contrast) — scoped exception in 7 stories.
 
-«Мастер + additive API»: step 1 to the mockup; `POST /v1/rides` takes optional
-`description`/`difficulty` (one atomic create); GPX uploads right after the create;
-steps 2–4 are the existing route/groups/edit screens in the same step frame.
+## CR-157 — Larger, easier date picker on the create-ride page
 
-### Gap table
+Status: **done, not committed** (2026-09-29). Validation: see `docs/changelog.md`
+CR-157. Previous task CR-156 (wizard) is done and committed (`765771f`).
 
-| In mockup                                       | Was                               | Result                                      |
-| ----------------------------------------------- | --------------------------------- | ------------------------------------------- |
-| Step list «шаг 1 из 4», four steps with hints   | none                              | done (`RideWizardSteps`)                    |
-| «Основное о заезде» + lead inside the card      | «Новый заезд» page h1             | done                                        |
-| Title + example hint                            | title + «До 140 символов»         | done                                        |
-| Date / «Время старта · МСК»                     | one datetime-local + zone select  | done (zone select beside the time label)    |
-| Bike type / Сложность                           | bike type only                    | done (API additive for difficulty)          |
-| Описание                                        | not at creation                   | done (API additive)                         |
-| GPX drop zone                                   | only on the route screen          | done (`GpxDropzone`, upload after save)     |
-| «Сохранить черновик» / «Далее: маршрут →»       | «Создать черновик» → success view | done                                        |
-| Top-bar cabinet nav, «Черновик сохранён» in bar | sidebar shell                     | skipped — cabinet shell is a separate task; |
-|                                                 |                                   | save time shown in the form footer          |
+Request (owner, screenshot of Safari's native date popup): «сделай календарь
+удобнее и больше на странице создания заезда».
 
 ### Acceptance
 
-- [x] Step 1 matches the mockup's layout/content inside ADR-024 tokens.
-- [x] First save creates one draft; later saves update it (`?ride=<id>`).
-- [x] GPX upload failure keeps the draft and reports it.
-- [x] Steps 2–4 reachable with back/next; non-wizard screens unchanged.
-- [x] Unit + API + functional e2e green; screenshots checked.
+- [x] Larger day targets (48px), readable numbers, Russian month/weekday names.
+- [x] Faster picking: «Сегодня / Завтра / Сб / Вс» quick picks; past days disabled.
+- [x] Phone: bottom sheet, no horizontal scroll; keyboard + screen-reader support.
+- [x] Value contract unchanged (`YYYY-MM-DD`), create flow + e2e green.

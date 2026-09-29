@@ -174,6 +174,18 @@ breakpoints — functionally (element visibility), not by screenshot.
   500 from the ride list) — every other spec still drives the real API/DB
   stack, which stays the default.
 
+## Storybook (CR-158)
+
+`apps/web/src/stories/*.stories.tsx` cover the shared primitives and ride
+components in every state (loading/error/empty/disabled) and theme
+(`globals: { theme: 'dark' | 'both' }`). `pnpm --filter web test:storybook`
+(Vitest project `storybook`, Chromium) renders each story, runs its `play`
+function and fails on any WCAG 2.1 A/AA axe violation (`a11y.test: 'error'`).
+An axe exception is scoped to the affected stories and names its KI
+(`src/stories/a11y-known-issues.ts`) — never a global rule switch. Stub the
+API per story with `beforeEach` (see `RideFilters.stories.tsx`), not by
+mocking the component. The `unit` project stays what `pnpm test`/coverage run.
+
 ## Coverage (CR-136)
 
 `pnpm test:coverage` runs every Vitest suite with v8 coverage (shared options:

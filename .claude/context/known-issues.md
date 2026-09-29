@@ -513,6 +513,21 @@ Next action: after the push, download the failed run's `playwright-report`
 artifact, check each `*-diff.png` shows only the CR-155 change, commit the
 `*-actual.png` files as the new baselines (same procedure as KI-077).
 
+### KI-080 — Light-theme `--danger` text is just under WCAG AA contrast
+
+Status: open. Discovered: 2026-09-29 (CR-158, Storybook axe checks).
+Problem: `--danger` `#D42B20` as text is 4.49:1 on `--bg` `#F3F1F5` (the
+`danger` Button variant, `FormField`'s error line, «Показать ещё»'s error) and
+3.87:1 on `ErrorState`'s `bg-danger/10` tint (its «Повторить» button inherits
+`text-danger`). AA needs 4.5:1. The dark theme passes.
+Impact: low-vision users on the light theme; the text is never the only signal
+(role="alert", wording), but it fails the §12 AA target.
+Workaround: `apps/web/src/stories/a11y-known-issues.ts`'s `KI_080_DANGER_CONTRAST`
+turns axe's `color-contrast` rule off for exactly the 7 stories that render it.
+Next action: darken light `--danger` slightly and give `ErrorState`'s retry
+button a darker ink — a token change, so update `docs/design.md` §3 too — then
+delete the exception and re-run `pnpm --filter web test:storybook`.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

@@ -37,6 +37,19 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-158 (2026-09-29, committed): Storybook 10.6 in `apps/web`
+(`pnpm --filter web storybook` → :6006, `/mcp` for Claude Code via `.mcp.json`'s
+`storybook-mcp`). Stories in `apps/web/src/stories/` (Button, Input, Badge,
+RideStatus, RideCard, RideFilters); `pnpm --filter web test:storybook` runs them in
+Chromium (render + `play` + axe, 59 tests). `pnpm test` is `--project unit` only.
+Not yet in CI. Open: KI-080 (light `--danger` text contrast).
+
+CR-157 (2026-09-29, not committed yet): the create-ride «Дата» is `packages/ui`'s
+new `DatePicker` (48px day cells, «Сегодня / Завтра / Сб / Вс» quick picks, past
+days disabled, bottom sheet on a phone, full keyboard) instead of the native date
+input; `formatCalendarDate` («Чт, 1 октября 2026»). `EditRideForm` still uses
+`datetime-local`.
+
 CR-156 (2026-09-29, committed and pushed): ride creation is a four-step wizard
 (owner's «Ночной старт» mockup, «Новый заезд · шаг 1 из 4»). Step 1
 `/organizer/rides/new` — «Основное о заезде»: title, date + start time (timezone
@@ -1057,4 +1070,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-29 (CR-156)
+2026-09-29 (CR-157)

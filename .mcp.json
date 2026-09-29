@@ -6,6 +6,10 @@
       "headers": {
         "x-api-key": "${API_KEY_21ST}"
       }
+    },
+    "storybook-mcp": {
+      "type": "http",
+      "url": "http://localhost:6006/mcp"
     }
   }
 }

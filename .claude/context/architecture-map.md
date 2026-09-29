@@ -933,6 +933,18 @@ ADR-022). No new package and no new dependency-direction edge; one new domain en
   implemented in `maps-2gis/src/render.ts` (`.claude/rules/maps.md` updated). The
   `create-map-renderer.ts` composition point is unchanged.
 
+CR-158 (Storybook, 2026-09-29): **apps/web** `.storybook/` (`main.ts` — nextjs-vite,
+addons vitest/a11y/docs/mcp, `features.componentsManifest`; `preview.tsx` — globals.css,
+theme toolbar, axe WCAG 2.1 AA; `fonts.ts` mirrors `app/layout.tsx`'s faces) and
+`src/stories/` (dev-only; imports feature components, never imported by them).
+`vitest.config.mts` projects `unit` (jsdom) + `storybook` (browser). No product
+module changed.
+
+CR-157 (date picker, 2026-09-29): **packages/ui** `components/DatePicker.tsx`
+(exported; inline SVG icons, no new dependency), `format.ts`
+`formatCalendarDate`, `terminology.ts` `DATE_PICKER_TERMS`; used by
+`CreateRideForm`.
+
 CR-156 (ride creation wizard, 2026-09-29). No new package or module.
 
 - **apps/web** `features/organizer/rides/`: `wizard-steps.ts` (step
