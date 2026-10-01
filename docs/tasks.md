@@ -1246,3 +1246,14 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `PUT /v1/rides/:id/participants-visibility` — hide any time after publish,
       re-show only while nobody is registered (owner decision). See
       `docs/changelog.md`.
+- [x] CR-163 Pace the nightly load test's `api-latency.js` scenario so it stays
+      under `RATE_LIMIT_MAX` — it had run without think time since CR-139 and
+      ~89 % of its requests were rate-limited, failing the job every night.
+      `THINK_TIME_S` (0.5 s) per VU. See `docs/changelog.md`.
+- [x] CR-164 KI-060: discovery's «Старт: …» falls back to the start route
+      point's description when its label is just «Старт» — additive
+      `startDescription` on `PublicRideListItem` (same `selectDistinctOn`, no
+      extra query), both discovery call sites through `formatStartPlace`
+      (`FeaturedRideCard` had been rendering the raw label, printing
+      «Старт: Старт»). Also verified and archived four stale KI entries
+      (KI-001/009/010/020); KI-021 stays open. See `docs/changelog.md`.

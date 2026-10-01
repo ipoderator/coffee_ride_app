@@ -1,5 +1,71 @@
 # Current task
 
+## CR-164 — KI-060 start-place fallback; four stale KI entries archived
+
+Status: **done, validated, committed** (2026-10-01). Details: `docs/changelog.md`.
+
+Goal (handoff items 1–2): verify/archive the stale KI entries, then fix KI-060.
+Item 3 (KI-057) was **not started** — it needs a dark MapGL style id from the
+owner's 2GIS account and the request left that placeholder unfilled. Item 4
+(coverage baseline) was not started either — it must run in the CI environment.
+
+- [x] KI-001 — verified: CR-074's Dockerfiles + `.dockerignore`, CR-075's
+      `docker-compose.prod.yml` + `deploy/Caddyfile`, CR-134's
+      `deploy/smoke/docker-compose.smoke.yml` (which also closes the KI-019
+      "never actually built" caveat). Archived.
+- [x] KI-009 — verified: CR-083/084/085/086 all in the changelog. Archived.
+- [x] KI-010 — verified: the `*2gis*` `no-restricted-imports` rule is present in
+      `apps/web`, `apps/api`, `packages/ui`, `packages/db`, `packages/config`;
+      `packages/maps-2gis` is the single opt-out. Archived.
+- [x] KI-020 — verified: `apps/web/src/components/ui/` does not exist and every
+      primitive (incl. `Dialog`/`DatePicker`) is exported from `packages/ui`.
+      `components.json` left as-is deliberately — unused by any script/CI step.
+      Archived.
+- [x] KI-021 — **kept open** with a dated verification note: no `ride-service.ts`
+      schema and no `ride_service` pgEnum exist, and the snake_case service keys
+      appear nowhere outside `terminology.ts`. The registration half is a
+      non-issue (`registration_status` = `active`/`cancelled`, a different axis
+      from `REGISTRATION_ACTION_TERMS`' CTA labels).
+- [x] KI-060 — fixed: additive `startDescription` on `PublicRideListItem`
+      (`packages/types`, `ride-response.schema.ts`, `rides.service.ts`'s
+      `getRideListExtras` — same `selectDistinctOn`, no extra query);
+      `RideLegendRow` and `FeaturedRideCard` both go through `formatStartPlace`
+      now. `FeaturedRideCard` had been rendering `ride.startLabel` raw, so it
+      printed the literal «Старт: Старт» — that is the real bug behind the
+      entry. Archived.
+
+Validation: `pnpm typecheck` green (8/8), `pnpm lint` green (9/9), `apps/web`
+unit 499 passed (53 files), `apps/api` `src/modules/rides` 217 passed + 3
+skipped. API tests need `TEST_DATABASE_URL` passed explicitly on this machine
+(`postgresql://postgres:postgres@127.0.0.1:5432/coffee_ride` — `.env` is not
+exported into the shell).
+
+Not run: `pnpm build` (no build-affecting change — types/service/two components
+only, all covered by typecheck) and the Playwright visual suite (no layout
+change; the start line's _text_ can change on a seeded ride, but the e2e
+fixtures don't label a start point «Старт»).
+
+## NEXT SESSION — handoff (written 2026-10-01, after CR-164)
+
+`docs/tasks.md` has no open items. What's left:
+
+1. **`coverage-baseline.json` refresh** — `pnpm test:coverage && pnpm
+coverage:baseline` in the CI environment (Postgres/Redis/S3 up,
+   `RUN_LIVE_S3_TESTS=1`, `RUN_LIVE_REDIS_TESTS=1` + `REDIS_URL`, and **no**
+   `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` in the shell — KI-070). `packages/ui` is at
+   100 % lines, so the floor can rise. CR-164 also added tests, so its numbers
+   should be folded in.
+2. **KI-057 — still blocked on the owner**: a dark MapGL style id from their 2GIS
+   account, then an additive `theme` option on `MapRenderOptions` mapped inside
+   `packages/maps-2gis`. Nothing to do until that id exists.
+3. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is
+   reachable from this machine (KI-056).
+
+Owner-side, not code: `EMAIL_FROM_ADDRESS` + Unisender DNS (KI-026/042/055);
+commercial 2GIS key (KI-075); 2GIS reachability via VPN (KI-056); Caddy/TLS on a
+real host (KI-045). KI-038 is a documented build gotcha, no fix needed.
+Still watch: `route-points-stops.spec.ts` passed only on retry in CI twice.
+
 ## CR-161…CR-163 — CI unblock, KI-078/079/066/065, nightly load test
 
 Status: **done, committed** (2026-10-01). Details: `docs/changelog.md`.

@@ -90,6 +90,7 @@ const baseRide: PublicRideListItem = {
   },
   registrationsCount: 0,
   startLabel: null,
+  startDescription: null,
   routePreview: null,
   groups: [],
   waitlistCount: 0,
@@ -168,6 +169,33 @@ describe('DiscoveryList', () => {
     expect(within(row).getByText('Опубликован')).toBeInTheDocument();
     // The card's "first three" (distance/elevation/pace) never includes duration.
     expect(within(row).queryByText(/2 ч 30/)).not.toBeInTheDocument();
+  });
+
+  // KI-060 (CR-164): «Старт» as a label told the reader nothing, so the row hid
+  // the line and the card showed no start place at all. The start point's
+  // description now backs it, matching ride detail's long-standing fallback.
+  it('falls back to the start point description when the label is just «Старт»', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [
+        {
+          ...baseRide,
+          startLabel: 'Старт',
+          startDescription: 'Парковка у велотрека Крылатское.',
+        },
+      ],
+      nextCursor: null,
+      total: 0,
+    });
+
+    render(<DiscoveryList />);
+
+    const link = await screen.findByRole('link', { name: baseRide.title });
+    const row = link.closest('li')!;
+    expect(
+      within(row).getByText(
+        'Старт: Парковка у велотрека Крылатское · Гравийный клуб',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows the pace range and group count when the ride has two or more groups', async () => {

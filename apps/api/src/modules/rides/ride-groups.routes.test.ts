@@ -666,6 +666,40 @@ describe('GET /v1/rides card fields (CR-116)', () => {
     await app.close();
   });
 
+  // KI-060 (CR-164): an organizer who labels the start point just «Старт» puts the
+  // actual place in its description. The list item has to carry both, or discovery
+  // can only render «Старт: Старт» (which `formatStartPlace` suppresses entirely,
+  // leaving the card with no start place at all).
+  it('carries the start point description alongside its label', async () => {
+    const app = await buildApp(testEnv);
+    const { token, rideId } = await createOrganizerRide(app);
+    await app.inject({
+      method: 'POST',
+      url: `/v1/rides/${rideId}/route-points`,
+      headers: { origin: WEB_ORIGIN },
+      cookies: { session: token },
+      payload: {
+        type: 'start',
+        label: 'Старт',
+        description: 'Парковка у велотрека Крылатское.',
+        lat: 55.75,
+        lng: 37.61,
+      },
+    });
+    await transition(app, token, rideId, 'publish');
+
+    const response = await app.inject({ method: 'GET', url: '/v1/rides' });
+    expect(response.statusCode).toBe(200);
+    const item = response
+      .json()
+      .items.find((entry: { id: string }) => entry.id === rideId);
+    expect(item).toMatchObject({
+      startLabel: 'Старт',
+      startDescription: 'Парковка у велотрека Крылатское.',
+    });
+    await app.close();
+  });
+
   it('carries registrationsCount, startLabel, a simplified routePreview and groups', async () => {
     const app = await buildApp(testEnv);
     const { token, rideId } = await createOrganizerRide(app);

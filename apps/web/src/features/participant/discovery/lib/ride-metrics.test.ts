@@ -45,6 +45,7 @@ function makeRide(
     },
     registrationsCount: 15,
     startLabel: null,
+    startDescription: null,
     routePreview: null,
     groups: [],
     waitlistCount: 0,

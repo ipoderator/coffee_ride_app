@@ -56,7 +56,7 @@ export function RideLegendRow({
   });
   const metrics = buildRideRowMetrics(ride);
   const seats = ridesSeatsLabel(ride);
-  const startPlace = formatStartPlace(ride.startLabel);
+  const startPlace = formatStartPlace(ride.startLabel, ride.startDescription);
   const startText = [
     startPlace
       ? `${RIDE_DISCOVERY_ROW_TERMS.startPrefix}: ${startPlace}`

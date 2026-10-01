@@ -60,6 +60,7 @@ export const publicRideListItemResponseSchema =
   rideWithOrganizerResponseSchema.extend({
     registrationsCount: z.number(),
     startLabel: z.string().nullable(),
+    startDescription: z.string().nullable(),
     routePreview: z.array(z.tuple([z.number(), z.number()])).nullable(),
     groups: z.array(z.object({ name: z.string(), paceKmh: z.number() })),
     waitlistCount: z.number(),

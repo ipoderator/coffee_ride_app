@@ -38,6 +38,7 @@ export function makeRide(
     },
     registrationsCount: 8,
     startLabel: null,
+    startDescription: null,
     routePreview: [
       [55.75, 37.6],
       [55.76, 37.62],

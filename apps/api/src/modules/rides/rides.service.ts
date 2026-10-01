@@ -810,6 +810,7 @@ export async function listPublicRides(
         },
         registrationsCount: extras.registrationsCount.get(row.ride.id) ?? 0,
         startLabel: extras.startLabel.get(row.ride.id) ?? null,
+        startDescription: extras.startDescription.get(row.ride.id) ?? null,
         routePreview: extras.routePreview.get(row.ride.id) ?? null,
         groups: extras.groups.get(row.ride.id) ?? [],
         waitlistCount: extras.waitlistCount.get(row.ride.id) ?? 0,
@@ -831,12 +832,17 @@ export async function listPublicRides(
 async function getRideListExtras(db: DbClient, rideIds: string[]) {
   const registrationsCount = new Map<string, number>();
   const startLabel = new Map<string, string | null>();
+  // KI-060: the label alone can't say where the ride starts when it is just
+  // «Старт» — the description carries the place then (same fallback ride
+  // detail already applies via `formatStartPlace`).
+  const startDescription = new Map<string, string | null>();
   const routePreview = new Map<string, Array<[number, number]> | null>();
   const waitlistCount = new Map<string, number>();
   if (rideIds.length === 0) {
     return {
       registrationsCount,
       startLabel,
+      startDescription,
       routePreview,
       waitlistCount,
       groups: new Map<string, Array<{ name: string; paceKmh: number }>>(),
@@ -864,6 +870,7 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
         .selectDistinctOn([routePoints.rideId], {
           rideId: routePoints.rideId,
           label: routePoints.label,
+          description: routePoints.description,
         })
         .from(routePoints)
         .where(
@@ -901,6 +908,7 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
   }
   for (const row of startRows) {
     startLabel.set(row.rideId, row.label);
+    startDescription.set(row.rideId, row.description);
   }
   for (const row of previewRows) {
     routePreview.set(row.rideId, row.preview);
@@ -911,6 +919,7 @@ async function getRideListExtras(db: DbClient, rideIds: string[]) {
   return {
     registrationsCount,
     startLabel,
+    startDescription,
     routePreview,
     waitlistCount,
     groups,

@@ -53,6 +53,7 @@ function makeRide(
     },
     registrationsCount: 13,
     startLabel: 'Велотрек Крылатское',
+    startDescription: null,
     routePreview: null,
     groups: [],
     waitlistCount: 0,
@@ -104,6 +105,45 @@ describe('RideGrid (CR-153)', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Показать ещё/ })).toBeNull();
+  });
+
+  // KI-060 (CR-164): a start point labelled just «Старт» used to render
+  // «Старт: Старт» on the featured card (the legend row suppressed the line
+  // entirely). Both now fall back to the point's description, like ride detail.
+  it('falls back to the start point description when the label is just «Старт»', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [
+        makeRide('a', {
+          startLabel: 'Старт',
+          startDescription: 'Парковка у велотрека Крылатское.',
+        }),
+      ],
+      nextCursor: null,
+      total: 1,
+    });
+
+    render(<RideGrid />);
+
+    const featured = await screen.findByRole('article', { name: 'Заезд a' });
+    expect(
+      within(featured).getByText('Старт: Парковка у велотрека Крылатское'),
+    ).toBeInTheDocument();
+    expect(within(featured).queryByText('Старт: Старт')).toBeNull();
+  });
+
+  // The same label with nothing to fall back to still renders no start line at
+  // all, rather than the meaningless «Старт: Старт».
+  it('renders no start line when neither the label nor the description says where', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [makeRide('a', { startLabel: 'Старт', startDescription: null })],
+      nextCursor: null,
+      total: 1,
+    });
+
+    render(<RideGrid />);
+
+    const featured = await screen.findByRole('article', { name: 'Заезд a' });
+    expect(within(featured).queryByText(/^Старт: /)).toBeNull();
   });
 
   it('reloads the first page when a chip changes', async () => {

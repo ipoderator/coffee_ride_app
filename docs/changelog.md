@@ -2374,3 +2374,43 @@ unchanged.
 Validation: re-run via `workflow_dispatch` after the push (see the next entry if
 it needs follow-up).
 Files: `load/k6/scenarios/api-latency.js`.
+
+## 2026-10-01 — CR-164 — KI-060 start-place fallback on discovery; four stale KI entries verified and archived
+
+Summary: Discovery's «Старт: …» can now say where a ride starts when the organizer
+labelled the start route point just «Старт». `PublicRideListItem` gains an additive
+`startDescription` (the same oldest-`start` route point's `description`, read by the
+existing `selectDistinctOn` in `getRideListExtras` — no extra query), and both
+discovery call sites pass it as `formatStartPlace`'s second argument, the fallback
+ride detail already used. `FeaturedRideCard` had been rendering `ride.startLabel` raw
+rather than through the formatter, so it literally showed «Старт: Старт»; it now goes
+through `formatStartPlace` too, which also means a start point with neither a usable
+label nor a description renders no start line at all instead of a meaningless one.
+Separately, five `known-issues.md` entries were re-verified against the code:
+KI-001 (deployment artifacts — CR-074/075/134 shipped all of them, incl. the Caddy
+manifest and the production Docker smoke test), KI-009 (CR-083..086 all landed),
+KI-010 (CR-056's `*2gis*` `no-restricted-imports` rule is present in every workspace
+member) and KI-020 (every shared primitive, including `Dialog`/`DatePicker`, was
+hand-vendored into `packages/ui`; `apps/web/src/components/ui/` does not exist) are
+resolved and moved verbatim to `known-issues-archive.md` with a resolution note each.
+KI-021 stays **open**: its `RideServiceKey` half is still unbacked by any DB enum
+(no `ride-service.ts` schema, no `ride_service` pgEnum), though the entry gained a
+note that the registration half is a non-issue — `registration_status`
+(`active`/`cancelled`) exists but is a different axis from
+`REGISTRATION_ACTION_TERMS`' CTA labels, so there was never anything to reconcile.
+Files: `packages/types/src/api/rides.ts`, `apps/api/src/modules/rides/rides.service.ts`,
+`apps/api/src/modules/rides/ride-response.schema.ts`,
+`apps/web/src/features/participant/discovery/components/{FeaturedRideCard,RideLegendRow}.tsx`,
+discovery/stories fixtures, `docs/api.md`, `.claude/context/known-issues.md`,
+`.claude/context/known-issues-archive.md`.
+Tests: `ride-groups.routes.test.ts` (the API carries both fields for a «Старт»-labelled
+point), `RideGrid.test.tsx` (featured card falls back to the description; renders no
+start line when neither says where), `discovery.test.tsx` (legend row fallback).
+Validation: `pnpm typecheck` and `pnpm lint` green; `apps/web` unit suite 499 passed
+(53 files); `apps/api` `src/modules/rides` 217 passed / 3 skipped (10 files, 2 skipped).
+Decisions: none — additive contract change per `.claude/rules/extensibility.md`
+("prefer adding new optional fields"); no migration, no new column.
+Follow-up: KI-057 (2GIS dark basemap) still needs a dark MapGL style id from the
+owner's 2GIS account — the handoff's placeholder for it was left unfilled, so it was
+not started. The `coverage-baseline.json` refresh (handoff item 4) also remains, and
+must be run in the CI environment per `.claude/rules/testing.md` → Coverage.

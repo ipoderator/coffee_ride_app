@@ -37,6 +37,22 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-164 (2026-10-01, this session): KI-060 — discovery could not say where a ride
+starts when the organizer labelled the start route point just «Старт».
+`PublicRideListItem` gained an additive `startDescription` (that same oldest-`start`
+point's `description`, read by the `selectDistinctOn` `getRideListExtras` already
+runs — no extra query), and both discovery call sites now pass it as
+`formatStartPlace`'s second argument, the fallback ride detail had been using all
+along. `FeaturedRideCard` was also rendering `ride.startLabel` raw rather than
+through the formatter, so it literally printed «Старт: Старт»; it goes through
+`formatStartPlace` now. Also re-verified five stale `known-issues.md` entries against
+the code: KI-001, KI-009, KI-010 and KI-020 are resolved and archived with a
+resolution note each; KI-021 stays open (its `RideServiceKey` half still has no DB
+enum behind it — the registration half turned out to be a non-issue and is annotated
+as such). No migration, no new column, no ADR. Not started: KI-057 (needs a dark
+MapGL style id from the owner's 2GIS account) and the `coverage-baseline.json`
+refresh (needs the CI environment).
+
 CR-161…CR-163 (2026-10-01): CI on `main` is green again through E2E —
 the coverage gate had been red since CR-155, so build/E2E never ran (CR-161:
 real tests for the untested term templates, `DatePicker`, `NavMenu`,
@@ -721,20 +737,25 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-155 is committed; KI-079 (baselines from CI) is the follow-up.
+None — CR-164 is complete, validated (typecheck/lint green, web 499, api rides 217)
+and committed.
 
 ## Next
 
-1. **KI-079**: refresh the ride-detail visual baselines from
-   the failed CI run's `*-actual.png` (KI-079, `.claude/rules/testing.md`).
-2. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is reachable
+1. **`coverage-baseline.json` refresh** — `pnpm test:coverage && pnpm coverage:baseline`
+   in the CI environment (Postgres/Redis/S3 up, the live-test flags set, no
+   `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, see `.claude/rules/testing.md` → Coverage);
+   `packages/ui` is at 100 % lines now, so the floor can rise.
+2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
+   style id from their 2GIS account; then an additive `theme` option on
+   `MapRenderOptions` mapped inside `packages/maps-2gis`.
+3. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is reachable
    from this machine (KI-056); the seed could also fill requirements.
-3. KI-078 — hide the discovery map's fullscreen toggle while the map is degraded.
-4. Before launch: a commercial 2GIS key (KI-075); first real deployment
-   (KI-045/KI-001).
-5. 2GIS dark basemap style (KI-057).
+4. Before launch: a commercial 2GIS key (KI-075); first real deployment (KI-045).
+5. Possibly flaky: `route-points-stops.spec.ts` passed only on retry in CI twice —
+   worth a look if it recurs.
 
-CR-148 is the only other unchecked ticket in `docs/tasks.md`.
+`docs/tasks.md` has no unchecked tickets.
 
 ## Important decisions
 
@@ -892,7 +913,8 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
 - «Топокарта»/pace-group follow-ups (CR-115…CR-120): the 2GIS basemap stays light
   in the dark theme (KI-057); `routePreview` samples the full stored geometry on
   every list request (KI-058); the rider list has no avatars (KI-059); the
-  discovery list's «Старт: …» only has the route-point label (KI-060); organizer
+  discovery list's «Старт: …» now falls back to the start point's description
+  (KI-060, resolved in CR-164); organizer
   ride sub-page links are a plain list in `EditRideForm`, not a registry (KI-061);
   pace step 0.5 is client-only (KI-062); `/login` has no `?next=` (KI-064, the
   next task).
@@ -902,9 +924,12 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
   generic, unconfigured-by-default seam, never exercised against a real
   endpoint (no vendor/credential to verify against). Metrics/tracing remain
   out of scope (ADR-016).
-- Provisional/deferred: `RideService`/registration-state terminology keys pending a
-  real DB enum (KI-021); shadcn CLI's vendoring target still points at `apps/web`, not
-  `packages/ui`, for any future structurally-complex primitive (KI-020). `Ride` cover
+- Provisional/deferred: `RideService` terminology keys pending a real DB enum
+  (KI-021 — still open; its registration-state half turned out to be a non-issue,
+  `registration_status` is a different axis from the CTA labels). `apps/web/
+components.json`'s shadcn alias still points at `apps/web`, but KI-020 is closed:
+  every primitive, including `Dialog`/`DatePicker`, was hand-vendored into
+  `packages/ui` and that file is used by no script or CI step. `Ride` cover
   images (CR-086, ADR-019) and `User`/`OrganizerProfile` avatars (CR-097) now both
   work end to end — KI-023 is fully resolved, no entity still lacks a photo path.
 
@@ -1103,4 +1128,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-09-29 (CR-157)
+2026-10-01 (CR-164)

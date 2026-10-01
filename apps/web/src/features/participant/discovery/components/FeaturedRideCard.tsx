@@ -8,6 +8,7 @@ import {
   cn,
   formatDistance,
   formatRideStartLine,
+  formatStartPlace,
 } from 'ui';
 import {
   buildRideCardMetrics,
@@ -38,6 +39,9 @@ export function FeaturedRideCard({ ride }: { ride: PublicRideListItem }) {
   const metrics = buildRideCardMetrics(ride);
   const seats = rideCardSeats(ride);
   const cancelled = ride.status === 'cancelled';
+  // KI-060: «Старт» as a label says nothing — fall back to the point's
+  // description, same as the legend row and ride detail.
+  const startPlace = formatStartPlace(ride.startLabel, ride.startDescription);
   const href = `/rides/${ride.id}`;
 
   return (
@@ -81,9 +85,9 @@ export function FeaturedRideCard({ ride }: { ride: PublicRideListItem }) {
           >
             {ride.title}
           </h2>
-          {ride.startLabel ? (
+          {startPlace ? (
             <p className="text-body-sm text-text-muted">
-              {RIDE_DISCOVERY_ROW_TERMS.startPrefix}: {ride.startLabel}
+              {RIDE_DISCOVERY_ROW_TERMS.startPrefix}: {startPlace}
             </p>
           ) : null}
         </div>

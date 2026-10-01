@@ -247,11 +247,14 @@ distinct from `/mine`'s `(createdAt desc, id desc)`. A malformed `cursor` →
 `400 invalid_cursor`. **CR-116** (discovery cards) — additive item fields
 (`PublicRideListItem`, this endpoint only; `GET /v1/registrations/mine` keeps plain
 `PublicRide`): `registrationsCount` (active registrations), `startLabel` (label of the
-ride's oldest `start` route point, `null` if none/unlabelled), `routePreview` (the
+ride's oldest `start` route point, `null` if none/unlabelled), `startDescription`
+(**CR-164**, KI-060 — that same point's `description`, `null` if unset; the card falls
+back to it when the label only repeats the point type, e.g. just «Старт», which is the
+fallback ride detail already applied), `routePreview` (the
 stored route geometry as at most 40 `[lat, lng]` pairs, 5 decimals — Douglas–Peucker by
 point budget over the full geometry, computed when the route is written and stored in
 `routes.preview` (KI-058); `null` without a route; for a card sketch, never navigation), `groups` (`[{ name, paceKmh }]` in `position` order,
-`[]` without groups). Computed with four batched queries per page, never per row.
+`[]` without groups). Computed with five batched queries per page, never per row.
 **CR-153** (discovery filter chips) — additive, all optional: `?startsFrom=`/
 `?startsTo=` (ISO 8601 datetime with offset; the lower bound is never earlier
 than now), `?paceMin=`/`?paceMax=` (km/h, 0–100, inclusive — a ride with pace

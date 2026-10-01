@@ -17,40 +17,6 @@ as part of closing the issue, not as a periodic batch cleanup.
 
 ## Open
 
-### KI-001 — No deployment artifacts exist
-
-Status: narrowed 2026-09-17 (CR-074). Discovered: 2026-09-11 (pre-foundation audit).
-Problem: no `Dockerfile`, no `.dockerignore`, no production manifest, no reverse proxy
-config. `docker-compose.yml` is local development infrastructure only and says so.
-CR-074 added `apps/web/Dockerfile`, `apps/api/Dockerfile`, and a root `.dockerignore`
-(multi-stage, non-root runtime user, Next.js `output: 'standalone'` for `apps/web`,
-ADR-017's esbuild bundle pruned to a production-only `node_modules` via `pnpm deploy`
-for `apps/api`) — see `docs/changelog.md` for the full mechanics. Still missing: a
-production manifest and reverse proxy config putting both images behind one origin
-(ADR-013) — that stays CR-075.
-Impact: the project still cannot be deployed to a server end to end, but the two
-application images themselves are no longer the missing piece.
-Workaround: none needed for CR-075 — the images exist now.
-Next action: CR-075. (Neither new Dockerfile has had an actual `docker build` run
-against it yet — see KI-019, same root cause, same environment.)
-
-### KI-009 — Contract/model follow-ups found in the audit
-
-Status: open. Discovered: 2026-09-11.
-Problem: registration is not idempotent against network retries (CR-083); the geo query
-approach for map discovery is undecided (CR-084); GPX parsing would block the Node event
-loop if done synchronously in a request (CR-085); the cover image pipeline is unspecified
-(CR-086).
-Impact: each is cheap to address before the related feature is built and expensive after.
-Next action: CR-083..CR-086, each before its dependent feature task.
-
-### KI-010 — ADR-010 map boundary is enforced by review only
-
-Status: open. Discovered: earlier; restated 2026-09-11.
-Problem: the lint rule forbidding direct 2GIS SDK imports outside `packages/maps-2gis`
-does not exist yet.
-Next action: CR-056.
-
 ### KI-021 — `RideService`/registration-state keys in the terminology module are provisional
 
 Status: open. Discovered: 2026-09-13 (CR-064).
@@ -75,49 +41,20 @@ the two drift apart silently. Ride status (`draft`/`published`/`registration_ope
 `registration_closed`/`started`/`finished`/`cancelled`) and bicycle type
 (`road`/`gravel`/`mtb`/`any`) are NOT affected — both already have an authoritative source
 in `docs/product.md`.
-
-### KI-020 — shadcn CLI's default alias writes components into `apps/web`, not `packages/ui`
-
-Status: open. Discovered: 2026-09-13 (CR-063).
-Problem: `apps/web/components.json` (scaffolded in CR-002) sets `aliases.ui` to
-`@/components/ui` — shadcn's own CLI default, which generates vendored components
-directly inside `apps/web`. `docs/design.md` §9/§14 requires shared components
-(`Button`, `Card`, `MetricTile`, ...) to be vendored into `packages/ui` instead, so both
-cabinets consume one copy and `.claude/rules/extensibility.md`'s regression discipline
-applies to them.
-Impact: none yet — no components are vendored (`packages/ui/src/index.ts` is still
-`export {}`). Running `npx shadcn add <component>` as-is today would generate into the
-wrong package.
-Workaround: none needed until a component is actually vendored.
-Next action: CR-065/CR-066 (first shared components) must either point
-`components.json` at `packages/ui` (and confirm shadcn's CLI can target a different
-workspace package) or vendor manually and re-theme by hand, per docs/design.md §14's
-"vendored ... and re-themed to these tokens" framing. Decide before writing the first
-component, not after several have already landed in the wrong place.
-Update 2026-09-13 (CR-065): still open, but CR-065's four components
-(`MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale`) did NOT trigger this —
-none are shadcn-registry primitives, and `StatusBadge` was deliberately built
-self-contained (not composed from a separate generic `Badge`) specifically to avoid
-pulling this question into that task's scope. Stays open for whichever CR vendors an
-actual shadcn primitive (`Button`, `Card`, `Badge`, ...) into `packages/ui`.
-Update 2026-09-13 (CR-066): `Skeleton` _is_ a real shadcn-registry primitive — this
-task chose to hand-vendor it directly against `packages/ui`'s own tokens/`cn` instead
-of resolving the CLI-targeting question, since the upstream component is trivial (one
-`div`, two classes: `animate-pulse rounded-md bg-muted`, re-themed here to
-`motion-safe:animate-pulse rounded-md bg-text-muted/15`). This is a reasonable
-per-component escape hatch for anything this simple, but does not resolve the general
-question — a structurally complex primitive (`Dialog`, `Select`, `DatePicker`, ...)
-would be real, error-prone work to hand-roll and should either repoint
-`components.json` at `packages/ui` (confirming the CLI can target a non-root workspace
-package first) or make a deliberate one-time call to keep hand-vendoring everything.
-Still open; next action unchanged until whichever CR needs the first non-trivial
-primitive.
-Update 2026-09-13 (CR-011): `Button`/`Input`/`Card` are real shadcn-registry
-primitives too (unlike CR-065's four) but, like `Skeleton`, structurally trivial
-— hand-vendored directly against `packages/ui`'s tokens/`cn` rather than
-resolving the CLI-targeting question. `FormField` has no shadcn equivalent
-(this project's own composition of label + control + error/hint), so it isn't
-relevant to this issue either way. Still open; next action unchanged.
+Update 2026-10-01 (CR-164, re-verified against the code): still open, and the
+registration half is now half-answered. A `registration_status` pgEnum _does_
+exist (`packages/db/src/schema/registration.ts`: `active`/`cancelled`), but it
+does not collide with `REGISTRATION_ACTION_TERMS`' keys — those are
+call-to-action/state _labels_ (`register`/`cancel`/`waitlisted`/`full`/
+`joinWaitlist`/`leaveWaitlist`), a different axis from a persisted status, so
+there is nothing to reconcile there and the `terminology.ts` doc comment saying
+"no `Registration` status enum exists yet either" is now simply out of date.
+The `RideServiceKey` half is unchanged and is the real remaining risk: there is
+still no `ride-service.ts` schema file and no `ride_service` pgEnum anywhere in
+`packages/db`, and the snake_case keys (`support_vehicle`, `medical_support`,
+`bicycle_transport`, `changing_room`) still appear nowhere outside
+`packages/ui/src/terminology.ts` — no DB, API or `packages/types` consumer.
+Next action unchanged for that half.
 
 ### KI-026 — No verify-email web screen exists, and two organizer actions now hard-depend on it
 
@@ -430,19 +367,6 @@ style editor), pass it through `MapRenderOptions` as an additive provider-neutra
 option (e.g. a `theme: 'light' | 'dark'`, mapped to a style id inside
 `packages/maps-2gis`), switch it when the theme changes, and re-check the halo
 colours on both basemaps. Next task after KI-064.
-
-### KI-060 — Discovery's «Старт: …» only knows the start route-point label
-
-Status: open. Discovered: 2026-09-23 (CR-118…CR-120 main-session review).
-Problem: `PublicRideListItem.startLabel` carries only the start route point's
-`label`. When an organizer labels it just «Старт», `formatStartPlace` hides the
-line on the discovery list (to avoid «Старт: Старт»), while ride detail falls
-back to the point's description — so the list shows no start place for such
-rides.
-Impact: low — the ride's map pin still shows where it starts.
-Workaround: organizers can name the start point by place («Парк Горького»).
-Next action: send the start point's description too (additive field) or add a
-dedicated start-place field on `Ride`, and use the same fallback on both screens.
 
 ### KI-075 — The 2GIS key is a demo key: routing refuses points over 50 km apart
 

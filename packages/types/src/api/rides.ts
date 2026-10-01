@@ -198,6 +198,10 @@ export type PublicRide = Ride & { organizer: RideOrganizerSummary };
 // `getRideListExtras`).
 // - `registrationsCount`: active registrations, same count `GetRideResponse` has.
 // - `startLabel`: label of the ride's `start` route point, `null` if none/unlabelled.
+// - `startDescription` (CR-164, KI-060): that same point's description, so the
+//   card can fall back to it when the label only repeats the point type
+//   («Старт») — `formatStartPlace`'s second argument, the same fallback ride
+//   detail already used. `null` if none/unset.
 // - `routePreview`: the stored route geometry simplified to at most
 //   `ROUTE_PREVIEW_MAX_POINTS` `[lat, lng]` pairs (for a small inline sketch, not
 //   for navigation), `null` without a route.
@@ -207,6 +211,7 @@ export const ROUTE_PREVIEW_MAX_POINTS = 40;
 export interface PublicRideListItem extends PublicRide {
   registrationsCount: number;
   startLabel: string | null;
+  startDescription: string | null;
   routePreview: Array<[number, number]> | null;
   groups: Array<{ name: string; paceKmh: number }>;
   // CR-153: `waiting` queue entries, a count only — the same number

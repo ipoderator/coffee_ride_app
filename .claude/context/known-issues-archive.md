@@ -2112,3 +2112,148 @@ project-wide.
 Resolution (CR-162, owner decision): `PUT /v1/rides/:id/participants-visibility`
 — hide at any status; re-show refused (`409 participants_visibility_locked`)
 while the ride has active registrations.
+
+### KI-001 — No deployment artifacts exist
+
+Status: narrowed 2026-09-17 (CR-074). Discovered: 2026-09-11 (pre-foundation audit).
+Problem: no `Dockerfile`, no `.dockerignore`, no production manifest, no reverse proxy
+config. `docker-compose.yml` is local development infrastructure only and says so.
+CR-074 added `apps/web/Dockerfile`, `apps/api/Dockerfile`, and a root `.dockerignore`
+(multi-stage, non-root runtime user, Next.js `output: 'standalone'` for `apps/web`,
+ADR-017's esbuild bundle pruned to a production-only `node_modules` via `pnpm deploy`
+for `apps/api`) — see `docs/changelog.md` for the full mechanics. Still missing: a
+production manifest and reverse proxy config putting both images behind one origin
+(ADR-013) — that stays CR-075.
+Impact: the project still cannot be deployed to a server end to end, but the two
+application images themselves are no longer the missing piece.
+Workaround: none needed for CR-075 — the images exist now.
+Next action: CR-075. (Neither new Dockerfile has had an actual `docker build` run
+against it yet — see KI-019, same root cause, same environment.)
+Resolution (CR-164, verification only — no code change): all of KI-001's missing
+artifacts exist on `main`. `apps/web/Dockerfile`, `apps/api/Dockerfile` and the
+root `.dockerignore` landed in CR-074; CR-075 (ADR-018) added the production
+manifest `docker-compose.prod.yml` plus the `deploy/Caddyfile` reverse proxy
+putting both images behind one origin (ADR-013), with TLS, resource limits and a
+restart policy; CR-134 added the `deploy/smoke/docker-compose.smoke.yml`
+production Docker smoke test, which is what finally exercised an actual
+`docker build`/boot of these images and closes the parenthetical KI-019 caveat
+for this entry. The project can now be deployed end to end. What remains is
+_running_ that manifest against a real host with real DNS/TLS, which is KI-045's
+scope, not this one.
+
+### KI-009 — Contract/model follow-ups found in the audit
+
+Status: open. Discovered: 2026-09-11.
+Problem: registration is not idempotent against network retries (CR-083); the geo query
+approach for map discovery is undecided (CR-084); GPX parsing would block the Node event
+loop if done synchronously in a request (CR-085); the cover image pipeline is unspecified
+(CR-086).
+Impact: each is cheap to address before the related feature is built and expensive after.
+Resolution (CR-164, verification only — no code change): all four follow-up CRs
+shipped. CR-083 made register/waitlist-join idempotent against network retries;
+CR-084 decided and implemented the map-discovery geo query (with CR-026);
+CR-085 settled GPX parsing's event-loop safety (with CR-027); CR-086 specified
+and built the cover image pipeline (ADR-019). Each landed before its dependent
+feature, as this entry asked.
+
+### KI-010 — ADR-010 map boundary is enforced by review only
+
+Status: open. Discovered: earlier; restated 2026-09-11.
+Problem: the lint rule forbidding direct 2GIS SDK imports outside `packages/maps-2gis`
+does not exist yet.
+Next action: CR-056.
+Resolution (CR-164, verification only — no code change): CR-056 added the rule.
+Every workspace member's `eslint.config.mjs` now carries a
+`no-restricted-imports` entry rejecting any specifier matching the `*2gis*`
+glob (verified present in `apps/web`, `apps/api`, `packages/ui`, `packages/db`
+and `packages/config`); `packages/maps-2gis` is the single opt-out via
+`nodeLibraryConfig({ allowMapsSdkImports: true })`, and the two legitimate
+composition points (`apps/web/src/lib/maps/create-map-renderer.ts`,
+`apps/api/src/plugins/maps.ts`) carry narrow `files`-scoped overrides rather
+than a blanket relaxation. ADR-010's boundary is lint-enforced, not
+review-enforced. See `.claude/rules/maps.md` → "Adapter package split".
+
+### KI-020 — shadcn CLI's default alias writes components into `apps/web`, not `packages/ui`
+
+Status: open. Discovered: 2026-09-13 (CR-063).
+Problem: `apps/web/components.json` (scaffolded in CR-002) sets `aliases.ui` to
+`@/components/ui` — shadcn's own CLI default, which generates vendored components
+directly inside `apps/web`. `docs/design.md` §9/§14 requires shared components
+(`Button`, `Card`, `MetricTile`, ...) to be vendored into `packages/ui` instead, so both
+cabinets consume one copy and `.claude/rules/extensibility.md`'s regression discipline
+applies to them.
+Impact: none yet — no components are vendored (`packages/ui/src/index.ts` is still
+`export {}`). Running `npx shadcn add <component>` as-is today would generate into the
+wrong package.
+Workaround: none needed until a component is actually vendored.
+Next action: CR-065/CR-066 (first shared components) must either point
+`components.json` at `packages/ui` (and confirm shadcn's CLI can target a different
+workspace package) or vendor manually and re-theme by hand, per docs/design.md §14's
+"vendored ... and re-themed to these tokens" framing. Decide before writing the first
+component, not after several have already landed in the wrong place.
+Update 2026-09-13 (CR-065): still open, but CR-065's four components
+(`MetricTile`/`MetricRow`/`StatusBadge`/`DifficultyScale`) did NOT trigger this —
+none are shadcn-registry primitives, and `StatusBadge` was deliberately built
+self-contained (not composed from a separate generic `Badge`) specifically to avoid
+pulling this question into that task's scope. Stays open for whichever CR vendors an
+actual shadcn primitive (`Button`, `Card`, `Badge`, ...) into `packages/ui`.
+Update 2026-09-13 (CR-066): `Skeleton` _is_ a real shadcn-registry primitive — this
+task chose to hand-vendor it directly against `packages/ui`'s own tokens/`cn` instead
+of resolving the CLI-targeting question, since the upstream component is trivial (one
+`div`, two classes: `animate-pulse rounded-md bg-muted`, re-themed here to
+`motion-safe:animate-pulse rounded-md bg-text-muted/15`). This is a reasonable
+per-component escape hatch for anything this simple, but does not resolve the general
+question — a structurally complex primitive (`Dialog`, `Select`, `DatePicker`, ...)
+would be real, error-prone work to hand-roll and should either repoint
+`components.json` at `packages/ui` (confirming the CLI can target a non-root workspace
+package first) or make a deliberate one-time call to keep hand-vendoring everything.
+Still open; next action unchanged until whichever CR needs the first non-trivial
+primitive.
+Update 2026-09-13 (CR-011): `Button`/`Input`/`Card` are real shadcn-registry
+primitives too (unlike CR-065's four) but, like `Skeleton`, structurally trivial
+— hand-vendored directly against `packages/ui`'s tokens/`cn` rather than
+resolving the CLI-targeting question. `FormField` has no shadcn equivalent
+(this project's own composition of label + control + error/hint), so it isn't
+relevant to this issue either way. Still open; next action unchanged.
+Resolution (CR-164, verification only — no code change): resolved by the route
+the later updates above were already converging on — every shared primitive was
+hand-vendored directly into `packages/ui` against its own tokens/`cn`, including
+the structurally non-trivial ones this entry was explicitly holding itself open
+for. `packages/ui/src/index.ts` exports `Dialog`/`ConfirmDialog`/`Toast`
+(CR-103, which that file's own header already credits with "resolving KI-020's
+Dialog/Toast half"), plus `DatePicker`, `NavMenu`, `SegmentedControl`,
+`Avatar`/`AvatarStack`, `FileInput` and the CR-011/CR-065/CR-066 primitives.
+`apps/web/src/components/ui/` does not exist — the CLI was never pointed at
+`apps/web` in practice, so the misconfigured alias never caused the harm this
+entry predicted. `apps/web/components.json` is left as-is deliberately: it is
+unused by any script or CI step, and repointing it would imply a CLI-targeting
+claim nobody has verified. Should anyone ever run `npx shadcn add` here, the
+standing convention is this project's: hand-vendor into `packages/ui`.
+
+### KI-060 — Discovery's «Старт: …» only knows the start route-point label
+
+Status: open. Discovered: 2026-09-23 (CR-118…CR-120 main-session review).
+Problem: `PublicRideListItem.startLabel` carries only the start route point's
+`label`. When an organizer labels it just «Старт», `formatStartPlace` hides the
+line on the discovery list (to avoid «Старт: Старт»), while ride detail falls
+back to the point's description — so the list shows no start place for such
+rides.
+Impact: low — the ride's map pin still shows where it starts.
+Workaround: organizers can name the start point by place («Парк Горького»).
+Next action: send the start point's description too (additive field) or add a
+dedicated start-place field on `Ride`, and use the same fallback on both screens.
+Resolution (CR-164): the first option — an additive `startDescription` on
+`PublicRideListItem`, not a new `Ride` column. `getRideListExtras` already
+reads the oldest `start` route point for `startLabel`, so its `description`
+comes back from the same `selectDistinctOn` query (still one query, no extra
+round trip). Both discovery call sites now pass it as `formatStartPlace`'s
+second argument, which is the fallback ride detail (`timeline.ts`,
+`RideDetailView`) had been applying all along — so the three screens finally
+agree. `FeaturedRideCard` was additionally rendering `ride.startLabel` raw
+rather than through `formatStartPlace`, so it showed the literal «Старт: Старт»
+this entry describes; it goes through the formatter now, which also means a
+start point with neither a usable label nor a description renders no start line
+instead of a meaningless one. Regression coverage:
+`ride-groups.routes.test.ts` (the API carries both fields),
+`RideGrid.test.tsx` (featured card: description fallback, and no line when
+neither says where) and `discovery.test.tsx` (legend row fallback).
