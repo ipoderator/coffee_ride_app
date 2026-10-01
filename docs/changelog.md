@@ -2621,3 +2621,212 @@ suites skipped themselves — exactly what `.claude/rules/testing.md` warns abou
 local Redis also needs its password (`redis://:redis-dev-only@127.0.0.1:6379`, from
 `.env`'s commented line); CI's passwordless URL yields `NOAUTH` against it. With the
 full stack up, `apps/api` runs 546 passed / 0 skipped.
+
+## 2026-10-01 — CR-169 — Contact editing for a published ride (KI-081)
+
+Summary: CR-165 shipped `PUT /v1/rides/:id/contact`, which deliberately accepts a
+change at any ride status — a contact that goes stale after publication (changed
+number, deleted account) is exactly the case that must stay fixable — but the
+endpoint had no UI: `EditRideForm` renders the whole form read-only once a ride
+leaves `draft`, so the contact fields were disabled there too. The organizer could
+publish a ride with a wrong contact and had no way to correct it from the app. The
+contact fields now stay enabled after publish and get their own «Сохранить способ
+связи» button that calls the endpoint directly.
+
+Shape deliberately copied from CR-162/KI-065's participants-visibility toggle, which
+solved the same "must stay editable after publish" problem: a dedicated request for
+the one field that survives the read-only flip, **not** a loosening of
+`RIDE_EDIT_TERMS.notEditable`. Every other field on the screen is still read-only
+once the ride leaves `draft`, and a draft still saves its contact through the
+whole-form `PATCH` — so there is exactly one save path per state rather than two
+competing ones for the same field. The handler validates through
+`setRideContactRequestSchema` before sending and puts the schema's _parsed_ output on
+the wire, so the normalized value matches what the draft path already sends rather
+than relying on the server to re-normalize.
+
+`RideContactFields` gained an optional `hint` prop defaulting to the create wizard's
+existing wording — additive, no call-site change required
+(`.claude/rules/extensibility.md`); the edit form overrides it after publish with the
+new `contactHintPublished`. The component's `disabled` is now driven by the save
+states (`isPending || isSavingContact`) instead of `!isDraft`. No new endpoint, no
+schema change, no migration — backend was already complete.
+
+Files: `apps/web/src/features/organizer/rides/components/EditRideForm.tsx` (own
+`handleSaveContact` + `isSavingContact`, button, hint switch);
+`apps/web/src/features/organizer/rides/components/RideContactFields.tsx` (optional
+`hint` prop); `apps/web/src/features/organizer/rides/api.ts` (re-export
+`setRideContactRequestSchema`; `setRideContact` already existed);
+`packages/ui/src/terminology.ts` (`contactHintPublished`, `contactSave`,
+`contactSavePending`, `contactSaveError`);
+`apps/web/src/features/organizer/rides/rides.test.tsx`;
+`apps/web/src/stories/RideContactFields.stories.tsx`.
+
+Validation: `apps/web` unit 520 passed (5 new cases: published save sends the
+normalized pair and not `updateRide`, clearing to `null`, an invalid value rejected
+before the API is called, a server error surfaced rather than swallowed, and the
+draft path still saving through the whole form with no second button); 77 Storybook
+stories pass with axe at `test: 'error'` including the new `EditableAfterPublish`;
+`packages/ui` 208 passed; `apps/api` 546 passed / 0 skipped against the live stack;
+typecheck + lint green across the workspace.
+
+Coverage: `pnpm coverage:check` holds at or above baseline — `apps/web` rose
++0.30 pp lines / +0.27 pp statements, above the 0.1 pp tolerance, so
+`coverage-baseline.json` was regenerated (`pnpm coverage:baseline`). Two
+`modules/auth` entries kept their existing higher floor rather than being lowered.
+
+Decisions: none — additive UI plus an optional shared-component prop, no ADR needed.
+The read-only rule for the rest of the form is unchanged, which is what KI-081's own
+"next action" asked for.
+
+Follow-up: the save control also shows on a cancelled/finished ride, matching the
+endpoint, which accepts any status by design — deliberately not given a stricter
+frontend-only rule than the API it calls. KI-081 closed and moved to
+`.claude/context/known-issues-archive.md`.
+
+Note for the next session: the long-running Storybook dev server on :6006 served a
+pre-edit copy of `packages/ui` to the MCP `test-run` tool, so a story asserting a
+newly added terminology string failed with `undefined` there while a fresh
+`npx vitest run --project storybook` passed. Clearing
+`apps/web/node_modules/.cache/storybook` did not help — the server process itself
+needs restarting after a `packages/ui` change.
+
+## 2026-10-01 — CR-170 — Micro-animations instead of decoration
+
+Summary: the owner asked for micro-animations in place of decorative effects —
+a smooth track appearance, a light map shift when a ride is selected, the
+difficulty scale filling in, the registration status changing, and a neat
+success after an action — and explicitly not glass, gradient cards or heavy
+shadows (already banned by `docs/design.md` §1). All five are in, built on one
+shared vocabulary rather than per-component durations.
+
+- **Motion tokens** (`packages/ui/src/tokens.css` `@theme`): `--ease-quiet`
+  (`cubic-bezier(.2,0,0,1)`) and `animate-track-draw` (1.1 s), `animate-check-draw`,
+  `animate-rise-in` (260 ms), `animate-fade-in`, `animate-fade-out`,
+  `animate-segment-fill`. Every use is `motion-safe:`, so reduced motion gets the
+  final state at once; JS-driven motion uses the new
+  `apps/web/src/lib/motion/reduced-motion.ts` (extracted from `DiscoveryList`).
+- **Track**: `RouteCover` and `TrackCover` draw the route in via `pathLength="1"` +
+  `stroke-dasharray="1"`; the finish pin / typed pins fade in as the line reaches
+  them. Grid cards below the fold hold the first frame
+  (`[animation-play-state:paused]`) until `useInViewOnce` (new, `packages/ui`)
+  sees them — otherwise the draw would play unseen on mount. Without
+  `IntersectionObserver` the hook reports visible at once, so nothing can stay
+  stuck hidden.
+- **Map**: `MapHandle.panTo(point, { durationMs })` — additive, implemented in
+  `packages/maps-2gis` as MapGL `setCenter` with `easeOutCubic`, `animate: false`
+  for 0 ms; `.claude/rules/maps.md` contract updated. `DiscoveryMap` takes an
+  optional `focusId` (the _selected_ ride: a pin click or a focused row) and eases
+  there in 450 ms, zoom unchanged. Keyed on the selection, never on hover or a
+  refetch — a hover sweep must not drag the camera.
+- **Difficulty**: `DifficultyScale` gained optional `animated` (default off — a grid
+  of cards filling at once is noise); filled segments go hollow → ink left to right,
+  70 ms apart, when the scale scrolls into view. On for the ride page's chip.
+- **Registration status**: `RegistrationTicket`'s card eases its frame colour
+  (`frame` → `success`/`danger`) and raises in its new content when the state
+  changes _after mount_ (render-time previous-value pattern, no extra effect); the
+  first render is still. The seats bar slides to a new count.
+- **Success**: the toast rises in, a success draws a check mark (`aria-hidden`; the
+  text carries the meaning) and fades out over 200 ms before leaving — total life
+  4.2 s instead of 4 s.
+
+Stories (new): `DifficultyScale`, `Toast`, `TrackCover`, `RegistrationTicket`
+(including a `StateChange` play test). `docs/design.md` §5 gains a "Motion"
+subsection as the reference.
+
+Validation: `apps/web` unit 527 passed; Storybook 90 passed with axe; `packages/ui`
+212; `packages/maps-2gis` 51 (5 contract tests skipped as always); `apps/api` 546
+against the live stack; typecheck + lint green across the workspace. Checked in a
+real browser that the track draws progressively, that reduced motion renders it
+complete at once, and that Playwright's `animations: 'disabled'` fast-forwards even
+a held (paused) draw to the finished track, so visual-regression baselines are
+unaffected. Coverage holds above baseline (`apps/web` +0.16 pp lines,
+`packages/maps-2gis` functions +6.2 pp); `coverage-baseline.json` regenerated.
+
+Known gap: a test of the 2GIS adapter's superseded-render handle (two concurrent
+`render()` calls on one container) was attempted and dropped — in Vitest the
+second concurrent render reaches the real `@2gis/mapgl` `load()` past the module
+mock, even after warming the import. The stub now shares one `inert` no-op instead
+of five inline functions; its behaviour is unchanged and still untested.
+
+Decisions: none needing an ADR — additive interface/prop changes and tokens inside
+the existing «Ночной старт» direction.
+
+## 2026-10-01 — CR-171 — The discovery map as the main emotional layer
+
+Summary: the owner asked to make the map the main emotional layer of `/`: a soft
+draw-in of the route when a ride card is chosen, a pulse of the start point, and
+unobtrusive elevation/difficulty markers right on the line. All three are in,
+behind additive `maps-core` contract fields implemented only in the 2GIS adapter.
+
+- **Route draw-in** (`MapPolylineInput.drawInMs`, 900 ms): MapGL's `Polyline` has
+  no `setCoordinates`, so the adapter rebuilds the line's prefix every animation
+  frame (`linePrefix`, by length, ending on an interpolated point), creating the
+  new object before destroying the old so it never blinks. The pace is constant
+  along the line — so a note `f` of the way along is reached at `f × 900 ms`. An
+  update _without_ `drawInMs` mid-draw continues the running draw on the new
+  points: the full stored geometry arriving ~120–300 ms after the ≤ 40-point
+  preview no longer restarts or pops the line. `DiscoveryMap` starts a draw only
+  when the active ride changes (hover, focus or pin), not on a theme switch.
+- **Start pulse** (`MapMarkerInput.pulse`, `'ring'`): three soft rings expand and
+  fade out of the pin (Web Animations API, inline — no stylesheet shipped), then
+  stop. Finite on purpose: WCAG 2.2.2, and CR-170's "no loops" rule stands.
+- **Notes on the line** (`shape: 'tag'`, `meter`, `revealDelayMs`): a tick on the
+  point and a small paper pill above it in `--map-route` ink — the difficulty word
+  with the §6 segment meter halfway along the line, and «▲ 214 м» at the summit
+  once the full geometry shows a climb of ≥ 30 m whose top is not at either end
+  (`lib/route-highlights.ts`). Non-interactive (`pointer-events:none`, below every
+  pin) and faded in as the drawing line reaches them; each note keeps the delay it
+  was first given, so a later update never re-fades it.
+- **Marker reconciliation**: `setMarkers` now reconciles by `id` — an unchanged
+  marker keeps its SDK object, a moved one is moved in place, only a changed look
+  is rebuilt; repeated ids still get their own marker. Without this, the summit
+  note appearing (or any unrelated update) recreated every pin and cut the pulse.
+  Transparent for the ride page and the route builder.
+- Reduced motion: no draw, no pulse, no reveal — all shown at once.
+
+Verified live against the dev stack with the MapGL key (software WebGL in headless
+Chromium): the line draws progressively, the chosen start pulses, «Средний» and
+«▲ 192 м» sit on the Krylatskoe route; the Patriarshie loop correctly gets no
+summit (its top is in the first 1 % of the route, on the start pin). Console
+errors seen there are pre-existing: the anonymous session check's 401 and 2GIS
+asset DNS failures (KI-056).
+
+Validation: `apps/web` unit 538 passed (5 new DiscoveryMap cases + 6 for
+`route-highlights`); `packages/maps-2gis` 62 (11 new: reconciliation, pulse, tag,
+reveal, draw-in with a fake frame clock, `linePrefix`); `packages/ui` 212;
+Storybook 90; `apps/api` 546 on the live stack; typecheck + lint green. Coverage
+holds (`maps-2gis` +3.6 pp lines, `apps/web` +0.4 pp); baseline regenerated.
+
+No story for the map effects: they are drawn by the 2GIS adapter's own DOM inside
+a live MapGL map, which Storybook cannot render (no key, and stories may not import
+`maps-2gis` — `.claude/rules/maps.md`'s lint rule). Covered by the adapter's unit
+tests and the live check above.
+
+Decisions: none needing an ADR — additive contract fields, same precedent as
+CR-112/CR-118.
+
+## 2026-10-01 — CR-172 — Frame the whole route when a ride is selected
+
+Summary: after CR-171 the owner chose to frame the selected route instead of
+CR-170's pan to its start. With only a pan (zoom unchanged), a long route — the
+69,5 km Krylatskoe ride — drew mostly off-screen, and its difficulty/summit notes
+with it. Selecting a ride on `/` (a pin click or a focused row; a hover still never
+moves the camera) now eases the camera to fit the start plus the route: the cached
+full geometry when it is already here, otherwise the preview, whose bounds match to
+within metres. One move per choice — the full geometry arriving later does not
+re-fit. A ride without a route keeps the eased pan to its start. Both moves are
+600 ms (was 450), a jump under reduced motion.
+
+Contract: `MapFitOptions.durationMs` (additive) — the 2GIS adapter passes MapGL's
+`animation` option (`easeOutCubic`, or `animate: false` for 0), also for the
+single-point center/zoom case; omitted, the SDK call is byte-for-byte what it was.
+A re-fit after a container resize strips the duration: it is a correction, not a
+move. `.claude/rules/maps.md` and `docs/design.md` §5 "Motion" updated.
+
+Verified live: selecting the Krylatskoe ride frames the whole loop with both notes
+(«Средний», «▲ 192 м») and the pulsing start in view.
+
+Validation: `apps/web` unit 539 (camera tests rewritten for fit/pan/cached
+line/hover/reduced motion); `packages/maps-2gis` 65 (animated fit, jump,
+single-point, resize re-fit immediate); typecheck + lint green; coverage holds,
+baseline regenerated.

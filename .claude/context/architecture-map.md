@@ -1055,3 +1055,16 @@ Ride
 → RideUpdate
 → Notification
 → Review
+
+**Motion (CR-170).** Motion tokens/keyframes live in `packages/ui/src/tokens.css`
+`@theme` (`ease-quiet`, `animate-*`), with `packages/ui/src/lib/use-in-view-once.ts`
+(`useInViewOnce`) to start a once-only animation on first view. JS-driven motion
+in `apps/web` reads `src/lib/motion/reduced-motion.ts`. `MapHandle` gained
+`panTo` (maps-core interface, 2GIS adapter implementation). Reference:
+`docs/design.md` §5 "Motion".
+
+**Discovery map layer (CR-171).** `apps/web/src/features/participant/discovery/
+lib/route-highlights.ts` (pure: line midpoint, summit) feeds `DiscoveryMap`'s
+notes; the 2GIS adapter (`packages/maps-2gis/src/render.ts`) owns the draw-in
+(`linePrefix`), the pulse, the `'tag'` element and id-based marker
+reconciliation.

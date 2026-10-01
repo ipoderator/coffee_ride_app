@@ -18,6 +18,7 @@ const renderState = vi.hoisted(() => ({
     setMarkers: ReturnType<typeof vi.fn>;
     setPolyline: ReturnType<typeof vi.fn>;
     fitBounds: ReturnType<typeof vi.fn>;
+    panTo: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   } | null,
   available: true,
@@ -33,6 +34,7 @@ vi.mock('@/lib/maps/create-map-renderer', () => ({
               setMarkers: vi.fn(),
               setPolyline: vi.fn(),
               fitBounds: vi.fn(),
+              panTo: vi.fn(),
               destroy: vi.fn(),
             };
             return renderState.handle as unknown as MapHandle;

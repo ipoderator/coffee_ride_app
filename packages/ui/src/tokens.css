@@ -270,4 +270,49 @@
   /* Elevation (§5): resting cards use a hairline border, no shadow — only
      overlays (popover/modal/sheet) get this one small, tight shadow. */
   --shadow-overlay: 0 4px 12px -4px rgb(0 0 0 / 0.16);
+
+  /* Motion (CR-170, docs/design.md §5 "Motion"): micro-animations instead of
+     decoration — short, finite, one quiet ease-out. Always applied through
+     `motion-safe:` so `prefers-reduced-motion` gets the final state at once
+     (§12). `track-draw` expects an SVG path with `pathLength="1"` and
+     `stroke-dasharray="1"`; `fill-mode: both` keeps it hidden until it starts. */
+  --ease-quiet: cubic-bezier(0.2, 0, 0, 1);
+  --animate-track-draw: track-draw 1100ms var(--ease-quiet) both;
+  --animate-check-draw: track-draw 320ms var(--ease-quiet) 140ms both;
+  --animate-rise-in: rise-in 260ms var(--ease-quiet) both;
+  --animate-fade-in: fade-in 400ms var(--ease-quiet) both;
+  --animate-fade-out: fade-out 200ms var(--ease-quiet) both;
+  --animate-segment-fill: segment-fill 240ms var(--ease-quiet) both;
+
+  @keyframes track-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  /* A difficulty segment going from hollow outline to solid ink. */
+  @keyframes segment-fill {
+    from {
+      background-color: transparent;
+      border-color: var(--border-input);
+    }
+  }
 }

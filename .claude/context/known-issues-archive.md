@@ -2257,3 +2257,37 @@ instead of a meaningless one. Regression coverage:
 `ride-groups.routes.test.ts` (the API carries both fields),
 `RideGrid.test.tsx` (featured card: description fallback, and no line when
 neither says where) and `discovery.test.tsx` (legend row fallback).
+
+### KI-081 — A published ride's organizer contact can only be changed through the API
+
+Status: open. Discovered: 2026-10-01 (CR-165, by its own scope decision).
+Problem: `PUT /v1/rides/:id/contact` deliberately accepts a change at any ride
+status, because a contact that goes stale after publication (changed number,
+deleted account) is exactly the case that must stay fixable. The organizer's
+edit screen, however, renders the _whole_ form read-only once a ride leaves
+`draft` (`RIDE_EDIT_TERMS.notEditable`), so the contact fields are disabled
+there too — consistent with that screen, but it means the endpoint has no UI.
+Impact: low-to-medium. An organizer who published a ride with a wrong or
+outdated contact cannot correct it from the app; registered participants would
+be left with a contact that doesn't work.
+Workaround: call `PUT /v1/rides/:id/contact` directly.
+Next action: add a contact control to the published-ride surface (next to the
+participants-visibility toggle, which solved the same "editable after publish"
+problem under KI-065) rather than loosening the edit form's read-only rule.
+
+Resolution (CR-169): the contact fields stay in `EditRideForm` and stay
+enabled after publish, with their own «Сохранить способ связи» button that
+calls `PUT /v1/rides/:id/contact` directly — exactly KI-065's shape for the
+participants-visibility toggle, and deliberately not a loosening of
+`RIDE_EDIT_TERMS.notEditable`: every other field on the screen is still
+read-only once the ride leaves `draft`. A draft is unchanged and still saves
+the contact through the whole-form `PATCH`, so there is one save path per
+state rather than two competing ones. The published-state hint is its own
+string (`contactHintPublished`); `RideContactFields` gained an optional
+`hint` prop defaulting to the create wizard's wording (additive, per
+`.claude/rules/extensibility.md`). Validation runs through
+`setRideContactRequestSchema` before the request, so the normalized value on
+the wire matches what the draft path sends. Regression coverage:
+five cases in `rides.test.tsx` (save, clear, invalid-before-API, server
+error, and the draft path keeping its single save) plus an
+`EditableAfterPublish` story.

@@ -47,8 +47,53 @@ describe('Toast', () => {
     act(() => {
       vi.advanceTimersByTime(4000);
     });
+    // CR-170: it fades out first, then leaves the DOM.
+    expect(
+      screen.getByText('Регистрация отменена.').parentElement!.className,
+    ).toContain('motion-safe:animate-fade-out');
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
 
     expect(screen.queryByText('Регистрация отменена.')).not.toBeInTheDocument();
+  });
+
+  it('rises in and draws a check mark for a success, not for other tones (CR-170)', () => {
+    function ShowBoth() {
+      const { showToast } = useToast();
+      return (
+        <>
+          <button type="button" onClick={() => showToast('Готово.')}>
+            Успех
+          </button>
+          <button type="button" onClick={() => showToast('Сбой.', 'danger')}>
+            Ошибка
+          </button>
+        </>
+      );
+    }
+    render(
+      <ToastProvider>
+        <ShowBoth />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Успех' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ошибка' }));
+
+    const success = screen.getByText('Готово.').parentElement!;
+    expect(success.className).toContain('motion-safe:animate-rise-in');
+    const mark = success.querySelector('[data-toast-mark]');
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
+    expect(mark!.querySelector('path')!.getAttribute('class')).toContain(
+      'motion-safe:animate-check-draw',
+    );
+    expect(
+      screen
+        .getByText('Сбой.')
+        .parentElement!.querySelector('[data-toast-mark]'),
+    ).toBeNull();
   });
 
   it('useToast without a ToastProvider ancestor fails soft, not throws', () => {

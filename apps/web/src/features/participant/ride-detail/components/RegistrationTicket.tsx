@@ -87,6 +87,7 @@ const FRAME_TONE = {
  * passed in as `footer`. Replaces CR-151's perforated ticket stub.
  */
 function TicketCard({
+  stateKey,
   tone,
   title,
   titleClassName,
@@ -94,6 +95,8 @@ function TicketCard({
   footer,
   children,
 }: {
+  /** CR-170: the registration state; a change after mount animates. */
+  stateKey: TicketState;
   tone: keyof typeof FRAME_TONE;
   title: string;
   titleClassName?: string;
@@ -101,18 +104,33 @@ function TicketCard({
   footer: ReactNode;
   children: ReactNode;
 }) {
+  // CR-170: a state change (registered, queued, cancelled…) is shown, not
+  // swapped — the frame colour eases over and the new content rises in. Only
+  // a change after mount counts: the page's first render stays still.
+  // Render-time "previous value" pattern, so no extra commit/effect.
+  const [seenState, setSeenState] = useState(stateKey);
+  const [changes, setChanges] = useState(0);
+  if (stateKey !== seenState) {
+    setSeenState(stateKey);
+    setChanges((count) => count + 1);
+  }
+  const changed = changes > 0;
+
   return (
     <div
       data-testid="ride-ticket"
       className={cn(
         'flex flex-col gap-4 rounded-3xl border-[1.5px] bg-bg-raised p-5',
+        'transition-colors duration-300 ease-quiet motion-reduce:transition-none',
         FRAME_TONE[tone],
       )}
     >
       <div className="flex min-h-7 flex-wrap items-center justify-between gap-2">
         <h3
+          key={changes}
           className={cn(
             'font-mono text-label text-text-secondary uppercase',
+            changed && 'motion-safe:animate-fade-in',
             titleClassName,
           )}
         >
@@ -124,7 +142,16 @@ function TicketCard({
           className="rounded-full px-2.5 py-1 text-xs leading-4 font-semibold"
         />
       </div>
-      {children}
+      <div
+        key={changes}
+        data-ticket-body
+        className={cn(
+          'flex flex-col gap-4',
+          changed && 'motion-safe:animate-rise-in',
+        )}
+      >
+        {children}
+      </div>
       {footer}
     </div>
   );
@@ -245,6 +272,8 @@ function Seats({
         <div
           className={cn(
             'h-full rounded-full',
+            // CR-170: a count change slides the bar, not jumps it.
+            'transition-[width] duration-500 ease-quiet motion-reduce:transition-none',
             few ? 'bg-warning-fill' : left === 0 ? 'bg-text-muted' : 'bg-brand',
           )}
           style={{ width: `${percent}%` }}
@@ -533,6 +562,7 @@ export function RegistrationTicket({
     const full = state === 'full';
     return (
       <TicketCard
+        stateKey={state}
         tone="frame"
         title={RIDE_TICKET_TERMS.startListLabel}
         status={statusTerm}
@@ -595,6 +625,7 @@ export function RegistrationTicket({
 
     return (
       <TicketCard
+        stateKey={state}
         tone="success"
         title={RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle}
         titleClassName="text-success"
@@ -723,6 +754,7 @@ export function RegistrationTicket({
       groups.find((group) => group.id === viewerWaitlistEntry.groupId) ?? null;
     return (
       <TicketCard
+        stateKey={state}
         tone="frame"
         title={RIDE_TICKET_TERMS.waitlistedTitle}
         titleClassName="text-info"
@@ -765,6 +797,7 @@ export function RegistrationTicket({
   if (state === 'cancelled') {
     return (
       <TicketCard
+        stateKey={state}
         tone="danger"
         title={RIDE_TICKET_TERMS.cancelledTitle}
         titleClassName="text-danger"
@@ -789,7 +822,13 @@ export function RegistrationTicket({
   } as const;
   const [title, hint] = quiet[state as keyof typeof quiet] ?? quiet.notOpen;
   return (
-    <TicketCard tone="frame" title={title} status={statusTerm} footer={footer}>
+    <TicketCard
+      stateKey={state}
+      tone="frame"
+      title={title}
+      status={statusTerm}
+      footer={footer}
+    >
       {state === 'notOpen' || state === 'closed' ? seats : null}
       <Hint>{hint}</Hint>
     </TicketCard>

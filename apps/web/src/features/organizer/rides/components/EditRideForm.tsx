@@ -41,6 +41,8 @@ import {
   openRegistration,
   publishRide,
   setParticipantsVisibility,
+  setRideContact,
+  setRideContactRequestSchema,
   startRide,
   updateRide,
   updateRideRequestSchema,
@@ -161,6 +163,9 @@ export function EditRideForm({
   const [isStarting, setIsStarting] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
+  // KI-081: the contact's own save path after publish — kept apart from
+  // `isPending` so the read-only form's disabled submit is not confused with it.
+  const [isSavingContact, setIsSavingContact] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
@@ -445,6 +450,57 @@ export function EditRideForm({
       );
     } finally {
       setIsSavingVisibility(false);
+    }
+  }
+
+  /**
+   * KI-081: the contact after publish. A draft still saves it with the whole
+   * form («Сохранить» → `PATCH`), so there is exactly one save path per state
+   * rather than two competing ones; once published, the form is read-only and
+   * this button is the contact's own `PUT /v1/rides/:id/contact`.
+   */
+  async function handleSaveContact() {
+    if (isSavingContact) return;
+
+    const payload = { contact: rideContactToRequest(contact) };
+    const parsed = setRideContactRequestSchema.safeParse(payload);
+    if (!parsed.success) {
+      const nextErrors: FieldErrors = {};
+      for (const issue of parsed.error.issues) {
+        // The schema reports the value's own failure at `contact.value`; the
+        // form shows it on the single visible input either way.
+        nextErrors.contact ??= issue.message;
+      }
+      setFieldErrors(nextErrors);
+      setFormError(null);
+      setSuccessMessage(null);
+      return;
+    }
+
+    setFieldErrors({});
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsSavingContact(true);
+
+    try {
+      // The schema's parsed output, not the raw draft: the normalized value is
+      // what the draft path already sends (`updateRideRequestSchema` transforms
+      // it too), so both paths put the same canonical form on the wire.
+      const response = await setRideContact(rideId, parsed.data.contact);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.contactSaved);
+    } catch (error) {
+      // A 404 here means "not found or not yours" — never revealed which
+      // (`rides.service.ts`'s `setRideContact`). Either way the organizer sees
+      // one actionable message rather than a status code.
+      setFormError(
+        error instanceof ApiError
+          ? RIDE_EDIT_TERMS.contactSaveError
+          : RIDE_EDIT_TERMS.loadError,
+      );
+    } finally {
+      setIsSavingContact(false);
     }
   }
 
@@ -798,18 +854,39 @@ export function EditRideForm({
           <legend className="text-body-sm font-semibold text-text">
             {RIDE_EDIT_TERMS.contactLabel}
           </legend>
-          {/* Draft-only, like every other field on this screen: a non-draft ride
-              renders the whole form read-only ({@link RIDE_EDIT_TERMS.notEditable}).
-              `PUT /v1/rides/:id/contact` already accepts a post-publish change —
-              the UI for it belongs with the published-ride controls, not in this
-              deliberately read-only form (noted in `known-issues.md`). */}
+          {/* KI-081: the one field on this screen that stays editable after
+              publish. `PUT /v1/rides/:id/contact` accepts a change at any status
+              on purpose — a contact that goes stale (changed number, deleted
+              account) is exactly the case that must remain fixable — so a
+              published ride gets its own save button below instead of the
+              read-only treatment the rest of the form keeps
+              ({@link RIDE_EDIT_TERMS.notEditable}). Same shape as KI-065's
+              visibility toggle: a dedicated request, not a loosened form rule. */}
           <RideContactFields
             idPrefix="ride-edit"
             value={contact}
             onChange={setContact}
-            disabled={isPending || !isDraft}
+            disabled={isPending || isSavingContact}
             error={fieldErrors.contact}
+            hint={
+              isDraft
+                ? RIDE_EDIT_TERMS.contactHint
+                : RIDE_EDIT_TERMS.contactHintPublished
+            }
           />
+          {!isDraft && (
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={isSavingContact}
+              onClick={handleSaveContact}
+              className="self-start"
+            >
+              {isSavingContact
+                ? RIDE_EDIT_TERMS.contactSavePending
+                : RIDE_EDIT_TERMS.contactSave}
+            </Button>
+          )}
         </fieldset>
 
         {/* CR-168 (KI-026): same dead-end fix as `OrganizerProfileForm`'s

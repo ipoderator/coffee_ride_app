@@ -1,5 +1,6 @@
 import {
   createRideRequestSchema,
+  setRideContactRequestSchema,
   updateRideRequestSchema,
   type CancelRideResponse,
   type CloseRegistrationResponse,
@@ -20,7 +21,12 @@ import {
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
 
-export { createRideRequestSchema, updateRideRequestSchema, ApiError };
+export {
+  createRideRequestSchema,
+  setRideContactRequestSchema,
+  updateRideRequestSchema,
+  ApiError,
+};
 export type {
   CancelRideResponse,
   CloseRegistrationResponse,

@@ -19,6 +19,7 @@ import {
   openRegistration,
   publishRide,
   setParticipantsVisibility,
+  setRideContact,
   startRide,
   updateRide,
   uploadRideGpx,
@@ -44,6 +45,7 @@ vi.mock('./api', async () => {
     startRide: vi.fn(),
     finishRide: vi.fn(),
     setParticipantsVisibility: vi.fn(),
+    setRideContact: vi.fn(),
     uploadRideGpx: vi.fn(),
   };
 });
@@ -60,6 +62,7 @@ const startRideMock = vi.mocked(startRide);
 const finishRideMock = vi.mocked(finishRide);
 const uploadRideGpxMock = vi.mocked(uploadRideGpx);
 const setParticipantsVisibilityMock = vi.mocked(setParticipantsVisibility);
+const setRideContactMock = vi.mocked(setRideContact);
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -892,6 +895,162 @@ describe('EditRideForm', () => {
 
     expect(toggle).not.toBeChecked();
     expect(setParticipantsVisibilityMock).not.toHaveBeenCalled();
+  });
+
+  // KI-081: the contact is the one field that survives the read-only flip.
+  it('saves the contact of a published ride with its own request', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'registration_open' },
+      contact: { type: 'phone', value: '+79161234567' },
+    });
+    setRideContactMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    // The rest of the form is still read-only — the rule is not loosened.
+    expect(
+      screen.getByText('Редактировать можно только черновик заезда.'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toBeDisabled();
+
+    const value = screen.getByLabelText('Контакт');
+    expect(value).toBeEnabled();
+    fireEvent.change(value, { target: { value: '+7 916 765-43-21' } });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Сохранить способ связи' }),
+    );
+
+    expect(
+      await screen.findByText('Способ связи сохранён.'),
+    ).toBeInTheDocument();
+    // Normalized by `setRideContactRequestSchema` before it goes out, the same
+    // canonical form the draft path sends.
+    expect(setRideContactMock).toHaveBeenCalledWith('ride-1', {
+      type: 'phone',
+      value: '+79167654321',
+    });
+    // Not the whole-form path.
+    expect(updateRideMock).not.toHaveBeenCalled();
+  });
+
+  it('clears the contact of a published ride', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'published' },
+      contact: { type: 'telegram', value: 'coffee_ride' },
+    });
+    setRideContactMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.change(screen.getByLabelText('Как связаться'), {
+      target: { value: '' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Сохранить способ связи' }),
+    );
+
+    expect(
+      await screen.findByText('Способ связи сохранён.'),
+    ).toBeInTheDocument();
+    expect(setRideContactMock).toHaveBeenCalledWith('ride-1', null);
+  });
+
+  it('rejects an invalid published-ride contact before calling the API', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'published' },
+      contact: { type: 'phone', value: '+79161234567' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.change(screen.getByLabelText('Контакт'), {
+      target: { value: 'не телефон' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Сохранить способ связи' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Enter a valid Russian phone number, e.g. +7 916 123-45-67.',
+      ),
+    ).toBeInTheDocument();
+    expect(setRideContactMock).not.toHaveBeenCalled();
+  });
+
+  it('shows a server error when saving a published-ride contact fails', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'published' },
+      contact: { type: 'phone', value: '+79161234567' },
+    });
+    setRideContactMock.mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Ride not found',
+        status: 404,
+        detail: 'Ride not found.',
+        instance: '/v1/rides/ride-1/contact',
+        code: 'ride_not_found',
+      }),
+    );
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Сохранить способ связи' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Не удалось сохранить способ связи. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the draft contact on the whole-form save path', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: baseRide,
+      contact: { type: 'phone', value: '+79161234567' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    // No second save path while the ride is a draft.
+    expect(
+      screen.queryByRole('button', { name: 'Сохранить способ связи' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Контакт'), {
+      target: { value: '+7 916 765-43-21' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await waitFor(() => expect(updateRideMock).toHaveBeenCalled());
+    // `updateRideRequestSchema` normalizes the number on the way out, the same
+    // as the published-ride path's own schema parse.
+    expect(updateRideMock.mock.calls[0]?.[1]).toMatchObject({
+      contact: { type: 'phone', value: '+79167654321' },
+    });
+    expect(setRideContactMock).not.toHaveBeenCalled();
   });
 
   it('shows no close-registration button for a published ride', async () => {

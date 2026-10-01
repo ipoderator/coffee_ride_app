@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react';
-import { cn } from 'ui';
+'use client';
+
+import { useRef, type ReactNode } from 'react';
+import { cn, useInViewOnce } from 'ui';
 import {
   projectRoutePreviewToBox,
   smoothRoutePreview,
@@ -107,6 +109,11 @@ export function RouteCover({
   variant = 'card',
   className,
 }: RouteCoverProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  // CR-170: a card below the fold draws its track when scrolled to, not
+  // unseen on mount; until then the track holds at its first frame.
+  const inView = useInViewOnce(rootRef);
+  const hold = !inView && '[animation-play-state:paused]';
   const background = pickBackground(seed);
   const box = VIEW_BOXES[variant];
   // The stretched hero background keeps its hairline width.
@@ -127,6 +134,7 @@ export function RouteCover({
 
   return (
     <div
+      ref={rootRef}
       className={cn(
         'relative isolate h-40 shrink-0 overflow-hidden bg-cover-bg',
         className,
@@ -159,12 +167,19 @@ export function RouteCover({
             <ellipse key={`el-${i}`} {...e} vectorEffect={isolineEffect} />
           ))}
         </g>
+        {/* CR-170: the track draws itself in from the start pin; the finish
+            pin appears as the line reaches it. Reduced motion: drawn at once. */}
         {track ? (
           <>
             <polyline
               points={track}
               fill="none"
-              className="stroke-cover-bg"
+              className={cn(
+                'stroke-cover-bg motion-safe:animate-track-draw',
+                hold,
+              )}
+              pathLength={1}
+              strokeDasharray={1}
               strokeWidth={8 * box.stroke}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -172,7 +187,12 @@ export function RouteCover({
             <polyline
               points={track}
               fill="none"
-              className="stroke-cover-route"
+              className={cn(
+                'stroke-cover-route motion-safe:animate-track-draw',
+                hold,
+              )}
+              pathLength={1}
+              strokeDasharray={1}
               strokeWidth={3.5 * box.stroke}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -200,7 +220,11 @@ export function RouteCover({
             cx={finish[0]}
             cy={finish[1]}
             r={5.5 * box.stroke}
-            className="fill-cover-bg stroke-cover-elevation"
+            className={cn(
+              'fill-cover-bg stroke-cover-elevation motion-safe:animate-fade-in',
+              hold,
+            )}
+            style={{ animationDelay: '800ms' }}
             strokeWidth={2.5 * box.stroke}
           />
         ) : null}

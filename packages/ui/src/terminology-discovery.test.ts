@@ -56,4 +56,8 @@ describe('RIDE_DISCOVERY_ROW_TERMS (CR-118)', () => {
     expect(RIDE_DISCOVERY_ROW_TERMS.groupsCount(12)).toBe('12 групп');
     expect(RIDE_DISCOVERY_ROW_TERMS.groupsCount(21)).toBe('21 группа');
   });
+
+  it('marks the summit on the map line with an up-triangle (CR-171)', () => {
+    expect(RIDE_DISCOVERY_ROW_TERMS.summit('214\u00a0м')).toBe('▲ 214\u00a0м');
+  });
 });

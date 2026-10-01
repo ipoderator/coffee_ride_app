@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapHandle, MapMarkerInput, MapRenderOptions } from 'maps-core';
 import type { PublicRideListItem } from 'types';
 import { DiscoveryList } from './components/DiscoveryList';
@@ -23,6 +23,7 @@ const renderState = vi.hoisted(() => ({
     setMarkers: ReturnType<typeof vi.fn>;
     setPolyline: ReturnType<typeof vi.fn>;
     fitBounds: ReturnType<typeof vi.fn>;
+    panTo: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   } | null,
   available: false,
@@ -38,6 +39,7 @@ vi.mock('@/lib/maps/create-map-renderer', () => ({
               setMarkers: vi.fn(),
               setPolyline: vi.fn(),
               fitBounds: vi.fn(),
+              panTo: vi.fn(),
               destroy: vi.fn(),
             };
             return renderState.handle as unknown as MapHandle;
@@ -598,6 +600,286 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
       screen.getByRole('button', { name: 'Скрыть карточку заезда' }),
     );
     expect(screen.getAllByRole('link', { name: 'Заезд Б' })).toHaveLength(1);
+  });
+});
+
+describe('DiscoveryMap camera on selection (CR-170, CR-171)', () => {
+  beforeEach(() => {
+    renderState.available = true;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function renderReadyList() {
+    listPublicRidesMock.mockResolvedValue({
+      items: [plottableA, plottableB],
+      nextCursor: null,
+      total: 0,
+    });
+    render(<DiscoveryList />);
+    await screen.findByText('Заезд Б');
+    await waitFor(() => expect(renderState.handle).not.toBeNull());
+  }
+
+  // ride-a's start plus its route preview.
+  const rideAFrame = [
+    { lat: 55.7, lng: 37.5 },
+    { lat: 55.7, lng: 37.5 },
+    { lat: 55.72, lng: 37.55 },
+  ];
+
+  it('frames the whole route of a ride selected from the keyboard', async () => {
+    await renderReadyList();
+
+    act(() => {
+      screen.getByRole('link', { name: 'Заезд А' }).focus();
+    });
+
+    await waitFor(() =>
+      expect(renderState.handle!.fitBounds).toHaveBeenLastCalledWith(
+        rideAFrame,
+        { padding: 56, maxZoom: 14, durationMs: 600 },
+      ),
+    );
+    expect(renderState.handle!.panTo).not.toHaveBeenCalled();
+  });
+
+  it('frames the cached full line when it is already here, once per choice', async () => {
+    const fullLine = [
+      { lat: 55.7, lng: 37.5, elevationMeters: null },
+      { lat: 55.73, lng: 37.52, elevationMeters: null },
+      { lat: 55.72, lng: 37.55, elevationMeters: null },
+    ];
+    getRouteGeometryMock.mockResolvedValue({ points: fullLine });
+    await renderReadyList();
+
+    // Hover first: the full line is fetched and cached, the camera stays.
+    const row = screen.getByText('Заезд А').closest('li')!;
+    fireEvent.mouseEnter(row);
+    await waitFor(() => expect(getRouteGeometryMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        (
+          renderState.handle!.setPolyline.mock.calls.at(-1)![0] as {
+            points: unknown[];
+          }
+        ).points,
+      ).toHaveLength(3),
+    );
+    const fitsBefore = renderState.handle!.fitBounds.mock.calls.length;
+
+    act(() => {
+      screen.getByRole('link', { name: 'Заезд А' }).focus();
+    });
+
+    await waitFor(() =>
+      expect(renderState.handle!.fitBounds).toHaveBeenLastCalledWith(
+        [{ lat: 55.7, lng: 37.5 }, ...fullLine],
+        expect.objectContaining({ durationMs: 600 }),
+      ),
+    );
+    expect(renderState.handle!.fitBounds.mock.calls.length).toBe(
+      fitsBefore + 1,
+    );
+  });
+
+  it('eases to the start of a ride without a route, keeping the zoom', async () => {
+    await renderReadyList();
+
+    act(() => {
+      renderState.options!.onMarkerClick!('ride-b');
+    });
+
+    await waitFor(() =>
+      expect(renderState.handle!.panTo).toHaveBeenLastCalledWith(
+        { lat: 55.9, lng: 37.8 },
+        { durationMs: 600 },
+      ),
+    );
+  });
+
+  it('does not move the camera on a hover sweep', async () => {
+    await renderReadyList();
+    const fitsBefore = renderState.handle!.fitBounds.mock.calls.length;
+
+    const row = screen.getByText('Заезд А').closest('li')!;
+    fireEvent.mouseEnter(row);
+    fireEvent.mouseLeave(row);
+
+    await waitFor(() =>
+      expect(lastMarkers().find((m) => m.id === 'ride-a')?.selected).toBe(
+        false,
+      ),
+    );
+    expect(renderState.handle!.panTo).not.toHaveBeenCalled();
+    expect(renderState.handle!.fitBounds.mock.calls.length).toBe(fitsBefore);
+  });
+
+  it('jumps without animation under prefers-reduced-motion', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: query.includes('prefers-reduced-motion'),
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          onchange: null,
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+    await renderReadyList();
+
+    act(() => {
+      renderState.options!.onMarkerClick!('ride-a');
+    });
+
+    await waitFor(() =>
+      expect(renderState.handle!.fitBounds).toHaveBeenLastCalledWith(
+        rideAFrame,
+        expect.objectContaining({ durationMs: 0 }),
+      ),
+    );
+  });
+});
+
+describe('DiscoveryMap as the emotional layer (CR-171)', () => {
+  beforeEach(() => {
+    renderState.available = true;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // A climbing line: 120 m → 214 m at the middle → 130 m.
+  const climbingLine = [
+    { lat: 55.7, lng: 37.5, elevationMeters: 120 },
+    { lat: 55.705, lng: 37.51, elevationMeters: 160 },
+    { lat: 55.71, lng: 37.525, elevationMeters: 214 },
+    { lat: 55.715, lng: 37.54, elevationMeters: 170 },
+    { lat: 55.72, lng: 37.55, elevationMeters: 130 },
+  ];
+
+  async function hoverRideA() {
+    listPublicRidesMock.mockResolvedValue({
+      items: [plottableA, plottableB],
+      nextCursor: null,
+      total: 0,
+    });
+    render(<DiscoveryList />);
+    const row = (await screen.findByText('Заезд А')).closest('li')!;
+    await waitFor(() => expect(renderState.handle).not.toBeNull());
+    fireEvent.mouseEnter(row);
+    return row;
+  }
+
+  function polylineCalls() {
+    return renderState.handle!.setPolyline.mock.calls.map(
+      ([input]) => input as { drawInMs?: number; points: unknown[] } | null,
+    );
+  }
+
+  it('draws a newly chosen route in, and the full geometry continues that draw', async () => {
+    getRouteGeometryMock.mockResolvedValue({ points: climbingLine });
+    await hoverRideA();
+
+    await waitFor(() =>
+      expect(polylineCalls().at(-1)?.points).toHaveLength(climbingLine.length),
+    );
+    const drawn = polylineCalls().filter((call) => call !== null);
+    // The first line of this ride starts the draw ...
+    expect(drawn[0]).toMatchObject({ drawInMs: 900 });
+    // ... the full geometry arriving mid-draw does not restart it.
+    expect(drawn.at(-1)).not.toHaveProperty('drawInMs');
+    expect(drawn.filter((call) => call!.drawInMs)).toHaveLength(1);
+  });
+
+  it("pulses the chosen ride's start, and only that one", async () => {
+    await hoverRideA();
+
+    await waitFor(() =>
+      expect(lastMarkers().find((m) => m.id === 'ride-a')?.pulse).toBe(true),
+    );
+    expect(lastMarkers().find((m) => m.id === 'ride-b')).not.toHaveProperty(
+      'pulse',
+    );
+  });
+
+  it('puts the difficulty and, once elevation is known, the summit on the line', async () => {
+    getRouteGeometryMock.mockResolvedValue({ points: climbingLine });
+    await hoverRideA();
+
+    await waitFor(() =>
+      expect(lastMarkers().map((m) => m.id)).toContain('ride-a:summit'),
+    );
+    const difficulty = lastMarkers().find((m) => m.id === 'ride-a:difficulty')!;
+    expect(difficulty).toMatchObject({
+      shape: 'tag',
+      label: 'Средний',
+      meter: { filled: 3, total: 5 },
+    });
+    expect(typeof difficulty.revealDelayMs).toBe('number');
+    const summit = lastMarkers().find((m) => m.id === 'ride-a:summit')!;
+    expect(summit).toMatchObject({
+      shape: 'tag',
+      label: '▲ 214\u00a0м', // NBSP before the unit (§7)
+      point: { lat: 55.71, lng: 37.525 },
+    });
+
+    // The difficulty note keeps its first reveal delay across updates — a
+    // note already showing is never faded in again.
+    const firstDelay = renderState
+      .handle!.setMarkers.mock.calls.map(([markers]) =>
+        (markers as MapMarkerInput[]).find((m) => m.id === 'ride-a:difficulty'),
+      )
+      .find(Boolean)!.revealDelayMs;
+    expect(difficulty.revealDelayMs).toBe(firstDelay);
+  });
+
+  it('drops the notes and the line when the ride is no longer chosen', async () => {
+    const row = await hoverRideA();
+    await waitFor(() =>
+      expect(lastMarkers().map((m) => m.id)).toContain('ride-a:difficulty'),
+    );
+
+    fireEvent.mouseLeave(row);
+
+    await waitFor(() =>
+      expect(renderState.handle!.setPolyline).toHaveBeenLastCalledWith(null),
+    );
+    expect(lastMarkers().map((m) => m.id)).toEqual(['ride-a', 'ride-b']);
+  });
+
+  it('under reduced motion: no draw, no pulse, notes shown at once', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: query.includes('prefers-reduced-motion'),
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          onchange: null,
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+    await hoverRideA();
+
+    await waitFor(() =>
+      expect(lastMarkers().map((m) => m.id)).toContain('ride-a:difficulty'),
+    );
+    expect(polylineCalls().some((call) => call?.drawInMs)).toBe(false);
+    expect(lastMarkers().some((m) => m.pulse)).toBe(false);
+    expect(lastMarkers().some((m) => m.revealDelayMs !== undefined)).toBe(
+      false,
+    );
   });
 });
 

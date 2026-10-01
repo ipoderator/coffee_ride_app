@@ -180,20 +180,28 @@ export function TrackCover({
         </g>
         {drawing.trackPath ? (
           <>
+            {/* CR-170: the track draws itself in once (`track-draw`,
+                normalized by `pathLength`); a resize changes `d` without
+                restarting it. Reduced motion: drawn at once. */}
             <path
               d={drawing.trackPath}
               fill="none"
-              className="stroke-cover-bg"
+              className="stroke-cover-bg motion-safe:animate-track-draw"
               strokeWidth={10}
               strokeLinejoin="round"
+              pathLength={1}
+              strokeDasharray={1}
             />
             <path
+              data-track
               d={drawing.trackPath}
               fill="none"
-              className="stroke-cover-route"
+              className="stroke-cover-route motion-safe:animate-track-draw"
               strokeWidth={3.5}
               strokeLinejoin="round"
               strokeLinecap="round"
+              pathLength={1}
+              strokeDasharray={1}
             />
           </>
         ) : null}
@@ -208,7 +216,15 @@ export function TrackCover({
                   cx={x}
                   cy={y}
                   r={r}
-                  className={cn(className, 'stroke-cover-bg')}
+                  className={cn(
+                    className,
+                    'stroke-cover-bg',
+                    // Pins settle in as the line reaches them, not before.
+                    drawing.trackPath && 'motion-safe:animate-fade-in',
+                  )}
+                  style={
+                    drawing.trackPath ? { animationDelay: '700ms' } : undefined
+                  }
                   strokeWidth={3}
                 />
               );

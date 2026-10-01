@@ -20,6 +20,7 @@ import {
   RIDE_DISCOVERY_TERMS,
   Skeleton,
 } from 'ui';
+import { prefersReducedMotion } from '@/lib/motion/reduced-motion';
 import { listPublicRides } from '../api';
 import {
   NO_DISCOVERY_FILTERS,
@@ -41,14 +42,6 @@ function isDesktop(): boolean {
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia(DESKTOP_QUERY).matches
-  );
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 }
 
@@ -295,6 +288,7 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
         <DiscoveryMap
           rides={rides}
           activeId={activeId}
+          focusId={selectedId}
           onSelect={handlePinSelect}
         />
         <Button

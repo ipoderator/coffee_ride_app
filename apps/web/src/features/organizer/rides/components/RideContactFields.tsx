@@ -68,6 +68,7 @@ export function RideContactFields({
   onChange,
   disabled = false,
   error,
+  hint = RIDE_EDIT_TERMS.contactHint,
 }: {
   /** Distinguishes the create form's ids from the edit form's. */
   idPrefix: string;
@@ -75,13 +76,20 @@ export function RideContactFields({
   onChange: (next: RideContactDraft) => void;
   disabled?: boolean;
   error?: string;
+  /**
+   * KI-081: the edit form overrides this after publish, where the contact is
+   * the one field that stays editable. Optional with the create wizard's
+   * wording as the default (`.claude/rules/extensibility.md`: a new shared-
+   * component prop is additive, never a required change at every call site).
+   */
+  hint?: string;
 }) {
   return (
     <>
       <FormField
         id={`${idPrefix}-contact-type`}
         label={RIDE_EDIT_TERMS.contactTypeLabel}
-        hint={RIDE_EDIT_TERMS.contactHint}
+        hint={hint}
       >
         <select
           id={`${idPrefix}-contact-type`}

@@ -736,6 +736,16 @@ export const RIDE_EDIT_TERMS = {
   contactValueLabel: 'Контакт',
   contactNone: 'Не указывать',
   contactSaved: 'Способ связи сохранён.',
+  // KI-081: unlike every other field here, the contact stays editable after
+  // publish — a number that goes stale is exactly what must remain fixable
+  // (`PUT /v1/rides/:id/contact` accepts any status). It saves with its own
+  // button rather than on change, because it is a validated pair of fields and
+  // not a single checkbox like the visibility toggle above.
+  contactHintPublished:
+    'Способ связи можно исправить в любой момент, даже после публикации. Остальные поля заезда уже нельзя менять.',
+  contactSave: 'Сохранить способ связи',
+  contactSavePending: 'Сохранение…',
+  contactSaveError: 'Не удалось сохранить способ связи. Попробуйте ещё раз.',
   contactPlaceholderPhone: '+7 916 123-45-67',
   contactPlaceholderTelegram: '@coffee_ride',
   contactPlaceholderMax: '+7 916 123-45-67',
@@ -1420,6 +1430,9 @@ export const RIDE_DISCOVERY_ROW_TERMS = {
   listLabel: 'Список заездов',
   // Mobile: the ride card raised over the map after a pin tap.
   closeSelected: 'Скрыть карточку заезда',
+  // CR-171: the summit note on the active route line — «▲ 214 м» (the
+  // elevation already formatted, `formatElevation`).
+  summit: (elevation: string) => `▲ ${elevation}`,
 } as const;
 
 // --------------------------- end CR-118 block ------------------------------

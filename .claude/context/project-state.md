@@ -37,7 +37,48 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-CR-168 (2026-10-01, this session): closed KI-026's real remaining half — an
+CR-172 (2026-10-01, this session, owner's call after CR-171): selecting a ride on
+`/` frames its whole route (eased `fitBounds`, new optional
+`MapFitOptions.durationMs`), not just a pan to the start; a ride without a route
+still pans; one camera move per choice; resize re-fits stay immediate.
+
+CR-171 (2026-10-01, this session): the discovery map is the emotional layer of
+`/` — the active ride's route draws itself in (adapter-side prefix rebuild per
+frame; a full-geometry update continues the draw), its start pin pulses three
+times, and non-interactive notes sit on the line: difficulty (word + meter)
+halfway and the summit «▲ N м» when the climb is ≥ 30 m away from the ends. New
+additive `maps-core` fields: `MapPolylineInput.drawInMs`, `MapMarkerInput.pulse`/
+`revealDelayMs`/`meter`, `shape: 'tag'`; `setMarkers` reconciles by id. CR-169
+and CR-170 below are committed together with CR-169, CR-171 and CR-172.
+
+CR-170 (2026-10-01, this session): micro-animations instead of decoration, per
+the owner's request — one motion vocabulary in `packages/ui/src/tokens.css`
+(`ease-quiet`, `animate-track-draw`/`check-draw`/`rise-in`/`fade-in`/`fade-out`/
+`segment-fill`), always `motion-safe:`. Five uses: the route track draws in
+(`RouteCover`, `TrackCover`; below-the-fold cards wait for `useInViewOnce`); the
+discovery map eases to a _selected_ ride's start (new `MapHandle.panTo`, never on
+hover); `DifficultyScale animated` fills its segments on view (ride page only);
+`RegistrationTicket` eases its frame colour and raises in the new content on a
+state change after mount; the toast rises in, draws a check mark on success and
+fades out. `docs/design.md` §5 "Motion" is the reference. No API/schema change.
+CR-169 below is committed in the same commit.
+
+CR-169 (2026-10-01, this session): closed KI-081 — `PUT /v1/rides/:id/contact`
+accepts a contact change at any ride status on purpose (a contact that goes
+stale after publication is exactly what must stay fixable), but the endpoint had
+no UI: `EditRideForm` renders the whole form read-only once a ride leaves
+`draft`, so the contact fields were disabled there too and a wrong published
+contact could not be corrected from the app. The fields now stay enabled after
+publish with their own «Сохранить способ связи» button calling that endpoint
+directly — CR-162/KI-065's shape for the participants-visibility toggle, and
+deliberately **not** a loosening of `RIDE_EDIT_TERMS.notEditable`: every other
+field is still read-only, and a draft still saves its contact through the
+whole-form `PATCH`, so there is one save path per state. `RideContactFields`
+gained an optional `hint` prop (additive, defaults to the create wizard's
+wording). No endpoint, schema or migration change — the backend was already
+complete. `docs/tasks.md` now has zero open items again.
+
+CR-168 (2026-10-01, earlier this session): closed KI-026's real remaining half — an
 unverified user had no way to ever obtain a _new_ verification link.
 `POST /v1/auth/register` issued the only token a user would ever get and no
 resend endpoint existed anywhere, so an expired (24h) or undelivered first
@@ -91,8 +132,9 @@ not a field on the `Ride` domain type, so it can never leak into the public
 status (the draft-only `PATCH` also accepts it), following KI-065's precedent.
 Organizer create/edit forms share a new `RideContactFields` component (10
 Storybook stories); the ride page shows the block as a `tel:`/`t.me`/`max.ru`/
-`mailto:` link. Known gap: KI-081 — the published-ride surface has no UI for
-the post-publish change the endpoint supports.
+`mailto:` link. The post-publish UI gap this left (KI-081) was closed by
+CR-169: the edit form's contact fields stay editable after publish with their
+own save button.
 
 CR-164 (2026-10-01, earlier this session): KI-060 — discovery could not say where a ride
 starts when the organizer labelled the start route point just «Старт».

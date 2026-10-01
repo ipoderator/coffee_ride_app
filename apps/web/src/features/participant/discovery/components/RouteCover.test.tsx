@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RouteCover } from './RouteCover';
 
 const ROUTE: Array<[number, number]> = [
@@ -70,5 +70,60 @@ describe('RouteCover', () => {
       />,
     );
     expect(screen.queryByText('Нет маршрута')).toBeNull();
+  });
+  describe('track draw-in (CR-170)', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function trackLines(container: HTMLElement) {
+      return Array.from(container.querySelectorAll('polyline'));
+    }
+
+    it('draws the track in with a normalized dash, finish pin after it', () => {
+      // jsdom has no IntersectionObserver: the hook reports "visible" at
+      // once, so nothing is left held at its first frame.
+      const { container } = render(
+        <RouteCover routePreview={ROUTE} seed="ride-1" />,
+      );
+      for (const line of trackLines(container)) {
+        expect(line.getAttribute('pathLength')).toBe('1');
+        expect(line.getAttribute('stroke-dasharray')).toBe('1');
+        const cls = line.getAttribute('class')!;
+        expect(cls).toContain('motion-safe:animate-track-draw');
+        expect(cls).not.toContain('animation-play-state');
+      }
+    });
+
+    it('holds the draw until the cover scrolls into view', () => {
+      let report:
+        ((entries: Array<{ isIntersecting: boolean }>) => void) | null = null;
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          constructor(cb: typeof report) {
+            report = cb;
+          }
+          observe() {}
+          disconnect() {}
+        },
+      );
+      const { container } = render(
+        <RouteCover routePreview={ROUTE} seed="ride-1" />,
+      );
+      for (const line of trackLines(container)) {
+        expect(line.getAttribute('class')).toContain(
+          '[animation-play-state:paused]',
+        );
+      }
+
+      act(() => report!([{ isIntersecting: true }]));
+
+      for (const line of trackLines(container)) {
+        expect(line.getAttribute('class')).not.toContain(
+          'animation-play-state',
+        );
+      }
+    });
   });
 });

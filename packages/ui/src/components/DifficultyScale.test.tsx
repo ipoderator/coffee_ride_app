@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DIFFICULTY_LEVEL_TERMS } from '../terminology';
 import { DifficultyScale } from './DifficultyScale';
 
@@ -54,5 +54,53 @@ describe('DifficultyScale', () => {
   it('never encodes difficulty by color alone — the word is always present', () => {
     render(<DifficultyScale level={5} />);
     expect(screen.getByText('Очень сложный')).toBeInTheDocument();
+  });
+  it('fills its filled segments left to right when animated (CR-170)', () => {
+    const { container } = render(<DifficultyScale level={3} animated />);
+    const segments = Array.from(
+      container.querySelectorAll('[aria-hidden="true"] span'),
+    ) as HTMLElement[];
+    const animated = segments.filter((segment) =>
+      segment.className.includes('motion-safe:animate-segment-fill'),
+    );
+    // Only the filled ones animate, staggered; empty outlines stay still.
+    expect(animated).toHaveLength(3);
+    expect(animated.map((segment) => segment.style.animationDelay)).toEqual([
+      '0ms',
+      '70ms',
+      '140ms',
+    ]);
+  });
+
+  it('does not animate by default', () => {
+    const { container } = render(<DifficultyScale level={5} />);
+    expect(container.innerHTML).not.toContain('animate-segment-fill');
+  });
+  it('holds the fill until the scale scrolls into view (CR-170)', () => {
+    let report: ((entries: Array<{ isIntersecting: boolean }>) => void) | null =
+      null;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: typeof report) {
+          report = cb;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const { container } = render(<DifficultyScale level={2} animated />);
+    const held = () =>
+      container.querySelectorAll('[class*="animation-play-state:paused"]')
+        .length;
+    expect(held()).toBe(2);
+
+    act(() => report!([{ isIntersecting: true }]));
+
+    expect(held()).toBe(0);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 });

@@ -25,6 +25,8 @@ interface ToastItem {
   id: number;
   message: string;
   tone: ToastTone;
+  /** CR-170: fading out; removed once `EXIT_MS` has passed. */
+  leaving?: boolean;
 }
 
 interface ToastContextValue {
@@ -48,6 +50,35 @@ const TONE_STYLES: Record<ToastTone, string> = {
 };
 
 const AUTO_DISMISS_MS = 4000;
+// Matches `--animate-fade-out`; under reduced motion the toast simply stays
+// this much longer, unanimated.
+const EXIT_MS = 200;
+
+/** CR-170: the success mark — a check that draws itself in after the toast
+ * has risen (`check-draw`), instead of a decorative fill or glow. Decorative:
+ * the message text carries the meaning. */
+function SuccessMark() {
+  return (
+    <svg
+      aria-hidden="true"
+      data-toast-mark
+      viewBox="0 0 16 16"
+      className="mt-0.5 size-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path
+        d="M3.5 8.5l3 3 6-7"
+        pathLength={1}
+        strokeDasharray={1}
+        className="motion-safe:animate-check-draw"
+      />
+    </svg>
+  );
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -61,7 +92,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, tone: ToastTone = 'success') => {
       const id = nextId.current++;
       setToasts((current) => [...current, { id, message, tone }]);
-      setTimeout(() => dismissToast(id), AUTO_DISMISS_MS);
+      setTimeout(() => {
+        setToasts((current) =>
+          current.map((toast) =>
+            toast.id === id ? { ...toast, leaving: true } : toast,
+          ),
+        );
+        setTimeout(() => dismissToast(id), EXIT_MS);
+      }, AUTO_DISMISS_MS);
     },
     [dismissToast],
   );
@@ -83,11 +121,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={cn(
-              'pointer-events-auto w-full max-w-sm rounded-md border px-4 py-3 text-body-sm shadow-overlay',
+              'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border px-4 py-3 text-body-sm shadow-overlay',
+              toast.leaving
+                ? 'motion-safe:animate-fade-out'
+                : 'motion-safe:animate-rise-in',
               TONE_STYLES[toast.tone],
             )}
           >
-            {toast.message}
+            {toast.tone === 'success' ? <SuccessMark /> : null}
+            <span>{toast.message}</span>
           </div>
         ))}
       </div>

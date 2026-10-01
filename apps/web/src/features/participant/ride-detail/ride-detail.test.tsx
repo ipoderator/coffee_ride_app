@@ -438,6 +438,14 @@ describe('RideDetailView', () => {
     ).not.toBeNull();
     expect(chart.querySelector('path.stroke-elevation')).not.toBeNull();
 
+    // CR-170: the hero track draws itself in (normalized path length).
+    const heroTrack = document.querySelector('[data-track]')!;
+    expect(heroTrack.getAttribute('pathLength')).toBe('1');
+    expect(heroTrack.getAttribute('stroke-dasharray')).toBe('1');
+    expect(heroTrack.getAttribute('class')).toContain(
+      'motion-safe:animate-track-draw',
+    );
+
     // CR-151: the pointer over the profile moves a dot along the cover's track.
     expect(screen.queryByTestId('cover-scrub')).not.toBeInTheDocument();
     fireEvent.pointerMove(screen.getByTestId('elevation-hit'), { clientX: 0 });
@@ -737,6 +745,47 @@ describe('RideDetailView', () => {
         await screen.findByText('Вы зарегистрированы на заезд.'),
       ).toBeInTheDocument();
       expect(registerForRideMock).toHaveBeenCalledWith('ride-1');
+    });
+
+    // CR-170: the state change is shown, not swapped — only after mount.
+    it('animates the ticket into its new state after registering, not on first render', async () => {
+      const registration = activeRegistration();
+      registerForRideMock.mockResolvedValue({ registration });
+      getRideDetailMock
+        .mockResolvedValueOnce(
+          baseDetailResponse({
+            ride: { ...baseRide, status: 'registration_open' },
+          }),
+        )
+        .mockResolvedValue(
+          baseDetailResponse({
+            ride: { ...baseRide, status: 'registration_open' },
+            registrationsCount: 1,
+            viewerRegistration: registration,
+            viewerStartNumber: 1,
+          }),
+        );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      const button = await screen.findByRole('button', { name: 'Записаться' });
+      const ticket = screen.getByTestId('ride-ticket');
+      const body = () =>
+        ticket.querySelector('[data-ticket-body]') as HTMLElement;
+      expect(body().className).not.toContain('animate-rise-in');
+      expect(ticket.className).toContain('transition-colors');
+
+      fireEvent.click(button);
+
+      expect(
+        await within(ticket).findByText('Отменить регистрацию'),
+      ).toBeInTheDocument();
+      expect(ticket.className).toContain('border-success');
+      expect(body().className).toContain('motion-safe:animate-rise-in');
     });
 
     // CR-141 (KI-064): an anonymous «Зарегистрироваться» must not lose the ride.

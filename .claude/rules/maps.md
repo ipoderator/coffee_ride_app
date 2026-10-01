@@ -122,9 +122,13 @@ export interface MapMarkerInput {
   // CR-118: 'ring' = orienteering control circle with `label` as a caption
   // beside it (discovery's start-time pins; 44×44 px hit box); `selected`
   // fills it and draws it on top; `haloColor` is its paper knock-out.
-  shape?: 'dot' | 'ring';
+  shape?: 'dot' | 'ring' | 'tag'; // CR-171: 'tag' = a non-interactive note on a line
   selected?: boolean;
   haloColor?: string;
+  // CR-171 (callers omit all three under reduced motion / when unused):
+  pulse?: boolean; // 'ring': three soft pulses on creation, then still
+  revealDelayMs?: number; // fade in after this delay
+  meter?: { filled: number; total: number }; // 'tag': segment meter
 }
 
 export interface MapPolylineInput {
@@ -136,11 +140,17 @@ export interface MapPolylineInput {
   opacity?: number;
   // CR-112: optional casing under the line (MapGL `color2`/`width2`).
   outlineColor?: string;
+  // CR-171: draw in over this many ms at a constant pace; an update without
+  // it mid-draw continues the running draw on the new points.
+  drawInMs?: number;
 }
 
 export interface MapFitOptions {
   padding?: number;
   maxZoom?: number;
+  // CR-172: eased fit over this many ms; 0 jumps. A resize re-fit is
+  // always immediate.
+  durationMs?: number;
 }
 
 export interface MapRenderOptions {
@@ -161,6 +171,9 @@ export interface MapHandle {
   // CR-112: frame every given point; a single point centers instead of
   // zooming to max. The 2GIS adapter re-applies the last fit on resize.
   fitBounds(points: LatLng[], options?: MapFitOptions): void;
+  // CR-170: eased camera move to `point`, zoom unchanged; `durationMs: 0`
+  // jumps (reduced motion). Discovery's "light shift" to a selected ride.
+  panTo(point: LatLng, options?: { durationMs?: number }): void;
   destroy(): void;
 }
 
@@ -185,6 +198,12 @@ instead of the renderer's own 4px default, "more visual weight" without a neon g
 design.md` §3). `opacity` is applied by appending an alpha suffix to a 6-digit hex `color`
 (2GIS's own RGBA hex support) since MapGL's `PolylineOptions` has no separate opacity
 field; a non-hex color renders at full opacity rather than risk an invalid color string.
+
+CR-171 extended both the same additive way, no new ADR: `setMarkers` now
+reconciles by marker `id` (an unchanged marker keeps its SDK object, a moved one
+is moved in place via `setCoordinates`, only a changed look is rebuilt), so an
+unrelated update never restarts a pulse; the draw-in rebuilds the line prefix
+per animation frame, since MapGL's `Polyline` has no `setCoordinates`.
 
 CR-118 extended markers the same additive way, no new ADR: `shape: 'ring'` draws an
 orienteering control circle (hollow ring in `color`, `haloColor` knock-out, `label` as

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
+import { RIDE_EDIT_TERMS } from 'ui';
 import {
   EMPTY_RIDE_CONTACT,
   RideContactFields,
@@ -18,11 +19,13 @@ function Controlled({
   onChange,
   disabled,
   error,
+  hint,
 }: {
   value: RideContactDraft;
   onChange: (next: RideContactDraft) => void;
   disabled?: boolean;
   error?: string;
+  hint?: string;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -36,6 +39,7 @@ function Controlled({
         }}
         disabled={disabled}
         error={error}
+        hint={hint}
       />
     </div>
   );
@@ -106,12 +110,35 @@ export const WithError: Story = {
   },
 };
 
-/** A non-draft ride renders the whole edit form read-only. */
+/**
+ * KI-081: only while a save is in flight, or in the create wizard's own pending
+ * state — a published ride no longer disables these fields (see
+ * {@link EditableAfterPublish}).
+ */
 export const Disabled: Story = {
   args: { value: { type: 'phone', value: '+7 916 123-45-67' }, disabled: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByLabelText('Как связаться')).toBeDisabled();
     await expect(canvas.getByLabelText('Контакт')).toBeDisabled();
+  },
+};
+
+/**
+ * KI-081: after publish the edit form is read-only everywhere except here, so
+ * the fields stay enabled and the hint explains why (the edit form adds its own
+ * «Сохранить способ связи» button beside them).
+ */
+export const EditableAfterPublish: Story = {
+  args: {
+    value: { type: 'phone', value: '+7 916 123-45-67' },
+    hint: RIDE_EDIT_TERMS.contactHintPublished,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByLabelText('Контакт')).toBeEnabled();
+    await expect(canvas.getByLabelText('Как связаться')).toBeEnabled();
+    await expect(
+      canvas.getByText(RIDE_EDIT_TERMS.contactHintPublished),
+    ).toBeVisible();
   },
 };
 

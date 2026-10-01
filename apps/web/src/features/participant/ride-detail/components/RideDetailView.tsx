@@ -752,7 +752,11 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                 {ride.difficulty !== null ? (
                   <Chip>
                     <span className="sr-only">{METRIC_TERMS.difficulty}: </span>
-                    <DifficultyScale level={ride.difficulty} size="sm" />
+                    <DifficultyScale
+                      level={ride.difficulty}
+                      size="sm"
+                      animated
+                    />
                   </Chip>
                 ) : null}
                 <Chip>

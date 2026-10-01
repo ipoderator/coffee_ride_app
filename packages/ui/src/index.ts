@@ -16,6 +16,7 @@
 export * from './format';
 export * from './terminology';
 export * from './lib/cn';
+export * from './lib/use-in-view-once';
 export * from './components/MetricTile';
 export * from './components/MetricRow';
 export * from './components/StatusBadge';

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { create2GisMapRenderer } from './render.js';
+import { create2GisMapRenderer, linePrefix } from './render.js';
 
 // `@2gis/mapgl` is dynamically imported inside `render()` — mocked here
 // rather than loading the real SDK (no DOM/WebGL in a Node test
@@ -14,6 +14,8 @@ const {
   mapSetZoom,
   mapOn,
   htmlMarkerCtor,
+  htmlMarkers,
+  polylines,
   markerOn,
   mapCtor,
 } = vi.hoisted(() => ({
@@ -23,6 +25,15 @@ const {
   mapSetZoom: vi.fn(),
   mapOn: vi.fn(),
   htmlMarkerCtor: vi.fn(),
+  // CR-171: live SDK objects, to see which were kept, moved or destroyed.
+  htmlMarkers: [] as Array<{
+    destroy: ReturnType<typeof vi.fn>;
+    setCoordinates: ReturnType<typeof vi.fn>;
+  }>,
+  polylines: [] as Array<{
+    coordinates: number[][];
+    destroy: ReturnType<typeof vi.fn>;
+  }>,
   markerOn: vi.fn(),
   mapCtor: vi.fn(),
 }));
@@ -40,14 +51,19 @@ vi.mock('@2gis/mapgl', () => ({
       this.setCenter = mapSetCenter;
       this.setZoom = mapSetZoom;
       this.on = mapOn;
+      this.invalidateSize = vi.fn();
     }),
     Polyline: vi.fn().mockImplementation(function (
       this: { destroy: () => void },
       _map: unknown,
-      options: unknown,
+      options: { coordinates: number[][] },
     ) {
       polylineCtor(options);
       this.destroy = vi.fn();
+      polylines.push({
+        coordinates: options.coordinates,
+        destroy: this.destroy as ReturnType<typeof vi.fn>,
+      });
     }),
     Marker: vi.fn().mockImplementation(function (
       this: Record<string, unknown>,
@@ -62,12 +78,16 @@ vi.mock('@2gis/mapgl', () => ({
     ) {
       htmlMarkerCtor(options);
       this.destroy = vi.fn();
+      this.setCoordinates = vi.fn();
+      htmlMarkers.push(this as never);
     }),
   }),
 }));
 
 afterEach(() => {
   vi.clearAllMocks();
+  htmlMarkers.length = 0;
+  polylines.length = 0;
 });
 
 async function renderHandle() {
@@ -172,11 +192,96 @@ describe('fitBounds', () => {
     expect(mapSetZoom).toHaveBeenCalledWith(14);
   });
 
+  it('eases the fit when given a duration, and jumps for 0 (CR-171)', async () => {
+    const handle = await renderHandle();
+    const points = [
+      { lat: 55.7, lng: 37.5 },
+      { lat: 55.9, lng: 37.8 },
+    ];
+    handle.fitBounds(points, { padding: 56, maxZoom: 14, durationMs: 600 });
+    expect(mapFitBounds).toHaveBeenLastCalledWith(expect.anything(), {
+      padding: { top: 56, right: 56, bottom: 56, left: 56 },
+      maxZoom: 14,
+      animation: { duration: 600, easing: 'easeOutCubic' },
+    });
+
+    handle.fitBounds(points, { durationMs: 0 });
+    expect(mapFitBounds).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ animation: { animate: false } }),
+    );
+  });
+
+  it('eases a single-point fit too (CR-171)', async () => {
+    const handle = await renderHandle();
+    handle.fitBounds([{ lat: 55.75, lng: 37.61 }], { durationMs: 600 });
+    const animation = { duration: 600, easing: 'easeOutCubic' };
+    expect(mapSetCenter).toHaveBeenCalledWith([37.61, 55.75], animation);
+    expect(mapSetZoom).toHaveBeenCalledWith(14, animation);
+  });
+
+  it('re-fits after a container resize at once, never animated (CR-171)', async () => {
+    let onResize: (() => void) | null = null;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          onResize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const handle = await renderHandle();
+    handle.fitBounds(
+      [
+        { lat: 55.7, lng: 37.5 },
+        { lat: 55.9, lng: 37.8 },
+      ],
+      { padding: 56, durationMs: 600 },
+    );
+    mapFitBounds.mockClear();
+
+    onResize!();
+
+    expect(mapFitBounds).toHaveBeenCalledTimes(1);
+    expect(mapFitBounds.mock.calls[0]![1]).not.toHaveProperty('animation');
+    vi.unstubAllGlobals();
+  });
+
   it('does nothing for an empty point list', async () => {
     const handle = await renderHandle();
     handle.fitBounds([]);
     expect(mapFitBounds).not.toHaveBeenCalled();
     expect(mapSetCenter).not.toHaveBeenCalled();
+  });
+});
+
+describe('panTo (CR-170)', () => {
+  it('eases the centre to the point in [lng, lat] order, keeping the zoom', async () => {
+    const handle = await renderHandle();
+    handle.panTo({ lat: 55.75, lng: 37.61 }, { durationMs: 450 });
+    expect(mapSetCenter).toHaveBeenCalledWith([37.61, 55.75], {
+      duration: 450,
+      easing: 'easeOutCubic',
+    });
+    expect(mapSetZoom).not.toHaveBeenCalled();
+  });
+
+  it('jumps without animation for a zero duration (reduced motion)', async () => {
+    const handle = await renderHandle();
+    handle.panTo({ lat: 55.75, lng: 37.61 }, { durationMs: 0 });
+    expect(mapSetCenter).toHaveBeenCalledWith([37.61, 55.75], {
+      animate: false,
+    });
+  });
+
+  it("keeps the provider's default duration when none is given", async () => {
+    const handle = await renderHandle();
+    handle.panTo({ lat: 55.75, lng: 37.61 });
+    expect(mapSetCenter).toHaveBeenCalledWith([37.61, 55.75], {
+      easing: 'easeOutCubic',
+    });
   });
 });
 
@@ -233,7 +338,11 @@ interface FakeElement {
   dataset: Record<string, string>;
   children: FakeElement[];
   listeners: Record<string, (event: { stopPropagation(): void }) => void>;
+  attributes: Record<string, string>;
+  animations: Array<{ keyframes: unknown; timing: Record<string, unknown> }>;
   appendChild(child: FakeElement): void;
+  setAttribute(name: string, value: string): void;
+  animate(keyframes: unknown, timing: Record<string, unknown>): void;
   addEventListener(
     type: string,
     listener: (event: { stopPropagation(): void }) => void,
@@ -250,8 +359,16 @@ function fakeDocument() {
         dataset: {},
         children: [],
         listeners: {},
+        attributes: {},
+        animations: [],
         appendChild(child) {
           this.children.push(child);
+        },
+        setAttribute(name, value) {
+          this.attributes[name] = value;
+        },
+        animate(keyframes, timing) {
+          this.animations.push({ keyframes, timing });
         },
         addEventListener(type, listener) {
           this.listeners[type] = listener;
@@ -385,5 +502,282 @@ describe('onMarkerClick (CR-118)', () => {
     const handle = await renderHandle();
     handle.setMarkers([{ id: 'plain', point: { lat: 1, lng: 1 } }]);
     expect(markerOn).not.toHaveBeenCalled();
+  });
+});
+
+describe('marker reconciliation (CR-171)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const ring = (id: string, lat: number, extra = {}) => ({
+    id,
+    point: { lat, lng: 37 },
+    shape: 'ring' as const,
+    label: '07:30',
+    ...extra,
+  });
+
+  it('keeps an unchanged marker, moves a moved one, rebuilds a changed one', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([ring('a', 55), ring('b', 56), ring('c', 57)]);
+    const [a, b, c] = htmlMarkers;
+
+    handle.setMarkers([
+      ring('a', 55),
+      ring('b', 56.5),
+      ring('c', 57, { selected: true }),
+    ]);
+
+    // `a`: same object, untouched — a running pulse would survive.
+    expect(a!.destroy).not.toHaveBeenCalled();
+    expect(a!.setCoordinates).not.toHaveBeenCalled();
+    // `b`: moved in place, not rebuilt.
+    expect(b!.destroy).not.toHaveBeenCalled();
+    expect(b!.setCoordinates).toHaveBeenCalledWith([37, 56.5]);
+    // `c`: its look changed, so it is rebuilt.
+    expect(c!.destroy).toHaveBeenCalled();
+    expect(htmlMarkers).toHaveLength(4);
+  });
+
+  it('destroys markers that are gone and gives repeated ids their own marker', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([ring('a', 55), ring('a', 55), ring('b', 56)]);
+    expect(htmlMarkers).toHaveLength(3);
+
+    handle.setMarkers([ring('a', 55)]);
+    expect(htmlMarkers.filter((m) => m.destroy.mock.calls.length)).toHaveLength(
+      2,
+    );
+
+    handle.destroy();
+    expect(htmlMarkers.every((m) => m.destroy.mock.calls.length)).toBe(true);
+  });
+});
+
+describe('ring pulse (CR-171)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('pulses a few times behind the ring, then stops (finite)', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([
+      {
+        id: 'ride-1',
+        point: { lat: 55.75, lng: 37.61 },
+        shape: 'ring',
+        color: '#82668c',
+        pulse: true,
+      },
+    ]);
+
+    const [pulse, ring] = lastHtmlMarker().html.children;
+    expect(pulse!.dataset.pulse).toBe('true');
+    expect(pulse!.style.cssText).toContain('border:2px solid #82668c');
+    expect(ring!.style.cssText).toContain('border:3px solid #82668c');
+    expect(pulse!.animations).toHaveLength(1);
+    expect(pulse!.animations[0]!.timing).toMatchObject({ iterations: 3 });
+  });
+
+  it('adds nothing without `pulse`', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([
+      { id: 'ride-1', point: { lat: 1, lng: 1 }, shape: 'ring', label: '9' },
+    ]);
+    const { html } = lastHtmlMarker();
+    expect(html.children.some((child) => child.dataset.pulse)).toBe(false);
+  });
+});
+
+describe('tag markers (CR-171)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('draws a tick on the point and a non-interactive pill with a meter above it', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const onMarkerClick = vi.fn();
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    const handle = await renderer.render({
+      container: {} as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+      onMarkerClick,
+    });
+    handle.setMarkers([
+      {
+        id: 'difficulty',
+        point: { lat: 55.8, lng: 37.7 },
+        shape: 'tag',
+        label: 'Средний',
+        color: '#82668c',
+        haloColor: '#ffffff',
+        meter: { filled: 3, total: 5 },
+      },
+    ]);
+
+    const options = lastHtmlMarker();
+    expect(options.anchor).toEqual([0, 0]);
+    expect(options.zIndex).toBe(0);
+    expect(options).not.toHaveProperty('interactive');
+    const { html } = options;
+    expect(html.style.cssText).toContain('pointer-events:none');
+    expect(html.listeners).toEqual({});
+    const [tick, pill] = html.children;
+    expect(tick!.style.cssText).toContain('border:2px solid #82668c');
+    expect(pill!.style.cssText).toContain('background:#ffffff');
+    const [meter, text] = pill!.children;
+    expect(meter!.attributes['aria-hidden']).toBe('true');
+    const filled = meter!.children.filter((segment) =>
+      segment.style.cssText.includes('background:#82668c'),
+    );
+    expect(meter!.children).toHaveLength(5);
+    expect(filled).toHaveLength(3);
+    expect(text!.textContent).toBe('Средний');
+    // No `revealDelayMs`: shown at once.
+    expect(html.animations).toHaveLength(0);
+  });
+
+  it('fades in after `revealDelayMs`', async () => {
+    vi.stubGlobal('document', fakeDocument());
+    const handle = await renderHandle();
+    handle.setMarkers([
+      {
+        id: 'summit',
+        point: { lat: 1, lng: 1 },
+        shape: 'tag',
+        label: '▲ 214 м',
+        revealDelayMs: 450,
+      },
+    ]);
+    const { html } = lastHtmlMarker();
+    expect(html.children[1]!.children).toHaveLength(1); // no meter
+    expect(html.animations[0]!.timing).toMatchObject({
+      delay: 450,
+      fill: 'backwards',
+    });
+  });
+});
+
+describe('polyline draw-in (CR-171)', () => {
+  let now = 0;
+  let frames: Array<() => void> = [];
+
+  function runFrames(ms: number) {
+    now += ms;
+    const pending = frames;
+    frames = [];
+    for (const frame of pending) frame();
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    frames = [];
+    now = 0;
+  });
+
+  function stubClock() {
+    vi.stubGlobal('performance', { now: () => now });
+    vi.stubGlobal('requestAnimationFrame', (cb: () => void) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      frames = [];
+    });
+  }
+
+  const straight = [
+    { lat: 0, lng: 0 },
+    { lat: 0, lng: 1 },
+    { lat: 0, lng: 2 },
+  ];
+
+  it('draws the line in at a constant pace, never blinking out', async () => {
+    stubClock();
+    const handle = await renderHandle();
+    handle.setPolyline({ points: straight, drawInMs: 1000 });
+    // First frame: nothing drawable yet (a single point).
+    expect(polylines).toHaveLength(0);
+
+    runFrames(250);
+    expect(polylines.at(-1)!.coordinates.at(-1)).toEqual([0.5, 0]);
+    runFrames(500);
+    const halfway = polylines.at(-1)!;
+    expect(halfway.coordinates.at(-1)).toEqual([1.5, 0]);
+    // The previous segment was replaced only once the next existed.
+    expect(polylines.at(-2)!.destroy).toHaveBeenCalled();
+
+    runFrames(400);
+    expect(polylines.at(-1)!.coordinates).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
+    expect(frames).toHaveLength(0); // done, no more frames
+  });
+
+  it('continues a running draw on new points instead of restarting it', async () => {
+    stubClock();
+    const handle = await renderHandle();
+    handle.setPolyline({ points: straight, drawInMs: 1000 });
+    runFrames(500);
+
+    const finer = [
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 0.5 },
+      { lat: 0, lng: 1 },
+      { lat: 0, lng: 1.5 },
+      { lat: 0, lng: 2 },
+    ];
+    handle.setPolyline({ points: finer });
+    // Same progress (half), on the new geometry.
+    expect(polylines.at(-1)!.coordinates).toEqual([
+      [0, 0],
+      [0.5, 0],
+      [1, 0],
+    ]);
+    runFrames(600);
+    expect(polylines.at(-1)!.coordinates).toHaveLength(5);
+  });
+
+  it('shows the whole line at once without `drawInMs`, and clears on null', async () => {
+    stubClock();
+    const handle = await renderHandle();
+    handle.setPolyline({ points: straight });
+    expect(polylines.at(-1)!.coordinates).toHaveLength(3);
+    expect(frames).toHaveLength(0);
+
+    handle.setPolyline({ points: straight, drawInMs: 1000 });
+    handle.setPolyline(null);
+    expect(frames).toHaveLength(0);
+    expect(polylines.every((line) => line.destroy.mock.calls.length)).toBe(
+      true,
+    );
+  });
+});
+
+describe('linePrefix (CR-171)', () => {
+  const line = [
+    { lat: 0, lng: 0 },
+    { lat: 0, lng: 1 },
+    { lat: 0, lng: 3 },
+  ];
+
+  it('cuts by length along the line, ending on an interpolated point', () => {
+    expect(linePrefix(line, 0.5)).toEqual([
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 1 },
+      { lat: 0, lng: 1.5 },
+    ]);
+  });
+
+  it('returns the start alone at 0 and the whole line at 1', () => {
+    expect(linePrefix(line, 0)).toEqual([{ lat: 0, lng: 0 }]);
+    expect(linePrefix(line, 1)).toBe(line);
   });
 });

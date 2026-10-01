@@ -1,4 +1,8 @@
+'use client';
+
+import { useRef } from 'react';
 import { cn } from '../lib/cn';
+import { useInViewOnce } from '../lib/use-in-view-once';
 import { DIFFICULTY_LEVEL_TERMS, type DifficultyLevel } from '../terminology';
 
 const LEVELS: readonly DifficultyLevel[] = [1, 2, 3, 4, 5];
@@ -16,16 +20,26 @@ export interface DifficultyScaleProps {
   level: DifficultyLevel;
   /** `sm` (CR-144): narrow segments and small text, for a chip on a ride card. */
   size?: 'md' | 'sm';
+  /** CR-170: filled segments fill in left to right once, when the scale
+   * first scrolls into view (`segment-fill`, `motion-safe:` only). Off by default — a grid of cards
+   * filling at once is noise; the ride page opts in. */
+  animated?: boolean;
   className?: string;
 }
+
+// Gap between one segment starting to fill and the next.
+const SEGMENT_STAGGER_MS = 70;
 
 export function DifficultyScale({
   level,
   size = 'md',
+  animated = false,
   className,
 }: DifficultyScaleProps) {
   const label = DIFFICULTY_LEVEL_TERMS[level];
   const small = size === 'sm';
+  const segmentsRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewOnce(segmentsRef, { enabled: animated });
   return (
     <div
       className={cn(
@@ -34,20 +48,39 @@ export function DifficultyScale({
         className,
       )}
     >
-      <div className={small ? 'flex gap-0.5' : 'flex gap-1'} aria-hidden="true">
-        {LEVELS.map((segment) => (
-          <span
-            key={segment}
-            className={cn(
-              small
-                ? 'h-2.5 w-1 rounded-[1px] border'
-                : 'h-2 w-4 rounded-sm border',
-              segment <= level
-                ? 'border-frame bg-frame'
-                : 'border-border-input bg-transparent',
-            )}
-          />
-        ))}
+      <div
+        ref={segmentsRef}
+        className={small ? 'flex gap-0.5' : 'flex gap-1'}
+        aria-hidden="true"
+      >
+        {LEVELS.map((segment) => {
+          const filled = segment <= level;
+          const fills = animated && filled;
+          return (
+            <span
+              key={segment}
+              data-filled={filled || undefined}
+              className={cn(
+                small
+                  ? 'h-2.5 w-1 rounded-[1px] border'
+                  : 'h-2 w-4 rounded-sm border',
+                filled
+                  ? 'border-frame bg-frame'
+                  : 'border-border-input bg-transparent',
+                fills && 'motion-safe:animate-segment-fill',
+                // Held at the hollow first frame until it is on screen.
+                fills && !inView && '[animation-play-state:paused]',
+              )}
+              style={
+                fills
+                  ? {
+                      animationDelay: `${(segment - 1) * SEGMENT_STAGGER_MS}ms`,
+                    }
+                  : undefined
+              }
+            />
+          );
+        })}
       </div>
       <span
         className={

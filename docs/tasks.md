@@ -1286,3 +1286,29 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       strings that promised a resend which did not exist. KI-042 re-checked
       and does not share the gap (`/forgot-password` is already re-requestable).
       See `docs/changelog.md`.
+- [x] CR-169 KI-081: `PUT /v1/rides/:id/contact` accepts a change at any status
+      (a stale contact must stay fixable) but had no UI — `EditRideForm` is
+      read-only after `draft`, so the contact fields were disabled too. The
+      fields now stay enabled after publish with their own «Сохранить способ
+      связи» button calling that endpoint, exactly KI-065's shape for the
+      visibility toggle; the form's read-only rule is unchanged and a draft
+      still saves through the whole-form `PATCH`. Additive optional `hint` prop
+      on `RideContactFields`. See `docs/changelog.md`.
+- [x] CR-170 Micro-animations instead of decoration (owner request): a shared
+      motion vocabulary in `tokens.css`, all `motion-safe:` — the route track
+      draws in (cards wait until scrolled to), the discovery map eases to a
+      selected ride (additive `MapHandle.panTo`), the difficulty scale fills on
+      view, the registration ticket animates a state change after mount, and
+      the success toast rises in with a drawn check mark and fades out.
+      `docs/design.md` §5 "Motion". See `docs/changelog.md`.
+- [x] CR-171 The discovery map as the main emotional layer (owner request): the
+      chosen ride's route draws itself in on the map (continuing, not
+      restarting, when the full geometry replaces the preview), its start pin
+      pulses three times, and quiet notes sit on the line — difficulty halfway,
+      the summit «▲ N м» once elevation is known. Additive `maps-core` fields
+      (`drawInMs`, `pulse`, `shape: 'tag'`, `meter`, `revealDelayMs`); the 2GIS
+      adapter reconciles markers by id. See `docs/changelog.md`.
+- [x] CR-172 Selecting a ride on `/` frames its whole route (eased `fitBounds`,
+      additive `MapFitOptions.durationMs`) instead of only panning to its start,
+      so CR-171's draw-in and notes stay in view; a ride without a route still
+      pans to its start. See `docs/changelog.md`.

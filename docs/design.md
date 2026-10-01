@@ -331,6 +331,51 @@ uppercase`. Sofia Sans Condensed held this role until ADR-026 retired it; the mo
 - **Focus:** a 2px `primary` outline with 2px offset on every interactive element
   (§12) — unchanged.
 
+### Motion (CR-170)
+
+Micro-animations instead of decoration — the owner's 2026-10-01 direction. Motion
+explains a change (something appeared, moved, filled, was confirmed); it never
+decorates a resting surface. Glass, gradient cards and heavy shadows stay banned (§1).
+
+- **One vocabulary**, in `packages/ui/src/tokens.css` `@theme`: the `ease-quiet`
+  curve and `animate-track-draw` (1.1 s) / `animate-check-draw` / `animate-rise-in`
+  (260 ms) / `animate-fade-in` / `animate-fade-out` / `animate-segment-fill`. No
+  per-component durations or easings beyond these.
+- **Always `motion-safe:`** (§12). Under `prefers-reduced-motion` the final state
+  renders at once; JS-driven motion (smooth scroll, the map camera) checks
+  `apps/web/src/lib/motion/reduced-motion.ts` and jumps instead.
+- **Finite and once.** No loops (the skeleton pulse is the one exception, §10), no
+  camera movement on a hover sweep, nothing that shifts layout. The start-pin pulse
+  (CR-171) is finite too: three beats, ≈ 4 s (WCAG 2.2.2).
+- **Where it is used:**
+  - _Track_ — `RouteCover` and the hero's `TrackCover` draw the route in from the
+    start (`pathLength="1"` + `stroke-dasharray="1"`); pins fade in as the line
+    reaches them. Cards below the fold hold the first frame until scrolled to
+    (`useInViewOnce`, `packages/ui`).
+  - _Map_ — selecting a ride on `/` (a pin click or a focused row, never a hover)
+    eases the camera to frame its whole route (`fitBounds` with `durationMs`,
+    600 ms, 56 px padding, max zoom 14) so the draw-in and the notes are in view;
+    a ride without a route eases to its start, zoom unchanged (`panTo`). One move
+    per choice: the full geometry arriving later does not move the camera again.
+    (CR-170 only panned to the start; CR-172 changed it on the owner's call.)
+  - _The map as the emotional layer (CR-171)_ — on `/`, the ride just made
+    active (hover, focus or pin) draws its route in over 900 ms at a constant
+    pace (`MapPolylineInput.drawInMs`; the full geometry replacing the preview
+    continues the draw, never restarts it); its start ring pulses three times; and
+    two quiet notes sit on the line, fading in as the line reaches them: the
+    difficulty (word + the §6 segment meter) halfway along, and the summit
+    «▲ 214 м» once the full geometry shows a climb of ≥ 30 m away from either end.
+    Notes are `haloColor` pills with `--map-route` ink, non-interactive, below the
+    pins.
+  - _Difficulty_ — `DifficultyScale animated` fills its segments left to right
+    when it scrolls into view; off by default (a grid of cards filling at once is
+    noise), on for the ride page's chip.
+  - _Registration status_ — the ticket's frame colour eases over and its content
+    rises in when the state changes after mount; the first render is still. The
+    seats bar slides to a new count.
+  - _Success_ — the toast rises in, a success draws its check mark, and it fades out
+    before leaving.
+
 ---
 
 ## 6. Metric presentation system
