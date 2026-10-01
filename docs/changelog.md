@@ -2494,3 +2494,42 @@ Follow-up: `AvatarStack` in `packages/ui` has the same `bg-primary-tint` fill fo
 `+N` overflow chip (1.22:1) and a `ring-bg-raised` assumption, but it has no production
 call sites yet (stories/tests only), so it was left alone — worth fixing when it gets
 its first real consumer.
+
+## 2026-10-01 — CR-167 — Ignore local `references/`; raise the coverage baseline after CR-165/166
+
+Summary: two housekeeping items from CR-165's follow-up list.
+(1) `references/` — local design reference screenshots (~13 MB of PNGs) that had sat
+untracked at the repo root — is now gitignored. The approved mockups live in the Design
+artifacts `docs/design.md` points to; these are large binaries that would bloat history.
+(2) The coverage baseline was refreshed for CR-165/CR-166. Running
+`pnpm test:coverage` in the environment `.claude/rules/testing.md` requires (Postgres,
+Redis and S3 up, `RUN_LIVE_S3_TESTS=1` + `RUN_LIVE_REDIS_TESTS=1` with `REDIS_URL` and
+`S3_*` exported, no `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`) showed coverage had in fact
+**fallen** in two scopes rather than risen — `apps/api/src/modules/rides/` (lines,
+statements, branches) and `apps/web` branches — because CR-165 added branches the new
+suites didn't reach. Per this project's "the baseline is a floor that only rises" rule
+the fix was more tests, not a lower floor:
+
+- `ride-contact.routes.test.ts` +2 cases: a caller with **no** `OrganizerProfile` at all
+  hitting `PUT /:id/contact` (a distinct authorization path from "someone else's ride",
+  and the one untested branch in `setRideContact`), and setting/clearing the contact
+  through the draft-only `PATCH` (22 → 24 cases).
+- `ride-contact-fields.test.tsx` (new): `RideContactFields`' own branching — the
+  type→value coupling, the per-type placeholders, the four offered types, and the two
+  converters between form state and the API payload. Its Storybook stories cover the
+  visual states but run in a separate Vitest project, so they don't count toward unit
+  coverage. Uses `fireEvent` (the house idiom here) — `@testing-library/user-event` is
+  not a dependency of this workspace.
+  Every scope now sits at or above the baseline, and the regenerated
+  `coverage-baseline.json` rose on every metric (verified field-by-field against the
+  previous commit — no value decreased, so no `--allow-decrease` and no
+  `coverage-decrease-approved` label is involved).
+  Files: `.gitignore`, `coverage-baseline.json`,
+  `apps/api/src/modules/rides/ride-contact.routes.test.ts`,
+  `apps/web/src/features/organizer/rides/ride-contact-fields.test.tsx` (new).
+  Validation: `pnpm typecheck` and `pnpm lint` green; `apps/api` 537 passed / 0 skipped
+  (the S3 and Redis live suites ran — `S3_*` must be exported into the shell, `.env` is
+  not auto-loaded); `apps/web` unit 507 passed; `pnpm coverage:check` reports "Coverage
+  holds at or above the baseline".
+  Decisions: none.
+  Follow-up: none.

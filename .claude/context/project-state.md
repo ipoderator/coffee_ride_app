@@ -37,6 +37,14 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-167 (2026-10-01, this session): `references/` (local design screenshots) is
+gitignored, and `coverage-baseline.json` was refreshed after CR-165/166. The
+measured run showed coverage had _fallen_ in `apps/api/src/modules/rides/` and
+`apps/web` branches — CR-165 added branches its suites didn't reach — so the
+floor was restored by adding tests (no-organizer-profile authz on
+`PUT /:id/contact`, PATCH set/clear, and a new `ride-contact-fields.test.tsx`),
+not by lowering the baseline. Every metric in the regenerated baseline rose.
+
 CR-166 (2026-10-01, this session): the ride-detail rider/organizer avatars were
 `--primary-tint` on `--bg` (1.09:1 — the circle was invisible, only the initials
 read); both now use the existing `--primary-fill`/`--on-primary-fill` pair

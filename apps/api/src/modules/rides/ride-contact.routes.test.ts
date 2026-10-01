@@ -307,6 +307,58 @@ describe('ride organizer contact (CR-165)', () => {
     });
   });
 
+  describe('PATCH /v1/rides/:id (draft)', () => {
+    it('sets and clears the contact on a draft', async () => {
+      const app = await buildApp(testEnv);
+      const organizerToken = await registerAndLoginUser(app);
+      await app.inject({
+        method: 'POST',
+        url: '/v1/organizers/me',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: organizerToken },
+        payload: { name: 'Гравийный клуб' },
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/rides',
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: organizerToken },
+        payload: {
+          title: 'Черновик',
+          bicycleType: 'gravel',
+          startsAt: '2027-05-01T05:00:00.000Z',
+          startTimezone: 'Europe/Moscow',
+        },
+      });
+      const rideId = created.json().ride.id as string;
+
+      const set = await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: organizerToken },
+        payload: { contact: { type: 'email', value: 'ride@example.com' } },
+      });
+      expect(set.statusCode).toBe(200);
+      expect(
+        (await getRide(app, rideId, organizerToken)).json().contact,
+      ).toEqual({ type: 'email', value: 'ride@example.com' });
+
+      const cleared = await app.inject({
+        method: 'PATCH',
+        url: `/v1/rides/${rideId}`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: organizerToken },
+        payload: { contact: null },
+      });
+      expect(cleared.statusCode).toBe(200);
+      expect(
+        (await getRide(app, rideId, organizerToken)).json(),
+      ).not.toHaveProperty('contact');
+      await app.close();
+    });
+  });
+
   describe('PUT /v1/rides/:id/contact', () => {
     it('rejects a request with no session cookie with 401', async () => {
       const app = await buildApp(testEnv);
@@ -323,6 +375,23 @@ describe('ride organizer contact (CR-165)', () => {
       const stranger = await registerAndLoginUser(app);
 
       const response = await setContact(app, rideId, stranger, {
+        contact: { type: 'telegram', value: '@coffee_ride' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().code).toBe('ride_not_found');
+      await app.close();
+    });
+
+    it('answers 404 for a caller with no organizer profile at all', async () => {
+      // Distinct from the "someone else's ride" case above: this caller has
+      // never created an `OrganizerProfile`, so ownership can't even be
+      // resolved. Same 404, never a 403 that would confirm the ride exists.
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOpenRide(app);
+      const plainUser = await registerAndLoginUser(app);
+
+      const response = await setContact(app, rideId, plainUser, {
         contact: { type: 'telegram', value: '@coffee_ride' },
       });
 

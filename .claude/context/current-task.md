@@ -76,3 +76,16 @@ link), both themes, plus the Storybook stories.
 
 Note: the dev database (`coffee_ride_dev`) is separate from the test database
 and needed the migration applied separately — both are migrated now.
+
+---
+
+## CR-167 — gitignore `references/`; coverage baseline refresh
+
+Status: **done, validated** (2026-10-01). Details: `docs/changelog.md` → CR-167.
+
+Notable: the baseline run revealed a coverage _drop_ (not the expected rise) in
+`apps/api/src/modules/rides/` and `apps/web` branches. Fixed by adding the
+missing tests rather than lowering the floor, per `.claude/rules/testing.md`.
+Environment note: `S3_*` must be exported into the shell (`set -a; . ./.env`)
+before `pnpm test:coverage` — otherwise the S3 live suites skip and understate
+coverage, even though `turbo.json` passes the vars through correctly.

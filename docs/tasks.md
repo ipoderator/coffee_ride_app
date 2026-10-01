@@ -1270,3 +1270,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       invisible. Switched to the existing `--primary-fill`/`--on-primary-fill`
       pair: 4.43:1 (light) / 3.81:1 (dark) for the shape, 4.97:1 AA for the
       initials. No new colour token. See `docs/changelog.md`.
+- [x] CR-167 Gitignore the local `references/` folder; refresh
+      `coverage-baseline.json` after CR-165/166 — the run showed a _drop_ in
+      `modules/rides` and `apps/web` branches, closed with 2 more API cases
+      (no-organizer-profile authz, PATCH set/clear) and a new
+      `ride-contact-fields.test.tsx`, not by lowering the floor. See
+      `docs/changelog.md`.
