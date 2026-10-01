@@ -90,3 +90,16 @@ export function useSession(): SessionState {
   }
   return session;
 }
+
+/**
+ * CR-168: same read, but `null` instead of a throw when no provider is above.
+ * For a component that is *supplementary* to whatever renders it — the resend-
+ * verification affordance sits inside two organizer forms, and a missing
+ * provider should cost that one button, never take the surrounding form down
+ * with it (`.claude/rules/resilience.md`'s principle, applied at the component
+ * level). `useSession()` keeps throwing for callers like `CabinetShell` whose
+ * whole purpose depends on a resolved session.
+ */
+export function useOptionalSession(): SessionState | null {
+  return useContext(SessionContext);
+}

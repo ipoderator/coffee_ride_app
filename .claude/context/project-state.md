@@ -37,6 +37,33 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-168 (2026-10-01, this session): closed KI-026's real remaining half — an
+unverified user had no way to ever obtain a _new_ verification link.
+`POST /v1/auth/register` issued the only token a user would ever get and no
+resend endpoint existed anywhere, so an expired (24h) or undelivered first
+email left the account permanently unverifiable: `/register` 409s the taken
+email, and `POST /v1/organizers/me` + `POST /v1/rides/:id/publish` stay 403
+`email_verification_required` forever. Note the stale framing this corrects:
+KI-026/KI-042's headline ("no auth screens") was already obsolete — CR-099
+built all three — and both KIs' "Next action" pointed only at
+`EMAIL_FROM_ADDRESS`/ADR-007, missing this code-side gap, which
+`notifications.service.ts` had been naming in a comment since CR-050.
+Added `POST /v1/auth/resend-verification`: session-authenticated and bodyless
+(user id from the session, never a request body — so no account-existence
+oracle and none of `/forgot-password`'s identical-response handling needed),
+sweeps every outstanding token and issues one fresh one in a single
+transaction, idempotent no-op when already verified, `204` always,
+rate-limited on both tiers under its own route name. Surfaced as
+`ResendVerificationButton` (`apps/web/src/lib/auth/`, cross-cutting like
+`useLogout` — not `packages/ui`, which never fetches) on all three dead-end
+surfaces: `/verify-email`'s error states, `/organizer/profile`'s banner and
+ride-edit's publish banner. Added `useOptionalSession()` beside `useSession()`
+(same read, `null` instead of a throw with no provider) after the existing
+organizer-form tests showed a throw there took the whole form down, not just
+this button. Fixed three strings that had been promising a resend that did not
+exist. KI-042 re-checked and does not share the gap — `/forgot-password` is
+already re-requestable, so only its delivery half remains.
+
 CR-167 (2026-10-01, this session): `references/` (local design screenshots) is
 gitignored, and `coverage-baseline.json` was refreshed after CR-165/166. The
 measured run showed coverage had _fallen_ in `apps/api/src/modules/rides/` and
@@ -527,9 +554,11 @@ tokens/typography/Russian formatting from `docs/design.md` via `packages/ui` —
 `app/layout.tsx`'s pre-hydration script. One global `AppHeader` on every route (CR-108).
 Screens:
 `/register`, `/login`, `/verify-email`, `/forgot-password`, `/reset-password` (last
-three new, CR-099, now backed by real email delivery — CR-100, ADR-007 — though
-KI-026/KI-042 stay narrowed pending a configured sender + a live-network-verified
-send, see "Current task"), `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
+three new, CR-099, now backed by real email delivery — CR-100, ADR-007 — and, since
+CR-168, by a working resend path (`ResendVerificationButton` on `/verify-email`'s
+error states and both organizer `email_verification_required` banners); KI-026/KI-042
+stay narrowed pending only a configured sender + a live-network-verified send, see
+"Current task"), `/me` + `/me/profile` + `/me/rides` + `/me/notifications`,
 `/organizer` (dashboard) + `/organizer/profile` + `/organizer/rides`
 (list/new/[id]/edit/[id]/route/[id]/cover/[id]/groups/[id]/participants/[id]/updates),
 `/` (public discovery — map-first with a legend-row list, bicycleType filter,
@@ -922,11 +951,17 @@ env.ts`'s `REDIS_URL`/`S3_ENDPOINT` now normalize an empty string to "not config
 - `/verify-email`, `/forgot-password`, `/reset-password` screens now exist (CR-099,
   narrows KI-026/KI-042) and are live-verified end to end in dev/QA. Real email
   delivery now exists too (CR-100, ADR-007 Accepted — Unisender Go, behind
-  `apps/api/src/lib/email/`), but KI-026/KI-042 stay narrowed rather than resolved:
+  `apps/api/src/lib/email/`), and CR-168 closed the last code-side gap: `POST
+/v1/auth/resend-verification` plus `ResendVerificationButton` mean a lost or
+  expired verification link is now recoverable in-app (before it was terminal —
+  `register` issued the only token a user would ever get). KI-026/KI-042 stay
+  narrowed rather than resolved for one remaining, owner-side reason each:
   no sender is verified in the account yet (`EMAIL_FROM_ADDRESS` unset,
   `app.emailProvider` is `null`), and this sandbox can't resolve `unisender.ru`
   (KI-055) to exercise a real send either way. The reset token still isn't exposed
-  over HTTP in any environment, by design (no-account-enumeration requirement).
+  over HTTP in any environment, by design (no-account-enumeration requirement) —
+  and neither is the resend-issued verification token, for the same reason the
+  caller already has a session (the email is the only channel).
 - Notification delivery (CR-038..041) now enqueues onto a real `bullmq`/Redis queue
   when `REDIS_URL` is configured (CR-050, KI-040 resolved); falls back to the
   pre-CR-050 direct synchronous insert when it isn't. Live connection-level

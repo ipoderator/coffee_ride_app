@@ -27,6 +27,26 @@ POST `/v1/auth/verify-email` — **implemented (CR-011)**. Body: `{ token }`.
 `verification_token_expired` as appropriate — single-use, 24h expiry. Same
 rate-limit tier as register.
 
+POST `/v1/auth/resend-verification` — **implemented (CR-168)**. No request
+body: the user is taken from the session cookie, never from a client-supplied
+email (`.claude/rules/security.md`). Requires a valid session (`401`
+otherwise). `204` in every success case. An unverified caller gets every
+outstanding `email_verification_tokens` row marked used and one fresh token
+issued (24h expiry) plus a verification email sent/enqueued; an
+already-verified caller is an idempotent no-op — nothing issued, nothing
+sent, same `204`. Because identity comes from the session, the endpoint has
+no account-existence oracle to protect against and so needs none of
+`/v1/auth/forgot-password`'s identical-response-either-way handling. The new
+token is never returned over HTTP in any environment (unlike `register`'s
+dev-only `verificationUrl`) — the email is the only channel. Rate-limited on
+both tiers (5/min/IP, plus a per-account budget keyed by the session's user
+id, independent of login/register's).
+
+Closes KI-026's code-side half: before this, `register` issued the only
+verification token a user would ever get, so an expired or undelivered first
+email left the account permanently unverifiable — `register` answers
+`409 email_already_registered`, so re-registering was not a way out either.
+
 POST `/v1/auth/login` — **implemented (CR-012)**. Body: `{ email, password }`.
 `200` → `{ user }` + `Set-Cookie: session=<opaque token>` (httpOnly, `Secure`
 in production only, `SameSite=Lax`, `Path=/`, 30-day rolling expiry —

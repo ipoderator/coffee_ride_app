@@ -2533,3 +2533,91 @@ the fix was more tests, not a lower floor:
   holds at or above the baseline".
   Decisions: none.
   Follow-up: none.
+
+## 2026-10-01 — CR-168 — Resend email verification (KI-026's real remaining half)
+
+Summary: an unverified user had no way to ever obtain a _new_ verification link.
+`POST /v1/auth/register` issued the only token a user would ever get, and no resend
+endpoint existed anywhere in the repo — so a 24h expiry, a spam-filtered email or a
+closed tab left the account permanently unverifiable, with `/register` answering
+`409 email_already_registered` and both `POST /v1/organizers/me` and `POST
+/v1/rides/:id/publish` stuck at 403 `email_verification_required` forever. The only
+recovery was a direct `POST` or a DB write (which is exactly how this session's
+reporter had to create a test organizer an hour earlier). Adds `POST
+/v1/auth/resend-verification` and surfaces it on all three dead-end screens.
+
+Note on scope: KI-026/KI-042's headline ("no `/verify-email`, `/forgot-password`,
+`/reset-password` screens") was already stale — CR-099 built all three, and both KIs'
+"Next action" pointed only at `EMAIL_FROM_ADDRESS`/ADR-007, missing this code-side gap
+entirely. `notifications.service.ts` had been documenting it in a comment since CR-050
+("there is no resend endpoint, so a dropped email would leave the account
+unverifiable") without it ever being filed. KI-042 was re-checked and does not
+share the gap: `/forgot-password` is already self-service and re-requestable, so only
+its delivery half remains.
+
+- **API**: `resendEmailVerification(db, userId)` — user id from the verified session,
+  never a request body (`.claude/rules/security.md`), so unlike `/forgot-password`
+  there is no account-existence oracle and no identical-response-either-way handling
+  needed. Marks every outstanding `email_verification_tokens` row used and inserts one
+  fresh token in a single transaction (the `resetPassword` token-sweep precedent: a
+  newer link must kill the older one). Already-verified caller is an idempotent no-op.
+  Route is bodyless, `requireAuth`-guarded, `204` in every success case, rate-limited
+  on both tiers — the per-account key is the session's user id under its own
+  `resend-verification` route name, so it gets an independent budget from login/register.
+  The new token is never returned over HTTP in any environment.
+- **Web**: `ResendVerificationButton` (`src/lib/auth/`, cross-cutting like `useLogout`
+  — not `packages/ui`, which is presentational and never fetches). Rendered on
+  `/verify-email`'s error/missing-token states, `/organizer/profile`'s banner and
+  ride-edit's publish banner. Success retires the button (a second send would
+  invalidate the link the user was just told to open); 429 gets its own actionable
+  copy; any other failure stays retryable; an anonymous viewer gets «войдите» rather
+  than a button that could only ever 401.
+- **`useOptionalSession()`** added beside `useSession()`: same read, `null` instead of
+  a throw with no provider above. Found by the existing organizer-form tests, which
+  render those forms without a `SessionProvider` — a throw there took the whole form
+  down, not just this button. `useSession()` still throws for `CabinetShell` and
+  anything else whose purpose depends on a resolved session.
+- **Copy**: two strings had been promising a resend that did not exist —
+  `VERIFY_EMAIL_TERMS.invalidOrExpired` («Запросите новую при следующем входе» —
+  nothing at login did this) and `ORGANIZER_TERMS.emailVerificationRequired` /
+  `RIDE_EDIT_TERMS.publishEmailVerificationRequired` («Ссылка ... была отправлена при
+  регистрации» — a statement, not a way out). All three now name the real action.
+
+Files: `apps/api/src/modules/auth/auth.service.ts`, `auth.routes.ts`,
+`auth.routes.test.ts`; `apps/web/src/lib/api/current-user.ts`,
+`src/lib/auth/ResendVerificationButton.tsx` (new) + `.test.tsx` (new),
+`src/lib/auth/session-context.tsx`,
+`src/features/auth/verify-email/components/VerifyEmailStatus.tsx`,
+`src/features/organizer/profile/components/OrganizerProfileForm.tsx`,
+`src/features/organizer/rides/components/EditRideForm.tsx`,
+`src/stories/ResendVerificationButton.stories.tsx` (new);
+`packages/ui/src/terminology.ts`; `docs/api.md`.
+
+Validation: `apps/api` 538 passed / 8 skipped (7 new resend cases); `apps/web` unit 515
+passed (9 new); 76 Storybook stories pass including 7 new ones with axe a11y at
+`test: 'error'`; typecheck + lint green across `api`/`web`/`ui`. Live-verified in a
+real browser against the running stack: register → log in unverified → stale
+`/verify-email?token=` link → «Отправить письмо повторно» → «Письмо отправлено…» with
+the button retiring itself, and the same affordance on `/organizer/profile`'s 403
+banner. Separately verified over HTTP that a resend invalidates the previous link
+(`verification_token_already_used`) and that a resend-issued token actually verifies
+the account (`emailVerified: true`), plus the DB rows (old swept, one fresh unused).
+
+Decisions: none — a new endpoint and an additive shared component, no ADR needed.
+
+Follow-up: KI-026's last remaining half is unchanged and owner-side —
+`EMAIL_FROM_ADDRESS` is still empty and `unisender.ru` still fails DNS from this
+machine (KI-055), so the resend issues a valid token while the email producer no-ops,
+exactly as `register`'s has since CR-100.
+
+Coverage: `pnpm coverage:check` reports "Coverage holds at or above the baseline" —
+`apps/api` total rose on all four metrics, `modules/auth` branches +0.30 pp and
+functions +0.32 pp (its lines −0.08 pp is inside the 0.1 pp noise tolerance). Baseline
+file deliberately not regenerated: the gains are within tolerance of the existing
+floor, so there is nothing to raise. Worth recording for the next session that a first
+coverage run here showed a false ~4 pp drop in `modules/notifications` purely because
+`REDIS_URL`/`RUN_LIVE_REDIS_TESTS`/`RUN_LIVE_S3_TESTS` were unset and three live
+suites skipped themselves — exactly what `.claude/rules/testing.md` warns about. The
+local Redis also needs its password (`redis://:redis-dev-only@127.0.0.1:6379`, from
+`.env`'s commented line); CI's passwordless URL yields `NOAUTH` against it. With the
+full stack up, `apps/api` runs 546 passed / 0 skipped.

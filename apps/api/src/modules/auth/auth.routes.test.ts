@@ -771,6 +771,210 @@ describe('POST /v1/auth/reset-password', () => {
   });
 });
 
+// CR-168 (KI-026): before this route existed, `registerUser` issued the only
+// verification token a user would ever get — an expired or undelivered first
+// email left the account permanently unverifiable (and `/register` 409s the
+// taken email). Session-authenticated and bodyless, so unlike
+// `/forgot-password` there is no account-existence oracle to protect against.
+describe('POST /v1/auth/resend-verification', () => {
+  beforeEach(async () => {
+    const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM users`);
+    await app.close();
+  });
+
+  async function registerAndLogIn(app: Awaited<ReturnType<typeof buildApp>>) {
+    const { email, userId } = await registerTestUser(app);
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: PASSWORD },
+    });
+    const cookie = sessionCookie(login);
+    if (!cookie) throw new Error('No session cookie after login');
+    return { email, userId, cookie: { session: cookie.value } };
+  }
+
+  // For the two cases that need the *registration* token in hand (to prove a
+  // resend kills it, or to verify the account first) rather than just a session.
+  async function registerLogInAndKeepToken(
+    app: Awaited<ReturnType<typeof buildApp>>,
+  ) {
+    const email = uniqueEmail();
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/register',
+      payload: { email, password: PASSWORD },
+    });
+    const firstToken = new URL(
+      registered.json().verificationUrl as string,
+      'http://localhost',
+    ).searchParams.get('token');
+    if (!firstToken) throw new Error('No token in verificationUrl');
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: PASSWORD },
+    });
+    const cookie = sessionCookie(login);
+    if (!cookie) throw new Error('No session cookie after login');
+
+    return {
+      userId: registered.json().user.id as string,
+      firstToken,
+      cookie: { session: cookie.value },
+    };
+  }
+
+  function outstandingTokens(
+    app: Awaited<ReturnType<typeof buildApp>>,
+    userId: string,
+  ) {
+    return app.db
+      .select()
+      .from(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.userId, userId));
+  }
+
+  it('issues a fresh, working token for an unverified caller and 204s', async () => {
+    const app = await buildApp(testEnv);
+    const { userId, cookie } = await registerAndLogIn(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+      cookies: cookie,
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).toBe('');
+
+    // A second, unused row now exists; the first one was swept.
+    const rows = await outstandingTokens(app, userId);
+    expect(rows.length).toBe(2);
+    const unused = rows.filter((r) => r.usedAt === null);
+    expect(unused.length).toBe(1);
+
+    await app.close();
+  });
+
+  it('never returns the new token in the response body', async () => {
+    const app = await buildApp(testEnv);
+    const { cookie } = await registerAndLogIn(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+      cookies: cookie,
+    });
+
+    // Unlike `/register`'s dev-only `verificationUrl`, nothing is exposed here
+    // in any environment — the caller has a session, so email is the only
+    // channel that matters.
+    expect(response.body).toBe('');
+
+    await app.close();
+  });
+
+  it('invalidates the previous verification link: the old token no longer works', async () => {
+    const app = await buildApp(testEnv);
+    const { firstToken, cookie } = await registerLogInAndKeepToken(app);
+
+    const resend = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+      cookies: cookie,
+    });
+    expect(resend.statusCode).toBe(204);
+
+    // The link from the registration email is now dead — exactly the
+    // `resetPassword` precedent (a newer request kills the older link).
+    const useOld = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/verify-email',
+      payload: { token: firstToken },
+    });
+    expect(useOld.statusCode).toBe(400);
+    expect(useOld.json().code).toBe('verification_token_already_used');
+
+    await app.close();
+  });
+
+  it('issues nothing for an already-verified caller, but still 204s', async () => {
+    const app = await buildApp(testEnv);
+    const { userId, firstToken, cookie } = await registerLogInAndKeepToken(app);
+    await app.inject({
+      method: 'POST',
+      url: '/v1/auth/verify-email',
+      payload: { token: firstToken },
+    });
+
+    const before = await outstandingTokens(app, userId);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+      cookies: cookie,
+    });
+    const after = await outstandingTokens(app, userId);
+
+    expect(response.statusCode).toBe(204);
+    // Idempotent no-op: no new row, nothing emailed.
+    expect(after.length).toBe(before.length);
+
+    await app.close();
+  });
+
+  it('rejects an unauthenticated request with 401', async () => {
+    const app = await buildApp(testEnv);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('rejects a tampered session cookie with 401', async () => {
+    const app = await buildApp(testEnv);
+    const { cookie } = await registerAndLogIn(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+      cookies: { session: `${cookie.session}tampered` },
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('rate-limits after the auth tier threshold', async () => {
+    const app = await buildApp(testEnv);
+    const { cookie } = await registerAndLogIn(app);
+    const attempts = 6; // tier is 5/min — see auth.routes.ts's AUTH_RATE_LIMIT
+
+    const statuses = [];
+    for (let i = 0; i < attempts; i += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/resend-verification',
+        cookies: cookie,
+      });
+      statuses.push(response.statusCode);
+    }
+
+    expect(statuses.filter((s) => s === 204).length).toBe(5);
+    expect(statuses.at(-1)).toBe(429);
+
+    await app.close();
+  });
+});
+
 describe('GET /v1/auth/me', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);

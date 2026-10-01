@@ -232,10 +232,34 @@ export const VERIFY_EMAIL_TERMS = {
   successTitle: 'Email подтверждён',
   successBody: 'Адрес подтверждён. Теперь можно пользоваться аккаунтом.',
   missingToken: 'Ссылка неполная — отсутствует код подтверждения.',
-  invalidOrExpired:
-    'Ссылка недействительна или уже была использована. Запросите новую при следующем входе.',
+  // CR-168: was «Запросите новую при следующем входе» — nothing at login ever
+  // did that, and before `POST /v1/auth/resend-verification` existed there was
+  // no way to request one at all (KI-026). The copy now points at the button
+  // `ResendVerificationButton` actually renders beside it.
+  invalidOrExpired: 'Ссылка недействительна или уже была использована.',
   genericError: 'Не удалось подтвердить email. Попробуйте ещё раз позже.',
   loginLink: 'Перейти ко входу',
+} as const;
+
+/**
+ * CR-168 (KI-026): `ResendVerificationButton`'s copy, shared by every surface
+ * that can hit an unverified-email dead end — `/verify-email`'s error states
+ * and the organizer `email_verification_required` banners on
+ * `/organizer/profile` and the ride-edit publish action.
+ *
+ * `signedOutHint` exists because the endpoint is session-authenticated: a
+ * visitor who opened a stale link in a browser with no session can't resend
+ * until they log in, and saying so is more useful than a disabled button with
+ * no explanation.
+ */
+export const RESEND_VERIFICATION_TERMS = {
+  submit: 'Отправить письмо повторно',
+  submitPending: 'Отправляем…',
+  success:
+    'Письмо отправлено. Проверьте почту — ссылка действует 24 часа. Предыдущая ссылка больше не работает.',
+  signedOutHint: 'Войдите в аккаунт, чтобы запросить новое письмо.',
+  rateLimited: 'Слишком много запросов. Подождите минуту и попробуйте ещё раз.',
+  genericError: 'Не удалось отправить письмо. Попробуйте ещё раз позже.',
 } as const;
 
 /** `/forgot-password` (CR-099, closes KI-042's screen gap). `.claude/rules/
@@ -476,8 +500,12 @@ export const ORGANIZER_TERMS = {
   saveSubmit: 'Сохранить',
   saveSubmitPending: 'Сохранение…',
   saveSuccess: 'Изменения сохранены.',
+  // CR-168: the second half used to read «Ссылка для подтверждения была
+  // отправлена при регистрации» — a statement, not a way out, and a dead end
+  // once that one link expired (KI-026). The banner now renders
+  // `ResendVerificationButton` beside this text.
   emailVerificationRequired:
-    'Подтвердите email, чтобы создать профиль организатора. Ссылка для подтверждения была отправлена при регистрации.',
+    'Подтвердите email, чтобы создать профиль организатора.',
   loadError: 'Не удалось загрузить профиль организатора.',
   // CR-015: the dashboard's no-profile state (since CR-131, shown by
   // `OrganizerOverviewWidget` in place of the retired profile card).
@@ -733,8 +761,12 @@ export const RIDE_EDIT_TERMS = {
   publish: 'Опубликовать',
   publishPending: 'Публикация…',
   publishSuccess: 'Заезд опубликован.',
+  // CR-168: same dead-end copy fix as `ORGANIZER_TERMS.
+  // emailVerificationRequired` — the «отправлена при регистрации» half named a
+  // link the organizer may no longer have, with no way to get another (KI-026).
+  // `ResendVerificationButton` now renders beside this text.
   publishEmailVerificationRequired:
-    'Подтвердите email, чтобы опубликовать заезд. Ссылка для подтверждения была отправлена при регистрации.',
+    'Подтвердите email, чтобы опубликовать заезд.',
   // CR-089 ("Open registration") / CR-020 ("Close registration").
   openRegistration: 'Открыть регистрацию',
   openRegistrationPending: 'Открытие регистрации…',

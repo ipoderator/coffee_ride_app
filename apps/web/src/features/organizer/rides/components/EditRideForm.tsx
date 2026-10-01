@@ -27,6 +27,7 @@ import {
   RIDE_STATUS_TERMS,
 } from 'ui';
 import type { RideSectionLink } from '@/lib/cabinet/types';
+import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import {
   utcIsoToZonedLocalInput,
   zonedTimeToUtcIso,
@@ -811,10 +812,16 @@ export function EditRideForm({
           />
         </fieldset>
 
+        {/* CR-168 (KI-026): same dead-end fix as `OrganizerProfileForm`'s
+            banner — publish is blocked until the email is verified, and this is
+            the only place the organizer can act on that. */}
         {publishVerificationRequired && (
-          <p role="alert" className="text-body-sm text-danger">
-            {RIDE_EDIT_TERMS.publishEmailVerificationRequired}
-          </p>
+          <div className="flex flex-col gap-3">
+            <p role="alert" className="text-body-sm text-danger">
+              {RIDE_EDIT_TERMS.publishEmailVerificationRequired}
+            </p>
+            <ResendVerificationButton className="self-start" />
+          </div>
         )}
 
         {formError && !publishVerificationRequired && (

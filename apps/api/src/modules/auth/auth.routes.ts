@@ -1,3 +1,4 @@
+import type { FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import {
@@ -19,6 +20,7 @@ import {
   AuthServiceError,
   loginUser,
   registerUser,
+  resendEmailVerification,
   requestPasswordReset,
   resetPassword,
   toPublicUser,
@@ -175,6 +177,47 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     async (request, reply) => {
       const user = await verifyEmail(app.db, request.body.token);
       return reply.status(200).send({ user });
+    },
+  );
+
+  /**
+   * CR-168 (KI-026): the only way a user can obtain a replacement
+   * verification link. Session-authenticated and bodyless — identity comes
+   * from `request.user` (`.claude/rules/security.md`: never a client-supplied
+   * email/userId), which also means there is no account-existence oracle here
+   * and so, unlike `/forgot-password`, no need for a response that ignores its
+   * own outcome. `204` either way all the same: whether a token was issued is
+   * the caller's own already-known verification state, not new information.
+   */
+  app.post(
+    '/resend-verification',
+    {
+      config: { rateLimit: AUTH_RATE_LIMIT },
+      preHandler: [
+        requireAuth,
+        async (request: FastifyRequest) =>
+          // Keyed by the authenticated user id, not an email from the body —
+          // this route has no body. Its own route name, so it gets an
+          // independent budget from login/register rather than sharing one.
+          enforceAccountRateLimit('resend-verification', request.user!.id),
+      ],
+    },
+    async (request, reply) => {
+      // `requireAuth` guarantees `request.user` is set (401s otherwise).
+      const user = request.user!;
+      const result = await resendEmailVerification(app.db, user.id);
+
+      if (result.issued) {
+        await sendVerificationEmail(
+          app.log,
+          app.notificationQueue,
+          app.emailProvider,
+          user.email,
+          `${env.WEB_ORIGIN}/verify-email?token=${result.verificationToken}`,
+        );
+      }
+
+      return reply.status(204).send();
     },
   );
 

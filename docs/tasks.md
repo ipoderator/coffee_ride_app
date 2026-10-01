@@ -1276,3 +1276,13 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (no-organizer-profile authz, PATCH set/clear) and a new
       `ride-contact-fields.test.tsx`, not by lowering the floor. See
       `docs/changelog.md`.
+- [x] CR-168 KI-026's real remaining half: there was no way to ever request a
+      _new_ email-verification link. `register` issued the only token a user
+      would ever get, so an expired/undelivered first email left the account
+      permanently unverifiable (and `/register` 409s the taken email). Adds
+      `POST /v1/auth/resend-verification` (session-authenticated, bodyless,
+      sweeps outstanding tokens, both rate-limit tiers) and a shared
+      `ResendVerificationButton` on the three dead-end surfaces; fixes three
+      strings that promised a resend which did not exist. KI-042 re-checked
+      and does not share the gap (`/forgot-password` is already re-requestable).
+      See `docs/changelog.md`.

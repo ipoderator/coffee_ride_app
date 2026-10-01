@@ -202,6 +202,80 @@ export async function verifyEmail(
   return toPublicUser(updatedUser);
 }
 
+export interface ResendEmailVerificationResult {
+  // False when the caller's email was already verified — the route sends the
+  // same `204` either way, but nothing is issued and no email is sent.
+  issued: boolean;
+  // Only set when `issued` is true. Raw token, never persisted; the route
+  // embeds it in the emailed URL and never puts it in a response body (unlike
+  // `registerUser`'s dev-only `verificationUrl`, there is no QA path that
+  // needs it over HTTP — the caller already has a session, so the email is
+  // the only channel that matters here).
+  verificationToken?: string;
+}
+
+/**
+ * CR-168: issues a replacement email-verification token for an
+ * already-authenticated user (KI-026's remaining code-side half — before this,
+ * `registerUser` issued the only token a user would ever get, so an expired or
+ * undelivered first email left the account permanently unverifiable, with
+ * `/register` answering 409 for the taken email).
+ *
+ * `userId` comes from the verified session, never a request body
+ * (`.claude/rules/security.md`) — which is also why this can report honestly
+ * instead of needing `/forgot-password`'s identical-response-either-way
+ * treatment: the caller already proved who they are, so there is no account
+ * existence left to leak.
+ *
+ * Sweeps every outstanding token for the user in the same transaction as the
+ * insert — same precedent as {@link resetPassword}: once a newer link has been
+ * requested, an older one must not still work.
+ */
+export async function resendEmailVerification(
+  db: DbClient,
+  userId: string,
+): Promise<ResendEmailVerificationResult> {
+  const [row] = await db
+    .select({ id: users.id, emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!row) {
+    // The session resolved to a user that no longer exists — treat as a no-op
+    // rather than a 500; `requireAuth` already rejected anyone without a valid
+    // session, and a deleted account has nothing to verify.
+    return { issued: false };
+  }
+  if (row.emailVerified) {
+    return { issued: false };
+  }
+
+  const rawToken = generateVerificationToken();
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(emailVerificationTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(emailVerificationTokens.userId, userId),
+          isNull(emailVerificationTokens.usedAt),
+        ),
+      );
+
+    await tx.insert(emailVerificationTokens).values({
+      userId,
+      tokenHash,
+      expiresAt,
+    });
+  });
+
+  return { issued: true, verificationToken: rawToken };
+}
+
 // CR-012, `.claude/rules/security.md`: one generic error, same status/body/
 // title for "no such account" and "wrong password" — a distinct message for
 // either would let a client enumerate registered emails.

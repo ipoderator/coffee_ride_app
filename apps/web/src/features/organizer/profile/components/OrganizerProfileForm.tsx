@@ -15,6 +15,7 @@ import {
   formatRating,
   useToast,
 } from 'ui';
+import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import {
   ApiError,
   createOrganizerProfile,
@@ -270,10 +271,16 @@ export function OrganizerProfileForm() {
             />
           </FormField>
 
+          {/* CR-168 (KI-026): the banner used to end at «ссылка была отправлена
+              при регистрации» — a statement with no way out once that link had
+              expired. The resend button makes it recoverable in place. */}
           {verificationRequired && (
-            <p role="alert" className="text-body-sm text-danger">
-              {ORGANIZER_TERMS.emailVerificationRequired}
-            </p>
+            <div className="flex flex-col gap-3">
+              <p role="alert" className="text-body-sm text-danger">
+                {ORGANIZER_TERMS.emailVerificationRequired}
+              </p>
+              <ResendVerificationButton className="self-start" />
+            </div>
           )}
 
           {formError && !verificationRequired && (

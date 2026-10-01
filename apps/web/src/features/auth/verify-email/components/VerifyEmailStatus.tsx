@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Card, ErrorState, Skeleton, VERIFY_EMAIL_TERMS } from 'ui';
+import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import { ApiError, verifyEmail } from '../api';
 
 type Status = 'verifying' | 'success' | 'missing-token' | 'error';
@@ -60,15 +61,20 @@ export function VerifyEmailStatus({ token }: { token: string | null }) {
     );
   }
 
-  if (status === 'missing-token') {
-    return (
-      <ErrorState message={VERIFY_EMAIL_TERMS.missingToken} tone="danger" />
-    );
-  }
+  // CR-168 (KI-026): every failure here used to be terminal — the copy said
+  // «Запросите новую при следующем входе» and nothing at login did that. A
+  // signed-in user can now get a fresh link without leaving the page.
+  if (status === 'missing-token' || status === 'error') {
+    const message =
+      status === 'missing-token'
+        ? VERIFY_EMAIL_TERMS.missingToken
+        : (errorMessage ?? VERIFY_EMAIL_TERMS.genericError);
 
-  if (status === 'error') {
     return (
-      <ErrorState message={errorMessage ?? VERIFY_EMAIL_TERMS.genericError} />
+      <div className="flex flex-col gap-4">
+        <ErrorState message={message} tone="danger" />
+        <ResendVerificationButton className="self-start" />
+      </div>
     );
   }
 

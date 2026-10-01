@@ -116,6 +116,38 @@ Next action: user sets `EMAIL_FROM_ADDRESS` to a real verified sender, then
 the first session with real network access to `unisender.ru` should send
 one real email end to end (register → check inbox → click link) before
 this is trusted as more than "the adapter's request shape is correct."
+Update 2026-10-01 (CR-168): a second, independent gap was found here that
+every prior update had missed — and it was code-side, not config-side.
+`POST /v1/auth/register` issued the **only** verification token a user would
+ever get; no resend endpoint existed anywhere in the repo (confirmed by
+`grep -rni resend` over `apps/api/src`, `apps/web/src`, `packages/ui/src`,
+`docs/api.md` — the single hit was `notifications.service.ts`'s own comment
+naming the gap: "there is no resend endpoint, so a dropped email would leave
+the account unverifiable"). So even with `EMAIL_FROM_ADDRESS` configured and
+delivery working, a 24h token expiry, a spam-filtered email, or a closed tab
+left the account permanently unverifiable — `/register` answers `409
+email_already_registered`, so re-registering was not a way out, and both
+`POST /v1/organizers/me` and `POST /v1/rides/:id/publish` stay 403 forever.
+The UI copy had been promising a resend that did not exist
+(`VERIFY_EMAIL_TERMS.invalidOrExpired`: «Запросите новую при следующем
+входе» — nothing at login did this; `ORGANIZER_TERMS.
+emailVerificationRequired`: «Ссылка ... была отправлена при регистрации» —
+a statement, not an action). CR-168 adds `POST /v1/auth/resend-verification`
+(session-authenticated, bodyless, sweeps outstanding tokens, rate-limited on
+both tiers) and surfaces it as `ResendVerificationButton` on all three
+dead-end surfaces (`/verify-email`'s error states, `/organizer/profile`'s
+banner, ride-edit's publish banner), with the two misleading strings fixed.
+Live-verified in a real browser against the running stack: register → log in
+unverified → open a stale `/verify-email?token=` link → «Отправить письмо
+повторно» → «Письмо отправлено…», and the same button on the organizer
+profile's 403 banner; separately verified over HTTP that a resend
+invalidates the previous link (`verification_token_already_used`) and that a
+resend-issued token verifies the account (`emailVerified: true`).
+Next action: unchanged and now the only remaining half — user sets
+`EMAIL_FROM_ADDRESS` to a verified sender and one real send is exercised
+from a network that can resolve `unisender.ru` (KI-055). Until then the
+resend button issues a valid token and the producer no-ops, exactly as
+`register`'s has since CR-100.
 
 ### KI-038 — `next build` crashes if a `development`-valued `NODE_ENV` reaches it from the shell
 
@@ -207,6 +239,16 @@ yet (`app.emailProvider` stays `null`, producer no-ops), and this sandbox
 can't resolve `unisender.ru` (`nslookup` confirms `SERVFAIL`) to exercise a
 real send. Next action: same as KI-026's — configure a verified sender,
 then verify one real send from an environment with real network access.
+Update 2026-10-01 (CR-168): checked against KI-026's newly-found resend gap
+and this issue does not share it. Password reset is already self-service
+end to end: `/forgot-password` can be requested again at any time, by anyone,
+with no token or prior state needed, and each request issues a fresh token —
+there is no equivalent of "the one token you'll ever get." The only thing
+standing between a real user and a completed reset here is delivery, which is
+the `EMAIL_FROM_ADDRESS`/KI-055 half above. Deliberately not given a resend
+button: `/forgot-password` _is_ the resend, and adding a second
+session-authenticated path would be meaningless (a user who can log in does
+not need a password reset). Next action unchanged.
 
 ### KI-045 — CR-075/CR-076's Caddy/compose production manifest has never been run end to end
 
