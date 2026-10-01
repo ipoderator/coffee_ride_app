@@ -58,7 +58,7 @@ services:
   # dev-only `minio`/`minio12345` pair `.env.example`'s S3_* use). `/healthz`
   # is the one unauthenticated S3 endpoint; the image ships busybox wget.
   s3:
-    image: ghcr.io/chrislusf/seaweedfs:4.47
+    image: ghcr.io/chrislusf/seaweedfs:4.48
     environment:
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio12345
@@ -88,7 +88,7 @@ services:
   # Runs with a plain `docker compose up -d`; after `up -d s3` alone, add
   # `s3-init`.
   s3-init:
-    image: ghcr.io/chrislusf/seaweedfs:4.47
+    image: ghcr.io/chrislusf/seaweedfs:4.48
     depends_on:
       s3:
         condition: service_healthy
