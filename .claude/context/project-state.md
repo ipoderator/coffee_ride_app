@@ -37,6 +37,21 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-161…CR-163 (2026-10-01): CI on `main` is green again through E2E —
+the coverage gate had been red since CR-155, so build/E2E never ran (CR-161:
+real tests for the untested term templates, `DatePicker`, `NavMenu`,
+`GpxDropzone`); KI-078 (map fullscreen toggle over the degraded-map notice)
+fixed; KI-079 ride-detail chromium baseline refreshed from CI. CR-162:
+`GET /v1/rides/mine/registrations/activity` (KI-066 — the dashboard's feed and
+per-day chart from one aggregate, bucketed in the viewer's time zone) and
+`PUT /v1/rides/:id/participants-visibility` (KI-065 — hide the riders list at
+any status, re-show only while nobody is registered; owner decision). CR-163:
+the nightly `load-test.yml` had failed every night since CR-139 —
+`api-latency.js` ran without think time and ~89 % of its requests hit the
+10 000/min `RATE_LIMIT_MAX`; it now paces each VU (`THINK_TIME_S`, 0.5 s).
+Still open on the owner's side: `EMAIL_FROM_ADDRESS` + Unisender reachability
+(KI-026/042/055), a commercial 2GIS key (KI-075).
+
 CR-160 (2026-09-29, committed): fixed a real 2GIS route-builder bug
 found while finishing CR-148 — `packages/maps-2gis/src/route.ts` sent every
 waypoint as `type: 'stop'`, but 2GIS only honors a `stop` at the first/last

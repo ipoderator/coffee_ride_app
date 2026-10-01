@@ -11,7 +11,7 @@
 //     load/k6/scenarios/api-latency.js
 
 import http from 'k6/http';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { BASE_URL } from '../lib/config.js';
 import {
   registerAndVerify,
@@ -21,6 +21,11 @@ import {
 } from '../lib/api.js';
 
 const RIDE_COUNT = Number(__ENV.RIDE_COUNT || 10);
+// Per-VU pause between requests. Without it the request rate is whatever the
+// runner can push (~2 000 rps on GitHub's), which overran even the raised
+// RATE_LIMIT_MAX and turned ~89 % of requests into 429s. 20 VUs at 0.5 s is
+// ~40 rps (~2 400/min), well under the workflow's 10 000/min.
+const THINK_TIME_S = Number(__ENV.THINK_TIME_S || 0.5);
 
 export const options = {
   setupTimeout: '2m',
@@ -72,4 +77,5 @@ export default function (data) {
     const res = http.get(`${BASE_URL}/health`, { tags: { name: 'health' } });
     check(res, { 'health: 200': (r) => r.status === 200 });
   }
+  sleep(THINK_TIME_S);
 }

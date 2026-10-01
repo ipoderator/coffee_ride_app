@@ -2357,3 +2357,20 @@ RegistrationActivityWidget.tsx,activity.test.tsx}`, `apps/web/src/features/
 organizer/rides/{api.ts,components/EditRideForm.tsx,rides.test.tsx}`,
 `packages/ui/src/terminology.ts`, `docs/api.md`.
 Decisions: KI-065's rule above (owner's call, no ADR — additive endpoint).
+
+## 2026-10-01 — CR-163 — Nightly load test: pace `api-latency.js`
+
+Why: `load-test.yml` had failed every scheduled night since CR-139 (runs
+`36395521876` … `36834871034`). Every invariant scenario and the
+rate-limit job passed; the `load` job failed on `api-latency.js`'s
+`http_req_failed` threshold (`rate<0.01`, actual 88.82 %) while its latency
+thresholds all passed (p95 discovery 32 ms, detail 117 ms). The scenario ran
+without think time, so 20 VUs pushed ~2 100 rps on GitHub's runner (128 k
+iterations a minute) — far past the job's raised `RATE_LIMIT_MAX` of 10 000/min,
+so nearly every request after the first few seconds was a 429.
+What: each VU now sleeps `THINK_TIME_S` (default 0.5 s) per iteration —
+~40 rps for 20 VUs, ~2 400/min, a defined load well inside the limit. Thresholds
+unchanged.
+Validation: re-run via `workflow_dispatch` after the push (see the next entry if
+it needs follow-up).
+Files: `load/k6/scenarios/api-latency.js`.

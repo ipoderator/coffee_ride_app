@@ -1,5 +1,21 @@
 # Current task
 
+## CR-161…CR-163 — CI unblock, KI-078/079/066/065, nightly load test
+
+Status: **done, committed** (2026-10-01). Details: `docs/changelog.md`.
+
+- [x] CR-161: coverage gate green with real tests (ui 202, web +5); KI-078
+      toggle hidden while the map is degraded + `home.spec.ts` regression.
+- [x] KI-079: CI run `36856168437` — only `ride-detail` chromium differed
+      (CR-155 layout); its actual committed as baseline.
+- [x] Fixed my own slip: moving KI-079 truncated the KI archive in `047e8fa`
+      (opened for write before read); restored verbatim in `855fd7e`.
+- [x] CR-162: KI-066 aggregate endpoint + widget; KI-065 visibility endpoint +
+      form (owner: hide anytime, re-show only with no registrations).
+- [x] CR-163: `api-latency.js` think time (nightly load test red since CR-139).
+- Owner-side, not code: `EMAIL_FROM_ADDRESS` + Unisender DNS (KI-026/042/055);
+  commercial 2GIS key (KI-075).
+
 ## CR-160 — Fix 2GIS multi-stop routing bug (found finishing CR-148)
 
 Status: **done, committed** (2026-09-29). Details: `docs/changelog.md` CR-160.
