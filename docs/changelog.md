@@ -2292,3 +2292,16 @@ components/DiscoveryList.tsx`, `apps/web/e2e/home.spec.ts`.
 Decisions: none.
 Follow-up: KI-079 — take the refreshed `ride-detail` (and now
 `discovery-map`) baselines from this push's CI run.
+
+## 2026-10-01 — CR-161 follow-up — KI-079: ride-detail visual baseline from CI
+
+With the coverage gate green, CI run `36856168437` (`ed3c1a3`) reached the E2E
+step for the first time since CR-155: 50 passed, 1 flaky
+(`route-points-stops.spec.ts` route point add/edit/delete, passed on retry —
+not related), 1 failed — `ride-detail` (chromium), 14 % of pixels. Its
+`*-diff.png`/`*-actual.png` show only CR-155's layout (hero beside the
+«Стартовый лист» ticket) and the «Все заезды» back link. Committed the
+`*-actual.png` as `ride-detail-chromium-linux.png`. `ride-detail` mobile and
+`discovery-map` (which now hides the fullscreen toggle, KI-078) stayed within
+the 2 % tolerance and were left as they are.
+Files: `apps/web/e2e/visual-regression.spec.ts-snapshots/ride-detail-chromium-linux.png`.
