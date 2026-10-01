@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { BICYCLE_TYPES, type Ride } from '../domain/ride.js';
+import { BICYCLE_TYPES, type Ride, type RideContact } from '../domain/ride.js';
+import { rideContactSchema } from './ride-contact.js';
 import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
 import type { Stop } from '../domain/stop.js';
 import { ROUTE_POINT_TYPES, type RoutePoint } from '../domain/route-point.js';
@@ -65,6 +66,10 @@ export const createRideRequestSchema = z.object({
     .nullable()
     .optional(),
   difficulty: z.number().int().min(1).max(5).nullable().optional(),
+  // CR-165: the organizer may give a way to be contacted about this ride right
+  // at creation, or leave it out entirely (the default). Same optional-additive
+  // shape as CR-156's two fields above.
+  contact: rideContactSchema.nullable().optional(),
 });
 export type CreateRideRequest = z.infer<typeof createRideRequestSchema>;
 
@@ -119,6 +124,12 @@ export interface RideOrganizerSummary {
 // reviewed" without a second request or guessing from the public review list.
 export interface GetRideResponse {
   ride: Ride;
+  // CR-165: the organizer's contact for this ride. Present ONLY for a viewer with
+  // an active registration on it, or the organizer who owns it — and absent from
+  // the payload entirely otherwise, rather than `null`, so the response never
+  // reveals that a contact exists to someone who may not have it. `undefined`
+  // therefore means "not yours to see OR none given", deliberately ambiguous.
+  contact?: RideContact;
   organizer: RideOrganizerSummary;
   route: RouteSummary | null;
   stops: Stop[];
@@ -434,6 +445,10 @@ export const updateRideRequestSchema = z
     // CR-125: not nullable — unlike the fields above, this setting always has a
     // value (default `true`), so there is no "clear it" state to express.
     participantsVisible: z.boolean().optional(),
+    // CR-165: the optional organizer contact. Nullable — `null` clears it, which
+    // is how an organizer withdraws a contact they gave earlier; omitting the key
+    // leaves whatever is stored unchanged (same convention as the fields above).
+    contact: rideContactSchema.nullable().optional(),
     // CR-155: the whole «Требования» list, replacing the stored one (`[]` clears
     // it). Not nullable — an empty list already means "none".
     requirements: z
@@ -529,6 +544,17 @@ export interface GetRouteGeometryResponse {
 
 // KI-065: `PUT /v1/rides/:id/participants-visibility` — at any status, unlike
 // `PATCH`. Showing the list is refused while the ride has active registrations.
+// CR-165: `PUT /v1/rides/:id/contact` — at any status, unlike the draft-only
+// `PATCH`. `null` clears the contact. See `rides.service.ts`'s `setRideContact`
+// for why this isn't folded into `PATCH`.
+export const setRideContactRequestSchema = z.object({
+  contact: rideContactSchema.nullable(),
+});
+export type SetRideContactRequest = z.infer<typeof setRideContactRequestSchema>;
+export interface SetRideContactResponse {
+  ride: Ride;
+}
+
 export const setParticipantsVisibilityRequestSchema = z.object({
   participantsVisible: z.boolean('participantsVisible must be a boolean.'),
 });

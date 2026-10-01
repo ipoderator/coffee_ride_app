@@ -9,6 +9,7 @@ import {
   listPublicRidesQuerySchema,
   listRidesQuerySchema,
   setParticipantsVisibilityRequestSchema,
+  setRideContactRequestSchema,
   updateRideRequestSchema,
   updateRoutePointRequestSchema,
   updateStopRequestSchema,
@@ -19,6 +20,7 @@ import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-res
 import { reviewResponseSchema } from '../reviews/review-response.schema.js';
 import {
   coverImageResponseSchema,
+  rideContactResponseSchema,
   rideOrganizerSummarySchema,
   rideResponseSchema,
   routeGeometryResponseSchema,
@@ -33,6 +35,7 @@ import {
   RideServiceError,
   cancelRide,
   setParticipantsVisibility,
+  setRideContact,
   closeRegistration,
   createRide,
   createRoutePoint,
@@ -146,6 +149,10 @@ const rideResponseWrapper = z.object({ ride: rideResponseSchema });
 // added `viewerWaitlistEntry` (same discipline).
 const rideDetailResponseSchema = z.object({
   ride: rideResponseSchema,
+  // CR-165: `.optional()`, not `.nullable()` — the service omits the key entirely
+  // for a viewer who may not see the contact, and Fastify's Zod serializer strips
+  // whatever isn't listed here, so this is what lets the field through at all.
+  contact: rideContactResponseSchema.optional(),
   organizer: rideOrganizerSummarySchema,
   route: routeSummaryResponseSchema.nullable(),
   stops: z.array(stopResponseSchema),
@@ -457,6 +464,30 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.user!.id,
         request.params.id,
         request.body.participantsVisible,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-165: the organizer contact at any status (`PATCH` is draft-only) — a
+  // contact that goes stale after publication is exactly the case that must stay
+  // fixable. Same ownership rule as every transition (404 either way).
+  app.put(
+    '/:id/contact',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: setRideContactRequestSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await setRideContact(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.body.contact,
       );
       return reply.status(200).send({ ride });
     },

@@ -1585,6 +1585,38 @@ describe('RideDetailView', () => {
       ).not.toBeInTheDocument();
     });
 
+    it('shows the organizer contact as an actionable link when the API sends one', async () => {
+      // CR-165: the API only includes `contact` for a viewer entitled to it, so
+      // the component's job is simply to render what it was given — the
+      // authorization itself is covered in `ride-contact.routes.test.ts`.
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          contact: { type: 'telegram', value: 'coffee_ride' },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const link = await screen.findByTestId('ride-contact-link');
+      expect(link).toHaveAttribute('href', 'https://t.me/coffee_ride');
+      expect(link).toHaveTextContent('@coffee_ride');
+      expect(
+        screen.getByRole('heading', { name: 'Связь с организатором' }),
+      ).toBeInTheDocument();
+    });
+
+    it('omits the contact block entirely when the API sends none', async () => {
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByRole('heading', { name: 'О заезде' });
+      expect(screen.queryByTestId('ride-contact-link')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Связь с организатором' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('downloads an .ics file from «Добавить в календарь» for an upcoming ride', async () => {
       const createObjectURL = vi.fn(() => 'blob:ride');
       const revokeObjectURL = vi.fn();

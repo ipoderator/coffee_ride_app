@@ -37,7 +37,29 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-CR-164 (2026-10-01, this session): KI-060 — discovery could not say where a ride
+CR-166 (2026-10-01, this session): the ride-detail rider/organizer avatars were
+`--primary-tint` on `--bg` (1.09:1 — the circle was invisible, only the initials
+read); both now use the existing `--primary-fill`/`--on-primary-fill` pair
+(4.43:1 light / 3.81:1 dark for the shape, 4.97:1 AA for the initials). No new
+colour token. `AvatarStack`'s `+N` chip has the same flaw but no production call
+site yet, so it was left alone.
+
+CR-165 (2026-10-01, this session): optional per-ride organizer contact —
+`phone`/`telegram`/`max` (the Russian MAX messenger)/`email`, validated and
+normalized once in `packages/types`' `rideContactSchema`. Migration
+`0022_ride_contact.sql` adds a nullable `contact_type`/`contact_value` pair to
+`rides` with both-or-neither and not-blank CHECKs. The contact is private:
+`GET /v1/rides/:id` carries it only for a viewer with an active registration or
+the owning organizer and omits the key entirely otherwise; it is deliberately
+not a field on the `Ride` domain type, so it can never leak into the public
+`GET /v1/rides` list. New `PUT /v1/rides/:id/contact` sets/clears it at any
+status (the draft-only `PATCH` also accepts it), following KI-065's precedent.
+Organizer create/edit forms share a new `RideContactFields` component (10
+Storybook stories); the ride page shows the block as a `tel:`/`t.me`/`max.ru`/
+`mailto:` link. Known gap: KI-081 — the published-ride surface has no UI for
+the post-publish change the endpoint supports.
+
+CR-164 (2026-10-01, earlier this session): KI-060 — discovery could not say where a ride
 starts when the organizer labelled the start route point just «Старт».
 `PublicRideListItem` gained an additive `startDescription` (that same oldest-`start`
 point's `description`, read by the `selectDistinctOn` `getRideListExtras` already

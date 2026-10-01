@@ -5,6 +5,7 @@
 import type {
   BicycleType,
   DifficultyLevel,
+  RideContactType,
   RideStatus,
   RoutePointType,
 } from 'types';
@@ -17,7 +18,13 @@ import type {
 // that imported these types from this module before CR-017 has to change its import
 // path. Only the Russian label maps below are genuinely UI-layer and stay defined
 // here.
-export type { BicycleType, DifficultyLevel, RideStatus, RoutePointType };
+export type {
+  BicycleType,
+  DifficultyLevel,
+  RideContactType,
+  RideStatus,
+  RoutePointType,
+};
 
 /**
  * Russian cardinal plural — `one` (1, 21), `few` (2–4, 22–24), `many` (0, 5–20,
@@ -75,6 +82,16 @@ export const BICYCLE_TYPE_TERMS: Record<BicycleType, string> = {
   gravel: 'Гравийный',
   mtb: 'Горный (MTB)',
   any: 'Любой',
+};
+
+// CR-165: how an organizer may be reached about one ride. `max` is the Russian MAX
+// messenger (max.ru) — named in full so an organizer picking from the list isn't
+// left guessing which "Max" is meant.
+export const RIDE_CONTACT_TYPE_TERMS: Record<RideContactType, string> = {
+  phone: 'Телефон',
+  telegram: 'Telegram',
+  max: 'MAX',
+  email: 'Почта',
 };
 
 /**
@@ -683,6 +700,18 @@ export const RIDE_EDIT_TERMS = {
   participantsVisibilitySaved: 'Видимость списка участников сохранена.',
   participantsVisibilityLocked:
     'Люди записались, когда список был скрыт, поэтому показать его уже нельзя.',
+  // CR-165: optional per-ride organizer contact.
+  contactLabel: 'Способ связи с организатором',
+  contactHint:
+    'Видят только те, кто записался на заезд. Можно не указывать — тогда блок не появится.',
+  contactTypeLabel: 'Как связаться',
+  contactValueLabel: 'Контакт',
+  contactNone: 'Не указывать',
+  contactSaved: 'Способ связи сохранён.',
+  contactPlaceholderPhone: '+7 916 123-45-67',
+  contactPlaceholderTelegram: '@coffee_ride',
+  contactPlaceholderMax: '+7 916 123-45-67',
+  contactPlaceholderEmail: 'ride@example.com',
   // CR-026 ("Map discovery"), ADR-014: manual coordinate entry — no geocode-by-
   // address UI yet (KI-016).
   startLatLabel: 'Широта старта',
@@ -1591,6 +1620,11 @@ export const RIDE_PAGE_TERMS = {
   elevationTitle: 'Профиль высоты',
   elevationRange: (max: string, min: string) => `макс. ${max} · мин. ${min}`,
   requirementsTitle: 'Требования',
+  // CR-165: shown only to a rider with an active registration (the API omits the
+  // field for everyone else), so the copy can safely address them directly.
+  contactTitle: 'Связь с организатором',
+  contactHint:
+    'Виден только участникам заезда. Не публикуйте его в открытых чатах.',
 } as const;
 
 // --------------------------- end CR-155 block ------------------------------

@@ -3,6 +3,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  EMPTY_RIDE_CONTACT,
+  RideContactFields,
+  rideContactFromResponse,
+  rideContactToRequest,
+  type RideContactDraft,
+} from './RideContactFields';
 import { ArrowRight } from 'lucide-react';
 import type { BicycleType, DifficultyLevel } from 'types';
 import { BICYCLE_TYPES, DIFFICULTY_LEVELS } from 'types';
@@ -54,6 +61,7 @@ interface FieldErrors {
   startTimezone?: string;
   difficulty?: string;
   description?: string;
+  contact?: string;
 }
 
 /** Server/Zod issue path → the field that shows it. `startsAt` is built from
@@ -65,6 +73,9 @@ function fieldForPath(path: unknown): keyof FieldErrors | null {
     case 'startTimezone':
     case 'difficulty':
     case 'description':
+    // CR-165: `rideContactSchema`'s per-type messages come back under
+    // `['contact', 'value']`; `issue.path[0]` is what this receives.
+    case 'contact':
       return path;
     case 'startsAt':
       return 'startDate';
@@ -134,6 +145,8 @@ export function CreateRideForm({
   const [startTimezone, setStartTimezone] = useState(DEFAULT_TIMEZONE);
   const [difficulty, setDifficulty] = useState('');
   const [description, setDescription] = useState('');
+  // CR-165: optional «Способ связи» — «Не указывать» by default.
+  const [contact, setContact] = useState<RideContactDraft>(EMPTY_RIDE_CONTACT);
   const [gpxFile, setGpxFile] = useState<File | null>(null);
   const [gpxError, setGpxError] = useState<string | undefined>(undefined);
 
@@ -153,7 +166,7 @@ export function CreateRideForm({
   const loadDraft = useCallback(async (id: string) => {
     setLoadState('loading');
     try {
-      const { ride, isOwner } = await getRide(id);
+      const { ride, isOwner, contact: loadedContact } = await getRide(id);
       if (!isOwner) {
         setLoadState('error');
         return;
@@ -166,6 +179,7 @@ export function CreateRideForm({
       setStartTimezone(ride.startTimezone);
       setDifficulty(ride.difficulty === null ? '' : String(ride.difficulty));
       setDescription(ride.description ?? '');
+      setContact(rideContactFromResponse(loadedContact));
       setRideId(ride.id);
       setLoadState('ready');
     } catch {
@@ -209,6 +223,7 @@ export function CreateRideForm({
       return;
     }
 
+    const contactPayload = rideContactToRequest(contact);
     const payload = {
       title: title.trim(),
       bicycleType,
@@ -216,6 +231,11 @@ export function CreateRideForm({
       startTimezone,
       description: description.trim() || null,
       difficulty: difficulty ? (Number(difficulty) as DifficultyLevel) : null,
+      // CR-165: only sent when the organizer actually picked something. On a
+      // create there is nothing to clear, and on the wizard's PATCH an omitted
+      // key leaves the stored contact alone — `null` would wipe it, which is
+      // not what "I didn't touch this field" should mean.
+      ...(contactPayload ? { contact: contactPayload } : {}),
     };
 
     const parsed = rideId
@@ -481,6 +501,16 @@ export function CreateRideForm({
             className="rounded-xl bg-bg py-3"
           />
         </FormField>
+
+        {/* CR-165: optional — «Не указывать» is the default, so a ride with no
+            contact stays the zero-effort path. */}
+        <RideContactFields
+          idPrefix="ride-create"
+          value={contact}
+          onChange={setContact}
+          disabled={isPending}
+          error={fieldErrors.contact}
+        />
 
         <GpxDropzone
           id="ride-gpx"

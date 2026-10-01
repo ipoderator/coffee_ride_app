@@ -8,6 +8,7 @@ export * from './api/pagination.js';
 export * from './api/auth.js';
 export * from './api/users.js';
 export * from './api/organizers.js';
+export * from './api/ride-contact.js';
 export * from './api/rides.js';
 export * from './api/ride-groups.js';
 export * from './api/registrations.js';

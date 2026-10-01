@@ -11,7 +11,9 @@ import {
   type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
+  type RideContactInput,
   type SetParticipantsVisibilityResponse,
+  type SetRideContactResponse,
   type StartRideResponse,
   type UpdateRideRequest,
   type UpdateRideResponse,
@@ -91,7 +93,10 @@ export async function listMyRides(
  * ride-detail endpoint, so a published/non-draft ride owned by someone else answers
  * 200. `isOwner` (KI-069) is what `EditRideForm` uses to show its own not-found state
  * for that case instead of rendering the edit form/lifecycle controls. */
-type EditableRide = Pick<GetRideResponse, 'ride' | 'isOwner' | 'requirements'>;
+type EditableRide = Pick<
+  GetRideResponse,
+  'ride' | 'isOwner' | 'requirements' | 'contact'
+>;
 
 export async function getRide(id: string): Promise<EditableRide> {
   const response = await fetch(`${RIDES_ENDPOINT}/${id}`);
@@ -150,6 +155,31 @@ export async function setParticipantsVisibility(
   }
 
   return body as SetParticipantsVisibilityResponse;
+}
+
+/**
+ * CR-165: the organizer contact at any status (`PATCH` is draft-only) — a contact
+ * that goes stale after publication is exactly when it must stay fixable.
+ * `null` clears it.
+ */
+export async function setRideContact(
+  id: string,
+  contact: RideContactInput | null,
+): Promise<SetRideContactResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/contact`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contact }),
+  });
+
+  const body = (await response.json()) as
+    SetRideContactResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as SetRideContactResponse;
 }
 
 /**

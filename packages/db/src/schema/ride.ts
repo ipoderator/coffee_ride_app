@@ -51,6 +51,18 @@ export const bicycleTypeEnum = pgEnum('bicycle_type', [
   'any',
 ]);
 
+// CR-165: how the organizer may be reached about one specific ride. `max` is the
+// Russian MAX messenger (max.ru), phone-number-based like `phone` itself — kept as
+// its own value rather than folded into `phone` because the ride page links to a
+// different place for each. Must stay in sync with `packages/types/src/domain/
+// ride.ts`'s `RIDE_CONTACT_TYPES`, same duplication rationale as the two enums above.
+export const rideContactTypeEnum = pgEnum('ride_contact_type', [
+  'phone',
+  'telegram',
+  'max',
+  'email',
+]);
+
 export const rides = pgTable(
   'rides',
   {
@@ -111,6 +123,15 @@ export const rides = pgTable(
     participantsVisible: boolean('participants_visible')
       .notNull()
       .default(true),
+    // CR-165: an optional, per-ride way to reach the organizer. Both columns are
+    // null for a ride with no contact (the default) — the `rides_contact_both_or_
+    // neither` CHECK below is what keeps a half-filled pair out of the table.
+    // Stored normalized (`+7XXXXXXXXXX` for `phone`/`max`, no leading `@` for
+    // `telegram`) so the ride page can build a link without re-parsing user input.
+    // Private: `.claude/rules/security.md` — served only to an active registrant or
+    // the owning organizer, never in the public list payload.
+    contactType: rideContactTypeEnum('contact_type'),
+    contactValue: text('contact_value'),
     status: rideStatusEnum('status').notNull().default('draft'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -165,6 +186,17 @@ export const rides = pgTable(
     check(
       'rides_difficulty_range',
       sql`${table.difficulty} is null or (${table.difficulty} >= 1 and ${table.difficulty} <= 5)`,
+    ),
+    // CR-165: a contact is either fully present or fully absent — never a type
+    // with no value, or a value with no type to say how to use it.
+    check(
+      'rides_contact_both_or_neither',
+      sql`(${table.contactType} is null and ${table.contactValue} is null) or (${table.contactType} is not null and ${table.contactValue} is not null)`,
+    ),
+    // CR-165: a stored contact is never blank/whitespace-only.
+    check(
+      'rides_contact_value_not_blank',
+      sql`${table.contactValue} is null or length(btrim(${table.contactValue})) > 0`,
     ),
     // ADR-014: latitude/longitude range invariants enforced at the DB level, not
     // just by `packages/types`' Zod schema.

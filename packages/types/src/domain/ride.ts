@@ -30,6 +30,35 @@ export const DIFFICULTY_LEVELS = [1, 2, 3, 4, 5] as const;
 export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
 
 /**
+ * CR-165: how an organizer may be reached about one specific ride. `max` is the
+ * Russian MAX messenger (max.ru) — phone-number-based, like `phone`, but its own
+ * value because the ride page links somewhere different for each. Mirrored by
+ * `packages/db`'s `ride_contact_type` pg enum.
+ */
+export const RIDE_CONTACT_TYPES = [
+  'phone',
+  'telegram',
+  'max',
+  'email',
+] as const;
+export type RideContactType = (typeof RIDE_CONTACT_TYPES)[number];
+
+/**
+ * A ride's organizer contact, as stored and as served. `value` is normalized by
+ * the API before it is written (`+7XXXXXXXXXX` for `phone`/`max`, no leading `@`
+ * for `telegram`, lowercased for `email`), so a consumer can build a link from it
+ * without re-parsing the organizer's raw input.
+ *
+ * Private (`.claude/rules/security.md`): served only to a participant with an
+ * active registration on this ride, or to the organizer who owns it. For every
+ * other caller the field is absent from the payload entirely — not blanked out.
+ */
+export interface RideContact {
+  type: RideContactType;
+  value: string;
+}
+
+/**
  * A cycling event owned by an `OrganizerProfile` (`docs/database.md`). CR-017 ("Create
  * ride", see `.claude/context/current-task.md`) only ever creates a row with `title`/
  * `bicycleType`/`startsAt`/`startTimezone` set and every other field `null` — the rest
@@ -37,6 +66,11 @@ export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
  * separate fixed domain entities (`Route`, `Stop`, `RideRequirement`, `RideService`)
  * with their own tickets, not fields on `Ride` itself.
  */
+// CR-165 note: the organizer's per-ride contact is deliberately NOT a field here.
+// `Ride` is the shape the public `GET /v1/rides` list serves, and the contact is
+// private (`.claude/rules/security.md`) — it lives on `GetRideResponse` instead,
+// where the API adds it only for a viewer allowed to see it. Keeping it off this
+// interface makes that a structural guarantee rather than a reviewer's vigilance.
 export interface Ride {
   id: string;
   organizerId: string;

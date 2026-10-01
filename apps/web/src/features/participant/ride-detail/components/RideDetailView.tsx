@@ -31,6 +31,9 @@ import {
   formatGroupPaceParts,
   formatPaceRangeParts,
   formatPrice,
+  formatRideContactHref,
+  formatRideContactType,
+  formatRideContactValue,
   formatRating,
   formatRelativeDay,
   formatRideStartLine,
@@ -393,6 +396,10 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     viewerStartNumber,
     viewerWaitlistPosition,
     requirements,
+    // CR-165: present only when the API decided this viewer may see it (an
+    // active registration on this ride, or the organizer) — so the UI simply
+    // renders what it was given, without re-deriving the rule.
+    contact,
   } = detail;
   const timeZone = ride.startTimezone;
   const startsAt = new Date(ride.startsAt);
@@ -607,7 +614,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             src={organizer.avatarUrl ? apiAssetUrl(organizer.avatarUrl) : null}
             name={organizer.name}
             size="sm"
-            className="h-9 w-9 bg-primary-tint text-body-sm font-semibold text-primary"
+            className="h-9 w-9 bg-primary-fill text-body-sm font-semibold text-on-primary-fill"
           />
           <p className="text-body-sm">
             <span className="text-text-secondary">
@@ -791,6 +798,30 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                     </li>
                   ))}
                 </ul>
+              </section>
+            ) : null}
+            {contact ? (
+              <section
+                className="flex min-w-0 flex-col gap-3.5"
+                aria-labelledby="ride-contact-title"
+              >
+                <h2 id="ride-contact-title" className={SECTION_TITLE_CLASSNAME}>
+                  {RIDE_PAGE_TERMS.contactTitle}
+                </h2>
+                <p className="text-body-sm text-text-secondary">
+                  {RIDE_PAGE_TERMS.contactHint}
+                </p>
+                <a
+                  href={formatRideContactHref(contact)}
+                  data-testid="ride-contact-link"
+                  className="min-h-11 self-start text-body font-semibold text-primary underline underline-offset-4 hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <span className="text-text-secondary">
+                    {formatRideContactType(contact.type)}
+                    {': '}
+                  </span>
+                  {formatRideContactValue(contact)}
+                </a>
               </section>
             ) : null}
           </div>

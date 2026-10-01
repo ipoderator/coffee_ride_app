@@ -145,7 +145,7 @@ function RiderAvatars({
               <Avatar
                 name={rider.displayName}
                 size="md"
-                className="size-11 bg-primary-tint text-body-sm font-semibold text-primary"
+                className="size-11 bg-primary-fill text-body-sm font-semibold text-on-primary-fill"
               />
               {rider.displayName ? null : (
                 <span className="sr-only">{name}</span>

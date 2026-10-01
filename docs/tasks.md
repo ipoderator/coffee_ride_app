@@ -1257,3 +1257,16 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (`FeaturedRideCard` had been rendering the raw label, printing
       «Старт: Старт»). Also verified and archived four stale KI entries
       (KI-001/009/010/020); KI-021 stays open. See `docs/changelog.md`.
+- [x] CR-165 Optional per-ride organizer contact: `phone`/`telegram`/`max`
+      (max.ru)/`email`, validated and normalized once in `packages/types`.
+      Private — `GET /v1/rides/:id` serves it only to an active registrant or
+      the owning organizer and omits the key for everyone else; absent from
+      the `Ride` domain type so it can never ride along in the public list.
+      Migration `0022_ride_contact.sql` (nullable pair + both-or-neither and
+      not-blank CHECKs); new `PUT /v1/rides/:id/contact` works at any status.
+      Follow-up KI-081 (no post-publish UI). See `docs/changelog.md`.
+- [x] CR-166 Ride-detail avatars (riders stack + organizer) were filled with
+      `--primary-tint` on the page's own `--bg` — 1.09:1, effectively
+      invisible. Switched to the existing `--primary-fill`/`--on-primary-fill`
+      pair: 4.43:1 (light) / 3.81:1 (dark) for the shape, 4.97:1 AA for the
+      initials. No new colour token. See `docs/changelog.md`.

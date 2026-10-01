@@ -2,6 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
+import {
+  EMPTY_RIDE_CONTACT,
+  RideContactFields,
+  rideContactFromResponse,
+  rideContactToRequest,
+  type RideContactDraft,
+} from './RideContactFields';
 import { BICYCLE_TYPES, DIFFICULTY_LEVELS, type Ride } from 'types';
 import type { BicycleType, DifficultyLevel } from 'types';
 import {
@@ -136,6 +143,10 @@ export function EditRideForm({
   // Kept apart from `form`: the lifecycle actions below reset `form` from the
   // `Ride` they get back, which carries no requirements.
   const [requirementsText, setRequirementsText] = useState('');
+  // CR-165: kept apart from `form` for the same reason as `requirementsText` —
+  // the lifecycle actions reset `form` from a `Ride`, which deliberately carries
+  // no contact (it is private; see `packages/types/src/domain/ride.ts`).
+  const [contact, setContact] = useState<RideContactDraft>(EMPTY_RIDE_CONTACT);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -171,6 +182,7 @@ export function EditRideForm({
         setRide(response.ride);
         setForm(toFormState(response.ride));
         setRequirementsText(response.requirements.join('\n'));
+        setContact(rideContactFromResponse(response.contact));
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -215,6 +227,7 @@ export function EditRideForm({
       startLat: toNullableNumber(form.startLat),
       startLng: toNullableNumber(form.startLng),
       participantsVisible: form.participantsVisible,
+      contact: rideContactToRequest(contact),
       requirements: toRequirementLines(requirementsText),
     };
 
@@ -779,6 +792,24 @@ export function EditRideForm({
             className="size-5 rounded border-[1.5px] border-frame accent-primary disabled:cursor-not-allowed disabled:opacity-60"
           />
         </FormField>
+
+        <fieldset className="flex flex-col gap-4 border-0 p-0">
+          <legend className="text-body-sm font-semibold text-text">
+            {RIDE_EDIT_TERMS.contactLabel}
+          </legend>
+          {/* Draft-only, like every other field on this screen: a non-draft ride
+              renders the whole form read-only ({@link RIDE_EDIT_TERMS.notEditable}).
+              `PUT /v1/rides/:id/contact` already accepts a post-publish change —
+              the UI for it belongs with the published-ride controls, not in this
+              deliberately read-only form (noted in `known-issues.md`). */}
+          <RideContactFields
+            idPrefix="ride-edit"
+            value={contact}
+            onChange={setContact}
+            disabled={isPending || !isDraft}
+            error={fieldErrors.contact}
+          />
+        </fieldset>
 
         {publishVerificationRequired && (
           <p role="alert" className="text-body-sm text-danger">

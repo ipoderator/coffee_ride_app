@@ -17,6 +17,9 @@ import {
   formatElevation,
   formatElevationParts,
   formatParticipants,
+  formatRideContactHref,
+  formatRideContactType,
+  formatRideContactValue,
   formatParticipantsParts,
   formatPrice,
   formatPriceParts,
@@ -467,5 +470,54 @@ describe('formatCountdownShort (CR-151)', () => {
   it('is null once the start has passed', () => {
     expect(formatCountdownShort(inMinutes(0), now)).toBeNull();
     expect(formatCountdownShort(inMinutes(-5), now)).toBeNull();
+  });
+});
+
+describe('ride contact formatters (CR-165)', () => {
+  it('shows a stored phone in readable Russian grouping', () => {
+    expect(
+      formatRideContactValue({ type: 'phone', value: '+79161234567' }),
+    ).toBe('+7 916 123-45-67');
+  });
+
+  it('shows a MAX contact the same way — it is a phone number too', () => {
+    expect(formatRideContactValue({ type: 'max', value: '+79161234567' })).toBe(
+      '+7 916 123-45-67',
+    );
+  });
+
+  it('gives a Telegram handle its @ back', () => {
+    expect(
+      formatRideContactValue({ type: 'telegram', value: 'coffee_ride' }),
+    ).toBe('@coffee_ride');
+  });
+
+  it('leaves an unexpected phone shape alone rather than mangling it', () => {
+    // The API always stores `+7XXXXXXXXXX`; this is the defensive branch.
+    expect(formatRideContactValue({ type: 'phone', value: '+1555' })).toBe(
+      '+1555',
+    );
+  });
+
+  it('builds the right href per type', () => {
+    expect(
+      formatRideContactHref({ type: 'phone', value: '+79161234567' }),
+    ).toBe('tel:+79161234567');
+    expect(
+      formatRideContactHref({ type: 'telegram', value: 'coffee_ride' }),
+    ).toBe('https://t.me/coffee_ride');
+    expect(formatRideContactHref({ type: 'max', value: '+79161234567' })).toBe(
+      'https://max.ru/+79161234567',
+    );
+    expect(
+      formatRideContactHref({ type: 'email', value: 'ride@example.com' }),
+    ).toBe('mailto:ride@example.com');
+  });
+
+  it('labels every type in Russian', () => {
+    expect(formatRideContactType('phone')).toBe('Телефон');
+    expect(formatRideContactType('telegram')).toBe('Telegram');
+    expect(formatRideContactType('max')).toBe('MAX');
+    expect(formatRideContactType('email')).toBe('Почта');
   });
 });

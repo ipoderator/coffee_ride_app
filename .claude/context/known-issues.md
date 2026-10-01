@@ -384,6 +384,23 @@ Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
 
+### KI-081 — A published ride's organizer contact can only be changed through the API
+
+Status: open. Discovered: 2026-10-01 (CR-165, by its own scope decision).
+Problem: `PUT /v1/rides/:id/contact` deliberately accepts a change at any ride
+status, because a contact that goes stale after publication (changed number,
+deleted account) is exactly the case that must stay fixable. The organizer's
+edit screen, however, renders the _whole_ form read-only once a ride leaves
+`draft` (`RIDE_EDIT_TERMS.notEditable`), so the contact fields are disabled
+there too — consistent with that screen, but it means the endpoint has no UI.
+Impact: low-to-medium. An organizer who published a ride with a wrong or
+outdated contact cannot correct it from the app; registered participants would
+be left with a contact that doesn't work.
+Workaround: call `PUT /v1/rides/:id/contact` directly.
+Next action: add a contact control to the published-ride surface (next to the
+participants-visibility toggle, which solved the same "editable after publish"
+problem under KI-065) rather than loosening the edit form's read-only rule.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

@@ -41,6 +41,7 @@ import {
   type ListRidesResponse,
   type OrganizerRideSummary,
   type Ride,
+  type RideContactType,
   type RouteGeometryPoint,
   type RoutePoint,
   type RouteSummary,
@@ -490,6 +491,11 @@ export async function createRide(
       // CR-156: optional at creation; an empty description is stored as `null`.
       description: input.description || null,
       difficulty: input.difficulty ?? null,
+      // CR-165: both halves move together — the `rides_contact_both_or_neither`
+      // CHECK rejects a half-filled pair, and `rideContactSchema` has already
+      // normalized the value by the time it reaches here.
+      contactType: input.contact?.type ?? null,
+      contactValue: input.contact?.value ?? null,
       updatedBy: userId,
     })
     .returning();
@@ -1111,8 +1117,23 @@ export async function getRideForViewer(
   const groups = await listRideGroupSummaries(db, rideId);
   const requirements = await listRideRequirements(db, rideId);
 
+  // CR-165: the organizer's contact is private (`.claude/rules/security.md`:
+  // "return unnecessary participant data" cuts both ways — this is the
+  // organizer's own phone/handle). Only someone with an active registration on
+  // this ride, or the organizer who owns it, receives it; for everyone else the
+  // key is absent from the payload entirely rather than sent as `null`, so a
+  // "there is a contact, you just can't see it" signal never leaks either.
+  // Deliberately NOT part of `toPublicRide` — that mapper also feeds the public
+  // `GET /v1/rides` list, where this must never appear.
+  const maySeeContact = isOwner || viewerRegistrationRows.length > 0;
+  const contact =
+    maySeeContact && row.ride.contactType && row.ride.contactValue
+      ? { type: row.ride.contactType, value: row.ride.contactValue }
+      : undefined;
+
   return {
     ride: toPublicRide(row.ride),
+    ...(contact ? { contact } : {}),
     organizer: {
       id: row.organizerId,
       name: row.organizerName,
@@ -1277,6 +1298,49 @@ export async function setParticipantsVisibility(
   });
 }
 
+/**
+ * CR-165: the ride's organizer contact, settable at any status — unlike `PATCH`,
+ * which stays draft-only.
+ *
+ * Same reasoning as KI-065's {@link setParticipantsVisibility}: a contact that has
+ * gone stale (changed number, deleted Telegram account) matters *most* after the
+ * ride is published and people have registered against it, which is exactly when
+ * `PATCH` refuses with `ride_not_editable`. Freezing it at publish would leave
+ * registered participants holding a contact the organizer cannot correct.
+ *
+ * `null` clears the contact. No lifecycle restriction and no "locked" case —
+ * unlike participant visibility, changing how to reach the organizer never
+ * invalidates an expectation a rider signed up under; it only ever improves it.
+ */
+export async function setRideContact(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  contact: { type: RideContactType; value: string } | null,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  const [updated] = await db
+    .update(rides)
+    .set({
+      contactType: contact?.type ?? null,
+      contactValue: contact?.value ?? null,
+      updatedAt: new Date(),
+      updatedBy: userId,
+    })
+    .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
+    .returning();
+  // No row matched: the ride doesn't exist, or isn't this organizer's. Same 404
+  // either way — never leak the difference (`.claude/rules/security.md`).
+  if (!updated) {
+    throw RIDE_NOT_FOUND();
+  }
+  return toPublicRide(updated);
+}
+
 async function applyRideDraftPatch(
   db: Pick<DbClient, 'update'>,
   userId: string,
@@ -1307,6 +1371,12 @@ async function applyRideDraftPatch(
   if (patch.difficulty !== undefined) values.difficulty = patch.difficulty;
   if (patch.participantsVisible !== undefined)
     values.participantsVisible = patch.participantsVisible;
+  // CR-165: `null` clears the contact, an object replaces it; both columns are
+  // always written together so the DB CHECK can never see a half-filled pair.
+  if (patch.contact !== undefined) {
+    values.contactType = patch.contact?.type ?? null;
+    values.contactValue = patch.contact?.value ?? null;
+  }
 
   const [updated] = await db
     .update(rides)

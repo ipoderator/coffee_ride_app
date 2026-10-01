@@ -2414,3 +2414,83 @@ Follow-up: KI-057 (2GIS dark basemap) still needs a dark MapGL style id from the
 owner's 2GIS account — the handoff's placeholder for it was left unfilled, so it was
 not started. The `coverage-baseline.json` refresh (handoff item 4) also remains, and
 must be run in the CI environment per `.claude/rules/testing.md` → Coverage.
+
+## 2026-10-01 — CR-165 — Optional per-ride organizer contact (phone / Telegram / MAX / email)
+
+Summary: an organizer may now give one way to be contacted about a specific ride, or
+leave it out entirely (the default). Four types — `phone`, `telegram`, `max` (the
+Russian MAX messenger, max.ru) and `email` — validated and normalized once in
+`packages/types` (`+7XXXXXXXXXX`, a bare Telegram handle, a lowercased address), so the
+ride page can build a `tel:`/`https://t.me/…`/`https://max.ru/…`/`mailto:` link without
+re-parsing what the organizer typed. The contact is **private**: `GET /v1/rides/:id`
+includes it only for a viewer with an active registration on that ride or the organizer
+who owns it, and omits the key entirely for everyone else — so the payload never reveals
+that a contact exists to someone who may not have it. It is deliberately absent from the
+`Ride` domain type (which also serializes the public `GET /v1/rides` list), making that a
+structural guarantee rather than a reviewer's vigilance.
+Migration: `packages/db/migrations/0022_ride_contact.sql` — new `ride_contact_type` pg
+enum plus nullable `contact_type`/`contact_value` on `rides`, with
+`rides_contact_both_or_neither` (never a half-filled pair) and
+`rides_contact_value_not_blank` CHECKs. Additive and nullable, so existing rows are
+unaffected.
+API: `contact` accepted by `POST /v1/rides` and the draft-only `PATCH /v1/rides/:id`;
+new `PUT /v1/rides/:id/contact` sets or clears (`null`) it **at any status** — same
+reasoning as KI-065's participants-visibility endpoint, since a contact that goes stale
+after publication is exactly the case that must stay fixable. Additive `contact?` on
+`GetRideResponse`.
+Files: `packages/db/src/schema/ride.ts` + migration, `packages/types/src/api/
+ride-contact.ts` (new), `packages/types/src/{domain/ride.ts,api/rides.ts,index.ts}`,
+`apps/api/src/modules/rides/{rides.service,rides.routes,ride-response.schema}.ts`,
+`packages/ui/src/{terminology,format}.ts`, `apps/web/src/features/organizer/rides/
+{api.ts,components/RideContactFields.tsx (new),components/CreateRideForm.tsx,
+components/EditRideForm.tsx}`, `apps/web/src/features/participant/ride-detail/
+components/RideDetailView.tsx`, `apps/web/src/stories/RideContactFields.stories.tsx`
+(new).
+Tests: `apps/api/src/modules/rides/ride-contact.routes.test.ts` (new, 22 cases) — the
+full visibility matrix (anonymous / signed-in non-participant / active registrant /
+organizer / after cancelling / never in the public list), per-type normalization and
+rejection, 401/404 authorization, post-publish update, clearing; `packages/ui/src/
+format.test.ts` (6 formatter cases); `ride-detail.test.tsx` (block shown/omitted);
+10 Storybook stories (every type, error, disabled, both themes) under axe.
+Validation: `pnpm typecheck` (8/8) and `pnpm lint` (9/9) green; `apps/api` 529 passed /
+8 skipped; `apps/web` unit 501 passed (53 files); `packages/ui` 208 passed;
+`test:storybook` 69 passed. Also verified end to end against the running dev stack with
+Playwright: the contact block is absent for an anonymous visitor and for a signed-in
+non-participant, and appears as a working `https://t.me/…` link once registered, in both
+themes.
+Decisions: no ADR — additive contract change per `.claude/rules/extensibility.md`
+("prefer adding new optional fields/params/endpoints"). Three product choices were made
+by the owner, not inferred: visibility is registered-participants-only, storage is
+per-ride (not on `OrganizerProfile`), and MAX is included alongside Telegram.
+Follow-up: the edit form shows the contact read-only for a non-draft ride (that whole
+screen is read-only by design, `RIDE_EDIT_TERMS.notEditable`), so the post-publish
+editing the `PUT` endpoint supports has no UI yet — recorded as KI-081. Also unchanged
+from CR-164: KI-057 and the `coverage-baseline.json` refresh (the new tests raise
+coverage, so the baseline should be regenerated in CI).
+
+## 2026-10-01 — CR-166 — Ride-detail avatars were invisible on the light background
+
+Summary: the rider avatar stack in «Кто едет» and the organizer avatar in the ride
+poster header both filled their circle with `--primary-tint` (`#ede6f0`) on the page's
+own `--bg` (`#f3f1f5`) — a contrast ratio of **1.09:1**, so the avatar shape was
+effectively invisible and only the initials read. Both now use the existing
+`--primary-fill` / `--on-primary-fill` token pair (which is also `Avatar`'s own default,
+so the change is mostly deleting an override): the circle clears 4.43:1 against the page
+in the light theme and 3.81:1 in dark (≥3:1 for non-text graphics), and the white
+initials sit at 4.97:1 (WCAG AA). The `ring-2 ring-bg` separator between overlapping
+avatars now reads too — before, ring and fill were both within 1.1:1 of the backdrop, so
+the stack blurred into one shape.
+Files: `apps/web/src/features/participant/ride-detail/components/RidersSection.tsx`,
+`apps/web/src/features/participant/ride-detail/components/RideDetailView.tsx`.
+Validation: `pnpm typecheck` and `pnpm lint` green; `apps/web` unit suite passed.
+Verified by screenshotting the real `/rides/[id]` page on the running dev stack in both
+themes (not Storybook — the bug was specifically about the avatar's contrast against
+_that page's_ background, and the section turned out to sit directly on `--bg` rather
+than on a raised card; a `ring-bg-raised` variant was tried and reverted for that
+reason).
+Decisions: none — no new colour was introduced, only a different existing token
+(ADR-024's roles are unchanged).
+Follow-up: `AvatarStack` in `packages/ui` has the same `bg-primary-tint` fill for its
+`+N` overflow chip (1.22:1) and a `ring-bg-raised` assumption, but it has no production
+call sites yet (stories/tests only), so it was left alone — worth fixing when it gets
+its first real consumer.

@@ -366,6 +366,21 @@ under the same ride row lock as registration, so no one can register between the
 check and the update. Setting the current value is a `200` no-op. `200` →
 `{ ride }`.
 
+PUT `/v1/rides/:id/contact` — **implemented (CR-165)**. Requires a valid session
+cookie (`401` otherwise); `404 ride_not_found` for a ride that doesn't exist or
+isn't the caller's. Body `{ contact: { type, value } | null }`, where `type` is
+`phone` | `telegram` | `max` | `email`; `null` clears the contact. `value` is
+validated per type and stored normalized (`+7XXXXXXXXXX` for `phone`/`max`, a bare
+handle for `telegram`, lowercased for `email`) — `400` with `errors[]` otherwise.
+Works at any status (`PATCH` stays draft-only): a contact that goes stale after
+publication is exactly the case that must stay fixable. `200` → `{ ride }`.
+
+The contact itself is **private**: it is returned by `GET /v1/rides/:id` only to a
+caller with an active registration on that ride or the organizer who owns it, as a
+top-level `contact` field _beside_ `ride`. For every other caller the key is absent
+from the response entirely — not `null` — so the payload never reveals that a
+contact exists. It never appears in `GET /v1/rides` (the public list) for anyone.
+
 POST `/v1/rides/:id/cancel` — **implemented (CR-021)**. Same 401/404-ownership
 rule as `publish`/`open-registration`/`close-registration`, no `emailVerified`
 gate. Three valid source statuses (`docs/product.md`'s Lifecycle): `published`,

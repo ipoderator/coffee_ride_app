@@ -74,7 +74,14 @@ registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
   CHECK `>= 0`), `difficulty` (nullable int, CHECK `1-5`),
   `participantsVisible` (not null boolean, default `true` — CR-125, the
   organizer-facing toggle for `GET /v1/rides/:id/riders`; `false` hides the
-  named list for every caller, `registrationsCount` is unaffected), `status`
+  named list for every caller, `registrationsCount` is unaffected),
+  `contactType` (nullable pg enum `ride_contact_type`: `phone`/`telegram`/
+  `max`/`email`) + `contactValue` (nullable text) — CR-165, the optional
+  per-ride organizer contact, stored normalized; CHECK
+  `rides_contact_both_or_neither` keeps the pair all-or-nothing and
+  `rides_contact_value_not_blank` keeps a stored value non-blank. Private:
+  served only to an active registrant or the owning organizer
+  (`.claude/rules/security.md`), never in the public ride list. `status`
   (not null, pg enum matching the Lifecycle section above, default `draft`),
   `createdAt`/`updatedAt` (`timestamptz`), `updatedBy` (nullable FK → User,
   `ON DELETE SET NULL` — audit trail, `.claude/rules/security.md`). CR-018

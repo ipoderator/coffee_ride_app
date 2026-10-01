@@ -15,6 +15,9 @@
 // differently (`MetricTile`). The joined `format*` functions are implemented in terms
 // of these, not a parallel copy.
 
+import type { RideContact, RideContactType } from 'types';
+import { RIDE_CONTACT_TYPE_TERMS } from './terminology.js';
+
 const NBSP = ' ';
 const EM_DASH = '—';
 
@@ -608,4 +611,57 @@ export function formatCountdownShort(
   if (days > 0) return `${days}${NBSP}дн ${hours}${NBSP}ч`;
   if (hours > 0) return `${hours}${NBSP}ч ${minutes}${NBSP}мин`;
   return `${minutes}${NBSP}мин`;
+}
+
+// CR-165: the per-ride organizer contact, as shown and as linked.
+//
+// Lives here rather than in a feature module because both cabinets may show it
+// (`.claude/rules/extensibility.md`: shared logic goes into `packages/ui`, not a
+// feature-to-feature import). The stored value is already normalized by
+// `packages/types`' `rideContactSchema`, so these two only present it.
+
+/** Russian label for a contact type — the «Как связаться» row's value. */
+export function formatRideContactType(type: RideContactType): string {
+  return RIDE_CONTACT_TYPE_TERMS[type];
+}
+
+/**
+ * How the value is shown to a participant: a phone stays in its readable
+ * `+7 916 123-45-67` grouping, a Telegram handle regains its `@`, an email is
+ * shown as-is.
+ */
+export function formatRideContactValue(contact: RideContact): string {
+  switch (contact.type) {
+    case 'phone':
+    case 'max': {
+      // `+7XXXXXXXXXX` → `+7 916 123-45-67`. Any other shape (never written by
+      // the API today) is shown unchanged rather than mangled.
+      const match = contact.value.match(/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/);
+      if (!match) return contact.value;
+      return `+7 ${match[1]} ${match[2]}-${match[3]}-${match[4]}`;
+    }
+    case 'telegram':
+      return `@${contact.value}`;
+    case 'email':
+      return contact.value;
+  }
+}
+
+/**
+ * The `href` a participant taps. `tel:` for a phone, the deep link for a
+ * messenger, `mailto:` for an email.
+ */
+export function formatRideContactHref(contact: RideContact): string {
+  switch (contact.type) {
+    case 'phone':
+      return `tel:${contact.value}`;
+    case 'max':
+      // MAX (max.ru) opens a chat by phone number, same convention as its own
+      // share links.
+      return `https://max.ru/${contact.value}`;
+    case 'telegram':
+      return `https://t.me/${contact.value}`;
+    case 'email':
+      return `mailto:${contact.value}`;
+  }
 }

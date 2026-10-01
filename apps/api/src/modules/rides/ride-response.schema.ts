@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { BICYCLE_TYPES, RIDE_STATUSES, ROUTE_POINT_TYPES } from 'types';
+import {
+  BICYCLE_TYPES,
+  RIDE_CONTACT_TYPES,
+  RIDE_STATUSES,
+  ROUTE_POINT_TYPES,
+} from 'types';
 
 // The one "ride over the wire" shape (CLAUDE.md: no duplicate concepts). CR-017
 // ("Create ride") only ever returns a row with `title`/`bicycleType`/`startsAt`/
@@ -30,6 +35,15 @@ export const rideResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   updatedBy: z.string().nullable(),
+});
+
+// CR-165: the organizer's contact for one ride, served only to a viewer entitled
+// to it (`rides.service.ts`'s `getRideForViewer`). Deliberately NOT part of
+// `rideResponseSchema` above — that shape also serializes the public `GET /v1/rides`
+// list, where this must never appear.
+export const rideContactResponseSchema = z.object({
+  type: z.enum(RIDE_CONTACT_TYPES),
+  value: z.string(),
 });
 
 // CR-023 ("Ride detail"): the ride's public organizer identity, embedded in `GET
