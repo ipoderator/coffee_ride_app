@@ -522,6 +522,18 @@ export interface GetRouteGeometryResponse {
   points: RouteGeometryPoint[];
 }
 
+// KI-065: `PUT /v1/rides/:id/participants-visibility` — at any status, unlike
+// `PATCH`. Showing the list is refused while the ride has active registrations.
+export const setParticipantsVisibilityRequestSchema = z.object({
+  participantsVisible: z.boolean('participantsVisible must be a boolean.'),
+});
+export type SetParticipantsVisibilityRequest = z.infer<
+  typeof setParticipantsVisibilityRequestSchema
+>;
+export interface SetParticipantsVisibilityResponse {
+  ride: Ride;
+}
+
 // CR-114 ("Route builder"): `POST /v1/rides/:id/route/build`. Ordered
 // waypoints the organizer placed on the map; the API routes them along the
 // map provider's road graph (bicycle) and stores the result as the ride's

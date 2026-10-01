@@ -1,121 +1,53 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Ride, RideParticipantSummary } from 'types';
+import type {
+  OrganizerActivityRegistration,
+  OrganizerRegistrationActivity,
+} from 'types';
 import { ApiError } from '@/lib/api/errors';
-import {
-  listAllRideParticipants,
-  listOwnRidesPage,
-} from '@/lib/organizer/own-rides';
+import { getRegistrationActivity } from './api';
 import { RegistrationActivityWidget } from './components/RegistrationActivityWidget';
-import {
-  MAX_ACTIVITY_RIDES,
-  recentEntries,
-  registrationsPerDay,
-  selectActivityRides,
-  toActivityEntries,
-} from './lib/activity';
+import { currentWeek, toActivityEntry, withCounts } from './lib/activity';
 
-vi.mock('@/lib/organizer/own-rides', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/organizer/own-rides')
-  >('@/lib/organizer/own-rides');
-  return {
-    ...actual,
-    listOwnRidesPage: vi.fn(),
-    listAllRideParticipants: vi.fn(),
-  };
-});
+vi.mock('./api', () => ({ getRegistrationActivity: vi.fn() }));
 
-const listOwnRidesMock = vi.mocked(listOwnRidesPage);
-const listAllRideParticipantsMock = vi.mocked(listAllRideParticipants);
+const getActivityMock = vi.mocked(getRegistrationActivity);
 
+// Saturday 26 September; the week is 21–27 September.
 const NOW = new Date('2026-09-26T12:00:00Z');
 
-function ride(overrides: Partial<Ride> = {}): Ride {
-  return {
-    id: 'ride-1',
-    organizerId: 'org-1',
-    title: 'Рассветный интервальный',
-    description: null,
-    coverImageUrl: null,
-    bicycleType: 'road',
-    startsAt: '2026-10-04T06:00:00.000Z',
-    startTimezone: 'Europe/Moscow',
-    startLat: null,
-    startLng: null,
-    participantLimit: 20,
-    priceRub: null,
-    distanceKm: null,
-    elevationGainMeters: null,
-    paceKmh: null,
-    durationMinutes: null,
-    difficulty: null,
-    participantsVisible: true,
-    status: 'registration_open',
-    createdAt: '2026-09-01T00:00:00.000Z',
-    updatedAt: '2026-09-01T00:00:00.000Z',
-    updatedBy: null,
-    ...overrides,
-  };
-}
-
-function participant(
+function registration(
   id: string,
   createdAt: string,
-  overrides: Partial<RideParticipantSummary> = {},
-): RideParticipantSummary {
+  overrides: Partial<OrganizerActivityRegistration> = {},
+): OrganizerActivityRegistration {
   return {
     id,
-    userId: `user-${id}`,
+    rideId: 'ride-1',
+    rideTitle: 'Рассветный интервальный',
     displayName: `Участник ${id}`,
-    createdAt,
     group: null,
+    createdAt,
     ...overrides,
   };
 }
 
-describe('selectActivityRides', () => {
-  it('drops drafts, cancelled and long-past rides; soonest first', () => {
-    const rides = [
-      ride({ id: 'later', startsAt: '2026-10-10T06:00:00Z' }),
-      ride({ id: 'draft', status: 'draft' }),
-      ride({ id: 'cancelled', status: 'cancelled' }),
-      ride({ id: 'old', status: 'finished', startsAt: '2026-09-10T06:00:00Z' }),
-      ride({
-        id: 'recent',
-        status: 'finished',
-        startsAt: '2026-09-22T06:00:00Z',
-      }),
-      ride({ id: 'soon', startsAt: '2026-09-28T06:00:00Z' }),
-    ];
-    expect(selectActivityRides(rides, NOW).map((r) => r.id)).toEqual([
-      'recent',
-      'soon',
-      'later',
-    ]);
-  });
+function activity(
+  recent: OrganizerActivityRegistration[],
+  counts: Record<string, number> = {},
+): { activity: OrganizerRegistrationActivity } {
+  return {
+    activity: {
+      recent,
+      days: Object.entries(counts).map(([date, count]) => ({ date, count })),
+    },
+  };
+}
 
-  it(`caps at ${MAX_ACTIVITY_RIDES} rides`, () => {
-    const rides = Array.from({ length: MAX_ACTIVITY_RIDES + 5 }, (_, i) =>
-      ride({ id: `r${i}` }),
-    );
-    expect(selectActivityRides(rides, NOW)).toHaveLength(MAX_ACTIVITY_RIDES);
-  });
-});
-
-describe('registrationsPerDay / recentEntries', () => {
-  const entries = toActivityEntries(ride(), [
-    participant('a', '2026-09-26T09:00:00Z'),
-    participant('b', '2026-09-26T11:50:00Z'),
-    participant('c', '2026-09-24T10:00:00Z'),
-    // Before this week — ignored by the chart.
-    participant('d', '2026-09-10T10:00:00Z'),
-  ]);
-
-  it('covers the calendar week пн–вс, future days kept at zero (CR-131)', () => {
-    // NOW is Saturday 26 September; the week is 21–27 September.
-    const days = registrationsPerDay(entries, NOW, 'UTC');
-    expect(days.map((d) => d.weekday)).toEqual([
+describe('currentWeek / withCounts', () => {
+  it('covers the calendar week пн–вс, today flagged (CR-131)', () => {
+    const week = currentWeek(NOW, 'UTC');
+    expect(week.map((d) => d.weekday)).toEqual([
       'пн',
       'вт',
       'ср',
@@ -124,28 +56,37 @@ describe('registrationsPerDay / recentEntries', () => {
       'сб',
       'вс',
     ]);
+    expect(week[0]!.key).toBe('2026-09-21');
+    expect(week[5]).toMatchObject({ key: '2026-09-26', isToday: true });
+  });
+
+  it("starts the week in the viewer's zone", () => {
+    // 22:30 UTC on Sunday the 27th is already Monday the 28th in Moscow.
+    const late = new Date('2026-09-27T22:30:00Z');
+    expect(currentWeek(late, 'UTC')[0]!.key).toBe('2026-09-21');
+    expect(currentWeek(late, 'Europe/Moscow')[0]!.key).toBe('2026-09-28');
+  });
+
+  it('fills counts by date and flags one peak, none on an empty week', () => {
+    const week = currentWeek(NOW, 'UTC');
+    const days = withCounts(week, [
+      { date: '2026-09-24', count: 1 },
+      { date: '2026-09-26', count: 2 },
+    ]);
     expect(days.map((d) => d.count)).toEqual([0, 0, 0, 1, 0, 2, 0]);
     expect(days[5]).toMatchObject({ isToday: true, isPeak: true });
     expect(days.filter((d) => d.isPeak)).toHaveLength(1);
+    expect(withCounts(week, []).some((d) => d.isPeak)).toBe(false);
   });
 
-  it('flags no peak on an empty week', () => {
-    expect(registrationsPerDay([], NOW, 'UTC').some((d) => d.isPeak)).toBe(
-      false,
-    );
-  });
-
-  it('uses the given zone for the day boundary', () => {
-    // 22:30 UTC on Friday the 25th is already Saturday the 26th in Moscow.
-    const late = toActivityEntries(ride(), [
-      participant('x', '2026-09-25T22:30:00Z'),
-    ]);
-    expect(registrationsPerDay(late, NOW, 'Europe/Moscow')[5]?.count).toBe(1);
-    expect(registrationsPerDay(late, NOW, 'UTC')[4]?.count).toBe(1);
-  });
-
-  it('lists newest first, limited', () => {
-    expect(recentEntries(entries, 2).map((e) => e.id)).toEqual(['b', 'a']);
+  it('keeps only the group name of a registration', () => {
+    expect(
+      toActivityEntry(
+        registration('a', '2026-09-26T09:00:00Z', {
+          group: { id: 'g1', name: 'Группа 1', paceKmh: 25 },
+        }),
+      ),
+    ).toMatchObject({ id: 'a', rideId: 'ride-1', groupName: 'Группа 1' });
   });
 });
 
@@ -153,19 +94,22 @@ describe('RegistrationActivityWidget', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
-    listOwnRidesMock.mockReset();
-    listAllRideParticipantsMock.mockReset();
+    getActivityMock.mockReset();
   });
 
-  it('shows the newest registrations with group and elapsed time', async () => {
-    listOwnRidesMock.mockResolvedValue([ride()]);
-    listAllRideParticipantsMock.mockResolvedValue([
-      participant('a', '2026-09-26T11:52:00Z', {
-        displayName: 'Анна Кузнецова',
-        group: { id: 'g1', name: 'Группа 1', paceKmh: 25 },
-      }),
-      participant('b', '2026-09-26T10:00:00Z', { displayName: null }),
-    ]);
+  it('reads one aggregate for the week and shows the newest registrations', async () => {
+    getActivityMock.mockResolvedValue(
+      activity(
+        [
+          registration('a', '2026-09-26T11:52:00Z', {
+            displayName: 'Анна Кузнецова',
+            group: { id: 'g1', name: 'Группа 1', paceKmh: 25 },
+          }),
+          registration('b', '2026-09-26T10:00:00Z', { displayName: null }),
+        ],
+        { '2026-09-26': 2 },
+      ),
+    );
 
     render(<RegistrationActivityWidget />);
 
@@ -181,22 +125,25 @@ describe('RegistrationActivityWidget', () => {
     expect(screen.getByText('сегодня: 2 записи')).toBeTruthy();
     // CR-132: one ride in the feed — rows don't repeat its title.
     expect(screen.queryByText(/Рассветный интервальный/)).toBeNull();
-    expect(listAllRideParticipantsMock).toHaveBeenCalledWith('ride-1');
+    expect(getActivityMock).toHaveBeenCalledTimes(1);
+    expect(getActivityMock).toHaveBeenCalledWith({
+      from: currentWeek(
+        NOW,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+      )[0]!.key,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
   });
 
   it('names the ride on each row once the feed spans several rides (CR-132)', async () => {
-    listOwnRidesMock.mockResolvedValue([
-      ride(),
-      ride({
-        id: 'ride-2',
-        title: 'Вечерний',
-        startsAt: '2026-10-05T15:00:00.000Z',
-      }),
-    ]);
-    listAllRideParticipantsMock.mockImplementation(async (rideId) =>
-      rideId === 'ride-1'
-        ? [participant('a', '2026-09-26T11:52:00Z')]
-        : [participant('b', '2026-09-26T11:00:00Z')],
+    getActivityMock.mockResolvedValue(
+      activity([
+        registration('a', '2026-09-26T11:52:00Z'),
+        registration('b', '2026-09-26T11:00:00Z', {
+          rideId: 'ride-2',
+          rideTitle: 'Вечерний',
+        }),
+      ]),
     );
 
     render(<RegistrationActivityWidget />);
@@ -206,26 +153,25 @@ describe('RegistrationActivityWidget', () => {
   });
 
   it('shows the empty copy when nobody has registered', async () => {
-    listOwnRidesMock.mockResolvedValue([]);
+    getActivityMock.mockResolvedValue(activity([]));
     render(<RegistrationActivityWidget />);
     expect(
       await screen.findByText('На ближайшие заезды пока никто не записался.'),
     ).toBeTruthy();
-    expect(listAllRideParticipantsMock).not.toHaveBeenCalled();
   });
 
   it('shows an error with retry, and recovers', async () => {
-    listOwnRidesMock.mockRejectedValueOnce(
+    getActivityMock.mockRejectedValueOnce(
       new ApiError({
         type: 'about:blank',
         title: 'Internal Server Error',
         status: 500,
         detail: 'Something went wrong.',
-        instance: '/v1/rides/mine',
+        instance: '/v1/rides/mine/registrations/activity',
         code: 'internal_error',
       }),
     );
-    listOwnRidesMock.mockResolvedValueOnce([]);
+    getActivityMock.mockResolvedValueOnce(activity([]));
 
     render(<RegistrationActivityWidget />);
 

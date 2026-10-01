@@ -8,6 +8,7 @@ import {
   createStopRequestSchema,
   listPublicRidesQuerySchema,
   listRidesQuerySchema,
+  setParticipantsVisibilityRequestSchema,
   updateRideRequestSchema,
   updateRoutePointRequestSchema,
   updateStopRequestSchema,
@@ -31,6 +32,7 @@ import {
   buildRoute,
   RideServiceError,
   cancelRide,
+  setParticipantsVisibility,
   closeRegistration,
   createRide,
   createRoutePoint,
@@ -431,6 +433,30 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         app.notificationQueue,
         request.user!.id,
         request.params.id,
+      );
+      return reply.status(200).send({ ride });
+    },
+  );
+
+  // KI-065: the riders-list toggle at any status (`PATCH` is draft-only). Same
+  // ownership rule as every transition (404 either way); `409
+  // participants_visibility_locked` when showing a list people joined hidden.
+  app.put(
+    '/:id/participants-visibility',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: setParticipantsVisibilityRequestSchema,
+        response: { 200: rideResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const ride = await setParticipantsVisibility(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.body.participantsVisible,
       );
       return reply.status(200).send({ ride });
     },

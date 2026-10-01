@@ -145,6 +145,16 @@ const RIDE_NOT_EDITABLE = () =>
     'Only a draft ride can be edited.',
   );
 
+// KI-065: re-showing the riders list after people signed up while it was
+// hidden would publish their names without their knowing.
+const PARTICIPANTS_VISIBILITY_LOCKED = () =>
+  new RideServiceError(
+    'participants_visibility_locked',
+    409,
+    'Participants list can no longer be shown',
+    'The list was hidden when people registered, so it can only stay hidden.',
+  );
+
 // CR-019 ("Publish ride"): a different action from `PATCH`, so a distinct code from
 // `ride_not_editable` — covers both "already published" and any later lifecycle
 // state (`registration_open`/.../`cancelled`).
@@ -1195,6 +1205,66 @@ export async function updateRideDraft(
       }
     }
     return { ride, requirements: await listRideRequirements(tx, rideId) };
+  });
+}
+
+/**
+ * KI-065: `Ride.participantsVisible` at any status, not just in a draft
+ * (`PATCH` stays draft-only). Hiding is always allowed. Showing is refused
+ * while the ride has active registrations, since those riders signed up to a
+ * hidden list. The ride row lock is the same one registration takes
+ * (CR-034), so no one can register between the check and the update.
+ */
+export async function setParticipantsVisibility(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  participantsVisible: boolean,
+): Promise<Ride> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(rides)
+      .where(
+        and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)),
+      )
+      .limit(1)
+      .for('update');
+    if (!existing) {
+      throw RIDE_NOT_FOUND();
+    }
+    if (existing.participantsVisible === participantsVisible) {
+      return toPublicRide(existing);
+    }
+    if (participantsVisible) {
+      const [active] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(registrations)
+        .where(
+          and(
+            eq(registrations.rideId, rideId),
+            eq(registrations.status, 'active'),
+          ),
+        );
+      if ((active?.count ?? 0) > 0) {
+        throw PARTICIPANTS_VISIBILITY_LOCKED();
+      }
+    }
+
+    const [updated] = await tx
+      .update(rides)
+      .set({ participantsVisible, updatedAt: new Date(), updatedBy: userId })
+      .where(eq(rides.id, rideId))
+      .returning();
+    if (!updated) {
+      throw new Error('Ride update returned no row.');
+    }
+    return toPublicRide(updated);
   });
 }
 

@@ -17,55 +17,6 @@ as part of closing the issue, not as a periodic batch cleanup.
 
 ## Open
 
-### KI-066 — Organizer registration activity is aggregated client-side from per-ride requests
-
-- Status: open (accepted limitation), discovered 2026-09-26 (CR-130).
-- Problem: `/organizer`'s «Новые записи»/«Записи по дням» widget
-  (`features/organizer/activity/`) has no aggregate endpoint to read, so it
-  calls `GET /v1/rides/mine` and then `GET /v1/rides/:id/participants` once
-  per selected ride (≤10 rides, ≤3 pages each), aggregating in the browser.
-  CR-130's scope was frontend-only, so no new API surface was added.
-- Impact: up to ~11 requests per dashboard load for a busy organizer; rides
-  beyond the 10 soonest in the window are not counted; an organizer with
-  more than 100 rides only sees the newest 100 considered.
-- Workaround: none needed at current scale.
-- Update 2026-09-26 (CR-131): the overview widget adds its own reads on the
-  same page (`/organizers/me`, `/rides/mine/summary`, `/rides/mine` again and
-  the nearest ride's participants) — the dashboard now makes roughly
-  `4 + selected rides` requests. Same fix applies.
-- Update 2026-09-26 (CR-132): the overview widget also reads the nearest
-  ride's waitlist, and the frame's «Участники» badge (`lib/organizer/
-nav-badges.ts`) re-reads `/rides/mine` + the nearest ride's participants
-  once per cabinet visit — on `/organizer` that duplicates the overview
-  widget's reads (≈ `7 + selected rides` requests). A shared client cache or
-  the same aggregate endpoint would remove the duplication.
-- Update 2026-09-26 (CR-133): duplication removed — `own-rides.ts`
-  de-duplicates concurrent identical GETs and the overview widget starts its
-  reads at mount, so `/organizer` makes 6 requests in production
-  (`auth/me`, `organizers/me`, `mine/summary`, `mine`, nearest ride's
-  participants + waitlist) plus one participants read per further selected
-  ride. What remains is the client-side aggregation itself.
-- Next action: if organizers with many concurrent rides appear, add a
-  `GET /v1/rides/mine/registrations/activity` aggregate (sibling of
-  `/mine/summary`, CR-103) and point the widget at it.
-
-### KI-065 — `participantsVisible` can't be changed after publish
-
-Status: open. Discovered 2026-09-24 (CR-125).
-Problem: `Ride.participantsVisible` (the organizer's riders-list privacy toggle) is
-only settable via `PATCH /v1/rides/:id`, which is draft-only
-(`resolveOwnDraftRide`/`409 ride_not_editable`) — the same gate every other ride
-setting in this codebase already uses (`participantLimit`, cover image, route, ...).
-An organizer who wants to hide/show the list on an already-published ride currently
-cannot.
-Impact: minor UX limitation, not a data-safety issue — the setting still defaults to
-`true` (today's live behavior) and works correctly at creation time.
-Workaround: decide the setting before publishing.
-Next action: none planned. If this becomes a real complaint, it needs a small
-dedicated endpoint (or a relaxation of the draft-only rule for this one field) — a
-deliberate product decision, not a bug fix, since draft-only editing is consistent
-project-wide.
-
 ### KI-001 — No deployment artifacts exist
 
 Status: narrowed 2026-09-17 (CR-074). Discovered: 2026-09-11 (pre-foundation audit).
@@ -393,6 +344,9 @@ verification/reset email end to end (register or forgot-password → check a
 real inbox → click the link) once `EMAIL_FROM_ADDRESS` is configured to a
 sender verified in the Unisender Go account — see KI-026/KI-042's matching
 "Next action."
+Update 2026-10-01: still `SERVFAIL` from this machine (resolver `10.12.0.1`,
+VPN), and `.env`'s `EMAIL_FROM_ADDRESS` is still empty — both on the owner's
+side; KI-026/KI-042's remaining halves wait on them.
 
 ### KI-056 — 2GIS REST APIs (Routing/Geocoder) unreachable from this machine's current egress
 

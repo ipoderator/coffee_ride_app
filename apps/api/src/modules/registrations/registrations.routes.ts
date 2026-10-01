@@ -5,6 +5,7 @@ import {
   joinWaitlistRequestSchema,
   listRidesQuerySchema,
   myRegistrationsQuerySchema,
+  organizerActivityQuerySchema,
   updateRegistrationGroupRequestSchema,
 } from 'types';
 import { requireAuth } from '../../plugins/auth.js';
@@ -18,6 +19,7 @@ import { bikeResponseSchema } from '../users/user-response.schema.js';
 import {
   cancelRegistration,
   createRegistration,
+  getOwnRegistrationActivity,
   getRiderAvatarDownload,
   getRiderProfile,
   joinWaitlist,
@@ -106,6 +108,25 @@ const myRegistrationSummaryResponseSchema = z.object({
 const listMyRegistrationsResponseSchema = z.object({
   items: z.array(myRegistrationSummaryResponseSchema),
   nextCursor: z.string().nullable(),
+});
+
+// KI-066: `GET /mine/registrations/activity` — a single aggregate, not a page
+// (ADR-011 pagination is for collections; same precedent as `/mine/summary`).
+// No `userId` in `recent`: the dashboard row links by registration id.
+const organizerActivityResponseSchema = z.object({
+  activity: z.object({
+    recent: z.array(
+      z.object({
+        id: z.string(),
+        rideId: z.string(),
+        rideTitle: z.string(),
+        displayName: z.string().nullable(),
+        group: rideGroupRefResponseSchema.nullable(),
+        createdAt: z.string(),
+      }),
+    ),
+    days: z.array(z.object({ date: z.string(), count: z.number() })),
+  }),
 });
 
 /**
@@ -248,6 +269,29 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       await leaveWaitlist(app.db, request.user!.id, request.params.id);
       return reply.status(204).send();
+    },
+  );
+
+  // KI-066: the `/organizer` dashboard's «Новые записи» / «Записи по дням»
+  // across every ride the caller organizes — own session only, never a
+  // client-supplied organizer id. No `OrganizerProfile` yet is an empty
+  // aggregate, not an error (same as `/mine/summary`).
+  app.get(
+    '/mine/registrations/activity',
+    {
+      schema: {
+        querystring: organizerActivityQuerySchema,
+        response: { 200: organizerActivityResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const activity = await getOwnRegistrationActivity(
+        app.db,
+        request.user!.id,
+        request.query,
+      );
+      return reply.status(200).send({ activity });
     },
   );
 

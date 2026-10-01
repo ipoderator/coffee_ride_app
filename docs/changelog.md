@@ -2305,3 +2305,55 @@ not related), 1 failed — `ride-detail` (chromium), 14 % of pixels. Its
 `discovery-map` (which now hides the fullscreen toggle, KI-078) stayed within
 the 2 % tolerance and were left as they are.
 Files: `apps/web/e2e/visual-regression.spec.ts-snapshots/ride-detail-chromium-linux.png`.
+
+## 2026-10-01 — CR-162 — KI-066 registration-activity aggregate; KI-065 riders-list toggle after publish
+
+KI-066 — why: `/organizer`'s «Новые записи» / «Записи по дням» read
+`GET /v1/rides/mine` and then each of up to 10 rides' participants (≤3 pages
+each), aggregating in the browser — rides past the 10 soonest weren't counted.
+What: new `GET /v1/rides/mine/registrations/activity?from=&timeZone=`
+(`registrations` module, `getOwnRegistrationActivity`): `recent` (newest 5
+active registrations on the caller's non-draft/non-cancelled rides starting no
+earlier than a week ago — the widget's earlier scope) and `days` (7 dates from
+`from`, counted in Postgres by creation day in the viewer's IANA zone, no ride
+cap). A single aggregate like `/mine/summary`, so no pagination; `recent` carries
+no `userId`. `RegistrationActivityWidget` makes one request; `lib/activity.ts`
+now only builds the пн–вс week in the viewer's zone (`currentWeek`) and lays the
+counts over it (`withCounts`). The participants-per-ride helpers the overview KPI
+cells and the sidebar badge use are unchanged.
+Found while writing it: grouping by the `to_char(... at time zone $tz)`
+expression fails in Postgres (the zone is a separate bind parameter in SELECT and
+GROUP BY) — grouped by position instead.
+
+KI-065 — owner decision (2026-10-01): after publish the organizer may hide the
+riders list at any time, but may show it again only while nobody is registered —
+people who signed up to a hidden list never become visible without knowing. What:
+`PUT /v1/rides/:id/participants-visibility` (`rides` module,
+`setParticipantsVisibility`), any status, owner-only (404 otherwise), `409
+participants_visibility_locked` when showing with active registrations, under the
+ride row lock registration takes (CR-034) so the check can't race a sign-up;
+`updatedBy`/`updatedAt` recorded. `PATCH` stays draft-only. `EditRideForm`: the
+checkbox stays in the draft form; after publish it is enabled, saves on change,
+and shows the locked message on 409 (new `RIDE_EDIT_TERMS` hint/success/locked
+strings).
+
+Validation: `registration-activity.routes.test.ts` 5/5 and
+`participants-visibility.routes.test.ts` 6/6 (real Postgres: 401, 400, empty
+aggregate, Moscow-vs-UTC day boundary, other organizers' rides excluded,
+cancelled registration/ride and long-past ride left out of the feed; 404 for a
+non-owner, hide with registrations → `riders_hidden`, re-show → 409, re-show with
+none, no-op); `apps/api` registrations 66/66; `apps/web` activity 10/10 and rides
+52/52 (3 new); web unit 493/493 before the form tests; `pnpm turbo run typecheck
+lint` for api/web/types/ui clean. Live: the activity endpoint against the dev
+stack with the demo seed (`org.coffee`) returns the feed, `400` for an unknown
+zone.
+API: two additive endpoints (`docs/api.md`). No migration.
+Files: `packages/types/src/api/{registrations,rides}.ts`,
+`apps/api/src/modules/registrations/{registrations.service,registrations.routes,
+registration-activity.routes.test}.ts`, `apps/api/src/modules/rides/
+{rides.service,rides.routes,participants-visibility.routes.test}.ts`,
+`apps/web/src/features/organizer/activity/{api.ts,lib/activity.ts,components/
+RegistrationActivityWidget.tsx,activity.test.tsx}`, `apps/web/src/features/
+organizer/rides/{api.ts,components/EditRideForm.tsx,rides.test.tsx}`,
+`packages/ui/src/terminology.ts`, `docs/api.md`.
+Decisions: KI-065's rule above (owner's call, no ADR — additive endpoint).

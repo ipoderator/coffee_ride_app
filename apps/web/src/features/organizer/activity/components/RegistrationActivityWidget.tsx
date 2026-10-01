@@ -13,18 +13,14 @@ import {
   REGISTRATION_ACTIVITY_TERMS,
   Skeleton,
 } from 'ui';
-import {
-  listAllRideParticipants,
-  listOwnRidesPage,
-} from '@/lib/organizer/own-rides';
 import { riderProfileHref } from '@/lib/rides/rider-profile-href';
+import { getRegistrationActivity } from '../api';
 import {
   type ActivityDay,
   type ActivityEntry,
-  recentEntries,
-  registrationsPerDay,
-  selectActivityRides,
-  toActivityEntries,
+  currentWeek,
+  toActivityEntry,
+  withCounts,
 } from '../lib/activity';
 
 type State =
@@ -44,10 +40,9 @@ function viewerTimeZone(): string {
 /**
  * `/organizer` dashboard (CR-130, ADR-024 mockup «свежие записи и неделя по
  * дням»): the newest registrations across the organizer's current rides, and
- * a per-day count for the last week. Built entirely from existing endpoints —
- * `GET /v1/rides/mine` plus each selected ride's `GET .../participants`
- * (`createdAt` per registration), aggregated here; no new API surface
- * (`selectActivityRides` bounds the per-ride fetches).
+ * a per-day count for this week. One aggregate read (KI-066,
+ * `GET /v1/rides/mine/registrations/activity`), bucketed by the server in the
+ * viewer's own time zone.
  */
 export function RegistrationActivityWidget() {
   const [state, setState] = useState<State>({ status: 'loading' });
@@ -59,17 +54,16 @@ export function RegistrationActivityWidget() {
 
     (async () => {
       const now = new Date();
-      const rides = selectActivityRides(await listOwnRidesPage(), now);
-      const perRide = await Promise.all(
-        rides.map(async (ride) =>
-          toActivityEntries(ride, await listAllRideParticipants(ride.id)),
-        ),
-      );
-      const entries = perRide.flat();
+      const timeZone = viewerTimeZone();
+      const week = currentWeek(now, timeZone);
+      const { activity } = await getRegistrationActivity({
+        from: week[0]!.key,
+        timeZone,
+      });
       return {
         now,
-        recent: recentEntries(entries),
-        days: registrationsPerDay(entries, now, viewerTimeZone()),
+        recent: activity.recent.map(toActivityEntry),
+        days: withCounts(week, activity.days),
       };
     })()
       .then((result) => {

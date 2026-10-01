@@ -677,6 +677,12 @@ export const RIDE_EDIT_TERMS = {
   participantsVisibleLabel: 'Показывать список участников',
   participantsVisibleHint:
     'Участники смогут видеть имена и фамилии друг друга в списке «Участники». Число мест видно всегда.',
+  // KI-065: after publish the toggle saves on its own and only hides freely.
+  participantsVisibleHintPublished:
+    'Скрыть список можно в любой момент. Показать снова — только пока никто не записался.',
+  participantsVisibilitySaved: 'Видимость списка участников сохранена.',
+  participantsVisibilityLocked:
+    'Люди записались, когда список был скрыт, поэтому показать его уже нельзя.',
   // CR-026 ("Map discovery"), ADR-014: manual coordinate entry — no geocode-by-
   // address UI yet (KI-016).
   startLatLabel: 'Широта старта',

@@ -16,6 +16,8 @@ import type {
   ListRideWaitlistResponse,
   ListRidesQuery,
   MyRegistrationsQuery,
+  OrganizerActivityQuery,
+  OrganizerRegistrationActivity,
   Registration,
   RideGroupRef,
   RideParticipantSummary,
@@ -23,12 +25,19 @@ import type {
   WaitlistEntry,
 } from 'types';
 import {
+  ORGANIZER_ACTIVITY_DAYS,
+  ORGANIZER_ACTIVITY_RECENT_LIMIT,
+} from 'types';
+import {
   CursorError,
   clampLimit,
   decodeCursor,
   encodeCursor,
 } from '../../lib/cursor.js';
-import { toPublicRide } from '../rides/rides.service.js';
+import {
+  resolveOwnOrganizerProfileId,
+  toPublicRide,
+} from '../rides/rides.service.js';
 import {
   createRegistrationConfirmedNotification,
   type NotificationLogger,
@@ -452,6 +461,96 @@ export async function listParticipants(
       : null;
 
   return { items: page.map(toRideParticipantSummary), nextCursor };
+}
+
+/**
+ * KI-066: the `/organizer` dashboard's registration feed and per-day chart as
+ * one aggregate over every ride the caller organizes. Active registrations on
+ * rides that aren't drafts or cancelled. `recent` keeps the widget's earlier
+ * scope — rides starting no earlier than a week ago — so a long-finished
+ * ride's sign-ups don't read as "new". Days are bucketed in Postgres in the
+ * viewer's `timeZone`, so a registration at 23:30 local lands on its own day.
+ */
+export async function getOwnRegistrationActivity(
+  db: DbClient,
+  userId: string,
+  query: OrganizerActivityQuery,
+): Promise<OrganizerRegistrationActivity> {
+  const dates = activityDates(query.from);
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    return { recent: [], days: dates.map((date) => ({ date, count: 0 })) };
+  }
+
+  const ownCountedRegistrations = and(
+    eq(rides.organizerId, organizerProfileId),
+    sql`${rides.status} not in ('draft', 'cancelled')`,
+    eq(registrations.status, 'active'),
+  );
+  const localDay = sql<string>`to_char(${registrations.createdAt} at time zone ${query.timeZone}, 'YYYY-MM-DD')`;
+
+  const [recentRows, dayRows] = await Promise.all([
+    db
+      .select({
+        id: registrations.id,
+        rideId: registrations.rideId,
+        rideTitle: rides.title,
+        displayName: users.displayName,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        createdAt: registrations.createdAt,
+        groupId: registrations.groupId,
+        groupName: rideGroups.name,
+        groupPaceKmh: rideGroups.paceKmh,
+      })
+      .from(registrations)
+      .innerJoin(rides, eq(registrations.rideId, rides.id))
+      .innerJoin(users, eq(registrations.userId, users.id))
+      .leftJoin(rideGroups, eq(registrations.groupId, rideGroups.id))
+      .where(
+        and(
+          ownCountedRegistrations,
+          sql`${rides.startsAt} >= now() - interval '7 days'`,
+        ),
+      )
+      .orderBy(desc(registrations.createdAt), desc(registrations.id))
+      .limit(ORGANIZER_ACTIVITY_RECENT_LIMIT),
+    db
+      .select({ date: localDay, count: sql<number>`count(*)::int` })
+      .from(registrations)
+      .innerJoin(rides, eq(registrations.rideId, rides.id))
+      .where(
+        and(
+          ownCountedRegistrations,
+          sql`${registrations.createdAt} >= (${query.from}::date)::timestamp at time zone ${query.timeZone}`,
+          sql`${registrations.createdAt} < (${query.from}::date + ${ORGANIZER_ACTIVITY_DAYS}::int)::timestamp at time zone ${query.timeZone}`,
+        ),
+      )
+      // By position: the time zone is a bind parameter, so the same expression
+      // repeated in GROUP BY would be a different parameter to Postgres.
+      .groupBy(sql`1`),
+  ]);
+
+  const counts = new Map(dayRows.map((row) => [row.date, row.count]));
+  return {
+    recent: recentRows.map((row) => ({
+      id: row.id,
+      rideId: row.rideId,
+      rideTitle: row.rideTitle,
+      displayName: resolveParticipantName(row),
+      group: toGroupRef(row),
+      createdAt: row.createdAt.toISOString(),
+    })),
+    days: dates.map((date) => ({ date, count: counts.get(date) ?? 0 })),
+  };
+}
+
+/** `ORGANIZER_ACTIVITY_DAYS` consecutive calendar dates starting at `from`. */
+function activityDates(from: string): string[] {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  return Array.from({ length: ORGANIZER_ACTIVITY_DAYS }, (_, index) =>
+    new Date(start + index * 86_400_000).toISOString().slice(0, 10),
+  );
 }
 
 /**

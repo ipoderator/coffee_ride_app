@@ -32,6 +32,7 @@ import {
   getRide,
   openRegistration,
   publishRide,
+  setParticipantsVisibility,
   startRide,
   updateRide,
   updateRideRequestSchema,
@@ -147,6 +148,7 @@ export function EditRideForm({
   const [isCancelling, setIsCancelling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [isSavingVisibility, setIsSavingVisibility] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
@@ -397,6 +399,38 @@ export function EditRideForm({
       setFormError(RIDE_EDIT_TERMS.loadError);
     } finally {
       setIsFinishing(false);
+    }
+  }
+
+  /** KI-065: a draft keeps the toggle in the form (saved with «Сохранить»);
+   * after publish it saves on its own, and the server refuses to re-show a
+   * list people joined while it was hidden. */
+  async function handleParticipantsVisibleChange(checked: boolean) {
+    if (!ride || !form) return;
+    if (ride.status === 'draft') {
+      setForm({ ...form, participantsVisible: checked });
+      return;
+    }
+    if (isSavingVisibility) return;
+
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsSavingVisibility(true);
+
+    try {
+      const response = await setParticipantsVisibility(rideId, checked);
+      setRide(response.ride);
+      setForm(toFormState(response.ride));
+      setSuccessMessage(RIDE_EDIT_TERMS.participantsVisibilitySaved);
+    } catch (error) {
+      setFormError(
+        error instanceof ApiError &&
+          error.problem.code === 'participants_visibility_locked'
+          ? RIDE_EDIT_TERMS.participantsVisibilityLocked
+          : RIDE_EDIT_TERMS.loadError,
+      );
+    } finally {
+      setIsSavingVisibility(false);
     }
   }
 
@@ -729,18 +763,19 @@ export function EditRideForm({
         <FormField
           id="ride-participants-visible"
           label={RIDE_EDIT_TERMS.participantsVisibleLabel}
-          hint={RIDE_EDIT_TERMS.participantsVisibleHint}
+          hint={
+            isDraft
+              ? RIDE_EDIT_TERMS.participantsVisibleHint
+              : RIDE_EDIT_TERMS.participantsVisibleHintPublished
+          }
         >
           <input
             type="checkbox"
             checked={form.participantsVisible}
             onChange={(event) =>
-              setForm({
-                ...form,
-                participantsVisible: event.target.checked,
-              })
+              void handleParticipantsVisibleChange(event.target.checked)
             }
-            disabled={isPending || !isDraft}
+            disabled={isPending || isSavingVisibility}
             className="size-5 rounded border-[1.5px] border-frame accent-primary disabled:cursor-not-allowed disabled:opacity-60"
           />
         </FormField>

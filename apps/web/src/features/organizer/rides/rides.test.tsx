@@ -18,6 +18,7 @@ import {
   listMyRides,
   openRegistration,
   publishRide,
+  setParticipantsVisibility,
   startRide,
   updateRide,
   uploadRideGpx,
@@ -42,6 +43,7 @@ vi.mock('./api', async () => {
     cancelRide: vi.fn(),
     startRide: vi.fn(),
     finishRide: vi.fn(),
+    setParticipantsVisibility: vi.fn(),
     uploadRideGpx: vi.fn(),
   };
 });
@@ -57,6 +59,7 @@ const cancelRideMock = vi.mocked(cancelRide);
 const startRideMock = vi.mocked(startRide);
 const finishRideMock = vi.mocked(finishRide);
 const uploadRideGpxMock = vi.mocked(uploadRideGpx);
+const setParticipantsVisibilityMock = vi.mocked(setParticipantsVisibility);
 
 const baseRide: Ride = {
   id: 'ride-1',
@@ -807,6 +810,88 @@ describe('EditRideForm', () => {
     expect(
       screen.queryByRole('button', { name: 'Закрыть регистрацию' }),
     ).not.toBeInTheDocument();
+  });
+
+  // KI-065: after publish the riders-list toggle saves on its own.
+  it('hides the riders list of a published ride right away', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+    setParticipantsVisibilityMock.mockResolvedValue({
+      ride: {
+        ...baseRide,
+        status: 'registration_open',
+        participantsVisible: false,
+      },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+    const toggle = screen.getByLabelText('Показывать список участников');
+    expect(toggle).toBeEnabled();
+
+    fireEvent.click(toggle);
+
+    expect(
+      await screen.findByText('Видимость списка участников сохранена.'),
+    ).toBeInTheDocument();
+    expect(setParticipantsVisibilityMock).toHaveBeenCalledWith('ride-1', false);
+    expect(toggle).not.toBeChecked();
+    expect(updateRideMock).not.toHaveBeenCalled();
+  });
+
+  it('explains why a hidden list with registrations cannot be shown again', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: {
+        ...baseRide,
+        status: 'registration_open',
+        participantsVisible: false,
+      },
+    });
+    setParticipantsVisibilityMock.mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Participants list can no longer be shown',
+        status: 409,
+        detail: 'The list was hidden when people registered.',
+        instance: '/v1/rides/ride-1/participants-visibility',
+        code: 'participants_visibility_locked',
+      }),
+    );
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+    const toggle = screen.getByLabelText('Показывать список участников');
+
+    fireEvent.click(toggle);
+
+    expect(
+      await screen.findByText(
+        'Люди записались, когда список был скрыт, поэтому показать его уже нельзя.',
+      ),
+    ).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+  });
+
+  it('keeps the riders-list toggle in the draft form until «Сохранить»', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: baseRide,
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+    const toggle = screen.getByLabelText('Показывать список участников');
+
+    fireEvent.click(toggle);
+
+    expect(toggle).not.toBeChecked();
+    expect(setParticipantsVisibilityMock).not.toHaveBeenCalled();
   });
 
   it('shows no close-registration button for a published ride', async () => {

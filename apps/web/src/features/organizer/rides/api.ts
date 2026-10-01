@@ -11,6 +11,7 @@ import {
   type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
+  type SetParticipantsVisibilityResponse,
   type StartRideResponse,
   type UpdateRideRequest,
   type UpdateRideResponse,
@@ -121,6 +122,34 @@ export async function updateRide(
   }
 
   return body as UpdateRideResponse;
+}
+
+/**
+ * KI-065: the riders-list toggle at any status (`PATCH` is draft-only). Throws
+ * `ApiError`, including `participants_visibility_locked` (409) when showing a
+ * list people joined while it was hidden.
+ */
+export async function setParticipantsVisibility(
+  id: string,
+  participantsVisible: boolean,
+): Promise<SetParticipantsVisibilityResponse> {
+  const response = await fetch(
+    `${RIDES_ENDPOINT}/${id}/participants-visibility`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantsVisible }),
+    },
+  );
+
+  const body = (await response.json()) as
+    SetParticipantsVisibilityResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as SetParticipantsVisibilityResponse;
 }
 
 /**

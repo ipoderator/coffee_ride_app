@@ -2058,3 +2058,57 @@ gate. Run `36856168437` (`ed3c1a3`): only `ride-detail` chromium failed (14 %
 of pixels — the CR-155 layout and «Все заезды» back link, nothing else);
 `ride-detail` mobile and every other screenshot passed. Its `*-actual.png`
 committed as the new chromium baseline.
+
+### KI-066 — Organizer registration activity is aggregated client-side from per-ride requests
+
+- Status: resolved 2026-10-01 (CR-162), discovered 2026-09-26 (CR-130).
+- Problem: `/organizer`'s «Новые записи»/«Записи по дням» widget
+  (`features/organizer/activity/`) has no aggregate endpoint to read, so it
+  calls `GET /v1/rides/mine` and then `GET /v1/rides/:id/participants` once
+  per selected ride (≤10 rides, ≤3 pages each), aggregating in the browser.
+  CR-130's scope was frontend-only, so no new API surface was added.
+- Impact: up to ~11 requests per dashboard load for a busy organizer; rides
+  beyond the 10 soonest in the window are not counted; an organizer with
+  more than 100 rides only sees the newest 100 considered.
+- Workaround: none needed at current scale.
+- Update 2026-09-26 (CR-131): the overview widget adds its own reads on the
+  same page (`/organizers/me`, `/rides/mine/summary`, `/rides/mine` again and
+  the nearest ride's participants) — the dashboard now makes roughly
+  `4 + selected rides` requests. Same fix applies.
+- Update 2026-09-26 (CR-132): the overview widget also reads the nearest
+  ride's waitlist, and the frame's «Участники» badge (`lib/organizer/
+nav-badges.ts`) re-reads `/rides/mine` + the nearest ride's participants
+  once per cabinet visit — on `/organizer` that duplicates the overview
+  widget's reads (≈ `7 + selected rides` requests). A shared client cache or
+  the same aggregate endpoint would remove the duplication.
+- Update 2026-09-26 (CR-133): duplication removed — `own-rides.ts`
+  de-duplicates concurrent identical GETs and the overview widget starts its
+  reads at mount, so `/organizer` makes 6 requests in production
+  (`auth/me`, `organizers/me`, `mine/summary`, `mine`, nearest ride's
+  participants + waitlist) plus one participants read per further selected
+  ride. What remains is the client-side aggregation itself.
+- Next action: if organizers with many concurrent rides appear, add a
+  `GET /v1/rides/mine/registrations/activity` aggregate (sibling of
+  `/mine/summary`, CR-103) and point the widget at it.
+- Resolution (CR-162): `GET /v1/rides/mine/registrations/activity` — one
+  aggregate, no ride cap, days bucketed in the viewer's zone by Postgres.
+
+### KI-065 — `participantsVisible` can't be changed after publish
+
+Status: resolved 2026-10-01 (CR-162). Discovered 2026-09-24 (CR-125).
+Problem: `Ride.participantsVisible` (the organizer's riders-list privacy toggle) is
+only settable via `PATCH /v1/rides/:id`, which is draft-only
+(`resolveOwnDraftRide`/`409 ride_not_editable`) — the same gate every other ride
+setting in this codebase already uses (`participantLimit`, cover image, route, ...).
+An organizer who wants to hide/show the list on an already-published ride currently
+cannot.
+Impact: minor UX limitation, not a data-safety issue — the setting still defaults to
+`true` (today's live behavior) and works correctly at creation time.
+Workaround: decide the setting before publishing.
+Next action: none planned. If this becomes a real complaint, it needs a small
+dedicated endpoint (or a relaxation of the draft-only rule for this one field) — a
+deliberate product decision, not a bug fix, since draft-only editing is consistent
+project-wide.
+Resolution (CR-162, owner decision): `PUT /v1/rides/:id/participants-visibility`
+— hide at any status; re-show refused (`409 participants_visibility_locked`)
+while the ride has active registrations.

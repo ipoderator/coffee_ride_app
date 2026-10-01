@@ -1241,3 +1241,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       CR-155/156 term templates, `DatePicker`, `GpxDropzone`) with real tests;
       fix KI-078 (desktop map fullscreen toggle hidden while the map is
       degraded) + e2e regression. See `docs/changelog.md`.
+- [x] CR-162 KI-066: `GET /v1/rides/mine/registrations/activity` aggregate
+      replaces the dashboard's per-ride participant reads; KI-065:
+      `PUT /v1/rides/:id/participants-visibility` — hide any time after publish,
+      re-show only while nobody is registered (owner decision). See
+      `docs/changelog.md`.

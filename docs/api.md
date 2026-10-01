@@ -279,6 +279,19 @@ ride the caller organizes (`activeRegistrations`/`waitlisted` sum across all of 
 not per-ride). No `OrganizerProfile` yet is an all-zero summary, not an error, same
 precedent as `/mine` above.
 
+GET `/v1/rides/mine/registrations/activity` — **implemented (KI-066, CR-162)**.
+Requires a valid session cookie (`401` otherwise). The `/organizer` dashboard's
+«Новые записи» / «Записи по дням» as one aggregate — not a page, no `nextCursor`
+(same precedent as `/mine/summary`). Query: `from` (`YYYY-MM-DD`, the chart's first
+day) and `timeZone` (IANA, the viewer's); either malformed → `400
+validation_error`. `200` → `{ activity: { recent, days } }`: `recent` — the newest
+5 active registrations on the caller's rides that aren't `draft`/`cancelled` and
+start no earlier than 7 days ago, each `{ id, rideId, rideTitle, displayName,
+group, createdAt }` (no `userId`, no contacts); `days` — exactly 7 `{ date, count }`
+from `from`, counting active registrations on those rides by their creation day in
+`timeZone`. No `OrganizerProfile` yet is an empty feed and seven zero days, not an
+error.
+
 GET `/v1/rides/:id` — **implemented (CR-016/CR-018, extended CR-023 "Ride
 detail")**. No session cookie required — a session, if present and valid, is
 resolved but never rejected (`resolveOptionalUser`, distinct from every other
@@ -339,6 +352,16 @@ POST `/v1/rides/:id/close-registration` — **implemented (CR-020)**. Same
 401/404-ownership rule as `publish`/`open-registration`, no `emailVerified` gate.
 `registration_open`-only: `409 ride_registration_not_closable` for any other status.
 `200` → `{ ride }` with `status: 'registration_closed'`. No request body.
+
+PUT `/v1/rides/:id/participants-visibility` — **implemented (KI-065, CR-162)**.
+Requires a valid session cookie (`401` otherwise); `404 ride_not_found` for a ride
+that doesn't exist or isn't the caller's. Body `{ participantsVisible: boolean }`.
+Works at any status (`PATCH` stays draft-only). Hiding is always allowed; showing
+is refused with `409 participants_visibility_locked` while the ride has active
+registrations — they signed up to a hidden list (owner decision 2026-10-01). Runs
+under the same ride row lock as registration, so no one can register between the
+check and the update. Setting the current value is a `200` no-op. `200` →
+`{ ride }`.
 
 POST `/v1/rides/:id/cancel` — **implemented (CR-021)**. Same 401/404-ownership
 rule as `publish`/`open-registration`/`close-registration`, no `emailVerified`

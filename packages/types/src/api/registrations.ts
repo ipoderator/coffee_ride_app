@@ -96,3 +96,57 @@ export const myRegistrationsQuerySchema = z.object({
 export type MyRegistrationsQuery = z.infer<typeof myRegistrationsQuerySchema>;
 
 export type ListMyRegistrationsResponse = Paginated<MyRegistrationSummary>;
+
+// KI-066: `GET /v1/rides/mine/registrations/activity` — the `/organizer`
+// dashboard's «Новые записи» / «Записи по дням» as one server aggregate
+// instead of a participants read per ride. A single resource, not a page.
+export const ORGANIZER_ACTIVITY_DAYS = 7;
+export const ORGANIZER_ACTIVITY_RECENT_LIMIT = 5;
+
+function isIanaTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const organizerActivityQuerySchema = z.object({
+  // First calendar day of the chart, in `timeZone`.
+  from: z.iso.date('from must be a date (YYYY-MM-DD).'),
+  timeZone: z
+    .string()
+    .max(64)
+    .refine(isIanaTimeZone, 'timeZone must be an IANA time zone.'),
+});
+export type OrganizerActivityQuery = z.infer<
+  typeof organizerActivityQuerySchema
+>;
+
+export interface OrganizerActivityRegistration {
+  /** The registration's id — with `rideId`, addresses the rider's card. */
+  id: string;
+  rideId: string;
+  rideTitle: string;
+  displayName: string | null;
+  group: RideGroupRef | null;
+  createdAt: string;
+}
+
+export interface OrganizerActivityDay {
+  /** `YYYY-MM-DD` in the query's `timeZone`. */
+  date: string;
+  count: number;
+}
+
+export interface OrganizerRegistrationActivity {
+  /** Newest first, at most `ORGANIZER_ACTIVITY_RECENT_LIMIT`. */
+  recent: OrganizerActivityRegistration[];
+  /** Exactly `ORGANIZER_ACTIVITY_DAYS` consecutive days from `from`. */
+  days: OrganizerActivityDay[];
+}
+
+export interface GetOrganizerRegistrationActivityResponse {
+  activity: OrganizerRegistrationActivity;
+}
