@@ -112,6 +112,35 @@ describe('NavMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Второй' })).toHaveFocus();
   });
 
+  it('jumps to the ends with Home/End and closes on Tab', async () => {
+    renderMenu();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Организатор' }), {
+      key: 'ArrowDown',
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: 'Первый' })).toHaveFocus(),
+    );
+
+    const menu = screen.getByRole('menu');
+    fireEvent.keyDown(menu, { key: 'End' });
+    expect(screen.getByRole('menuitem', { name: 'Второй' })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'Home' });
+    expect(screen.getByRole('menuitem', { name: 'Первый' })).toHaveFocus();
+
+    fireEvent.keyDown(menu, { key: 'Tab' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('stays open on a press inside the menu', () => {
+    renderMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Организатор' }));
+    fireEvent.mouseDown(screen.getByRole('menu'));
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
   it('keeps the label as the accessible name when it is visually hidden', () => {
     renderMenu({ labelHidden: true, icon: <span data-testid="icon" /> });
 

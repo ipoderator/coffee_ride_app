@@ -152,4 +152,57 @@ describe('DatePicker', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('moves a day, a week and a month at a time with the other keys', () => {
+    render(<Harness initial="2026-10-14" />);
+    fireEvent.click(screen.getByLabelText('Дата'));
+    const grid = screen.getByRole('grid');
+    const focusedName = () =>
+      document.activeElement?.getAttribute('aria-label');
+
+    fireEvent.keyDown(grid, { key: 'ArrowRight' });
+    expect(focusedName()).toBe('Чт, 15 октября 2026');
+    fireEvent.keyDown(grid, { key: 'ArrowLeft' });
+    fireEvent.keyDown(grid, { key: 'ArrowLeft' });
+    expect(focusedName()).toBe('Вт, 13 октября 2026');
+    fireEvent.keyDown(grid, { key: 'ArrowUp' });
+    expect(focusedName()).toBe('Вт, 6 октября 2026');
+    fireEvent.keyDown(grid, { key: 'Home' });
+    expect(focusedName()).toBe('Пн, 5 октября 2026');
+    fireEvent.keyDown(grid, { key: 'PageDown' });
+    expect(screen.getByText('Ноябрь 2026')).toBeInTheDocument();
+    expect(focusedName()).toBe('Чт, 5 ноября 2026');
+  });
+
+  it('closes from the phone sheet’s button and backdrop', () => {
+    const onChange = vi.fn();
+    const { container } = render(<Harness onChange={onChange} />);
+    const trigger = screen.getByLabelText('Дата');
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    const backdrop = container.querySelector('[aria-hidden="true"].fixed');
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop as Element);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('defaults «today» to the browser’s local calendar day', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 2, 9, 23, 30));
+    try {
+      const onChange = vi.fn();
+      render(<DatePicker value="" onChange={onChange} />);
+      fireEvent.click(screen.getByRole('button', { name: /Выберите дату/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Сегодня' }));
+      expect(onChange).toHaveBeenCalledWith('2026-03-09');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

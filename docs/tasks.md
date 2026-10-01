@@ -1237,3 +1237,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       CR-148) — `packages/maps-2gis/src/route.ts` now sends `type: 'pref'`
       for every intermediate point, `type: 'stop'` only for the first/last.
       See `docs/changelog.md`.
+- [x] CR-161 Unblock CI's coverage gate (red since CR-155: untested
+      CR-155/156 term templates, `DatePicker`, `GpxDropzone`) with real tests;
+      fix KI-078 (desktop map fullscreen toggle hidden while the map is
+      degraded) + e2e regression. See `docs/changelog.md`.

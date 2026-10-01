@@ -2026,3 +2026,17 @@ against its actual grounds instead of only a plain white one.
 (`apps/web/src/stories/a11y-known-issues.ts`'s `KI_080_DANGER_CONTRAST`,
 7 stories) removed and the file deleted — `pnpm --filter web test:storybook`
 passes 59/59 with no rule disabled.
+
+### KI-078 — Desktop map fullscreen toggle covers the «Карта временно недоступна» banner
+
+Status: resolved 2026-10-01 (CR-161). Discovered: 2026-09-28 (reviewing KI-077's CI screenshots).
+Problem: on `/?view=map` at desktop width with the map degraded (no MapGL key, as in
+CI), CR-123's fullscreen toggle (`DiscoveryList.tsx`, top-left over the map panel)
+sits on top of `RideMapPlaceholder`'s warning, hiding its first word «Карта». Visible
+in `discovery-map-chromium-linux.png` both before and after CR-152–CR-154 — not a
+regression from them.
+Impact: cosmetic/legibility in the degraded state only; a live map is unaffected.
+Next action: hide the toggle while the map is unavailable (nothing to expand), or
+offset the banner past it; refresh `discovery-map-chromium` from CI afterwards.
+Resolution (CR-161): the toggle is hidden at `lg` while the map panel contains
+`[data-map-unavailable]`; `home.spec.ts` asserts it with MapGL blocked.

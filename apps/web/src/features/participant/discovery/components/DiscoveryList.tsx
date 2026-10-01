@@ -283,7 +283,7 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
       <div
         data-testid="discovery-map-panel"
         className={cn(
-          'relative order-first h-[45vh] min-h-64 border-b-[1.5px] border-frame bg-bg lg:order-0 lg:col-start-1 lg:row-start-1 lg:h-auto lg:min-h-0 lg:border-b-0',
+          'group/map relative order-first h-[45vh] min-h-64 border-b-[1.5px] border-frame bg-bg lg:order-0 lg:col-start-1 lg:row-start-1 lg:h-auto lg:min-h-0 lg:border-b-0',
           // Degraded (no key / render failed): the strip shrinks to the notice
           // instead of leaving a tall blank band above the list.
           'has-[[data-map-unavailable]]:h-auto has-[[data-map-unavailable]]:min-h-0',
@@ -305,7 +305,9 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
               ? RIDE_DISCOVERY_TERMS.collapseMapLabel
               : RIDE_DISCOVERY_TERMS.expandMapLabel
           }
-          className="absolute top-4 left-4 z-20 hidden shadow-overlay lg:inline-flex"
+          // KI-078: nothing to expand while the map is degraded, and the
+          // button would cover the notice's first word.
+          className="absolute top-4 left-4 z-20 hidden shadow-overlay lg:inline-flex lg:group-has-[[data-map-unavailable]]/map:hidden"
         >
           {isMapFullscreen ? (
             <Minimize2 className="size-5" aria-hidden="true" />

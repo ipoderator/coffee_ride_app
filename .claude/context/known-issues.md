@@ -506,18 +506,6 @@ Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
 
-### KI-078 — Desktop map fullscreen toggle covers the «Карта временно недоступна» banner
-
-Status: open. Discovered: 2026-09-28 (reviewing KI-077's CI screenshots).
-Problem: on `/?view=map` at desktop width with the map degraded (no MapGL key, as in
-CI), CR-123's fullscreen toggle (`DiscoveryList.tsx`, top-left over the map panel)
-sits on top of `RideMapPlaceholder`'s warning, hiding its first word «Карта». Visible
-in `discovery-map-chromium-linux.png` both before and after CR-152–CR-154 — not a
-regression from them.
-Impact: cosmetic/legibility in the degraded state only; a live map is unaffected.
-Next action: hide the toggle while the map is unavailable (nothing to expand), or
-offset the banner past it; refresh `discovery-map-chromium` from CI afterwards.
-
 ### KI-079 — Ride-detail visual baselines are stale after CR-155
 
 Status: open. Discovered: 2026-09-29 (CR-155).

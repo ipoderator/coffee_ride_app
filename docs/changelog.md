@@ -2252,3 +2252,43 @@ provider.test.ts`.
 Decisions: none (bug fix, no ADR).
 Follow-up: none for CR-148/CR-160. KI-056 (2GIS reachability from this
 machine) stays open as a standing, unresolved environment condition.
+
+## 2026-10-01 — CR-161 — Unblock CI's coverage gate; fix KI-078 (fullscreen toggle over the degraded-map notice)
+
+Why: `main`'s `ci` job had failed at "Coverage gate" on every push since CR-155
+(`e5bf900` … `f0a2d5a`, five runs), so the build and E2E steps never ran —
+which is also why KI-079's refreshed ride-detail baselines couldn't be taken
+from CI. The drop: `packages/ui` lines 90.98 % < 92.98 %, functions 82.69 % <
+88.07 % (CR-155/CR-156's templated strings in `terminology.ts` and CR-157's
+`DatePicker` keyboard/close paths had no tests) and `apps/web` statements
+74.55 % < 74.71 % (CR-156's `GpxDropzone` at 30 %).
+
+What:
+
+- Tests, not a lowered baseline: `packages/ui/src/terminology-templates.test.ts`
+  (genitive/plural forms of `RIDE_PAGE_TERMS`, `ORGANIZER_GROUPS_TERMS`,
+  `GARAGE_TERMS`, wizard/route-builder/overview templates), more `DatePicker`
+  cases (Arrow/Home/PageDown keys, phone sheet close button + backdrop, the
+  local-clock «today» default), `NavMenu` Home/End/Tab and press-inside, and
+  `apps/web/.../gpx-dropzone.test.tsx` (picker, drop, disabled drop, clear,
+  error wiring). Local: `packages/ui` lines 100 %, functions 100 %, branches
+  92.78 %; `apps/web` statements 74.94 %, branches 75.48 %;
+  `pnpm coverage:check` holds. Baseline file not raised yet — CI's own numbers
+  come first (web's local and CI figures differ slightly).
+- KI-078: `DiscoveryList`'s desktop fullscreen toggle is now hidden while the
+  map panel contains `[data-map-unavailable]` (`group/map` +
+  `lg:group-has-[[data-map-unavailable]]/map:hidden`) — CSS only, so it covers
+  both the missing-key and the failed-render case. New `home.spec.ts` test
+  aborts `mapgl.2gis.com` to force the degraded state and asserts the notice
+  is visible and the toggle hidden; confirmed it fails without the fix.
+
+Validation: `pnpm turbo run typecheck lint --filter=web --filter=ui` clean;
+`packages/ui` 202/202, `apps/web` 495/495 unit; `home.spec.ts` 3/3 (chromium)
+against the local stack.
+Files: `packages/ui/src/terminology-templates.test.ts`, `packages/ui/src/
+components/{DatePicker,NavMenu}.test.tsx`, `apps/web/src/features/organizer/
+rides/gpx-dropzone.test.tsx`, `apps/web/src/features/participant/discovery/
+components/DiscoveryList.tsx`, `apps/web/e2e/home.spec.ts`.
+Decisions: none.
+Follow-up: KI-079 — take the refreshed `ride-detail` (and now
+`discovery-map`) baselines from this push's CI run.

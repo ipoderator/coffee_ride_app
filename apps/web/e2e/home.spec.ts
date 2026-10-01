@@ -53,3 +53,22 @@ test('home page loads the map view end to end', async ({ page }) => {
   const rideLink = listPanel.locator('a[href^="/rides/"]').first();
   await expect(emptyState.or(rideLink)).toBeVisible();
 });
+
+// KI-078: with the map degraded there is nothing to expand, and the desktop
+// fullscreen toggle used to cover the notice. Blocking the MapGL SDK forces
+// the degraded state even where a local key is configured.
+test('map view hides the fullscreen toggle while the map is unavailable', async ({
+  page,
+}) => {
+  await page.route('**/mapgl.2gis.com/**', (route) => route.abort());
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?view=map');
+
+  const mapPanel = page.getByTestId('discovery-map-panel');
+  await expect(
+    mapPanel.getByText(RIDE_DISCOVERY_TERMS.mapUnavailable),
+  ).toBeVisible();
+  await expect(
+    mapPanel.getByRole('button', { name: RIDE_DISCOVERY_TERMS.expandMapLabel }),
+  ).toBeHidden();
+});
