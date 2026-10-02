@@ -17,6 +17,7 @@ import {
   RIDE_WORKSPACE_TERMS,
 } from 'ui';
 import type { RideWorkspaceContextValue } from '@/lib/cabinet/ride-workspace';
+import { fieldErrorMessage } from '@/lib/forms/field-errors';
 import { isRideOverdue } from '@/lib/rides/overdue';
 import {
   ApiError,
@@ -25,6 +26,7 @@ import {
   setRideContact,
   setRideContactRequestSchema,
 } from '../api';
+import { rideFieldShapeError } from '../field-errors';
 import {
   RideContactFields,
   rideContactFromResponse,
@@ -93,7 +95,14 @@ export function RideOverview({
     if (!parsed.success) {
       // The schema reports the value's own failure at `contact.value`; the
       // form shows it on the single visible input either way.
-      setContactError(parsed.error.issues[0]?.message);
+      const issue = parsed.error.issues[0];
+      setContactError(
+        issue &&
+          fieldErrorMessage(
+            issue,
+            rideFieldShapeError('contact', contact.type),
+          ),
+      );
       return;
     }
     setContactError(undefined);

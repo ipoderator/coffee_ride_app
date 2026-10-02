@@ -8,7 +8,9 @@ import {
   REGISTRATION_ACTION_TERMS,
   RIDE_SERVICE_TERMS,
   RIDE_STATUS_TERMS,
+  RIDE_CONTACT_VALUE_ERRORS,
   UI_TERMS,
+  VALIDATION_TERMS,
 } from './terminology';
 
 describe('RIDE_STATUS_TERMS', () => {
@@ -239,5 +241,28 @@ describe('ORGANIZER_JOURNAL_TERMS (CR-173)', () => {
     expect(ORGANIZER_JOURNAL_TERMS.typicalDistance('60 км')).toBe(
       'дистанция около 60 км',
     );
+  });
+});
+
+describe('VALIDATION_TERMS (KI-085)', () => {
+  const NBSP = '\u00a0';
+
+  it('declines the length bounds and groups thousands', () => {
+    expect(VALIDATION_TERMS.tooShort(12)).toBe('Не короче 12 символов.');
+    expect(VALIDATION_TERMS.tooShort(21)).toBe('Не короче 21 символа.');
+    expect(VALIDATION_TERMS.tooLong(140)).toBe('Не длиннее 140 символов.');
+    expect(VALIDATION_TERMS.tooLong(2000)).toBe(
+      `Не длиннее 2${NBSP}000 символов.`,
+    );
+    expect(VALIDATION_TERMS.tooManyItems(1)).toBe('Не больше 1 строки.');
+    expect(VALIDATION_TERMS.tooManyItems(20)).toBe('Не больше 20 строк.');
+    expect(VALIDATION_TERMS.tooFewItems(2)).toBe('Нужно хотя бы 2 значения.');
+  });
+
+  it('names the format a contact value must have, per type', () => {
+    expect(RIDE_CONTACT_VALUE_ERRORS.phone).toBe(VALIDATION_TERMS.russianPhone);
+    expect(RIDE_CONTACT_VALUE_ERRORS.max).toBe(VALIDATION_TERMS.russianPhone);
+    expect(RIDE_CONTACT_VALUE_ERRORS.telegram).toContain('@coffee_ride');
+    expect(RIDE_CONTACT_VALUE_ERRORS.email).toBe(VALIDATION_TERMS.email);
   });
 });

@@ -705,8 +705,10 @@ published: «Открыть регистрацию» first; closed: «Начат
 undecided, CR-185); finished/cancelled: no lifecycle step at all. On a phone the
 buttons grow to share rows. Under the head, six local tabs — «Обзор» plus the
 ADR-009 ride-section registry — as route links with `aria-current`: an underlined row
-from `lg`, a bordered 3×2 grid below (6×1 from `md`), so they never look like the
-cabinet's own horizontally scrolling section strip. Each section opens with a task
+from `lg`, a bordered 3×2 grid below (6×1 from `md`; 2×3 while the tab strip is under
+21rem wide — a 320–360 px phone, where a third of the width is narrower than
+«Обновления», KI-085), so they never look like the cabinet's own horizontally
+scrolling section strip. Each section opens with a task
 heading (`h2`), one line on why it exists and a concrete status chip («Трек
 загружен», «2 из 6», «5 записались», «Не отмечено: 2», «Последнее: 2 октября»).
 
@@ -823,6 +825,15 @@ done (`docs/definition-of-done.md`).
 
 Forms additionally require, per `.claude/rules/frontend.md`: client + server validation
 messages tied to the field, a pending state, and duplicate-submit protection.
+
+Validation lines are Russian and never a Zod `issue.message` (`packages/types` writes
+those in English for the API, KI-085): `apps/web/src/lib/forms/field-errors.ts` words
+the failed check from its code and bounds through `VALIDATION_TERMS` («Заполните это
+поле.», «Не длиннее 140 символов.», «Не может быть меньше нуля.»), or with a field's own
+wording for a shape rule (`RIDE_CONTACT_VALUE_ERRORS` per contact type, the profile
+phone, the start point's latitude + longitude pair). A server `validation_error` entry
+carries only a path and English text, so it shows that wording or «Проверьте это поле.».
+While a change saves, row actions on the same list are disabled, never silently inert.
 
 ---
 

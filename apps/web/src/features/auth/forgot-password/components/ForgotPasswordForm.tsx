@@ -7,6 +7,10 @@ import {
   forgotPasswordRequestSchema,
   requestPasswordReset,
 } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 interface FieldErrors {
   email?: string;
@@ -47,7 +51,8 @@ export function ForgotPasswordForm() {
 
     const parsed = forgotPasswordRequestSchema.safeParse({ email });
     if (!parsed.success) {
-      setFieldErrors({ email: parsed.error.issues[0]?.message });
+      const issue = parsed.error.issues[0];
+      setFieldErrors({ email: issue && fieldErrorMessage(issue) });
       setFormError(null);
       return;
     }
@@ -67,7 +72,9 @@ export function ForgotPasswordForm() {
       ) {
         const nextErrors: FieldErrors = {};
         for (const issue of error.problem.errors) {
-          if (issue.path === 'email') nextErrors.email ??= issue.message;
+          if (issue.path === 'email') {
+            nextErrors.email ??= serverFieldErrorMessage();
+          }
         }
         setFieldErrors(nextErrors);
       } else {

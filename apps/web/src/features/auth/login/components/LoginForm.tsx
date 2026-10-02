@@ -11,6 +11,10 @@ import {
 } from '@/lib/auth/next-path';
 import { useSession } from '@/lib/auth/session-context';
 import { ApiError, login, loginRequestSchema } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 interface FieldErrors {
   email?: string;
@@ -48,7 +52,7 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         if (field === 'email' || field === 'password') {
-          nextErrors[field] ??= issue.message;
+          nextErrors[field] ??= fieldErrorMessage(issue);
         }
       }
       setFieldErrors(nextErrors);
@@ -78,7 +82,7 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
           const nextErrors: FieldErrors = {};
           for (const issue of error.problem.errors) {
             if (issue.path === 'email' || issue.path === 'password') {
-              nextErrors[issue.path] ??= issue.message;
+              nextErrors[issue.path] ??= serverFieldErrorMessage();
             }
           }
           setFieldErrors(nextErrors);

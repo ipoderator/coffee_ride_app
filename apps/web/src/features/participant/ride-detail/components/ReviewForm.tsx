@@ -2,7 +2,14 @@
 
 import { useState, type FormEvent } from 'react';
 import { createReviewRequestSchema, type Review } from 'types';
-import { Button, Card, FormField, REVIEWS_TERMS, Textarea } from 'ui';
+import {
+  Button,
+  Card,
+  FormField,
+  REVIEWS_TERMS,
+  Textarea,
+  VALIDATION_TERMS,
+} from 'ui';
 import { ApiError, createReview } from '../api';
 
 const RATING_VALUES = [1, 2, 3, 4, 5] as const;
@@ -42,9 +49,11 @@ export function ReviewForm({
     };
     const parsed = createReviewRequestSchema.safeParse(payload);
     if (!parsed.success) {
+      // KI-085: the only way to break the rating is to send no stars.
       setRatingError(
-        parsed.error.issues.find((issue) => issue.path[0] === 'rating')
-          ?.message ?? null,
+        parsed.error.issues.some((issue) => issue.path[0] === 'rating')
+          ? VALIDATION_TERMS.rating
+          : null,
       );
       setFormError(null);
       return;
@@ -65,8 +74,9 @@ export function ReviewForm({
         error.problem.errors
       ) {
         setRatingError(
-          error.problem.errors.find((issue) => issue.path === 'rating')
-            ?.message ?? null,
+          error.problem.errors.some((issue) => issue.path === 'rating')
+            ? VALIDATION_TERMS.rating
+            : null,
         );
       } else {
         setFormError(REVIEWS_TERMS.submitError);

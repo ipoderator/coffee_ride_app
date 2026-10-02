@@ -13,7 +13,8 @@ import postgres from 'postgres';
 // architecture.md`).
 //
 // Same database the API under test uses: playwright.config.ts's webServer
-// default, overridden by `DATABASE_URL` exactly as there (CI sets it).
+// default, overridden by `DATABASE_URL` exactly as there (CI sets it; locally
+// the config loads it from the root .env, KI-085).
 const DATABASE_URL =
   process.env.DATABASE_URL ??
   'postgresql://postgres:postgres@localhost:5432/coffee_ride';
@@ -33,8 +34,8 @@ export async function seedPasswordResetToken(userId: string): Promise<string> {
     `;
   } catch (error) {
     // FK violation = the user isn't in *this* database: a reused local dev API
-    // (`reuseExistingServer`) reads the root .env's DATABASE_URL, which this
-    // process doesn't load — export the same DATABASE_URL for the test run.
+    // (`reuseExistingServer`) was started with a different DATABASE_URL than
+    // the root .env / environment this run sees.
     throw new Error(
       `seedPasswordResetToken: insert failed against ${new URL(DATABASE_URL).pathname} — is the API under test on the same DATABASE_URL? ${String(error)}`,
     );

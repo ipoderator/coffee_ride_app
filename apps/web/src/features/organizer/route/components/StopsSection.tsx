@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createStopRequestSchema, type CreateStopRequest } from 'types';
-import { Button, Card, STOPS_TERMS } from 'ui';
+import { Button, Card, cn, STOPS_TERMS } from 'ui';
 import {
   ApiError,
   createStop,
@@ -10,6 +10,10 @@ import {
   updateStop,
   type Stop,
 } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 type FieldErrors = Partial<
   Record<'name' | 'description' | 'lat' | 'lng' | 'durationMinutes', string>
@@ -22,6 +26,10 @@ type FormState = {
   lng: string;
   durationMinutes: string;
 };
+
+/** A row's «Изменить»/«Удалить»; dimmed and inert while a change saves. */
+const ROW_ACTION_CLASS =
+  'inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:no-underline';
 
 const EMPTY_FORM: FormState = {
   name: '',
@@ -94,7 +102,7 @@ export function StopsSection({
         field === 'lng' ||
         field === 'durationMinutes'
       ) {
-        next[field] ??= issue.message;
+        next[field] ??= fieldErrorMessage(issue);
       }
     }
     return next;
@@ -115,7 +123,7 @@ export function StopsSection({
           issue.path === 'lng' ||
           issue.path === 'durationMinutes'
         ) {
-          next[issue.path] ??= issue.message;
+          next[issue.path] ??= serverFieldErrorMessage();
         }
       }
       setFieldErrors(next);
@@ -339,7 +347,10 @@ export function StopsSection({
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
+                        className={ROW_ACTION_CLASS}
+                        // KI-085: while a change is saving, a row action
+                        // would be ignored — say so instead of a dead click.
+                        disabled={isPending}
                         onClick={() => {
                           setEditingId(stop.id);
                           setEditForm(stopToForm(stop));
@@ -350,7 +361,8 @@ export function StopsSection({
                       </button>
                       <button
                         type="button"
-                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-danger hover:underline"
+                        className={cn(ROW_ACTION_CLASS, 'text-danger')}
+                        disabled={isPending}
                         onClick={() => handleDelete(stop.id)}
                       >
                         {STOPS_TERMS.delete}

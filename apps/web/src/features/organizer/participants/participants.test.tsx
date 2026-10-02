@@ -6,6 +6,10 @@ import {
   within,
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  TestRideWorkspace,
+  workspaceData,
+} from '@/test-support/ride-workspace';
 import { ParticipantTable } from './components/ParticipantTable';
 import { WaitlistTable } from './components/WaitlistTable';
 import {
@@ -473,5 +477,48 @@ describe('ParticipantTable — finish check-in (CR-181)', () => {
     const row = screen.getByRole('group', { name: 'Финиш: Молчун' });
     expect(await within(row).findByText('Сошёл')).toBeInTheDocument();
     expect(screen.getByText(/Сошли: 1/)).toBeInTheDocument();
+  });
+});
+
+describe('Participants inside the ride workspace (KI-085)', () => {
+  it("takes the groups and the status from the workspace's ride, not a second read", async () => {
+    getRideParticipantsMock.mockResolvedValue({
+      items: [
+        {
+          ...first,
+          group: slowRef,
+          finishClaimedAt: '2027-05-01T09:00:00.000Z',
+        },
+      ],
+      nextCursor: null,
+    });
+    // Queued without a group: its «Группа: —» shows only because the
+    // workspace's ride has groups.
+    getRideWaitlistMock.mockResolvedValue({
+      items: [second],
+      nextCursor: null,
+    });
+
+    render(
+      <TestRideWorkspace
+        data={workspaceData({
+          ride: { status: 'started' },
+          groups: [slowGroup, fastGroup],
+        })}
+      >
+        <ParticipantTable rideId="ride-1" />
+        <WaitlistTable rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+
+    // The workspace's status opens the finish check-in, its groups the headings.
+    expect(await screen.findByTestId('attendance-panel')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: `Группа 2 · 32,5${NBSP}км/ч` }),
+    ).toBeInTheDocument();
+    const queued = await screen.findByText(/1\.\s*Без имени/);
+    expect(queued.closest('li')).toHaveTextContent('Группа: —');
+    expect(getRideGroupsMock).not.toHaveBeenCalled();
+    expect(getRideStatusMock).not.toHaveBeenCalled();
   });
 });

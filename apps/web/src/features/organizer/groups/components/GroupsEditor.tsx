@@ -57,7 +57,11 @@ function suggestName(groups: RideGroupWithCount[]): string {
  * refreshes the workspace's «Группы» chip and overview row.
  */
 export function GroupsEditor({ rideId }: { rideId: string }) {
-  const { status, rideStatus, groups, refresh, retry } = useRideGroups(rideId);
+  const workspace = useRideWorkspace();
+  const { status, rideStatus, groups, refresh, retry } = useRideGroups(
+    rideId,
+    workspace?.data.ride.status,
+  );
   const [lockedByServer, setLockedByServer] = useState(false);
   const [mode, setMode] = useState<Mode>({ kind: 'idle' });
   const [form, setForm] = useState<GroupFormState>({
@@ -78,7 +82,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
     direction: Direction;
   } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const refreshWorkspace = useRideWorkspace()?.refresh;
+  const refreshWorkspace = workspace?.refresh;
 
   /** The list, then the workspace's chip/overview row. */
   async function refreshAll() {

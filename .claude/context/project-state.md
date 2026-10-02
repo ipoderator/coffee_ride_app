@@ -37,12 +37,24 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-188 (2026-10-02, committed): KI-085's follow-ups. Each ride-workspace tab
+reads `GET /v1/rides/:id` once — sections take the ride from `useRideWorkspace()` and
+re-read through its `refresh()` (standalone they still read themselves). Field errors
+are Russian in every form: `apps/web/src/lib/forms/field-errors.ts` words a Zod issue
+from its code/bounds via `VALIDATION_TERMS` (`packages/ui`), never `issue.message`
+(`packages/types` stays English for the API). `playwright.config.ts` loads the root
+`.env` (no more exporting `DATABASE_URL` for `password-reset.spec.ts`). Ride tabs are
+2×3 under 21rem (320–360 px phones). Also fixed red `main` CI: coverage raised with
+tests (web/ui floors raised in `coverage-baseline.json`), KI-084's six baselines taken
+from CI's artifact, stops/route-point row actions disabled while a change saves (the
+`route-points-stops` flake). Frontend + test config only — no API/schema change.
+
 CR-187 (2026-10-02, committed together with CR-186): the ride workspace
 «Управление заездом» from the owner's UX review. `features/organizer/rides/components/
 RideWorkspace.tsx` frames every `/organizer/rides/[id]/*` page — status + overdue
 badge, mono start line, the title as `h1`, lifecycle actions in priority order (it owns
 the steps and the finish `ConfirmDialog`), six local tabs (`RideWorkspaceTabs.tsx`:
-underline from `lg`, a 3×2/6×1 grid below) and a section head (h2, purpose line,
+underline from `lg`, a 3×2/6×1 grid below — 2×3 under 21rem since CR-188) and a section head (h2, purpose line,
 readiness chip). Context via `lib/cabinet/ride-workspace.ts` (`useRideWorkspace()`).
 Readiness is a registry: each section's `readiness.ts`, collected in
 `lib/cabinet/organizer-ride-readiness.ts`. «Обзор»: a draft = «Перед публикацией»
@@ -64,7 +76,7 @@ Featured card only for a ride with a route; a route-less grid card has a compact
 Additive `MapRenderOptions.onBasemapUnavailable` + `maps-2gis/src/basemap-watch.ts`:
 discovery shows «Карта недоступна» with «Повторить», the ride page its placeholder.
 `Dialog` returns focus to its opener. No API/schema change. Open: KI-082, KI-083,
-KI-084 (visual baselines not regenerated — CI e2e fails until replaced).
+KI-084 (visual baselines — replaced from CI's artifact in CR-188, closes on a green CI run).
 
 CR-184 (2026-10-02, committed with CR-185, on top of CR-181..CR-183): a non-draft ride's
 `/edit` opens as «Управление заездом» (next lifecycle action first, summary, sections,
@@ -901,25 +913,25 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-186 + CR-187 are committed. KI-084 (screenshot baselines from CI's
-artifact) is still the follow-up once CI has run; CR-187 touches no visual-regression
-screen.
+None — CR-188 is committed. Its CI run should go green: the coverage gate (web/ui
+raised with tests) and e2e (KI-084's replaced baselines) were the two red steps on
+`main`.
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
-1. **KI-084** — after CR-184/CR-185 are pushed, replace the screenshot baselines with
-   CI's `*-actual.png` (checked against `*-diff.png`), or regenerate on amd64 Docker.
-   (`coverage-baseline.json` was refreshed by CR-185 with the live stack.)
+1. **Push CR-188 and confirm CI** — then close KI-084 (archive it). `apps/api`,
+   `maps-2gis` and `resilience` baselines were not re-measured in CR-188 (unchanged
+   code; CI had them at/above their floors).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
    style id from their 2GIS account; then an additive `theme` option on
    `MapRenderOptions` mapped inside `packages/maps-2gis`.
 3. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is reachable
    from this machine (KI-056); the seed could also fill requirements.
 4. Before launch: a commercial 2GIS key (KI-075); first real deployment (KI-045).
-5. Possibly flaky: `route-points-stops.spec.ts` passed only on retry in CI twice —
-   worth a look if it recurs.
+5. **KI-086** — owner decision: which sidebar item lights on a ride's
+   participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
 
 `docs/tasks.md` has no unchecked tickets.
 
@@ -1300,4 +1312,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-10-02 (CR-187)
+2026-10-02 (CR-188)

@@ -25,6 +25,10 @@ import {
   updateOrganizerProfileRequestSchema,
 } from '../api';
 import { AvatarUploadForm } from './AvatarUploadForm';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -123,7 +127,7 @@ export function OrganizerProfileForm() {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         if (field === 'name' || field === 'description') {
-          nextErrors[field] ??= issue.message;
+          nextErrors[field] ??= fieldErrorMessage(issue);
         }
       }
       setFieldErrors(nextErrors);
@@ -172,7 +176,7 @@ export function OrganizerProfileForm() {
         const nextErrors: FieldErrors = {};
         for (const issue of error.problem.errors) {
           if (issue.path === 'name' || issue.path === 'description') {
-            nextErrors[issue.path] ??= issue.message;
+            nextErrors[issue.path] ??= serverFieldErrorMessage();
           }
         }
         setFieldErrors(nextErrors);

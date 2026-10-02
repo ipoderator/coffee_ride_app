@@ -1351,3 +1351,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       section heads with a readiness chip), readiness checklist on «Обзор», published
       sections as results with a lock `Notice` instead of disabled forms. Supersedes
       CR-186's «Разделы» rows and CR-185's ride context header. See `docs/changelog.md`.
+- [x] CR-188 KI-085 follow-ups: one ride read per workspace tab, Russian field errors in
+      every form (`lib/forms/field-errors.ts`, `VALIDATION_TERMS`), root `.env` for e2e,
+      2×3 ride tabs on narrow phones; red `main` CI fixed (coverage raised with tests,
+      KI-084 baselines from CI's artifact, the `route-points-stops` flake). See
+      `docs/changelog.md`.

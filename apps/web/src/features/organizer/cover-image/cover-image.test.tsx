@@ -1,5 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  TestRideWorkspace,
+  workspaceData,
+} from '@/test-support/ride-workspace';
 import { CoverImageUploadForm } from './components/CoverImageUploadForm';
 import {
   ApiError,
@@ -196,6 +200,36 @@ describe('CoverImageUploadForm', () => {
       'ride-1',
       expect.any(File),
     );
+  });
+
+  it('inside the ride workspace, starts from its ride and keeps the fresh cover (KI-085)', async () => {
+    const reread = vi.fn(() =>
+      workspaceData({ ride: { coverImageUrl: '/v1/rides/ride-1/cover' } }),
+    );
+    replaceCoverImageMock.mockResolvedValue('/v1/rides/ride-1/cover');
+
+    render(
+      <TestRideWorkspace
+        data={workspaceData({
+          ride: { coverImageUrl: '/v1/rides/ride-1/cover' },
+        })}
+        reread={reread}
+      >
+        <CoverImageUploadForm rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+
+    // Controls at once, from the workspace's ride: no second ride read.
+    selectFile(new File(['x'], 'new-cover.jpg', { type: 'image/jpeg' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Заменить обложку' }));
+
+    expect(await screen.findByText('Обложка обновлена.')).toBeInTheDocument();
+    expect(getRideCoverStateMock).not.toHaveBeenCalled();
+    // The frame's chip is refreshed; the preview keeps the cache-busted URL.
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('img', { name: 'Обложка заезда' }).getAttribute('src'),
+    ).toContain('v%3D');
   });
 
   it('deletes the cover after confirmation', async () => {

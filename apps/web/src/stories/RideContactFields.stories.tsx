@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
-import { RIDE_EDIT_TERMS } from 'ui';
+import { RIDE_CONTACT_VALUE_ERRORS, RIDE_EDIT_TERMS } from 'ui';
 import {
   EMPTY_RIDE_CONTACT,
   RideContactFields,
@@ -100,7 +100,8 @@ export const Email: Story = {
 export const WithError: Story = {
   args: {
     value: { type: 'telegram', value: '@a' },
-    error: 'Enter a valid Telegram username, e.g. @coffee_ride.',
+    // KI-085: what the form shows for a bad handle — never the API's English.
+    error: RIDE_CONTACT_VALUE_ERRORS.telegram,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByLabelText('Контакт')).toHaveAttribute(

@@ -7,7 +7,13 @@ import {
   type CreateRoutePointRequest,
   type RoutePointType,
 } from 'types';
-import { Button, Card, ROUTE_POINT_TERMS, ROUTE_POINT_TYPE_TERMS } from 'ui';
+import {
+  Button,
+  Card,
+  cn,
+  ROUTE_POINT_TERMS,
+  ROUTE_POINT_TYPE_TERMS,
+} from 'ui';
 import {
   ApiError,
   createRoutePoint,
@@ -15,6 +21,10 @@ import {
   updateRoutePoint,
   type RoutePoint,
 } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 type FieldErrors = Partial<
   Record<'type' | 'label' | 'description' | 'lat' | 'lng', string>
@@ -27,6 +37,10 @@ type FormState = {
   lat: string;
   lng: string;
 };
+
+/** A row's «Изменить»/«Удалить»; dimmed and inert while a change saves. */
+const ROW_ACTION_CLASS =
+  'inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:no-underline';
 
 const EMPTY_FORM: FormState = {
   type: 'stop',
@@ -97,7 +111,7 @@ export function RoutePointsSection({
         field === 'lat' ||
         field === 'lng'
       ) {
-        next[field] ??= issue.message;
+        next[field] ??= fieldErrorMessage(issue);
       }
     }
     return next;
@@ -118,7 +132,7 @@ export function RoutePointsSection({
           issue.path === 'lat' ||
           issue.path === 'lng'
         ) {
-          next[issue.path] ??= issue.message;
+          next[issue.path] ??= serverFieldErrorMessage();
         }
       }
       setFieldErrors(next);
@@ -352,7 +366,10 @@ export function RoutePointsSection({
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
+                        className={ROW_ACTION_CLASS}
+                        // KI-085: while a change is saving, a row action
+                        // would be ignored — say so instead of a dead click.
+                        disabled={isPending}
                         onClick={() => {
                           setEditingId(routePoint.id);
                           setEditForm(routePointToForm(routePoint));
@@ -363,7 +380,8 @@ export function RoutePointsSection({
                       </button>
                       <button
                         type="button"
-                        className="inline-flex min-h-11 items-center text-body-sm font-medium text-danger hover:underline"
+                        className={cn(ROW_ACTION_CLASS, 'text-danger')}
+                        disabled={isPending}
                         onClick={() => handleDelete(routePoint.id)}
                       >
                         {ROUTE_POINT_TERMS.delete}

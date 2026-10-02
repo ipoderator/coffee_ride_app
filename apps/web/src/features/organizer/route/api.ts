@@ -2,8 +2,10 @@ import type {
   BuildRouteRequest,
   CreateRoutePointRequest,
   CreateStopRequest,
+  GetRideResponse,
   GetRouteGeometryResponse,
   ProblemDetails,
+  Ride,
   RouteGeometryPoint,
   RoutePoint,
   RouteSummary,
@@ -28,7 +30,7 @@ const RIDES_ENDPOINT = '/api/v1/rides';
  * ("Stops") also reads the additive `stops` array, same embedding precedent. CR-031
  * ("Route points") also reads the additive `routePoints` array, same precedent again.
  */
-export async function getRideRouteState(rideId: string): Promise<{
+export interface RideRouteState {
   status: string;
   distanceKm: number | null;
   elevationGainMeters: number | null;
@@ -37,50 +39,42 @@ export async function getRideRouteState(rideId: string): Promise<{
   route: RouteSummary | null;
   stops: Stop[];
   routePoints: RoutePoint[];
-}> {
+}
+
+type RideRouteSource = {
+  ride: Pick<
+    Ride,
+    'status' | 'distanceKm' | 'elevationGainMeters' | 'startLat' | 'startLng'
+  >;
+} & Pick<GetRideResponse, 'route' | 'stops' | 'routePoints'>;
+
+/** KI-085: the same projection over a ride the ride workspace already read. */
+export function routeStateOf(source: RideRouteSource): RideRouteState {
+  const { ride } = source;
+  return {
+    status: ride.status,
+    distanceKm: ride.distanceKm,
+    elevationGainMeters: ride.elevationGainMeters,
+    start:
+      ride.startLat !== null && ride.startLng !== null
+        ? { lat: ride.startLat, lng: ride.startLng }
+        : null,
+    route: source.route,
+    stops: source.stops,
+    routePoints: source.routePoints,
+  };
+}
+
+export async function getRideRouteState(
+  rideId: string,
+): Promise<RideRouteState> {
   const response = await fetch(`${RIDES_ENDPOINT}/${rideId}`);
-  const body = (await response.json()) as
-    | {
-        ride: {
-          status: string;
-          distanceKm: number | null;
-          elevationGainMeters: number | null;
-          startLat: number | null;
-          startLng: number | null;
-        };
-        route: RouteSummary | null;
-        stops: Stop[];
-        routePoints: RoutePoint[];
-      }
-    | ProblemDetails;
+  const body = (await response.json()) as RideRouteSource | ProblemDetails;
 
   if (!response.ok) {
     throw new ApiError(body as ProblemDetails);
   }
-  const parsed = body as {
-    ride: {
-      status: string;
-      distanceKm: number | null;
-      elevationGainMeters: number | null;
-      startLat: number | null;
-      startLng: number | null;
-    };
-    route: RouteSummary | null;
-    stops: Stop[];
-    routePoints: RoutePoint[];
-  };
-  return {
-    status: parsed.ride.status,
-    distanceKm: parsed.ride.distanceKm,
-    elevationGainMeters: parsed.ride.elevationGainMeters,
-    start:
-      parsed.ride.startLat !== null && parsed.ride.startLng !== null
-        ? { lat: parsed.ride.startLat, lng: parsed.ride.startLng }
-        : null,
-    route: parsed.route,
-    stops: parsed.stops,
-    routePoints: parsed.routePoints,
-  };
+  return routeStateOf(body as RideRouteSource);
 }
 
 /** 409 `ride_not_editable` unless the ride is still `draft`. Appended at the end —

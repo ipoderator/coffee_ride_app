@@ -14,6 +14,10 @@ export const OVERVIEW_SEGMENT = 'edit';
  * grid of bordered cells, so every section stays visible without a hidden
  * horizontal scroll — and so it never looks like the cabinet's own section
  * strip, which is the horizontally scrolling row at those widths.
+ *
+ * KI-085: a third of a 320–360 px phone is narrower than «Обновления», which
+ * then broke as «Обновле-ния». Under 21rem of nav width the grid is 2×3
+ * instead; a container query in rem, so larger text moves the switch too.
  */
 export function RideWorkspaceTabs({
   rideId,
@@ -31,8 +35,8 @@ export function RideWorkspaceTabs({
   ];
 
   return (
-    <nav aria-label={RIDE_WORKSPACE_TERMS.tabsLabel}>
-      <ul className="grid grid-cols-3 gap-2 md:grid-cols-6 lg:flex lg:gap-1 lg:border-b lg:border-border">
+    <nav aria-label={RIDE_WORKSPACE_TERMS.tabsLabel} className="@container">
+      <ul className="grid grid-cols-2 gap-2 max-md:@min-[21rem]:grid-cols-3 md:grid-cols-6 lg:flex lg:gap-1 lg:border-b lg:border-border">
         {items.map((item) => {
           const active = item.segment === current;
           return (

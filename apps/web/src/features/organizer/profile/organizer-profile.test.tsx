@@ -243,9 +243,10 @@ describe('OrganizerProfileForm', () => {
     });
     submit(/Создать профиль/);
 
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
     expect(
-      await screen.findByText('Organizer name cannot be empty.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Organizer name cannot be empty.'),
+    ).not.toBeInTheDocument();
   });
 
   it('drops the stale "saved" line as soon as the form is edited again', async () => {

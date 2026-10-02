@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ImageIcon, Lock } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -36,30 +36,39 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
  * workspace, a change also refreshes the workspace's «Обложка» chip.
  */
 export function CoverImageUploadForm({ rideId }: { rideId: string }) {
-  const [status, setStatus] = useState<LoadStatus>('loading');
-  const [rideStatus, setRideStatus] = useState<string | null>(null);
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const workspace = useRideWorkspace();
+  const refreshWorkspace = workspace?.refresh;
+  const inWorkspace = workspace !== null;
+  // KI-085: inside the workspace the frame has already read the ride — start
+  // from its copy instead of a second `GET /v1/rides/:id`. Kept locally after
+  // that: a replace shows a cache-busted URL the workspace's copy lacks.
+  const [status, setStatus] = useState<LoadStatus>(
+    workspace ? 'ready' : 'loading',
+  );
+  const [rideStatus, setRideStatus] = useState<string | null>(
+    workspace?.data.ride.status ?? null,
+  );
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(
+    workspace?.data.ride.coverImageUrl ?? null,
+  );
   const [formError, setFormError] = useState<string | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const refreshWorkspace = useRideWorkspace()?.refresh;
-
-  const reload = useCallback(async () => {
-    const state = await getRideCoverState(rideId);
-    setRideStatus(state.status);
-    setCoverImageUrl(state.coverImageUrl);
-  }, [rideId]);
 
   useEffect(() => {
+    if (inWorkspace) return;
     let cancelled = false;
     setStatus('loading');
 
-    reload()
-      .then(() => {
-        if (!cancelled) setStatus('ready');
+    getRideCoverState(rideId)
+      .then((state) => {
+        if (cancelled) return;
+        setRideStatus(state.status);
+        setCoverImageUrl(state.coverImageUrl);
+        setStatus('ready');
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -76,7 +85,7 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [reload, loadAttempt]);
+  }, [rideId, inWorkspace, loadAttempt]);
 
   function resetMessages() {
     setFormError(null);

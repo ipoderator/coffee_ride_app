@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Lock } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   buttonClassName,
@@ -23,10 +23,11 @@ import {
   getRideRouteState,
   replaceRoute,
   routeDownloadUrl,
+  routeStateOf,
   syncRideMetricsFromRoute,
   uploadRoute,
+  type RideRouteState,
   type RoutePoint,
-  type RouteSummary,
   type Stop,
 } from '../api';
 import { RouteBuilder } from './RouteBuilder';
@@ -35,6 +36,9 @@ import { RouteTrackSketch } from './RouteTrackSketch';
 import { StopsSection } from './StopsSection';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
+
+const NO_STOPS: Stop[] = [];
+const NO_ROUTE_POINTS: RoutePoint[] = [];
 
 /**
  * `/organizer/rides/[id]/route` (CR-027, `docs/design.md` §8). Draft-only, same gate
@@ -48,20 +52,13 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
  *
  * CR-187: a published ride's route is a result, not a disabled form — a lock
  * notice saying why, the track sketch with «Скачать GPX», the track facts, then
- * the read-only stops and points. Inside the ride workspace, every change also
- * refreshes the workspace (its «Маршрут» chip and overview row).
+ * the read-only stops and points. Inside the ride workspace, the screen reads
+ * the workspace's ride (KI-085), and every change refreshes the workspace (its
+ * «Маршрут» chip and overview row) instead of re-reading the ride itself.
  */
 export function RouteUploadForm({ rideId }: { rideId: string }) {
-  const [status, setStatus] = useState<LoadStatus>('loading');
-  const [rideStatus, setRideStatus] = useState<string | null>(null);
-  const [rideDistanceKm, setRideDistanceKm] = useState<number | null>(null);
-  const [rideElevationGainMeters, setRideElevationGainMeters] = useState<
-    number | null
-  >(null);
-  const [start, setStart] = useState<{ lat: number; lng: number } | null>(null);
-  const [route, setRoute] = useState<RouteSummary | null>(null);
-  const [stops, setStops] = useState<Stop[]>([]);
-  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
+  const [loadStatus, setStatus] = useState<LoadStatus>('loading');
+  const [ownState, setOwnState] = useState<RideRouteState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -69,26 +66,46 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspace = useRideWorkspace();
+  const workspaceData = workspace?.data;
   const refreshWorkspace = workspace?.refresh;
+  const inWorkspace = workspace !== null;
 
+  // KI-085: inside the workspace this screen shows the ride the frame already
+  // read — no second `GET /v1/rides/:id` — and follows each of its re-reads.
+  const workspaceState = useMemo(
+    () => (workspaceData ? routeStateOf(workspaceData) : null),
+    [workspaceData],
+  );
+  const state = workspaceState ?? ownState;
+  const status: LoadStatus = workspaceState ? 'ready' : loadStatus;
+  const rideStatus = state?.status ?? null;
+  const rideDistanceKm = state?.distanceKm ?? null;
+  const rideElevationGainMeters = state?.elevationGainMeters ?? null;
+  const start = state?.start ?? null;
+  const route = state?.route ?? null;
+  const stops = state?.stops ?? NO_STOPS;
+  const routePoints = state?.routePoints ?? NO_ROUTE_POINTS;
+
+  /** After a change: inside the workspace, its one re-read updates this
+   * screen and its «Маршрут» chip; on its own, this screen's own read. */
   const reload = useCallback(async () => {
-    const state = await getRideRouteState(rideId);
-    setRideStatus(state.status);
-    setRideDistanceKm(state.distanceKm);
-    setRideElevationGainMeters(state.elevationGainMeters);
-    setStart(state.start);
-    setRoute(state.route);
-    setStops(state.stops);
-    setRoutePoints(state.routePoints);
-  }, [rideId]);
+    if (refreshWorkspace) {
+      await refreshWorkspace();
+      return;
+    }
+    setOwnState(await getRideRouteState(rideId));
+  }, [rideId, refreshWorkspace]);
 
   useEffect(() => {
+    if (inWorkspace) return;
     let cancelled = false;
     setStatus('loading');
 
-    reload()
-      .then(() => {
-        if (!cancelled) setStatus('ready');
+    getRideRouteState(rideId)
+      .then((next) => {
+        if (cancelled) return;
+        setOwnState(next);
+        setStatus('ready');
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -105,13 +122,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [reload, loadAttempt]);
-
-  /** After a change: this screen's own state, then the workspace's chip. */
-  const reloadAll = useCallback(async () => {
-    await reload();
-    void refreshWorkspace?.();
-  }, [reload, refreshWorkspace]);
+  }, [rideId, inWorkspace, loadAttempt]);
 
   function resetMessages() {
     setFormError(null);
@@ -166,7 +177,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
       // (CR-029, resolves KI-034) — reloading keeps this screen's mismatch check
       // accurate against what the server actually did, not a locally-guessed copy
       // of its auto-fill logic.
-      await reloadAll();
+      await reload();
       setSuccessMessage(
         isReplace
           ? RIDE_ROUTE_TERMS.replaceSuccess
@@ -188,8 +199,8 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     setIsPending(true);
     try {
       await deleteRoute(rideId);
-      setRoute(null);
-      void refreshWorkspace?.();
+      if (refreshWorkspace) await refreshWorkspace();
+      else setOwnState((current) => current && { ...current, route: null });
       setSuccessMessage(RIDE_ROUTE_TERMS.deleteSuccess);
     } catch (error) {
       handleUploadError(error);
@@ -208,7 +219,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
         distanceKm: route.distanceKm,
         elevationGainMeters: route.elevationGainMeters,
       });
-      await reloadAll();
+      await reload();
       setSuccessMessage(RIDE_ROUTE_TERMS.metricsSyncSuccess);
     } catch (error) {
       handleUploadError(error);
@@ -346,14 +357,14 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
         rideId={rideId}
         stops={stops}
         isDraft={isDraft}
-        onChange={reloadAll}
+        onChange={reload}
       />
 
       <RoutePointsSection
         rideId={rideId}
         routePoints={routePoints}
         isDraft={isDraft}
-        onChange={reloadAll}
+        onChange={reload}
       />
     </>
   );
@@ -413,7 +424,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
         rideId={rideId}
         hasRoute={route !== null}
         start={start}
-        onBuilt={reloadAll}
+        onBuilt={reload}
       />
 
       <Card className="flex flex-col gap-4">

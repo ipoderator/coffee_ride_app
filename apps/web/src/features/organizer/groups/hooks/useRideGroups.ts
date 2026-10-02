@@ -16,20 +16,27 @@ export type RideGroupsLoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
  * retry). `refresh` re-reads only the groups after a mutation — the ride status
  * doesn't change from this screen, and a stale status is corrected anyway by the
  * server's `409 ride_groups_not_editable`.
+ *
+ * KI-085: `knownRideStatus` — the status the ride workspace already read; given
+ * it, the hook skips its own `GET /v1/rides/:id` and reads only the groups.
  */
-export function useRideGroups(rideId: string) {
+export function useRideGroups(rideId: string, knownRideStatus?: RideStatus) {
   const [status, setStatus] = useState<RideGroupsLoadStatus>('loading');
   const [rideStatus, setRideStatus] = useState<RideStatus | null>(null);
+  const hasKnownStatus = knownRideStatus !== undefined;
   const [groups, setGroups] = useState<RideGroupWithCount[]>([]);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setStatus('loading');
-    Promise.all([getRideStatus(rideId), listRideGroups(rideId)])
+    Promise.all([
+      hasKnownStatus ? null : getRideStatus(rideId),
+      listRideGroups(rideId),
+    ])
       .then(([nextRideStatus, response]) => {
         if (cancelled) return;
-        setRideStatus(nextRideStatus);
+        if (nextRideStatus) setRideStatus(nextRideStatus);
         setGroups(response.items);
         setStatus('ready');
       })
@@ -44,7 +51,7 @@ export function useRideGroups(rideId: string) {
     return () => {
       cancelled = true;
     };
-  }, [rideId, attempt]);
+  }, [rideId, attempt, hasKnownStatus]);
 
   const refresh = useCallback(async () => {
     const response = await listRideGroups(rideId);
@@ -53,5 +60,11 @@ export function useRideGroups(rideId: string) {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  return { status, rideStatus, groups, refresh, retry };
+  return {
+    status,
+    rideStatus: knownRideStatus ?? rideStatus,
+    groups,
+    refresh,
+    retry,
+  };
 }

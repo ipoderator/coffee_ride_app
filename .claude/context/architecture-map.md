@@ -1055,6 +1055,16 @@ CR-187 (ride workspace «Управление заездом», frontend only; s
   head shows the matching chip. `route/components/RouteTrackSketch.tsx` draws the stored
   geometry provider-free (no maps-core import).
 - **packages/ui**: `Notice` (a quiet «why this screen behaves so» callout).
+- CR-188 (KI-085): sections take the ride from `useRideWorkspace()` when the frame is
+  there (route state via `route/api.ts`'s `routeStateOf`, cover/groups status, the
+  participants' groups) and re-read through its `refresh()` — only standalone do they
+  call `GET /v1/rides/:id` themselves. New cross-cutting
+  `apps/web/src/lib/forms/field-errors.ts` (`fieldErrorMessage`/`serverFieldErrorMessage`):
+  the one place a Zod issue becomes a Russian field line (`VALIDATION_TERMS` in
+  `packages/ui`); a feature adds only its own shape wording (`features/organizer/rides/
+field-errors.ts`). `apps/web/src/test-support/ride-workspace.tsx` — a test-only
+  workspace context (`TestRideWorkspace`), excluded from coverage like every
+  `src/test-support/**`.
 
 ## Integration boundaries
 

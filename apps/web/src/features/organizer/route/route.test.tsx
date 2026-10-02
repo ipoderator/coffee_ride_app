@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  TestRideWorkspace,
+  workspaceData,
+} from '@/test-support/ride-workspace';
 import { RouteUploadForm } from './components/RouteUploadForm';
 import {
   ApiError,
@@ -495,6 +499,48 @@ describe('RouteUploadForm', () => {
       screen.queryByRole('button', { name: 'Использовать данные трека' }),
     ).not.toBeInTheDocument();
   });
+
+  it('inside the ride workspace, shows its ride and re-reads through it (KI-085)', async () => {
+    const reread = vi.fn(() =>
+      workspaceData({
+        ride: {
+          distanceKm: baseRoute.distanceKm,
+          elevationGainMeters: baseRoute.elevationGainMeters,
+        },
+        route: baseRoute,
+      }),
+    );
+    syncRideMetricsFromRouteMock.mockResolvedValue(undefined);
+
+    render(
+      <TestRideWorkspace
+        data={workspaceData({
+          ride: { distanceKm: 99.9, elevationGainMeters: 1234 },
+          route: baseRoute,
+        })}
+        reread={reread}
+      >
+        <RouteUploadForm rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+
+    // Rendered from the workspace's ride at once: no second ride read.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Использовать данные трека' }),
+    );
+    expect(
+      await screen.findByText(
+        'Дистанция и набор высоты заезда обновлены из трека.',
+      ),
+    ).toBeInTheDocument();
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(getRideRouteStateMock).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(
+        'Дистанция или набор высоты заезда отличаются от данных трека.',
+      ),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe('StopsSection (CR-030)', () => {
@@ -628,6 +674,51 @@ describe('StopsSection (CR-030)', () => {
 
     expect(await screen.findByText('Остановка удалена.')).toBeInTheDocument();
     expect(deleteStopMock).toHaveBeenCalledWith('ride-1', baseStop.id);
+    confirmSpy.mockRestore();
+  });
+
+  it('locks the row actions while a change is still saving (KI-085)', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const draft = {
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      start: null,
+      route: null,
+      stops: [baseStop, { ...baseStop, id: 'stop-2', name: 'Мост' }],
+      routePoints: [],
+    };
+    let finishReload: () => void = () => undefined;
+    getRideRouteStateMock
+      .mockResolvedValueOnce(draft)
+      // The re-read after the delete hangs until the test releases it.
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishReload = () =>
+              resolve({ ...draft, stops: [draft.stops[1]!] });
+          }),
+      );
+    deleteStopMock.mockResolvedValue(undefined);
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Мост');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Удалить' })[0]!);
+
+    // Before: a second click here was silently dropped by the busy guard.
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('button', { name: 'Удалить' })[1],
+      ).toBeDisabled(),
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Изменить' })[1],
+    ).toBeDisabled();
+
+    finishReload();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Удалить' })).toBeEnabled(),
+    );
     confirmSpy.mockRestore();
   });
 

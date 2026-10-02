@@ -11,6 +11,10 @@ import {
   RESET_PASSWORD_TERMS,
 } from 'ui';
 import { ApiError, resetPassword, resetPasswordRequestSchema } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 interface FieldErrors {
   password?: string;
@@ -73,7 +77,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
       const issue = parsed.error.issues.find(
         (candidate) => candidate.path[0] === 'password',
       );
-      setFieldErrors({ password: issue?.message });
+      setFieldErrors({ password: issue && fieldErrorMessage(issue) });
       setFormError(null);
       return;
     }
@@ -98,7 +102,9 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
       ) {
         const nextErrors: FieldErrors = {};
         for (const issue of error.problem.errors) {
-          if (issue.path === 'password') nextErrors.password ??= issue.message;
+          if (issue.path === 'password') {
+            nextErrors.password ??= serverFieldErrorMessage();
+          }
         }
         setFieldErrors(nextErrors);
       } else {

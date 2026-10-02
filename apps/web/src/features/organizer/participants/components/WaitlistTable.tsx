@@ -36,9 +36,15 @@ type LoadStatus = 'loading' | 'ready' | 'error';
 export function WaitlistTable({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<RideParticipantSummary[]>([]);
-  const [rideHasGroups, setRideHasGroups] = useState(false);
+  const [ownHasGroups, setOwnHasGroups] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const timeZone = useRideWorkspace()?.data.ride.startTimezone;
+  const workspace = useRideWorkspace();
+  const timeZone = workspace?.data.ride.startTimezone;
+  // KI-085: the workspace's ride already lists the groups.
+  const inWorkspace = workspace !== null;
+  const rideHasGroups = workspace
+    ? workspace.data.groups.length > 0
+    : ownHasGroups;
 
   useEffect(() => {
     let cancelled = false;
@@ -46,12 +52,12 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
 
     Promise.all([
       getRideWaitlist(rideId),
-      getRideGroups(rideId).catch(() => null),
+      inWorkspace ? null : getRideGroups(rideId).catch(() => null),
     ])
       .then(([response, groups]) => {
         if (cancelled) return;
         setItems(response.items);
-        setRideHasGroups((groups?.length ?? 0) > 0);
+        setOwnHasGroups((groups?.length ?? 0) > 0);
         setStatus('ready');
       })
       .catch(() => {
@@ -62,7 +68,7 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [rideId, attempt]);
+  }, [rideId, inWorkspace, attempt]);
 
   const showGroup = rideHasGroups || items.some((item) => item.group !== null);
 

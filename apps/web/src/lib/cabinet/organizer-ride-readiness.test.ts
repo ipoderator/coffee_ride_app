@@ -175,6 +175,67 @@ describe('ride section readiness (CR-187)', () => {
     });
   });
 
+  it('participants: every other phase has its own concrete line (KI-085)', () => {
+    expect(participants!(data('published'))).toMatchObject({
+      chip: 'Запись не открыта',
+      action: null,
+    });
+    expect(
+      participants!(
+        data('registration_closed', {
+          ride: {
+            ...ride,
+            status: 'registration_closed',
+            participantLimit: null,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      tone: 'neutral',
+      title: 'Пока никто не записался',
+      detail: 'Без ограничения мест · лист ожидания: 0',
+      chip: 'Никто не записан',
+    });
+    expect(participants!(data('started'))).toMatchObject({
+      title: 'Пока никто не записался',
+      action: null,
+    });
+    // No summary yet: everyone counts as undecided, never as «all marked».
+    expect(
+      participants!(data('started', { registrationsCount: 3 })),
+    ).toMatchObject({ tone: 'warning', chip: 'Не отмечено: 3' });
+    expect(
+      participants!(
+        data('started', {
+          registrationsCount: 2,
+          attendanceSummary: { finished: 2, dnf: 0, noShow: 0, unresolved: 0 },
+        }),
+      ),
+    ).toMatchObject({ tone: 'success', chip: 'Все отмечены' });
+    expect(participants!(data('finished'))).toMatchObject({
+      title: 'Итоги заезда',
+      action: null,
+    });
+    expect(
+      participants!(data('finished', { registrationsCount: 2 })),
+    ).toMatchObject({ action: 'Открыть' });
+    expect(
+      participants!(
+        data('finished', {
+          registrationsCount: 4,
+          attendanceSummary: { finished: 2, dnf: 0, noShow: 0, unresolved: 2 },
+        }),
+      ),
+    ).toMatchObject({ tone: 'warning', chip: 'Не подтверждено: 2' });
+    expect(participants!(data('cancelled'))).toMatchObject({
+      title: 'Заезд отменён',
+      action: null,
+    });
+    expect(
+      participants!(data('cancelled', { registrationsCount: 1 })),
+    ).toMatchObject({ chip: '1 записался', action: 'Открыть' });
+  });
+
   it('updates: no row for a draft; the last message in the ride timezone', () => {
     expect(updates!(data('draft'))).toBeNull();
     expect(

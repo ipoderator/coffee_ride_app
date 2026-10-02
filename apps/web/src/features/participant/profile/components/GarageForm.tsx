@@ -25,6 +25,7 @@ import {
   type CreateBikeRequest,
   type UpdateBikeRequest,
 } from '../api';
+import { fieldErrorMessage } from '@/lib/forms/field-errors';
 
 type Status = 'loading' | 'ready' | 'error';
 type Mode = { kind: 'idle' } | { kind: 'add' } | { kind: 'edit'; id: string };
@@ -177,7 +178,7 @@ export function GarageForm() {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         if (field === 'bikeType' || field === 'brand' || field === 'model') {
-          nextErrors[field] ??= issue.message;
+          nextErrors[field] ??= fieldErrorMessage(issue);
         }
       }
       setFieldErrors(nextErrors);

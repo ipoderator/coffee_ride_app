@@ -428,7 +428,13 @@ whether the 403 case still needs its own error code.
 
 ### KI-082 — The basemap watch probes an undocumented 2GIS tile host
 
-Status: open. Discovered: 2026-10-02 (CR-185).
+Status: open — fix ready (CR-188), awaiting the next CI run. Discovered: 2026-10-02 (CR-185).
+CR-188: the six baselines were replaced with the `*-actual.png` files of CI run
+37022093199 (bdd20b6 = CR-185's screens), each checked against its `*-diff.png` — only
+the intended CR-185 changes (no featured card without a route, the compact no-route grid
+card, live/upcoming rides above the dashboard KPIs; «ride card» now captures the grid
+card itself, which `a[href^="/rides/"]` matches first once the featured card's button is
+gone). CR-186/187/188 change none of these screens. Close once CI's e2e step is green.
 Problem: MapGL reports nothing when its tile servers are unreachable, so
 `packages/maps-2gis/src/basemap-watch.ts` probes `TILE_PROBE_URL`
 (`https://tile0-sdk.maps.2gis.com/`) with a `no-cors` fetch. The host is a 2GIS
@@ -478,24 +484,18 @@ with CR-138's procedure: repo copied into the container (not bind-mounted), the
 container on the compose network, CI's env with an empty MapGL key,
 `--update-snapshots`, then a verify run without it.
 
-### KI-085 — CR-187 ride workspace leftovers: a second ride read per tab, English field errors, sidebar highlight
+### KI-086 — On a ride's participants/updates tab the sidebar lights «Участники»/«Обновления», not «Заезды»
 
-Status: open. Discovered: 2026-10-02 (CR-187).
-Problem: (1) every `/organizer/rides/[id]/*` tab reads `GET /v1/rides/:id` twice — once
-in `RideWorkspace`, once in the section's own loader (`getRideRouteState`,
-`GroupsEditor`, …), which still run standalone. (2) `EditRideForm` shows Zod issue
-messages verbatim — both its client-side `updateRideRequestSchema` check and the API's
-`validation_error` `errors[]` — and `packages/types/src/api/rides.ts` writes them in
-English (an emptied title → «Title cannot be empty.»; pre-existing, not CR-187's).
-(3) On the participants tab the organizer sidebar highlights «Участники», not
-«Заезды» (CR-150's nav rule, unchanged).
-Impact: low — one extra small request per tab; an English line under a draft-form field
-whenever the input breaks the shared schema; a nav highlight.
+Status: open. Discovered: 2026-10-02 (CR-187, split out of KI-085 by CR-188).
+Problem: deliberate since CR-150 — `features/organizer/participants/nav.ts` and
+`updates/nav.ts` carry `activeOn: ['/organizer/rides/*/participants']` /
+`['/organizer/rides/*/updates']`, because the cabinet's own «Участники»/«Обновления»
+redirect to a ride's sub-page. Inside CR-187's ride workspace those two tabs therefore
+light a different sidebar item than the other four tabs, which light «Заезды».
+Impact: low — a nav highlight; the workspace's own tabs show the right place.
 Workaround: none needed.
-Next action: (1) let sections take the ride from `useRideWorkspace()` when present and
-skip their own read; (2) map Zod issue codes to `RIDE_EDIT_TERMS` field messages (or
-give `packages/types` schemas Russian messages); (3) owner decision on which sidebar
-item a ride's sub-page lights.
+Next action: owner decision — keep CR-150's rule, or light «Заезды» on every ride tab
+(drop the two `activeOn` entries; `CabinetSidebar.test.tsx` pins the current rule).
 
 ## Resolved
 

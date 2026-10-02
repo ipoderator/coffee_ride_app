@@ -121,8 +121,9 @@ describe('UpdateComposer', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
     expect(
-      await screen.findByText('Message rejected by the server.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Message rejected by the server.'),
+    ).not.toBeInTheDocument();
   });
 });

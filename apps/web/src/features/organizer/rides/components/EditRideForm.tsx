@@ -27,6 +27,10 @@ import {
 } from '@/lib/cabinet/ride-workspace';
 import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
+import {
   utcIsoToZonedLocalInput,
   zonedTimeToUtcIso,
 } from '@/lib/datetime/zoned-time';
@@ -36,6 +40,7 @@ import {
   updateRide,
   updateRideRequestSchema,
 } from '../api';
+import { rideFieldShapeError } from '../field-errors';
 import { RideOverview } from './RideOverview';
 import { RideReadinessList } from './RideReadinessList';
 
@@ -183,7 +188,12 @@ function DraftRideForm({
       const nextErrors: FieldErrors = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
-        if (typeof field === 'string') nextErrors[field] ??= issue.message;
+        if (typeof field === 'string') {
+          nextErrors[field] ??= fieldErrorMessage(
+            issue,
+            rideFieldShapeError(field, contact.type),
+          );
+        }
       }
       setFieldErrors(nextErrors);
       setFormError(null);
@@ -211,7 +221,10 @@ function DraftRideForm({
         const nextErrors: FieldErrors = {};
         for (const issue of error.problem.errors) {
           // `requirements.3` → the one requirements field.
-          nextErrors[issue.path.split('.')[0]!] ??= issue.message;
+          const field = issue.path.split('.')[0]!;
+          nextErrors[field] ??= serverFieldErrorMessage(
+            rideFieldShapeError(field, contact.type),
+          );
         }
         setFieldErrors(nextErrors);
       } else {

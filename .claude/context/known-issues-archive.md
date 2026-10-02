@@ -2291,3 +2291,36 @@ the wire matches what the draft path sends. Regression coverage:
 five cases in `rides.test.tsx` (save, clear, invalid-before-API, server
 error, and the draft path keeping its single save) plus an
 `EditableAfterPublish` story.
+
+### KI-085 — CR-187 ride workspace leftovers: a second ride read per tab, English field errors, sidebar highlight
+
+Status: open. Discovered: 2026-10-02 (CR-187).
+Problem: (1) every `/organizer/rides/[id]/*` tab reads `GET /v1/rides/:id` twice — once
+in `RideWorkspace`, once in the section's own loader (`getRideRouteState`,
+`GroupsEditor`, …), which still run standalone. (2) `EditRideForm` shows Zod issue
+messages verbatim — both its client-side `updateRideRequestSchema` check and the API's
+`validation_error` `errors[]` — and `packages/types/src/api/rides.ts` writes them in
+English (an emptied title → «Title cannot be empty.»; pre-existing, not CR-187's).
+(3) On the participants tab the organizer sidebar highlights «Участники», not
+«Заезды» (CR-150's nav rule, unchanged).
+Impact: low — one extra small request per tab; an English line under a draft-form field
+whenever the input breaks the shared schema; a nav highlight.
+Workaround: none needed.
+Next action: (1) let sections take the ride from `useRideWorkspace()` when present and
+skip their own read; (2) map Zod issue codes to `RIDE_EDIT_TERMS` field messages (or
+give `packages/types` schemas Russian messages); (3) owner decision on which sidebar
+item a ride's sub-page lights.
+
+Resolution (CR-188): (1) every section reads the ride the workspace already has —
+`RouteUploadForm` derives its state from `useRideWorkspace()` and re-reads through the
+workspace's `refresh()` after a change (one read instead of two); `CoverImageUploadForm`
+starts from the workspace's copy (kept local after that for the cache-busted URL);
+`useRideGroups` takes the known status; `ParticipantTable`/`WaitlistTable` take groups
+and status from it. Standalone (tests, stories, no frame) they still read on their own.
+The participants tab went from four `GET /v1/rides/:id` to one. (2) No form shows a Zod
+`issue.message` any more: `apps/web/src/lib/forms/field-errors.ts` builds the line from
+the issue's code and bounds (`VALIDATION_TERMS`, `packages/ui`), with a field's own
+wording for shape rules (`rideFieldShapeError`, `RIDE_CONTACT_VALUE_ERRORS`, the profile
+phone); a server `validation_error` entry shows that wording or «Проверьте это поле.» —
+eleven forms, not just the draft form. `packages/types` keeps its English messages for
+the API. (3) moved to KI-086, still an owner decision.

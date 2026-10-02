@@ -57,13 +57,19 @@ type LoadStatus = 'loading' | 'ready' | 'error';
 export function ParticipantTable({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<RideParticipantSummary[]>([]);
-  const [rideGroups, setRideGroups] = useState<RideGroupSummary[] | null>(null);
-  const [rideStatus, setRideStatus] = useState<RideStatus | null>(null);
+  const [ownGroups, setOwnGroups] = useState<RideGroupSummary[] | null>(null);
+  const [ownRideStatus, setOwnRideStatus] = useState<RideStatus | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
+  const workspace = useRideWorkspace();
   // Without the workspace (tests, stories) the formatter's own default.
-  const timeZone = useRideWorkspace()?.data.ride.startTimezone;
+  const timeZone = workspace?.data.ride.startTimezone;
+  // KI-085: inside the workspace its ride already carries the groups and the
+  // status — only standalone does this table read `GET /v1/rides/:id` itself.
+  const inWorkspace = workspace !== null;
+  const rideGroups = workspace ? workspace.data.groups : ownGroups;
+  const rideStatus = workspace ? workspace.data.ride.status : ownRideStatus;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,15 +77,15 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
 
     Promise.all([
       getRideParticipants(rideId),
-      getRideGroups(rideId).catch(() => null),
+      inWorkspace ? null : getRideGroups(rideId).catch(() => null),
       // CR-181: without a status the finish check-in simply stays hidden.
-      getRideStatus(rideId).catch(() => null),
+      inWorkspace ? null : getRideStatus(rideId).catch(() => null),
     ])
       .then(([response, groups, status]) => {
         if (cancelled) return;
         setItems(response.items);
-        setRideGroups(groups);
-        setRideStatus(status);
+        setOwnGroups(groups);
+        setOwnRideStatus(status);
         setStatus('ready');
       })
       .catch(() => {
@@ -90,7 +96,7 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [rideId, attempt]);
+  }, [rideId, inWorkspace, attempt]);
 
   const sections =
     status === 'ready' ? buildGroupSections(items, rideGroups) : null;

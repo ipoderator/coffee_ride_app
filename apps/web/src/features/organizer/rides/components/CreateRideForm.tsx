@@ -35,6 +35,10 @@ import {
   zonedTimeToUtcIso,
 } from '@/lib/datetime/zoned-time';
 import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
+import {
   ApiError,
   createRide,
   createRideRequestSchema,
@@ -43,6 +47,7 @@ import {
   updateRideRequestSchema,
   uploadRideGpx,
 } from '../api';
+import { rideFieldShapeError } from '../field-errors';
 import { RIDE_WIZARD_STEPS, wizardStepHref } from '../wizard-steps';
 import { GpxDropzone } from './GpxDropzone';
 
@@ -245,7 +250,12 @@ export function CreateRideForm({
       const nextErrors: FieldErrors = {};
       for (const issue of parsed.error.issues) {
         const field = fieldForPath(issue.path[0]);
-        if (field) nextErrors[field] ??= issue.message;
+        if (field) {
+          nextErrors[field] ??= fieldErrorMessage(
+            issue,
+            rideFieldShapeError(issue.path[0], contact.type),
+          );
+        }
       }
       setFieldErrors(nextErrors);
       setFormError(null);
@@ -315,8 +325,14 @@ export function CreateRideForm({
     ) {
       const nextErrors: FieldErrors = {};
       for (const issue of error.problem.errors) {
-        const field = fieldForPath(issue.path);
-        if (field) nextErrors[field] ??= issue.message;
+        // `contact.value` → `contact`, the one visible contact input.
+        const path = issue.path.split('.')[0];
+        const field = fieldForPath(path);
+        if (field) {
+          nextErrors[field] ??= serverFieldErrorMessage(
+            rideFieldShapeError(path, contact.type),
+          );
+        }
       }
       setFieldErrors(nextErrors);
     } else {

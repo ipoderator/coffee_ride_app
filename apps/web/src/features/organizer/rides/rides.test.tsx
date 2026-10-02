@@ -344,9 +344,11 @@ describe('CreateRideForm', () => {
     fillMinimalValidForm();
     fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
 
+    // KI-085: the API's English text never reaches the form.
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
     expect(
-      await screen.findByText('Title cannot be empty.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Title cannot be empty.'),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -852,6 +854,27 @@ describe('EditRideForm', () => {
     expect(closeRegistrationMock).not.toHaveBeenCalled();
   });
 
+  it('shows field errors in Russian, not the shared schema’s English (KI-085)', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: '   ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Заполните это поле.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Title cannot be empty.'),
+    ).not.toBeInTheDocument();
+    expect(updateRideMock).not.toHaveBeenCalled();
+  });
+
   it('maps a server validation error onto the matching field', async () => {
     getRideMock.mockResolvedValue({
       ride: baseRide,
@@ -874,9 +897,11 @@ describe('EditRideForm', () => {
     await screen.findByRole('heading', { level: 1 });
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
+    // KI-085: the API's English text never reaches the form.
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
     expect(
-      await screen.findByText('Title cannot be empty.'),
-    ).toBeInTheDocument();
+      screen.queryByText('Title cannot be empty.'),
+    ).not.toBeInTheDocument();
   });
 
   it('publishes a draft ride and shows a success message', async () => {
@@ -1182,7 +1207,7 @@ describe('EditRideForm', () => {
 
     expect(
       await screen.findByText(
-        'Enter a valid Russian phone number, e.g. +7 916 123-45-67.',
+        'Введите российский номер, например +7 916 123-45-67.',
       ),
     ).toBeInTheDocument();
     expect(setRideContactMock).not.toHaveBeenCalled();

@@ -225,7 +225,9 @@ describe('ProfileForm', () => {
     submit();
 
     expect(
-      await screen.findByText('Enter a valid phone number.'),
+      await screen.findByText(
+        'Введите номер телефона, например +7 916 123-45-67.',
+      ),
     ).toBeInTheDocument();
   });
 

@@ -2133,3 +2133,54 @@ export const FINISH_CHECKIN_TERMS = {
 } as const;
 
 // --------------------------- end CR-181 block ------------------------------
+
+// ------------------------------- KI-085 -------------------------------------
+
+const RU_INTEGER = new Intl.NumberFormat('ru-RU');
+
+/**
+ * KI-085: field-level validation lines. `packages/types` writes its Zod
+ * messages in English for the API; a form never shows them — it builds the
+ * line from the failed check (`apps/web/src/lib/forms/field-errors.ts`), with
+ * the generic wording below or a field's own shape rule.
+ */
+export const VALIDATION_TERMS = {
+  required: 'Заполните это поле.',
+  tooShort: (min: number) =>
+    `Не короче ${RU_INTEGER.format(min)} ${pluralRu(min, 'символа', 'символов', 'символов')}.`,
+  tooLong: (max: number) =>
+    `Не длиннее ${RU_INTEGER.format(max)} ${pluralRu(max, 'символа', 'символов', 'символов')}.`,
+  tooFewItems: (min: number) =>
+    `Нужно хотя бы ${RU_INTEGER.format(min)} ${pluralRu(min, 'значение', 'значения', 'значений')}.`,
+  tooManyItems: (max: number) =>
+    `Не больше ${RU_INTEGER.format(max)} ${pluralRu(max, 'строки', 'строк', 'строк')}.`,
+  notNegative: 'Не может быть меньше нуля.',
+  positive: 'Должно быть больше нуля.',
+  atLeast: (min: number) => `Не меньше ${RU_INTEGER.format(min)}.`,
+  atMost: (max: number) => `Не больше ${RU_INTEGER.format(max)}.`,
+  number: 'Введите число.',
+  integer: 'Введите целое число.',
+  choose: 'Выберите вариант из списка.',
+  email: 'Введите адрес почты, например name@example.ru.',
+  format: 'Проверьте, как заполнено поле.',
+  invalid: 'Проверьте это поле.',
+  // A field's own shape rule (the `specific` argument of `fieldErrorMessage`).
+  phone: 'Введите номер телефона, например +7 916 123-45-67.',
+  russianPhone: 'Введите российский номер, например +7 916 123-45-67.',
+  telegram: 'Введите имя пользователя Telegram, например @coffee_ride.',
+  startsAt: 'Укажите дату и время старта.',
+  timeZone: 'Выберите часовой пояс из списка.',
+  startPoint:
+    'Укажите и широту, и долготу точки старта — или оставьте оба поля пустыми.',
+  rating: 'Поставьте оценку от 1 до 5.',
+} as const;
+
+/** KI-085: the shape rule a ride contact's value breaks, by contact type. */
+export const RIDE_CONTACT_VALUE_ERRORS: Record<RideContactType, string> = {
+  phone: VALIDATION_TERMS.russianPhone,
+  max: VALIDATION_TERMS.russianPhone,
+  telegram: VALIDATION_TERMS.telegram,
+  email: VALIDATION_TERMS.email,
+};
+
+// ----------------------------- end KI-085 -----------------------------------

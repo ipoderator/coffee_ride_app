@@ -19,6 +19,10 @@ import {
 } from 'ui';
 import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
 import { ApiError, createRideUpdate, getRideUpdates } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -88,7 +92,10 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
     const parsed = createRideUpdateRequestSchema.safeParse({ message });
     if (!parsed.success) {
       setFieldError(
-        messageError(message) ?? parsed.error.issues[0]?.message ?? null,
+        messageError(message) ??
+          (parsed.error.issues[0]
+            ? fieldErrorMessage(parsed.error.issues[0])
+            : null),
       );
       return;
     }
@@ -106,7 +113,9 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
           (issue) => issue.path === 'message',
         );
         setFieldError(
-          messageIssue ? (messageError(message) ?? messageIssue.message) : null,
+          messageIssue
+            ? (messageError(message) ?? serverFieldErrorMessage())
+            : null,
         );
         setFormError(messageIssue ? null : AUTH_TERMS.genericError);
       } else {

@@ -1,4 +1,18 @@
+import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+
+// KI-085: the root .env, loaded the way `apps/api/src/server.ts` and
+// `next.config.ts` load it — a variable already in the environment wins, and
+// a missing file (CI) is not an error. Without it a reused local dev API
+// (`reuseExistingServer`) wrote to the .env's DATABASE_URL while this process
+// and its workers — `e2e/helpers/db-fixtures.ts`, and an API this config
+// starts — fell back to the default database, so `password-reset.spec.ts`
+// passed only with DATABASE_URL exported by hand.
+try {
+  process.loadEnvFile(resolve(__dirname, '../../.env'));
+} catch {
+  // no .env file present — expected outside local dev
+}
 
 // e2e config (CR-008; wired into CI + a second webServer entry by CR-080).
 // Root package.json's "test:e2e" delegates here via `turbo test:e2e`.

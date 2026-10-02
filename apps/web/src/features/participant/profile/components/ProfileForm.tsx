@@ -10,8 +10,13 @@ import {
   PROFILE_TERMS,
   AUTH_TERMS,
   Textarea,
+  VALIDATION_TERMS,
 } from 'ui';
 import { ApiError, updateProfile, updateProfileRequestSchema } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 interface FieldErrors {
   displayName?: string;
@@ -127,7 +132,10 @@ export function ProfileForm({ initialUser }: { initialUser: User }) {
           field === 'distanceMonthKm' ||
           field === 'distanceYearKm'
         ) {
-          nextErrors[field] ??= issue.message;
+          nextErrors[field] ??= fieldErrorMessage(
+            issue,
+            field === 'phone' ? VALIDATION_TERMS.phone : undefined,
+          );
         }
       }
       setFieldErrors(nextErrors);
@@ -171,7 +179,9 @@ export function ProfileForm({ initialUser }: { initialUser: User }) {
             issue.path === 'distanceMonthKm' ||
             issue.path === 'distanceYearKm'
           ) {
-            nextErrors[issue.path] ??= issue.message;
+            nextErrors[issue.path] ??= serverFieldErrorMessage(
+              issue.path === 'phone' ? VALIDATION_TERMS.phone : undefined,
+            );
           }
         }
         setFieldErrors(nextErrors);

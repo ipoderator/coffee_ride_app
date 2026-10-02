@@ -5,6 +5,10 @@ import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
 import { loginHref } from '@/lib/auth/next-path';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 
 interface FieldErrors {
   email?: string;
@@ -90,7 +94,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         if (field === 'email' || field === 'password') {
-          nextErrors[field] ??= issue.message;
+          nextErrors[field] ??= fieldErrorMessage(issue);
         }
       }
       setFieldErrors(nextErrors);
@@ -117,7 +121,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
           const nextErrors: FieldErrors = {};
           for (const issue of error.problem.errors) {
             if (issue.path === 'email' || issue.path === 'password') {
-              nextErrors[issue.path] ??= issue.message;
+              nextErrors[issue.path] ??= serverFieldErrorMessage();
             }
           }
           setFieldErrors(nextErrors);

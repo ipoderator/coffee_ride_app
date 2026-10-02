@@ -7,6 +7,10 @@ import {
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProblemDetails } from 'types';
+import {
+  TestRideWorkspace,
+  workspaceData,
+} from '@/test-support/ride-workspace';
 import { GroupsEditor } from './components/GroupsEditor';
 import {
   ApiError,
@@ -163,6 +167,22 @@ describe('GroupsEditor — list', () => {
     expect(
       screen.queryByRole('button', { name: /Удалить группу/ }),
     ).not.toBeInTheDocument();
+  });
+  it('inside the ride workspace, takes the status from its ride (KI-085)', async () => {
+    listRideGroupsMock.mockResolvedValue(listResponse([SLOW]));
+    render(
+      <TestRideWorkspace data={workspaceData({ ride: { status: 'finished' } })}>
+        <GroupsEditor rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+
+    expect(
+      await screen.findByText(
+        'Заезд завершён или отменён — группы больше нельзя менять.',
+      ),
+    ).toBeInTheDocument();
+    expect(getRideStatusMock).not.toHaveBeenCalled();
+    expect(listRideGroupsMock).toHaveBeenCalledTimes(1);
   });
 });
 
