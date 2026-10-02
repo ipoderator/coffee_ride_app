@@ -10,11 +10,13 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from 'react';
+import Link from 'next/link';
 import { Maximize2, Minimize2, X } from 'lucide-react';
 import type { PublicRideListItem } from 'types';
 import {
   Button,
   cn,
+  ContoursIllustration,
   EmptyState,
   ErrorState,
   RIDE_DISCOVERY_ROW_TERMS,
@@ -32,7 +34,6 @@ import {
   useDiscoveryFilters,
   type DiscoveryFiltersControl,
 } from '../lib/use-discovery-filters';
-import { ContoursIllustration } from './ContoursIllustration';
 import { DiscoveryMap } from './DiscoveryMap';
 import { DiscoveryFilters } from './DiscoveryFilters';
 import { RideLegendRow } from './RideLegendRow';
@@ -246,6 +247,7 @@ export function DiscoveryList({
       <EmptyState
         icon={<ContoursIllustration />}
         title={RIDE_DISCOVERY_TERMS.emptyFilteredTitle}
+        description={RIDE_DISCOVERY_TERMS.emptyFilteredDescription}
         action={
           <Button
             variant="secondary"
@@ -260,6 +262,14 @@ export function DiscoveryList({
         icon={<ContoursIllustration />}
         title={RIDE_DISCOVERY_ROW_TERMS.emptyTitle}
         description={RIDE_DISCOVERY_TERMS.emptyDescription}
+        action={
+          <Link
+            href="/organizer/rides/new"
+            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_DISCOVERY_TERMS.createRideLabel}
+          </Link>
+        }
       />
     );
   } else {

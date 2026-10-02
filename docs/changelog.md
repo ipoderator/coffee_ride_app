@@ -2956,3 +2956,10 @@ Summary: CI on `46af87b` failed only at «Coverage gate» (`packages/ui` lines/s
 Files: `packages/ui/src/format.test.ts`, `packages/ui/src/terminology.test.ts`, `apps/api/src/modules/rides/organizer-journal.routes.test.ts`.
 Decisions: none.
 Follow-up: `organizer-journal.ts` `row?.finished ?? 0` fallbacks are unreachable (an aggregate always returns a row); raise the baseline after a CI-like full run.
+
+## 2026-10-02 — CR-180 — brand empty states
+
+Summary: empty states became next steps. Discovery (grid and map list): «Рядом пока тихо» + «Создать заезд» link; filtered: «Под эти фильтры заездов пока нет» + hint to widen dates/pace/difficulty + «Сбросить фильтры» (there is no radius filter, so no «увеличьте радиус» copy). Organizer ride list: «Здесь пока тихо» + contour drawing. `ContoursIllustration` (topographic rings) moved from the discovery feature into `packages/ui` so both cabinets share it (extensibility rule: no feature-to-feature import).
+Files: `packages/ui/src/components/ContoursIllustration.tsx` (+test), `packages/ui/src/terminology.ts`, discovery `RideGrid`/`DiscoveryList`, organizer `RidesList`, `apps/web/src/stories/EmptyState.stories.tsx`, affected tests.
+Decisions: none.
+Follow-up: the remaining ~12 small `EmptyState` uses (cabinet tables, notifications, my-rides) keep their plain copy; roll the illustration/copy out there if wanted.

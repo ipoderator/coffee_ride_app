@@ -8,8 +8,15 @@ import {
   useRef,
   useState,
 } from 'react';
+import Link from 'next/link';
 import type { PublicRideListItem } from 'types';
-import { Button, EmptyState, ErrorState, RIDE_DISCOVERY_TERMS } from 'ui';
+import {
+  Button,
+  ContoursIllustration,
+  EmptyState,
+  ErrorState,
+  RIDE_DISCOVERY_TERMS,
+} from 'ui';
 import { type ListPublicRidesParams, listPublicRides } from '../api';
 import {
   NO_DISCOVERY_FILTERS,
@@ -21,7 +28,6 @@ import {
   type DiscoveryFiltersControl,
 } from '../lib/use-discovery-filters';
 import { pickFeaturedRide } from '../lib/ride-metrics';
-import { ContoursIllustration } from './ContoursIllustration';
 import { DiscoveryFilters } from './DiscoveryFilters';
 import { DiscoveryGridSkeleton } from './DiscoveryPageSkeleton';
 import { FeaturedRideCard } from './FeaturedRideCard';
@@ -134,6 +140,7 @@ export function RideGrid({
       <EmptyState
         icon={<ContoursIllustration />}
         title={RIDE_DISCOVERY_TERMS.emptyFilteredTitle}
+        description={RIDE_DISCOVERY_TERMS.emptyFilteredDescription}
         action={
           <Button
             variant="secondary"
@@ -148,6 +155,14 @@ export function RideGrid({
         icon={<ContoursIllustration />}
         title={RIDE_DISCOVERY_TERMS.emptyTitle}
         description={RIDE_DISCOVERY_TERMS.emptyDescription}
+        action={
+          <Link
+            href="/organizer/rides/new"
+            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
+          >
+            {RIDE_DISCOVERY_TERMS.createRideLabel}
+          </Link>
+        }
       />
     );
   } else {

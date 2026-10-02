@@ -414,9 +414,7 @@ describe('RidesList', () => {
 
     render(<RidesList />);
 
-    expect(
-      await screen.findByText('Пока нет ни одного заезда'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Здесь пока тихо')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Новый заезд' })).toHaveAttribute(
       'href',
       '/organizer/rides/new',

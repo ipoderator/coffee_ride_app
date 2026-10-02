@@ -224,7 +224,11 @@ describe('RideGrid (CR-153)', () => {
     });
 
     render(<RideGrid />);
-    await screen.findByText('Пока нет заездов');
+    await screen.findByText('Рядом пока тихо');
+    expect(screen.getByRole('link', { name: 'Создать заезд' })).toHaveAttribute(
+      'href',
+      '/organizer/rides/new',
+    );
 
     fireEvent.change(screen.getByLabelText('Темп'), {
       target: { value: 'from20to25' },
@@ -252,7 +256,7 @@ describe('RideGrid (CR-153)', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Сбросить фильтры' }),
     );
-    await screen.findByText('Пока нет заездов');
+    await screen.findByText('Рядом пока тихо');
     expect(screen.getByLabelText('Темп')).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Эта неделя' })).toHaveAttribute(
       'aria-pressed',

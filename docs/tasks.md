@@ -1329,3 +1329,4 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-178 Ride page: organizer rating line links to the «Отзывы» section (`#reviews`);
       section shown for every ride, a note until finished. See `docs/changelog.md`.
 - [x] CR-179 Coverage gate restored (ui formatters, journal tie-break tests). See `docs/changelog.md`.
+- [x] CR-180 Brand empty states: discovery/organizer copy as next steps, shared contour illustration. See `docs/changelog.md`.

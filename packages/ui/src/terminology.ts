@@ -684,8 +684,9 @@ export const RIDE_LIST_TERMS = {
   pageTitle: 'Мои заезды',
   createLink: 'Новый заезд',
   loadError: 'Не удалось загрузить список заездов. Попробуйте ещё раз.',
-  emptyTitle: 'Пока нет ни одного заезда',
-  emptyDescription: 'Создайте первый заезд, чтобы он появился здесь.',
+  emptyTitle: 'Здесь пока тихо',
+  emptyDescription:
+    'Создайте свой маршрут и соберите группу — заезд появится здесь.',
   summaryStartLabel: 'Старт',
 } as const;
 
@@ -872,15 +873,20 @@ export const RIDE_DETAIL_TERMS = {
 export const RIDE_DISCOVERY_TERMS = {
   pageTitle: 'Заезды',
   loadError: 'Не удалось загрузить заезды. Попробуйте ещё раз.',
-  emptyTitle: 'Пока нет заездов',
+  // Brand empty states: a next step, not a dead end (the filter set has no
+  // radius, so the hint points at dates/pace/difficulty, which it does have).
+  emptyTitle: 'Рядом пока тихо',
   emptyDescription:
-    'Загляните позже — организаторы скоро опубликуют новые заезды.',
+    'Загляните позже — или создайте свой маршрут и соберите группу.',
+  createRideLabel: 'Создать заезд',
   organizedByLabel: 'Организатор',
   // CR-025 ("Filters"): exact copy `docs/design.md` §10 and `EmptyState`'s own doc
   // comment already quote for the filtered-empty state, distinct from the plain
   // `emptyTitle` above (no filter active).
   filterAllOption: 'Все типы',
-  emptyFilteredTitle: 'Пока нет заездов по этим фильтрам',
+  emptyFilteredTitle: 'Под эти фильтры заездов пока нет',
+  emptyFilteredDescription:
+    'Расширьте даты, темп или сложность — или сбросьте фильтры.',
   resetFiltersLabel: 'Сбросить фильтры',
   // ADR-024 («Ночной старт»): the "Заезды / Карта" tab switch above the two
   // discovery views — a card grid (`RideGrid`) and the map-first list

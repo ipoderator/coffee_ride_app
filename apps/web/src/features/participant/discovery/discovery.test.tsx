@@ -452,7 +452,7 @@ describe('DiscoveryList', () => {
     });
 
     expect(
-      await screen.findByText('Пока нет заездов по этим фильтрам'),
+      await screen.findByText('Под эти фильтры заездов пока нет'),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));

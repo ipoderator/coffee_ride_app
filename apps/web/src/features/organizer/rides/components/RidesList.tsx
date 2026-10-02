@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { RIDE_STATUSES, type Ride } from 'types';
 import {
+  ContoursIllustration,
   BICYCLE_TYPE_TERMS,
   Card,
   EmptyState,
@@ -93,6 +94,7 @@ export function RidesList() {
   if (rides.length === 0) {
     return (
       <EmptyState
+        icon={<ContoursIllustration />}
         title={RIDE_LIST_TERMS.emptyTitle}
         description={RIDE_LIST_TERMS.emptyDescription}
         action={

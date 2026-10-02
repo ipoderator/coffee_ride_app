@@ -22,6 +22,7 @@ export * from './components/MetricRow';
 export * from './components/StatusBadge';
 export * from './components/DifficultyScale';
 export * from './components/Skeleton';
+export * from './components/ContoursIllustration';
 export * from './components/EmptyState';
 export * from './components/ErrorState';
 export * from './components/Button';
