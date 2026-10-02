@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import type { Registration } from '../domain/registration.js';
+import {
+  REGISTRATION_ATTENDANCES,
+  type Registration,
+  type RegistrationAttendance,
+} from '../domain/registration.js';
 import type { WaitlistEntry } from '../domain/waitlist-entry.js';
 import type { PublicRide } from './rides.js';
 import type { RideGroupRef } from './ride-groups.js';
@@ -67,10 +71,42 @@ export interface RideParticipantSummary {
   displayName: string | null;
   createdAt: string;
   group: RideGroupRef | null;
+  // CR-181 ("Finish self-check-in"): additive. The participant's own claim and the
+  // organizer's decision (`null` = undecided); always `null`/`null` on the waitlist.
+  finishClaimedAt: string | null;
+  attendance: RegistrationAttendance | null;
 }
 
 export type ListRideParticipantsResponse = Paginated<RideParticipantSummary>;
 export type ListRideWaitlistResponse = Paginated<RideParticipantSummary>;
+
+// CR-181 ("Finish self-check-in"). `POST/DELETE /v1/rides/:id/finish-claim` — the
+// caller's own claim «I finished» on their own active registration; bodyless, the
+// registration is resolved from the session + the ride in the path. POST returns
+// `{ registration }`, DELETE (withdraw) `204`.
+export interface FinishClaimResponse {
+  registration: Registration;
+}
+
+// `PUT /v1/rides/:id/attendance` — the organizer sets (or, with `null`, clears) the
+// verdict for the listed active registrations of their own ride in one transaction.
+// Selective and batch confirmation are the same call with a different id list.
+export const ATTENDANCE_BATCH_MAX = 200;
+export const setAttendanceRequestSchema = z.object({
+  registrationIds: z
+    .array(z.uuid('registrationIds must be registration ids.'))
+    .min(1, 'Pick at least one participant.')
+    .max(ATTENDANCE_BATCH_MAX),
+  attendance: z.enum(REGISTRATION_ATTENDANCES).nullable(),
+});
+export type SetAttendanceRequest = z.infer<typeof setAttendanceRequestSchema>;
+
+// `POST /v1/rides/:id/attendance/confirm-claimed` — «confirm everyone who claimed a
+// finish»: every active, still-undecided registration of the ride with a claim.
+// Bodyless. `updated` = how many rows changed (0 is a valid, idempotent answer).
+export interface SetAttendanceResponse {
+  updated: number;
+}
 
 // CR-091 ("My registrations", `.claude/context/current-task.md`): `GET
 // /v1/registrations/mine` — the caller's own active registrations, each joined with

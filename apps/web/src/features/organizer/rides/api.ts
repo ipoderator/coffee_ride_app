@@ -102,7 +102,9 @@ export async function listMyRides(
 type EditableRide = Pick<
   GetRideResponse,
   'ride' | 'isOwner' | 'requirements' | 'contact'
->;
+> &
+  // CR-182: optional here so ownership-only callers need not supply it.
+  Partial<Pick<GetRideResponse, 'attendanceSummary'>>;
 
 export async function getRide(id: string): Promise<EditableRide> {
   const response = await fetch(`${RIDES_ENDPOINT}/${id}`);

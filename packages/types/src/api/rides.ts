@@ -159,6 +159,13 @@ export const ORGANIZER_JOURNAL_MIN_CLOSED_RIDES = 3;
 // `null` if none/unauthenticated) — same "embed the caller's own state" precedent as
 // `viewerRegistration`/`viewerWaitlistEntry`. Lets `ReviewForm` decide "already
 // reviewed" without a second request or guessing from the public review list.
+export interface AttendanceSummary {
+  finished: number;
+  dnf: number;
+  noShow: number;
+  unresolved: number;
+}
+
 export interface GetRideResponse {
   ride: Ride;
   // CR-165: the organizer's contact for this ride. Present ONLY for a viewer with
@@ -193,6 +200,11 @@ export interface GetRideResponse {
   // over `waiting` entries, i.e. the FIFO promotion order; `null` when not
   // queued. A place can move up as earlier riders cancel.
   waitlistCount: number;
+  // CR-182: additive. Where the ride's active registrations stand once it has
+  // started — counts only, so it is safe for any viewer. `unresolved` = riders with no
+  // final status yet; a finished ride with `unresolved > 0` is shown as «есть
+  // неподтверждённые», never as «everyone finished». `null` before the start.
+  attendanceSummary: AttendanceSummary | null;
   viewerStartNumber: number | null;
   viewerWaitlistPosition: number | null;
   // CR-155: additive — the ride's «Требования» lines (`RideRequirement`), in the

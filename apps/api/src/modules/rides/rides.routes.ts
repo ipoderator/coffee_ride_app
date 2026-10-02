@@ -170,6 +170,15 @@ const rideDetailResponseSchema = z.object({
   isOwner: z.boolean(),
   // CR-151: additive — see `GetRideResponse.waitlistCount`'s doc comment.
   waitlistCount: z.number(),
+  // CR-182: additive.
+  attendanceSummary: z
+    .object({
+      finished: z.number(),
+      dnf: z.number(),
+      noShow: z.number(),
+      unresolved: z.number(),
+    })
+    .nullable(),
   viewerStartNumber: z.number().nullable(),
   viewerWaitlistPosition: z.number().nullable(),
   // CR-155: additive — see `GetRideResponse.requirements`.

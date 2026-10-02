@@ -56,6 +56,8 @@ const baseItem: MyRegistrationSummary = {
     createdAt: '2027-01-02T00:00:00.000Z',
     updatedAt: '2027-01-02T00:00:00.000Z',
     cancelledAt: null,
+    finishClaimedAt: null,
+    attendance: null,
   },
   ride: baseRide,
 };

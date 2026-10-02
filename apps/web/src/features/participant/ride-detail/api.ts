@@ -1,5 +1,6 @@
 import type {
   CreateRegistrationResponse,
+  FinishClaimResponse,
   CreateReviewRequest,
   CreateReviewResponse,
   CreateWaitlistEntryResponse,
@@ -151,6 +152,35 @@ export async function cancelRideRegistration(rideId: string): Promise<void> {
     method: 'DELETE',
   });
 
+  if (!response.ok) {
+    const body = (await response.json()) as ProblemDetails;
+    throw new ApiError(body);
+  }
+}
+
+/**
+ * CR-181: the caller's own «I finished» claim — only a claim, the organizer
+ * decides. Idempotent. Throws `ApiError` (`ride_not_in_progress`,
+ * `registration_not_found`, `unauthorized`).
+ */
+export async function claimRideFinish(
+  rideId: string,
+): Promise<FinishClaimResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/finish-claim`, {
+    method: 'POST',
+  });
+  const body = (await response.json()) as FinishClaimResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return body as FinishClaimResponse;
+}
+
+/** CR-181: withdraws the claim; `409 attendance_already_decided` once decided. */
+export async function withdrawRideFinishClaim(rideId: string): Promise<void> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/finish-claim`, {
+    method: 'DELETE',
+  });
   if (!response.ok) {
     const body = (await response.json()) as ProblemDetails;
     throw new ApiError(body);

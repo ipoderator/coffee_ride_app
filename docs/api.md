@@ -561,6 +561,50 @@ cancellation itself. The promoted `WaitlistEntry` is marked `status: 'promoted'`
 `promotedAt` (terminal, kept as a row). This is not a separate endpoint; it is a side
 effect of cancellation, invisible to the cancelling caller's own response.
 
+### Finish check-in (CR-181, ADR-027)
+
+A participant reports «I finished»; the organizer decides, selectively or in one batch.
+A claim is only a claim — it never changes the organizer-owned `attendance`.
+`Registration` and every `RideParticipantSummary` gain additive `finishClaimedAt`
+(ISO string | null) and `attendance` (`'finished' | 'dnf' | 'no_show' | null`, `null` =
+undecided). All four endpoints live in the `registrations` module under `/v1/rides`.
+
+POST `/v1/rides/:id/finish-claim` — **implemented**. Session required (`401`).
+Bodyless; the registration is the caller's own active one. Allowed while the ride is
+`started` or `finished` (`409 ride_not_in_progress` otherwise); `404
+registration_not_found` without an active registration. Idempotent `200` with
+`{ registration }` — a repeat keeps the first claim's timestamp.
+
+DELETE `/v1/rides/:id/finish-claim` — **implemented**. Withdraws the caller's claim,
+`204`, idempotent. `409 attendance_already_decided` once the organizer has recorded an
+outcome — a decision is theirs to change.
+
+PUT `/v1/rides/:id/attendance` — **implemented**. Organizer-only (`404 ride_not_found`
+for anyone else, same as every organizer endpoint), only while the ride is `started`/
+`finished` (`409 ride_not_in_progress`). Body `{ registrationIds: uuid[] (1..200),
+attendance: 'finished' | 'dnf' | 'no_show' | null }` — `null` clears a mark; `dnf` (CR-182) = «сошёл», started but did not finish, `no_show` = never came. One transaction,
+all-or-nothing: an id that is not an _active_ registration of this ride rejects the whole
+batch (`404 participant_not_found`). Records `attendanceMarkedAt`/`attendanceMarkedBy`.
+Response `{ updated }`.
+
+POST `/v1/rides/:id/attendance/confirm-claimed` — **implemented**. «Confirm everyone who
+claimed a finish»: bodyless, same gates as above; sets `finished` on every active
+registration of the ride that has a claim and no decision yet (a rider already marked
+`no_show` is left alone). Response `{ updated }`; `0` is valid, repeats are no-ops.
+
+**Closing summary (CR-182, additive)**: `GET /v1/rides/:id` carries
+`attendanceSummary: { finished, dnf, noShow, unresolved } | null` — counts of the ride's
+active registrations by final status, `null` before the start, safe for any viewer.
+`POST .../finish` is **not** blocked by `unresolved > 0`: the organizer can close a ride
+with undecided riders, and the UI then shows «не подтверждено: N» instead of reading as
+«everyone finished». The count is computed on read, so it drops as the organizer
+resolves riders later.
+
+**Review eligibility (breaking, see `docs/changelog.md`)**: `POST /v1/rides/:id/reviews`
+now also requires `attendance = 'finished'` — `403 finish_not_confirmed` for an active
+registrant who is undecided, only claimed, or a no-show. Registrants of rides that were
+already `finished` were backfilled to `finished` by migration `0023`.
+
 GET `/v1/rides/:id/participants` — **implemented (CR-037, "Organizer participant
 list")**. Organizer-only, at any ride status (not draft-only): `401 unauthorized` with
 no session, `404 ride_not_found` for a non-existent ride or one that isn't the
@@ -886,7 +930,8 @@ POST `/v1/rides/:id/reviews` — **implemented (CR-042)**. Requires a valid sess
 cookie (`401` otherwise). `404 ride_not_found` for a non-existent ride. `409
 ride_not_finished` unless the ride's status is `finished`. `403 not_a_participant`
 unless the caller has an _active_ registration for the ride (a cancelled registrant
-cannot review). `409 review_already_exists` on a second submission from the same
+cannot review). `403 finish_not_confirmed` (CR-181) unless the organizer has confirmed
+the caller's finish (`attendance = 'finished'`). `409 review_already_exists` on a second submission from the same
 caller for the same ride (also enforced by a DB unique index). Body: `{ rating,
 comment? }` — `rating` an integer 1-5, `comment` ≤2000 chars, nullable/omittable.
 `201` → `{ review }`.

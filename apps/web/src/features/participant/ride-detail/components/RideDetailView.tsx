@@ -11,6 +11,7 @@ import {
 import Image from 'next/image';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AttendanceSummary,
   GetRideResponse,
   Registration,
   Review,
@@ -49,6 +50,7 @@ import {
   RIDE_PAGE_TERMS,
   RIDE_POSTER_TERMS,
   RIDE_TICKET_TERMS,
+  FINISH_CHECKIN_TERMS,
   REVIEWS_TERMS,
   ROUTE_RENDERING_TERMS,
   Skeleton,
@@ -102,6 +104,41 @@ const ACTION_ROW_CLASSNAME =
   'flex min-h-11 w-full items-center gap-3 rounded-sm border-t border-border py-2.5 text-left text-body-sm font-medium text-text transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 /**
+ * CR-182: the closed ride's results. A ride closed with riders still undecided
+ * says so — it never reads as «everyone finished».
+ */
+function FinishResults({ summary }: { summary: AttendanceSummary }) {
+  const total =
+    summary.finished + summary.dnf + summary.noShow + summary.unresolved;
+  if (total === 0) return null;
+  return (
+    <section
+      aria-labelledby="finish-results-title"
+      data-testid="finish-results"
+      className="flex flex-col gap-2"
+    >
+      <h2 id="finish-results-title" className={SECTION_TITLE_CLASSNAME}>
+        {FINISH_CHECKIN_TERMS.resultsTitle}
+      </h2>
+      <p className="text-body-sm text-text tabular-nums">
+        {FINISH_CHECKIN_TERMS.resultsLine(summary.finished, total)}
+        {summary.dnf > 0
+          ? ` · ${FINISH_CHECKIN_TERMS.resultsDnf(summary.dnf)}`
+          : ''}
+        {summary.noShow > 0
+          ? ` · ${FINISH_CHECKIN_TERMS.resultsNoShow(summary.noShow)}`
+          : ''}
+      </p>
+      {summary.unresolved > 0 ? (
+        <p className="text-body-sm font-medium text-warning">
+          {FINISH_CHECKIN_TERMS.resultsUnresolved(summary.unresolved)}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * CR-042 ("Review"): the "Отзывы" section, shown only once the ride is `finished`.
  * `ReviewForm` renders only for a viewer who both has an active registration and
  * hasn't already reviewed — its absence is the "you can't/already did" signal.
@@ -110,11 +147,14 @@ function ReviewsSection({
   rideId,
   finished,
   canReview,
+  reviewHint,
   onSubmitted,
 }: {
   rideId: string;
   finished: boolean;
   canReview: boolean;
+  /** CR-181: why a registered viewer cannot review yet (organizer hasn't confirmed). */
+  reviewHint: string | null;
   onSubmitted: (review: Review) => void;
 }) {
   const [status, setStatus] = useState<ReviewListStatus>('loading');
@@ -144,6 +184,9 @@ function ReviewsSection({
         <p className="text-body-sm text-text-secondary">
           {REVIEWS_TERMS.notFinished}
         </p>
+      )}
+      {finished && reviewHint && (
+        <p className="text-body-sm text-text-secondary">{reviewHint}</p>
       )}
       {finished && canReview && (
         <ReviewForm
@@ -869,10 +912,29 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             />
           )}
 
+          {ride.status === 'finished' && detail.attendanceSummary ? (
+            <FinishResults summary={detail.attendanceSummary} />
+          ) : null}
+
           <ReviewsSection
             rideId={rideId}
             finished={ride.status === 'finished'}
-            canReview={viewerRegistration !== null && viewerReview === null}
+            // CR-181: only an organizer-confirmed finisher may review.
+            canReview={
+              viewerRegistration?.attendance === 'finished' &&
+              viewerReview === null
+            }
+            reviewHint={
+              viewerRegistration === null ||
+              viewerRegistration.attendance === 'finished' ||
+              viewerReview !== null
+                ? null
+                : viewerRegistration.attendance === 'dnf'
+                  ? FINISH_CHECKIN_TERMS.reviewDnf
+                  : viewerRegistration.attendance === 'no_show'
+                    ? FINISH_CHECKIN_TERMS.reviewNoShow
+                    : FINISH_CHECKIN_TERMS.reviewAwaiting
+            }
             onSubmitted={setViewerReview}
           />
 

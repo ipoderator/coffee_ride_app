@@ -178,7 +178,15 @@ WHERE isActive` enforces "at most one active bike per user" at the DB
   group belongs to the same ride; indexed (`registrations_group_id_idx`) for the
   per-group counts and the delete-group reference check. Required by the service once
   the ride has groups; `null` for rides without groups or registrations made before
-  groups existed.
+  groups existed. CR-181
+  ("Finish check-in", migration `0023_registration_attendance`) added
+  `finishClaimedAt` (participant's own claim, nullable `timestamptz`) and the
+  organizer-owned `attendance` (pg enum `registration_attendance`: `finished`/
+  `no_show`/`dnf` (CR-182, migration `0024_attendance_dnf` — «сошёл»), `null` = undecided) with `attendanceMarkedAt`/`attendanceMarkedBy` (FK →
+  User, audit). CHECK `registrations_attendance_consistent`: the three attendance
+  columns are all set or all null. Deliberately not a `status` value — a no-show stays
+  an active, reversible row. The migration backfills `finished` for active registrants
+  of already-finished rides (attributed to the ride's organizer).
 - WaitlistEntry — user waiting for a place (CR-036, "Waitlist"): `id`, `rideId` (FK →
   Ride, `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`), `status` (not
   null, pg enum `waiting`/`promoted`/`cancelled`, default `waiting`), `createdAt`/

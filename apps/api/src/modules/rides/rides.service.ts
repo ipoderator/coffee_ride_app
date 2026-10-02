@@ -29,6 +29,7 @@ import {
 } from 'db/schema';
 import type { DbClient } from 'db';
 import {
+  type AttendanceSummary,
   type CoverImageResponse,
   type CreateRideRequest,
   type CreateRoutePointRequest,
@@ -1089,6 +1090,13 @@ export async function getRideForViewer(
         )
     : [];
 
+  // CR-182: where the active riders stand once the ride has started — counts
+  // only. `unresolved` keeps a closed ride from reading as «everyone finished».
+  const attendanceSummary =
+    row.ride.status === 'started' || row.ride.status === 'finished'
+      ? await getAttendanceSummary(db, rideId)
+      : null;
+
   // CR-043 ("Organizer rating summary"): additive, same `getOrganizerRatingSummary`
   // aggregate `listPublicRides` batches for its own page of rides.
   const ratingSummary = await getOrganizerRatingSummary(db, row.organizerId);
@@ -1161,9 +1169,34 @@ export async function getRideForViewer(
     groups,
     isOwner,
     waitlistCount: waitlistCountRow?.count ?? 0,
+    attendanceSummary,
     viewerStartNumber: startNumberRow?.rank ?? null,
     viewerWaitlistPosition: waitlistPositionRow?.rank ?? null,
     requirements,
+  };
+}
+
+/** CR-182: counts of a ride's active registrations by final status. */
+async function getAttendanceSummary(
+  db: Pick<DbClient, 'select'>,
+  rideId: string,
+): Promise<AttendanceSummary> {
+  const [row] = await db
+    .select({
+      finished: sql<number>`count(*) filter (where ${registrations.attendance} = 'finished')::int`,
+      dnf: sql<number>`count(*) filter (where ${registrations.attendance} = 'dnf')::int`,
+      noShow: sql<number>`count(*) filter (where ${registrations.attendance} = 'no_show')::int`,
+      unresolved: sql<number>`count(*) filter (where ${registrations.attendance} is null)::int`,
+    })
+    .from(registrations)
+    .where(
+      and(eq(registrations.rideId, rideId), eq(registrations.status, 'active')),
+    );
+  return {
+    finished: row?.finished ?? 0,
+    dnf: row?.dnf ?? 0,
+    noShow: row?.noShow ?? 0,
+    unresolved: row?.unresolved ?? 0,
   };
 }
 

@@ -69,6 +69,8 @@ function participants(count: number, recent: number) {
     userId: `u${i}`,
     displayName: null,
     group: null,
+    finishClaimedAt: null,
+    attendance: null,
     createdAt: new Date(
       NOW.getTime() - (i < recent ? 3_600_000 : 5 * 86_400_000),
     ).toISOString(),

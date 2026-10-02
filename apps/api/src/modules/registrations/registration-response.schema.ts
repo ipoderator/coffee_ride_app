@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { REGISTRATION_STATUSES } from 'types';
+import { REGISTRATION_ATTENDANCES, REGISTRATION_STATUSES } from 'types';
 
 // CR-032 ("Register"): the one "registration over the wire" shape — returned by
 // `POST .../register` and embedded as `GetRideResponse.viewerRegistration`
@@ -14,4 +14,7 @@ export const registrationResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   cancelledAt: z.string().nullable(),
+  // CR-181 ("Finish self-check-in"): additive.
+  finishClaimedAt: z.string().nullable(),
+  attendance: z.enum(REGISTRATION_ATTENDANCES).nullable(),
 });

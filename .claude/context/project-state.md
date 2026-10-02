@@ -37,6 +37,26 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-182 (2026-10-02, not committed, on top of CR-181): `attendance` gained `dnf`
+(«сошёл», migration `0024_attendance_dnf`, dev DB now `0000`–`0024`);
+`GET /v1/rides/:id` gained `attendanceSummary` (counts incl. `unresolved`, null before the
+start). A ride can be finished with undecided riders — the organizer form warns
+before, the closed ride shows «Итоги заезда» with «Не подтверждено: N» (ADR-028).
+
+CR-181 (2026-10-02, not committed): finish check-in (ADR-027). A rider claims
+«Отметить финиш» (`POST/DELETE /v1/rides/:id/finish-claim`, `started`/`finished`
+rides); the organizer confirms on the participants page, selectively (`PUT
+.../attendance` with an id list, also `no_show`/clear) or in one click (`POST
+.../attendance/confirm-claimed`). Claim and verdict are separate `registrations`
+columns (`finish_claimed_at`; `attendance` + `attendance_marked_at/by`); a no-show
+stays an active row. Migration `0023_registration_attendance` (dev DB now `0000`–
+`0023`) backfills `finished` for registrants of already-finished rides. **Reviews now
+require `attendance = 'finished'`** (`403 finish_not_confirmed`). Web: `FinishCheckIn`
+in `RegistrationTicket`, review hint in `RideDetailView`, attendance panel/row actions
+in `ParticipantTable`, `FINISH_CHECKIN_TERMS`. Open: no notification on a decision,
+no Playwright spec, coverage baseline not regenerated (needs the live stack), an
+organizer who never confirms blocks reviews (auto-confirm is the candidate fix).
+
 CR-173 (2026-10-01, committed): «Журнал организатора» on
 `/rides/[id]` — additive `organizer.journal` on `GET /v1/rides/:id` (finished/
 cancelled counts, completion % withheld under 3 closed rides, median pace/distance,

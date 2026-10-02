@@ -1300,3 +1300,70 @@ already shipped by CR-151 (`TicketBar`, tab bar hidden on `/rides/[id]`).
 
 Revert the CR-152 commit: the old faces and sizes return together; no data or API
 contract is involved.
+
+## ADR-027 — Finish check-in: participant claim, organizer-owned attendance, review gated on confirmation
+
+Status: Accepted (2026-10-02, owner decisions, CR-181).
+
+### Context
+
+The owner wants the organizer to spend a minute, not process every rider separately,
+on who actually finished — with the participant's self-report staying a claim and
+the organizer able to mark people who did not come. Nothing in the model recorded
+attendance: any active registrant of a finished ride could review it (CR-042).
+
+### Decision
+
+1. **Claim and verdict are two fields on `registrations`.** `finishClaimedAt` is the
+   participant's own claim; `attendance` (`finished`/`no_show`, `null` = undecided,
+   with `attendanceMarkedAt`/`attendanceMarkedBy`) is the organizer's. A claim never
+   sets `attendance`. «No show» is **not** a registration `status`: the row stays
+   `active`, the decision is reversible and keeps its audit trail, and nothing frees
+   a seat or promotes the waitlist behind the organizer's back.
+2. **Window: `started` and `finished`.** Claims and decisions are accepted in both;
+   organizers often close a ride before everyone has reported.
+3. **One write endpoint for selective and batch** (`PUT .../attendance` with an id
+   list, all-or-nothing) plus `POST .../attendance/confirm-claimed` for «confirm
+   everyone who claimed». Owner-only, enforced in the service.
+4. **Reviews require `attendance = 'finished'`** (owner decision). This tightens
+   CR-042's contract: `403 finish_not_confirmed`. The migration backfills `finished`
+   for registrants of rides already `finished`, so no existing reviewer loses access.
+
+### Consequences
+
+- An organizer who never confirms blocks every review of that ride; the participant
+  sees why («после того, как организатор подтвердит ваш финиш»). If this proves a
+  problem, a time-boxed auto-confirm of claims is the natural follow-up.
+- No notification is sent on a decision (out of scope; the ticket shows the state).
+- Statistics (organizer journal, rider distance) still ignore `attendance`.
+
+### Rollback
+
+Drop the four columns/enum (migration down) and revert `createReview`'s gate; no
+other data depends on them.
+
+## ADR-028 — Ride closing: «сошёл» status, results summary, close-with-unconfirmed
+
+Status: Accepted (2026-10-02, owner proposal, CR-182). Extends ADR-027.
+
+### Decision
+
+1. **A fourth outcome, `dnf` («сошёл»)**, beside `finished` and `no_show`: the rider
+   started and did not finish. «Не пришёл» stays separate. A final status is any non-null
+   `attendance`; a participant's claim is still only a claim.
+2. **The ride is not blocked from finishing** while riders are undecided. Instead
+   `GET /v1/rides/:id` exposes `attendanceSummary` (counts, `unresolved` included), computed on
+   read, and the UI says «не подтверждено: N» on the organizer's finish control and on the
+   closed ride's results — it never reads as «everyone finished». No new ride status and no
+   stored flag: the mark disappears by itself when the organizer resolves the last rider.
+3. Review rule unchanged (ADR-027): only `finished` may review; `dnf` cannot.
+
+### Consequences
+
+- Enum value added with `ALTER TYPE ... ADD VALUE` (irreversible without recreating the type).
+- A hard «cannot close until everyone has a status» rule was rejected: an unreachable
+  participant would hold the ride open forever.
+
+### Rollback
+
+Stop writing `dnf` and map it to `null`; leaving the unused enum value is harmless.

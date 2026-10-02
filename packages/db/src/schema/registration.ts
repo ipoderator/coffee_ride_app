@@ -24,6 +24,17 @@ export const registrationStatusEnum = pgEnum('registration_status', [
   'cancelled',
 ]);
 
+// CR-181 ("Finish self-check-in"): the organizer's verdict on an active registration
+// once the ride has started. `null` = undecided. Deliberately not a registration
+// `status`: a no-show stays an `active` row (reversible, keeps its audit trail, does
+// not free a slot behind the organizer's back).
+// CR-182 adds `dnf` («сошёл»): the rider started and did not finish.
+export const registrationAttendanceEnum = pgEnum('registration_attendance', [
+  'finished',
+  'no_show',
+  'dnf',
+]);
+
 export const registrations = pgTable(
   'registrations',
   {
@@ -51,6 +62,17 @@ export const registrations = pgTable(
       .notNull()
       .defaultNow(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    // CR-181: the participant's own claim «I finished» — only a claim, it never
+    // changes `attendance` by itself. Withdrawn by setting it back to `null`.
+    finishClaimedAt: timestamp('finish_claimed_at', { withTimezone: true }),
+    // CR-181: the organizer's decision, attributable (`.claude/rules/security.md`
+    // "Audit trail") — `attendance`, `attendanceMarkedAt`, `attendanceMarkedBy` are
+    // all set or all null (`registrations_attendance_consistent`).
+    attendance: registrationAttendanceEnum('attendance'),
+    attendanceMarkedAt: timestamp('attendance_marked_at', {
+      withTimezone: true,
+    }),
+    attendanceMarkedBy: uuid('attendance_marked_by').references(() => users.id),
   },
   (table) => [
     // `.claude/rules/database.md`: "active duplicate registration is forbidden" —
@@ -83,6 +105,10 @@ export const registrations = pgTable(
     // Backs the per-group active-count query (`GET /v1/rides/:id`'s
     // `groups[].registrationsCount`) and the delete-group reference check.
     index('registrations_group_id_idx').on(table.groupId),
+    check(
+      'registrations_attendance_consistent',
+      sql`(${table.attendance} is null) = (${table.attendanceMarkedAt} is null) and (${table.attendance} is null) = (${table.attendanceMarkedBy} is null)`,
+    ),
     check(
       'registrations_cancelled_at_consistent',
       sql`(${table.status} = 'cancelled') = (${table.cancelledAt} is not null)`,

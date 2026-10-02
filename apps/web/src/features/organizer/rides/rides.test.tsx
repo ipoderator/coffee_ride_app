@@ -1215,6 +1215,47 @@ describe('EditRideForm', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('warns before finishing with undecided riders, still allows it, and keeps the note (CR-182)', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'started' },
+      attendanceSummary: { finished: 3, dnf: 0, noShow: 0, unresolved: 2 },
+    });
+    finishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'finished' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(screen.getByTestId('unresolved-before-finish')).toHaveTextContent(
+      'У 2 участников нет итогового статуса',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
+
+    expect(
+      await screen.findByText(/Заезд завершён, но у 2 участников/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Заезд завершён.')).not.toBeInTheDocument();
+  });
+
+  it('shows no unresolved warning when every rider has a status', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'started' },
+      attendanceSummary: { finished: 3, dnf: 1, noShow: 0, unresolved: 0 },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByDisplayValue(baseRide.title);
+
+    expect(
+      screen.queryByTestId('unresolved-before-finish'),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows no finish button for a registration_closed or finished ride', async () => {
     getRideMock.mockResolvedValue({
       isOwner: true,

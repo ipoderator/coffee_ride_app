@@ -1330,3 +1330,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       section shown for every ride, a note until finished. See `docs/changelog.md`.
 - [x] CR-179 Coverage gate restored (ui formatters, journal tie-break tests). See `docs/changelog.md`.
 - [x] CR-180 Brand empty states: discovery/organizer copy as next steps, shared contour illustration. See `docs/changelog.md`.
+- [x] CR-181 Finish check-in (owner request): the participant claims «Отметить финиш»,
+      the organizer confirms selectively or in one batch and can mark no-shows
+      (separate `attendance` field, migration `0023`); reviews now need the
+      organizer's confirmation (ADR-027). See `docs/changelog.md`.
+- [x] CR-182 Ride closing: «сошёл» outcome, public results summary, finishing allowed with
+      undecided riders and labelled «не подтверждено» (ADR-028). See `docs/changelog.md`.

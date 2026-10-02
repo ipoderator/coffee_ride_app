@@ -52,6 +52,16 @@ const NOT_A_PARTICIPANT = () =>
     'You must have an active registration for this ride to review it.',
   );
 
+// CR-181: a review needs the organizer's confirmation that the rider finished — a
+// claim, an undecided registration or a no-show cannot review.
+const FINISH_NOT_CONFIRMED = () =>
+  new ReviewServiceError(
+    'finish_not_confirmed',
+    403,
+    'Finish not confirmed',
+    'The organizer has not confirmed that you finished this ride yet.',
+  );
+
 const REVIEW_ALREADY_EXISTS = () =>
   new ReviewServiceError(
     'review_already_exists',
@@ -102,6 +112,7 @@ function isUniqueViolation(error: unknown): boolean {
 
 /**
  * CR-042 ("Review"): a participant reviews a `finished` ride they actively attended.
+ * CR-181 tightens "attended" to the organizer-confirmed `attendance = 'finished'`.
  * `.claude/context/current-task.md`'s scope decision: eligibility is "active
  * registration" only — a cancelled registrant cannot review (same "active only" scope
  * `listParticipants`/`listMyRegistrations` already established), and only once the
@@ -129,7 +140,7 @@ export async function createReview(
   }
 
   const [registrationRow] = await db
-    .select({ id: registrations.id })
+    .select({ id: registrations.id, attendance: registrations.attendance })
     .from(registrations)
     .where(
       and(
@@ -141,6 +152,9 @@ export async function createReview(
     .limit(1);
   if (!registrationRow) {
     throw NOT_A_PARTICIPANT();
+  }
+  if (registrationRow.attendance !== 'finished') {
+    throw FINISH_NOT_CONFIRMED();
   }
 
   const [existing] = await db

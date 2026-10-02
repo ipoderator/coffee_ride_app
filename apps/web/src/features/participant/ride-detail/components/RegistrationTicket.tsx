@@ -13,6 +13,7 @@ import {
   Button,
   cn,
   ConfirmDialog,
+  FINISH_CHECKIN_TERMS,
   formatCountdownShort,
   formatGroupPace,
   formatGroupPaceParts,
@@ -33,9 +34,11 @@ import {
   ApiError,
   cancelRideRegistration,
   changeRegistrationGroup,
+  claimRideFinish,
   joinRideWaitlist,
   leaveRideWaitlist,
   registerForRide,
+  withdrawRideFinishClaim,
 } from '../api';
 import { seatsLeftOf, type TicketState } from '../lib/ticket-state';
 
@@ -53,6 +56,10 @@ function actionErrorMessage(error: unknown): string {
         return RIDE_DETAIL_GROUP_TERMS.groupNotFound;
       case 'group_change_not_allowed':
         return RIDE_DETAIL_GROUP_TERMS.groupChangeNotAllowed;
+      case 'attendance_already_decided':
+        return FINISH_CHECKIN_TERMS.alreadyDecided;
+      case 'ride_not_in_progress':
+        return FINISH_CHECKIN_TERMS.rideNotInProgress;
     }
   }
   return RIDE_DETAIL_TERMS.registrationActionError;
@@ -356,6 +363,87 @@ function GroupPicker({
   );
 }
 
+/**
+ * CR-181: the registered viewer's finish check-in once the ride is under way or
+ * over. A claim is only a claim — «Ждём подтверждения» until the organizer
+ * decides, and it can be withdrawn until then.
+ */
+function FinishCheckIn({
+  registration,
+  isPending,
+  onClaim,
+  onWithdraw,
+}: {
+  registration: Registration;
+  isPending: boolean;
+  onClaim: () => void;
+  onWithdraw: () => void;
+}) {
+  const { attendance, finishClaimedAt } = registration;
+  if (attendance === 'finished') {
+    return (
+      <Cell label={FINISH_CHECKIN_TERMS.sectionTitle} testId="finish-checkin">
+        <b className="font-semibold text-success">
+          {FINISH_CHECKIN_TERMS.confirmedTitle}
+        </b>
+        <Hint>{FINISH_CHECKIN_TERMS.confirmedHint}</Hint>
+      </Cell>
+    );
+  }
+  if (attendance === 'dnf') {
+    return (
+      <Cell label={FINISH_CHECKIN_TERMS.sectionTitle} testId="finish-checkin">
+        <b className="font-semibold text-text">
+          {FINISH_CHECKIN_TERMS.dnfTitle}
+        </b>
+        <Hint>{FINISH_CHECKIN_TERMS.dnfHint}</Hint>
+      </Cell>
+    );
+  }
+  if (attendance === 'no_show') {
+    return (
+      <Cell label={FINISH_CHECKIN_TERMS.sectionTitle} testId="finish-checkin">
+        <b className="font-semibold text-text">
+          {FINISH_CHECKIN_TERMS.noShowTitle}
+        </b>
+        <Hint>{FINISH_CHECKIN_TERMS.noShowHint}</Hint>
+      </Cell>
+    );
+  }
+  if (finishClaimedAt) {
+    return (
+      <Cell label={FINISH_CHECKIN_TERMS.sectionTitle} testId="finish-checkin">
+        <b className="font-semibold text-text">
+          {FINISH_CHECKIN_TERMS.claimedTitle}
+        </b>
+        <Hint>{FINISH_CHECKIN_TERMS.claimedHint}</Hint>
+        <Button
+          variant="secondary"
+          className="mt-2 min-h-11 self-start"
+          isLoading={isPending}
+          disabled={isPending}
+          onClick={onWithdraw}
+        >
+          {FINISH_CHECKIN_TERMS.withdrawButton}
+        </Button>
+      </Cell>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2" data-testid="finish-checkin">
+      <Button
+        className="w-full"
+        isLoading={isPending}
+        disabled={isPending}
+        onClick={onClaim}
+      >
+        {FINISH_CHECKIN_TERMS.claimButton}
+      </Button>
+      <Hint>{FINISH_CHECKIN_TERMS.claimHint}</Hint>
+    </div>
+  );
+}
+
 export interface RegistrationTicketProps {
   rideId: string;
   rideStatus: RideStatus;
@@ -453,6 +541,25 @@ export function RegistrationTicket({
     } finally {
       setIsPending(false);
     }
+  }
+
+  // CR-181: the viewer's own finish claim — only a claim, the organizer decides.
+  function handleClaimFinish() {
+    void run(async () => {
+      const response = await claimRideFinish(rideId);
+      onChange(response.registration);
+      showToast(FINISH_CHECKIN_TERMS.claimSuccess);
+    });
+  }
+
+  function handleWithdrawFinish() {
+    void run(async () => {
+      await withdrawRideFinishClaim(rideId);
+      if (viewerRegistration) {
+        onChange({ ...viewerRegistration, finishClaimedAt: null });
+      }
+      showToast(FINISH_CHECKIN_TERMS.withdrawSuccess);
+    });
   }
 
   function handleRegister() {
@@ -742,7 +849,14 @@ export function RegistrationTicket({
           >
             {REGISTRATION_ACTION_TERMS.cancel}
           </Button>
-        ) : null}
+        ) : (
+          <FinishCheckIn
+            registration={viewerRegistration}
+            isPending={isPending}
+            onClaim={handleClaimFinish}
+            onWithdraw={handleWithdrawFinish}
+          />
+        )}
         {dialogs}
       </TicketCard>
     );

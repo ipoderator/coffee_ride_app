@@ -17,6 +17,7 @@ import {
   Card,
   DIFFICULTY_LEVEL_TERMS,
   ErrorState,
+  FINISH_CHECKIN_TERMS,
   FormField,
   Input,
   RIDE_EDIT_TERMS,
@@ -162,6 +163,8 @@ export function EditRideForm({
   const [isCancelling, setIsCancelling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  // CR-182: riders with no final status yet (`null` before the ride starts).
+  const [unresolved, setUnresolved] = useState<number | null>(null);
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
   // KI-081: the contact's own save path after publish — kept apart from
   // `isPending` so the read-only form's disabled submit is not confused with it.
@@ -189,6 +192,7 @@ export function EditRideForm({
         setForm(toFormState(response.ride));
         setRequirementsText(response.requirements.join('\n'));
         setContact(rideContactFromResponse(response.contact));
+        setUnresolved(response.attendanceSummary?.unresolved ?? null);
         setStatus('ready');
       })
       .catch((error: unknown) => {
@@ -413,7 +417,13 @@ export function EditRideForm({
       const response = await finishRide(rideId);
       setRide(response.ride);
       setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.finishSuccess);
+      // CR-182: a ride closed with undecided riders says so instead of reading
+      // as «everyone finished».
+      setSuccessMessage(
+        unresolved
+          ? FINISH_CHECKIN_TERMS.finishedWithUnresolved(unresolved)
+          : RIDE_EDIT_TERMS.finishSuccess,
+      );
     } catch {
       setFormError(RIDE_EDIT_TERMS.loadError);
     } finally {
@@ -987,17 +997,27 @@ export function EditRideForm({
         )}
 
         {ride.status === 'started' && (
-          <Button
-            type="button"
-            variant="secondary"
-            isLoading={isFinishing}
-            onClick={handleFinish}
-            className="self-start"
-          >
-            {isFinishing
-              ? RIDE_EDIT_TERMS.finishPending
-              : RIDE_EDIT_TERMS.finish}
-          </Button>
+          <>
+            {unresolved ? (
+              <p
+                className="text-body-sm text-warning"
+                data-testid="unresolved-before-finish"
+              >
+                {FINISH_CHECKIN_TERMS.unresolvedBeforeFinish(unresolved)}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={isFinishing}
+              onClick={handleFinish}
+              className="self-start"
+            >
+              {isFinishing
+                ? RIDE_EDIT_TERMS.finishPending
+                : RIDE_EDIT_TERMS.finish}
+            </Button>
+          </>
         )}
       </form>
     </Card>

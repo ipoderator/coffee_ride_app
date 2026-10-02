@@ -6,6 +6,8 @@ import {
   listRidesQuerySchema,
   myRegistrationsQuerySchema,
   organizerActivityQuerySchema,
+  REGISTRATION_ATTENDANCES,
+  setAttendanceRequestSchema,
   updateRegistrationGroupRequestSchema,
 } from 'types';
 import { requireAuth } from '../../plugins/auth.js';
@@ -18,6 +20,8 @@ import { waitlistEntryResponseSchema } from './waitlist-entry-response.schema.js
 import { bikeResponseSchema } from '../users/user-response.schema.js';
 import {
   cancelRegistration,
+  claimFinish,
+  confirmClaimedFinishes,
   createRegistration,
   getOwnRegistrationActivity,
   getRiderAvatarDownload,
@@ -28,7 +32,9 @@ import {
   listParticipants,
   listRiders,
   listWaitlist,
+  setAttendance,
   updateRegistrationGroup,
+  withdrawFinishClaim,
 } from './registrations.service.js';
 
 const registrationResponseWrapper = z.object({
@@ -37,6 +43,7 @@ const registrationResponseWrapper = z.object({
 const waitlistEntryResponseWrapper = z.object({
   waitlistEntry: waitlistEntryResponseSchema,
 });
+const setAttendanceResponseSchema = z.object({ updated: z.number() });
 const rideIdParamsSchema = z.object({
   id: z.uuid('id must be a valid ride id.'),
 });
@@ -51,6 +58,9 @@ const rideParticipantSummaryResponseSchema = z.object({
   createdAt: z.string(),
   // CR-117 ("Pace groups"): additive.
   group: rideGroupRefResponseSchema.nullable(),
+  // CR-181 ("Finish self-check-in"): additive.
+  finishClaimedAt: z.string().nullable(),
+  attendance: z.enum(REGISTRATION_ATTENDANCES).nullable(),
 });
 const listParticipantsResponseSchema = z.object({
   items: z.array(rideParticipantSummaryResponseSchema),
@@ -292,6 +302,87 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         request.query,
       );
       return reply.status(200).send({ activity });
+    },
+  );
+
+  // CR-181 ("Finish self-check-in"). The participant's own claim «I finished» —
+  // only a claim, it never changes the organizer-owned `attendance`. Idempotent
+  // `200`; `404 registration_not_found` without an active registration, `409
+  // ride_not_in_progress` before the start. DELETE withdraws it (`204`), `409
+  // attendance_already_decided` once the organizer has recorded an outcome.
+  app.post(
+    '/:id/finish-claim',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: registrationResponseWrapper },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const registration = await claimFinish(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(200).send({ registration });
+    },
+  );
+
+  app.delete(
+    '/:id/finish-claim',
+    { schema: { params: rideIdParamsSchema }, preHandler: requireAuth },
+    async (request, reply) => {
+      await withdrawFinishClaim(app.db, request.user!.id, request.params.id);
+      return reply.status(204).send();
+    },
+  );
+
+  // CR-181. Organizer-only (`404 ride_not_found` for anyone else), only while the
+  // ride is `started`/`finished` (`409 ride_not_in_progress`). One call sets or
+  // clears (`attendance: null`) the outcome of the listed participants —
+  // selective and batch confirmation alike; an id that is not an active
+  // registration of this ride rejects the whole batch (`404 participant_not_found`).
+  app.put(
+    '/:id/attendance',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: setAttendanceRequestSchema,
+        response: { 200: setAttendanceResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const updated = await setAttendance(
+        app.db,
+        request.user!.id,
+        request.params.id,
+        request.body.registrationIds,
+        request.body.attendance,
+      );
+      return reply.status(200).send({ updated });
+    },
+  );
+
+  // CR-181. «Confirm everyone who claimed a finish»: bodyless, same gates as
+  // `PUT .../attendance`; only claimed + still-undecided registrations change.
+  app.post(
+    '/:id/attendance/confirm-claimed',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        response: { 200: setAttendanceResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const updated = await confirmClaimedFinishes(
+        app.db,
+        request.user!.id,
+        request.params.id,
+      );
+      return reply.status(200).send({ updated });
     },
   );
 

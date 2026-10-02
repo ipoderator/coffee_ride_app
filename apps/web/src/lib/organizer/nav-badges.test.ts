@@ -24,6 +24,8 @@ function signedUp(id: string, hoursAgo: number): RideParticipantSummary {
     userId: `user-${id}`,
     displayName: null,
     group: null,
+    finishClaimedAt: null,
+    attendance: null,
     createdAt: new Date(NOW.getTime() - hoursAgo * 3_600_000).toISOString(),
   };
 }

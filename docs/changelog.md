@@ -2963,3 +2963,24 @@ Summary: empty states became next steps. Discovery (grid and map list): «Ряд
 Files: `packages/ui/src/components/ContoursIllustration.tsx` (+test), `packages/ui/src/terminology.ts`, discovery `RideGrid`/`DiscoveryList`, organizer `RidesList`, `apps/web/src/stories/EmptyState.stories.tsx`, affected tests.
 Decisions: none.
 Follow-up: the remaining ~12 small `EmptyState` uses (cabinet tables, notifications, my-rides) keep their plain copy; roll the illustration/copy out there if wanted.
+
+## 2026-10-02 — CR-181 — finish check-in: participant claim, organizer confirms in bulk
+
+Summary: a rider reports «Отметить финиш» once the ride has started; the organizer's participants page shows claims and confirms them selectively («Подтвердить» / «Не пришёл» / «Вернуть» per row) or in one click («Подтвердить всех заявивших (N)»). A claim stays a claim: the organizer-owned `attendance` is a separate field. **Breaking (additive fields, tightened rule):** `POST /v1/rides/:id/reviews` now needs `attendance = 'finished'` (`403 finish_not_confirmed`); the review form appears only for a confirmed finisher and a hint explains the wait. Migration `0023_registration_attendance` adds `finish_claimed_at`, `attendance` (enum), `attendance_marked_at/by` with a consistency CHECK, and backfills `finished` for active registrants of already-finished rides so existing reviewers keep access (dev and test DBs migrated).
+Files: `packages/db` (schema, migration 0023), `packages/types` (`Registration`, `RideParticipantSummary`, attendance request/response), `apps/api/src/modules/registrations/` (service, routes, `attendance.routes.test.ts` 13 tests), `reviews.service.ts` (+test updates), `apps/web` organizer `ParticipantTable`/`attendance.ts`, participant `RegistrationTicket` (`FinishCheckIn`) and `RideDetailView`, `packages/ui` `FINISH_CHECKIN_TERMS`, four new `RegistrationTicket` stories, `docs/api.md`/`database.md`.
+Decisions: ADR-027.
+Follow-up: no notification on a decision; an organizer who never confirms blocks reviews (auto-confirm after N days is the candidate fix); `ParticipantTable` still has no Storybook story (it fetches); coverage baseline not regenerated (needs the live stack, KI-070); no Playwright spec for the flow yet.
+
+## 2026-10-02 — CR-182 — ride closing: «сошёл», results summary, close-with-unconfirmed
+
+Summary: extends CR-181 per the owner's proposal. New outcome `dnf` («сошёл», migration `0024_attendance_dnf`, a «Сошёл» row action and badge, a read-only state on the rider's ticket). `GET /v1/rides/:id` gains additive `attendanceSummary { finished, dnf, noShow, unresolved }` (null before the start). Finishing a ride is still allowed with undecided riders: the organizer sees a warning before and a note after, and the closed ride's page shows «Итоги заезда» — «Финишировали: N из M» plus «Не подтверждено: K — итоги ещё не закрыты» — instead of reading as «everyone finished». `dnf` cannot review.
+Files: `packages/db` (enum, migration 0024), `packages/types`, `apps/api/src/modules/rides/rides.service.ts` + `rides.routes.ts` (summary), `attendance.routes.test.ts` (+3 API tests), web `ParticipantTable`, `EditRideForm`, `RideDetailView` (`FinishResults`), `RegistrationTicket`, `FINISH_CHECKIN_TERMS`, one story, docs.
+Decisions: ADR-028.
+Follow-up: unresolved is computed, not stored, so a closed ride's historical «not confirmed» state is not frozen; no batch «mark all remaining as no-show» yet; still no notification, Playwright spec or coverage-baseline refresh.
+
+## 2026-10-02 — CR-183 — organizer dashboard: rides under way and upcoming rides
+
+Summary: `/organizer` now lists the organizer's own `started` rides as «Заезды сейчас» cards (finish-control progress bar, state legend, up to 3 rows with claims first, one-click «Подтвердить» via CR-181's `PUT /v1/rides/:id/attendance`) and their next published rides as «Ближайшие заезды». Nothing is rendered when there are neither. No API, schema or contract change — existing `GET /v1/rides/mine` and `/participants`.
+Files: `apps/web/src/features/organizer/live-rides/` (new module + tests), `lib/cabinet/organizer-widgets.ts` (registry, order 20), `packages/ui/src/terminology.ts` (`ORGANIZER_LIVE_TERMS`), `stories/LiveRidesWidget.stories.tsx`.
+Decisions: none.
+Follow-up: the block sits under the KPI tiles (the widget registry orders whole widgets; the mockup puts it above them — splitting the overview widget would fix that); the participant preview reads one page of 100; the «Следующий заезд» strip shows title/start only, no registered count.

@@ -22,12 +22,14 @@ import {
   ApiError,
   cancelRideRegistration,
   changeRegistrationGroup,
+  claimRideFinish,
   getRideDetail,
   getRideReviews,
   getRideRiders,
   getRouteGeometry,
   joinRideWaitlist,
   registerForRide,
+  withdrawRideFinishClaim,
 } from './api';
 
 // `RegistrationTicket` calls `useRouter()` (redirect-to-login on a 401) — same
@@ -64,6 +66,8 @@ vi.mock('./api', async () => {
     changeRegistrationGroup: vi.fn(),
     joinRideWaitlist: vi.fn(),
     getRideRiders: vi.fn(),
+    claimRideFinish: vi.fn(),
+    withdrawRideFinishClaim: vi.fn(),
   };
 });
 
@@ -75,6 +79,8 @@ const cancelRideRegistrationMock = vi.mocked(cancelRideRegistration);
 const changeRegistrationGroupMock = vi.mocked(changeRegistrationGroup);
 const joinRideWaitlistMock = vi.mocked(joinRideWaitlist);
 const getRideRidersMock = vi.mocked(getRideRiders);
+const claimRideFinishMock = vi.mocked(claimRideFinish);
+const withdrawRideFinishClaimMock = vi.mocked(withdrawRideFinishClaim);
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -151,6 +157,7 @@ function baseDetailResponse(
     viewerReview: null,
     groups: [],
     isOwner: false,
+    attendanceSummary: null,
     waitlistCount: 0,
     viewerStartNumber: null,
     viewerWaitlistPosition: null,
@@ -171,6 +178,8 @@ function activeRegistration(
     createdAt: '2027-01-01T00:00:00.000Z',
     updatedAt: '2027-01-01T00:00:00.000Z',
     cancelledAt: null,
+    finishClaimedAt: null,
+    attendance: null,
     ...overrides,
   };
 }
@@ -217,6 +226,8 @@ describe('RideDetailView', () => {
     registerForRideMock.mockReset();
     pushMock.mockReset();
     cancelRideRegistrationMock.mockReset();
+    claimRideFinishMock.mockReset();
+    withdrawRideFinishClaimMock.mockReset();
     changeRegistrationGroupMock.mockReset();
     joinRideWaitlistMock.mockReset();
     getRideRidersMock.mockReset();
@@ -700,6 +711,8 @@ describe('RideDetailView', () => {
             createdAt: '2027-01-01T00:00:00.000Z',
             updatedAt: '2027-01-01T00:00:00.000Z',
             cancelledAt: null,
+            finishClaimedAt: null,
+            attendance: null,
           },
         }),
       );
@@ -723,6 +736,8 @@ describe('RideDetailView', () => {
           createdAt: '2027-01-01T00:00:00.000Z',
           updatedAt: '2027-01-01T00:00:00.000Z',
           cancelledAt: null,
+          finishClaimedAt: null,
+          attendance: null,
         },
       });
       getRideDetailMock.mockResolvedValue(
@@ -827,6 +842,8 @@ describe('RideDetailView', () => {
             createdAt: '2027-01-01T00:00:00.000Z',
             updatedAt: '2027-01-01T00:00:00.000Z',
             cancelledAt: null,
+            finishClaimedAt: null,
+            attendance: null,
           },
         }),
       );
@@ -864,6 +881,8 @@ describe('RideDetailView', () => {
             createdAt: '2027-01-01T00:00:00.000Z',
             updatedAt: '2027-01-01T00:00:00.000Z',
             cancelledAt: null,
+            finishClaimedAt: null,
+            attendance: null,
           },
         }),
       );
@@ -945,6 +964,216 @@ describe('RideDetailView', () => {
     });
   });
 
+  describe('finish check-in (CR-181)', () => {
+    const registered = {
+      id: 'registration-1',
+      rideId: 'ride-1',
+      userId: 'user-1',
+      status: 'active' as const,
+      groupId: null,
+      createdAt: '2027-01-01T00:00:00.000Z',
+      updatedAt: '2027-01-01T00:00:00.000Z',
+      cancelledAt: null,
+      finishClaimedAt: null,
+      attendance: null,
+    };
+
+    function renderStarted(viewerRegistration: Registration) {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'started' },
+          registrationsCount: 1,
+          viewerRegistration,
+        }),
+      );
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+    }
+
+    it('offers «Отметить финиш» once the ride has started, instead of cancelling', async () => {
+      renderStarted(registered);
+
+      expect(
+        await screen.findByRole('button', { name: 'Отметить финиш' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText('Отменить регистрацию'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('does not offer it before the start', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+          registrationsCount: 1,
+          viewerRegistration: registered,
+        }),
+      );
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText('Отменить регистрацию');
+      expect(screen.queryByText('Отметить финиш')).not.toBeInTheDocument();
+    });
+
+    it('sends the claim and then shows it as waiting for the organizer', async () => {
+      claimRideFinishMock.mockResolvedValue({
+        registration: {
+          ...registered,
+          finishClaimedAt: '2027-05-01T09:00:00.000Z',
+        },
+      });
+      renderStarted(registered);
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Отметить финиш' }),
+      );
+
+      await waitFor(() =>
+        expect(claimRideFinishMock).toHaveBeenCalledWith('ride-1'),
+      );
+      const block = await screen.findByTestId('finish-checkin');
+      expect(
+        within(block).getByText('Ждём подтверждения организатора.'),
+      ).toBeInTheDocument();
+      expect(
+        within(block).getByRole('button', { name: 'Отозвать отметку' }),
+      ).toBeInTheDocument();
+    });
+
+    it('withdraws a claim', async () => {
+      withdrawRideFinishClaimMock.mockResolvedValue(undefined);
+      renderStarted({
+        ...registered,
+        finishClaimedAt: '2027-05-01T09:00:00.000Z',
+      });
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Отозвать отметку' }),
+      );
+
+      await waitFor(() =>
+        expect(withdrawRideFinishClaimMock).toHaveBeenCalledWith('ride-1'),
+      );
+      expect(
+        await screen.findByRole('button', { name: 'Отметить финиш' }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows the organizer-owned outcomes read-only', async () => {
+      renderStarted({ ...registered, attendance: 'finished' });
+      const confirmed = await screen.findByTestId('finish-checkin');
+      expect(
+        within(confirmed).getByText('Финиш подтверждён'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Отметить финиш' }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Отозвать отметку' }),
+      ).toBeNull();
+    });
+
+    it('shows «сошёл» read-only', async () => {
+      renderStarted({ ...registered, attendance: 'dnf' });
+      const block = await screen.findByTestId('finish-checkin');
+      expect(
+        within(block).getByText('Отмечено: сошли с дистанции'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Отметить финиш' }),
+      ).toBeNull();
+    });
+
+    it('says plainly when the organizer did not mark the rider', async () => {
+      renderStarted({
+        ...registered,
+        finishClaimedAt: '2027-05-01T09:00:00.000Z',
+        attendance: 'no_show',
+      });
+      const block = await screen.findByTestId('finish-checkin');
+      expect(
+        within(block).getByText('Не отмечен на заезде'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Отозвать отметку' }),
+      ).toBeNull();
+    });
+
+    it('explains a decided claim when withdrawing is refused', async () => {
+      withdrawRideFinishClaimMock.mockRejectedValue(
+        groupProblem('attendance_already_decided', 409),
+      );
+      renderStarted({
+        ...registered,
+        finishClaimedAt: '2027-05-01T09:00:00.000Z',
+      });
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Отозвать отметку' }),
+      );
+
+      expect(
+        await screen.findByText(
+          'Организатор уже принял решение — отметку изменить нельзя.',
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe('results of a closed ride (CR-182)', () => {
+    it('shows the tally and says so when riders are still undecided', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'finished' },
+          attendanceSummary: { finished: 5, dnf: 1, noShow: 1, unresolved: 2 },
+        }),
+      );
+      render(<RideDetailView rideId="ride-1" />);
+
+      const results = await screen.findByTestId('finish-results');
+      expect(
+        within(results).getByText(
+          'Финишировали: 5 из 9 · Сошли: 1 · Не пришли: 1',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        within(results).getByText(/Не подтверждено: 2/),
+      ).toBeInTheDocument();
+    });
+
+    it('shows no «not confirmed» line when everyone has a status', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'finished' },
+          attendanceSummary: { finished: 4, dnf: 0, noShow: 0, unresolved: 0 },
+        }),
+      );
+      render(<RideDetailView rideId="ride-1" />);
+
+      const results = await screen.findByTestId('finish-results');
+      expect(
+        within(results).getByText('Финишировали: 4 из 4'),
+      ).toBeInTheDocument();
+      expect(within(results).queryByText(/Не подтверждено/)).toBeNull();
+    });
+
+    it('is not shown while the ride is still under way', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'started' },
+          attendanceSummary: { finished: 1, dnf: 0, noShow: 0, unresolved: 3 },
+        }),
+      );
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      expect(screen.queryByTestId('finish-results')).not.toBeInTheDocument();
+    });
+  });
+
   describe('reviews (CR-042/CR-043)', () => {
     const activeRegistration = {
       id: 'registration-1',
@@ -955,6 +1184,8 @@ describe('RideDetailView', () => {
       createdAt: '2027-01-01T00:00:00.000Z',
       updatedAt: '2027-01-01T00:00:00.000Z',
       cancelledAt: null,
+      finishClaimedAt: null,
+      attendance: null,
     };
 
     it('explains that ride reviews come after the ride is finished, without fetching', async () => {
@@ -977,7 +1208,7 @@ describe('RideDetailView', () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({
           ride: { ...baseRide, status: 'finished' },
-          viewerRegistration: activeRegistration,
+          viewerRegistration: { ...activeRegistration, attendance: 'finished' },
         }),
       );
 
@@ -985,6 +1216,41 @@ describe('RideDetailView', () => {
 
       expect(await screen.findByText('Отзывы')).toBeInTheDocument();
       expect(screen.getByText('Оставить отзыв')).toBeInTheDocument();
+    });
+
+    it('holds the review form back until the organizer confirms the finish (CR-181)', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'finished' },
+          viewerRegistration: {
+            ...activeRegistration,
+            finishClaimedAt: '2027-05-01T09:00:00.000Z',
+          },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText('Отзывы');
+      expect(screen.queryByText('Оставить отзыв')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/после того, как организатор подтвердит ваш финиш/),
+      ).toBeInTheDocument();
+    });
+
+    it('tells a no-show they cannot review, and shows no form (CR-181)', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'finished' },
+          viewerRegistration: { ...activeRegistration, attendance: 'no_show' },
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText('Отзывы');
+      expect(screen.queryByText('Оставить отзыв')).not.toBeInTheDocument();
+      expect(screen.getByText(/оставить отзыв нельзя/)).toBeInTheDocument();
     });
 
     it('hides the review form once the viewer has already reviewed', async () => {

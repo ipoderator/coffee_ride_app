@@ -145,13 +145,38 @@ async function finishRide(
   });
 }
 
-/** A finished ride with one active participant, ready to be reviewed. */
+/**
+ * CR-181: a review needs the organizer's confirmation — the participant claims a
+ * finish and the organizer confirms every claim, both through the real endpoints.
+ */
+async function confirmFinish(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  organizerToken: string,
+  rideId: string,
+  participantToken: string,
+) {
+  await app.inject({
+    method: 'POST',
+    url: `/v1/rides/${rideId}/finish-claim`,
+    headers: { origin: WEB_ORIGIN },
+    cookies: { session: participantToken },
+  });
+  await app.inject({
+    method: 'POST',
+    url: `/v1/rides/${rideId}/attendance/confirm-claimed`,
+    headers: { origin: WEB_ORIGIN },
+    cookies: { session: organizerToken },
+  });
+}
+
+/** A finished ride with one confirmed participant, ready to be reviewed. */
 async function createFinishedRideWithParticipant(
   app: Awaited<ReturnType<typeof buildApp>>,
 ) {
   const { organizerToken, rideId } = await createOrganizerRide(app);
   const participant = await registerParticipant(app, rideId);
   await finishRide(app, organizerToken, rideId);
+  await confirmFinish(app, organizerToken, rideId, participant.rawToken);
   return { organizerToken, rideId, participant };
 }
 
@@ -217,6 +242,25 @@ describe('Post-ride (CR-042/CR-043)', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json().code).toBe('ride_not_finished');
+      await app.close();
+    });
+
+    it('rejects an active registrant the organizer has not confirmed with 403 finish_not_confirmed (CR-181)', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app);
+      const participant = await registerParticipant(app, rideId);
+      await finishRide(app, organizerToken, rideId);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/reviews`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participant.rawToken },
+        payload: { rating: 5 },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('finish_not_confirmed');
       await app.close();
     });
 

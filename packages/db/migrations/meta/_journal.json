@@ -162,6 +162,20 @@
       "when": 1790860613136,
       "tag": "0022_ride_contact",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790931386194,
+      "tag": "0023_registration_attendance",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790933345924,
+      "tag": "0024_attendance_dnf",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
 import type {
   GetRideResponse,
+  RegistrationAttendance,
+  SetAttendanceResponse,
   ListRideParticipantsResponse,
   ListRideWaitlistResponse,
   ProblemDetails,
@@ -80,4 +82,43 @@ export async function getRideGroups(
     throw new ApiError(body as ProblemDetails);
   }
   return (body as Pick<GetRideResponse, 'groups'>).groups ?? [];
+}
+
+/**
+ * CR-181: the organizer sets (`finished`/`no_show`) or clears (`null`) the outcome
+ * of the listed registrations in one transaction — selective confirmation. Throws
+ * `ApiError` (`participant_not_found` when the list is stale, `ride_not_in_progress`).
+ */
+export async function setAttendance(
+  rideId: string,
+  registrationIds: string[],
+  attendance: RegistrationAttendance | null,
+): Promise<SetAttendanceResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/attendance`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ registrationIds, attendance }),
+  });
+  const body = (await response.json()) as
+    SetAttendanceResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return body as SetAttendanceResponse;
+}
+
+/** CR-181: «confirm everyone who claimed a finish» — one call, claimed + undecided only. */
+export async function confirmClaimedFinishes(
+  rideId: string,
+): Promise<SetAttendanceResponse> {
+  const response = await fetch(
+    `${RIDES_ENDPOINT}/${rideId}/attendance/confirm-claimed`,
+    { method: 'POST' },
+  );
+  const body = (await response.json()) as
+    SetAttendanceResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return body as SetAttendanceResponse;
 }

@@ -1,4 +1,13 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from 'drizzle-orm';
 import {
   organizerProfiles,
   registrations,
@@ -19,6 +28,7 @@ import type {
   OrganizerActivityQuery,
   OrganizerRegistrationActivity,
   Registration,
+  RegistrationAttendance,
   RideGroupRef,
   RideParticipantSummary,
   RiderProfile,
@@ -105,6 +115,34 @@ const RIDE_FULL = () =>
     409,
     'Ride is full',
     'This ride has reached its participant limit.',
+  );
+
+// CR-181 ("Finish self-check-in"): a finish can only be claimed/decided while the
+// ride is under way or already over — before the start there is nothing to finish.
+const RIDE_NOT_IN_PROGRESS = () =>
+  new RegistrationServiceError(
+    'ride_not_in_progress',
+    409,
+    'Ride has not started',
+    'Finishing can only be reported or confirmed once the ride has started.',
+  );
+
+const ATTENDANCE_ALREADY_DECIDED = () =>
+  new RegistrationServiceError(
+    'attendance_already_decided',
+    409,
+    'Already decided',
+    'The organizer has already recorded the outcome for this registration.',
+  );
+
+// Not `registration_not_found`: that one's wording is the participant's own ("you do
+// not have...") and this is a list of someone else's ids.
+const PARTICIPANT_NOT_FOUND = () =>
+  new RegistrationServiceError(
+    'participant_not_found',
+    404,
+    'Participant not found',
+    'Some of the selected participants are not active registrations of this ride.',
   );
 
 const REGISTRATION_NOT_FOUND = () =>
@@ -282,6 +320,10 @@ export function toRegistration(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     cancelledAt: row.cancelledAt ? row.cancelledAt.toISOString() : null,
+    finishClaimedAt: row.finishClaimedAt
+      ? row.finishClaimedAt.toISOString()
+      : null,
+    attendance: row.attendance,
   };
 }
 
@@ -380,6 +422,9 @@ function toRideParticipantSummary(row: {
   groupId: string | null;
   groupName: string | null;
   groupPaceKmh: number | null;
+  // CR-181: absent for a waitlist entry, which has neither.
+  finishClaimedAt?: Date | null;
+  attendance?: RegistrationAttendance | null;
 }): RideParticipantSummary {
   return {
     id: row.id,
@@ -387,6 +432,10 @@ function toRideParticipantSummary(row: {
     displayName: resolveParticipantName(row),
     createdAt: row.createdAt.toISOString(),
     group: toGroupRef(row),
+    finishClaimedAt: row.finishClaimedAt
+      ? row.finishClaimedAt.toISOString()
+      : null,
+    attendance: row.attendance ?? null,
   };
 }
 
@@ -444,6 +493,8 @@ export async function listParticipants(
       groupId: registrations.groupId,
       groupName: rideGroups.name,
       groupPaceKmh: rideGroups.paceKmh,
+      finishClaimedAt: registrations.finishClaimedAt,
+      attendance: registrations.attendance,
     })
     .from(registrations)
     .innerJoin(users, eq(registrations.userId, users.id))
@@ -1167,6 +1218,207 @@ export async function updateRegistrationGroup(
     return updated;
   });
   return toRegistration(row);
+}
+
+// CR-181 ("Finish self-check-in"): the ride statuses in which a finish may be
+// claimed and decided. `finished` stays open on purpose — an organizer usually
+// closes the ride before everyone has reported.
+const ATTENDANCE_OPEN_STATUSES = new Set(['started', 'finished']);
+
+/**
+ * CR-181. The participant's own claim «I finished» on their own active
+ * registration. Only a claim: it never touches `attendance`, so the organizer's
+ * list is what turns it into a recorded finish. Idempotent — a repeat keeps the
+ * first claim's timestamp. `404 registration_not_found` without an active
+ * registration, `409 ride_not_in_progress` before the start or after a cancellation.
+ */
+export async function claimFinish(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<Registration> {
+  const row = await db.transaction(async (tx) => {
+    const [found] = await tx
+      .select({ registration: registrations, rideStatus: rides.status })
+      .from(registrations)
+      .innerJoin(rides, eq(registrations.rideId, rides.id))
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.userId, userId),
+          eq(registrations.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (!found) {
+      throw REGISTRATION_NOT_FOUND();
+    }
+    if (!ATTENDANCE_OPEN_STATUSES.has(found.rideStatus)) {
+      throw RIDE_NOT_IN_PROGRESS();
+    }
+    if (found.registration.finishClaimedAt) {
+      return found.registration;
+    }
+    const [updated] = await tx
+      .update(registrations)
+      .set({ finishClaimedAt: new Date(), updatedAt: new Date() })
+      .where(eq(registrations.id, found.registration.id))
+      .returning();
+    if (!updated) {
+      throw new Error('Registration update returned no row.');
+    }
+    return updated;
+  });
+  return toRegistration(row);
+}
+
+/**
+ * CR-181. Withdraws the caller's own claim. Idempotent; `409
+ * attendance_already_decided` once the organizer has recorded an outcome — a
+ * decision is theirs to change, not the participant's.
+ */
+export async function withdrawFinishClaim(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [found] = await tx
+      .select({
+        id: registrations.id,
+        attendance: registrations.attendance,
+        finishClaimedAt: registrations.finishClaimedAt,
+      })
+      .from(registrations)
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.userId, userId),
+          eq(registrations.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (!found) {
+      throw REGISTRATION_NOT_FOUND();
+    }
+    if (found.attendance !== null) {
+      throw ATTENDANCE_ALREADY_DECIDED();
+    }
+    if (found.finishClaimedAt === null) {
+      return;
+    }
+    await tx
+      .update(registrations)
+      .set({ finishClaimedAt: null, updatedAt: new Date() })
+      .where(eq(registrations.id, found.id));
+  });
+}
+
+// Owner gate + status gate for the organizer's attendance writes. `404
+// ride_not_found` for a non-owner (same enumeration-safe answer as every other
+// organizer-only endpoint), `409 ride_not_in_progress` outside started/finished.
+async function assertOwnRideAttendanceOpen(
+  tx: DbTransaction,
+  userId: string,
+  rideId: string,
+): Promise<void> {
+  const [row] = await tx
+    .select({ status: rides.status })
+    .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
+    .where(and(eq(rides.id, rideId), eq(organizerProfiles.userId, userId)))
+    .limit(1);
+  if (!row) {
+    throw RIDE_NOT_FOUND();
+  }
+  if (!ATTENDANCE_OPEN_STATUSES.has(row.status)) {
+    throw RIDE_NOT_IN_PROGRESS();
+  }
+}
+
+function attendanceValues(
+  userId: string,
+  attendance: RegistrationAttendance | null,
+) {
+  const now = new Date();
+  return attendance === null
+    ? {
+        attendance: null,
+        attendanceMarkedAt: null,
+        attendanceMarkedBy: null,
+        updatedAt: now,
+      }
+    : {
+        attendance,
+        attendanceMarkedAt: now,
+        attendanceMarkedBy: userId,
+        updatedAt: now,
+      };
+}
+
+/**
+ * CR-181. The organizer sets (or clears, with `null`) the outcome of the listed
+ * participants — selective and batch confirmation are this one call with a
+ * different id list. All-or-nothing: an id that is not an active registration of
+ * *this* ride rolls the whole batch back (`404 participant_not_found`), so a
+ * stale checkbox never half-applies. The organizer's user id comes from the
+ * session and is stored as `attendanceMarkedBy`.
+ */
+export async function setAttendance(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+  registrationIds: string[],
+  attendance: RegistrationAttendance | null,
+): Promise<number> {
+  const ids = [...new Set(registrationIds)];
+  return db.transaction(async (tx) => {
+    await assertOwnRideAttendanceOpen(tx, userId, rideId);
+    const updated = await tx
+      .update(registrations)
+      .set(attendanceValues(userId, attendance))
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.status, 'active'),
+          inArray(registrations.id, ids),
+        ),
+      )
+      .returning({ id: registrations.id });
+    if (updated.length !== ids.length) {
+      throw PARTICIPANT_NOT_FOUND();
+    }
+    return updated.length;
+  });
+}
+
+/**
+ * CR-181. «Confirm everyone who claimed a finish»: every active, still-undecided
+ * registration of the ride that carries a claim becomes `finished`. A participant
+ * the organizer already marked (e.g. `no_show`) is left alone. Returns the number
+ * of rows changed — `0` is a valid answer, and a repeat call is a no-op.
+ */
+export async function confirmClaimedFinishes(
+  db: DbClient,
+  userId: string,
+  rideId: string,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    await assertOwnRideAttendanceOpen(tx, userId, rideId);
+    const updated = await tx
+      .update(registrations)
+      .set(attendanceValues(userId, 'finished'))
+      .where(
+        and(
+          eq(registrations.rideId, rideId),
+          eq(registrations.status, 'active'),
+          isNotNull(registrations.finishClaimedAt),
+          isNull(registrations.attendance),
+        ),
+      )
+      .returning({ id: registrations.id });
+    return updated.length;
+  });
 }
 
 /**

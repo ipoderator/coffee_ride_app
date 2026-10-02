@@ -1,0 +1,1 @@
+ALTER TYPE "public"."registration_attendance" ADD VALUE 'dnf';

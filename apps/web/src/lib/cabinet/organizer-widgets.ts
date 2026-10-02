@@ -1,4 +1,5 @@
 import { organizerRegistrationActivityWidget } from '@/features/organizer/activity/nav';
+import { organizerLiveRidesWidget } from '@/features/organizer/live-rides/nav';
 import { organizerOverviewWidget } from '@/features/organizer/overview/nav';
 import type { DashboardWidget } from './types';
 
@@ -15,5 +16,6 @@ import type { DashboardWidget } from './types';
 // Flag-gating a widget is CR-055's scope, not this file's.
 export const ORGANIZER_WIDGETS: DashboardWidget[] = [
   organizerOverviewWidget,
+  organizerLiveRidesWidget,
   organizerRegistrationActivityWidget,
 ].sort((a, b) => a.order - b.order);

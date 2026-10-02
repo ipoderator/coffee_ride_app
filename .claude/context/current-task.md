@@ -1,84 +1,75 @@
-# Current task — CR-171: the map as the main emotional layer
+# Current task — CR-181: finish self-check-in, organizer confirms in bulk
 
-> CR-169 (KI-081) and CR-170 (micro-animations) are complete but **not yet
-> committed**; their records are in `docs/changelog.md`, `docs/tasks.md`,
-> `project-state.md`. CR-171 builds on that working tree — three commits.
+> Previous task (CR-171/172) is complete and committed; its record lives in
+> `docs/changelog.md` and `project-state.md`.
 
 ## Goal
 
-Owner's request (2026-10-01): on `/` (discovery «Карта»), make the map the main
-emotional layer:
+Owner's request (2026-10-02): a participant self-reports "I finished"; the organizer
+confirms selectively or in one batch («подтвердить всех заявивших финиш») in about a
+minute, and can mark participants who did not come. A participant's claim stays a
+**claim** until the organizer confirms it.
 
-1. a soft draw-in of the route on the map when a ride card is chosen;
-2. a pulse of the start point;
-3. unobtrusive elevation/difficulty markers right on the line.
+## Requirements (draft — awaiting owner decisions, see "Open decisions")
 
-## Requirements
-
-- Provider-neutral: additive `maps-core` contract fields, implemented in
-  `packages/maps-2gis` only (`.claude/rules/maps.md`); no vendor type leaks.
-- MapGL `Polyline` has no `setCoordinates` → draw by rebuilding the line prefix
-  per animation frame inside the adapter; an update during a draw (the full
-  geometry replacing the ≤40-point preview) continues the running draw.
-- Pulse is **finite** (3 pulses ≈ 4 s, WCAG 2.2.2) and only on the ride that just
-  became active; the CR-170 "no loops" rule stays.
-- Reduced motion: no draw, no pulse, no reveal — the final state at once.
-- `setMarkers` reconciles by id so an unrelated update (a tag appearing, the
-  full geometry arriving) does not recreate pins and restart their pulse.
-- Markers: difficulty (word + segment meter, `docs/design.md` §6) mid-route;
-  the summit «▲ 214 м» when the full geometry has a meaningful climb. Tags are
-  non-interactive and fade in as the line reaches them.
-- Colours from `--map-*` tokens via `getCssColorVar`; strings via terminology.
+- Per active registration: `finishClaimedAt` (participant) and an organizer-owned
+  outcome `attendance`: `null` (undecided) | `finished` | `no_show`.
+- Participant: `POST /v1/rides/:id/finish-claim` (and `DELETE` to withdraw) while the
+  ride is `started` or `finished`; identity from the session only; idempotent.
+- Organizer, owner-only, in one transaction each:
+  - `POST /v1/rides/:id/attendance/confirm` `{ registrationIds: string[] }` — selective;
+  - `POST /v1/rides/:id/attendance/confirm-claimed` — every claimed, undecided one;
+  - `POST /v1/rides/:id/attendance/no-show` `{ registrationIds }` — and reverting a
+    mark (`PUT` back to `null`).
+- `GET /v1/rides/:id/participants` gains additive `finishClaimedAt`, `attendance`.
+- Organizer participants page: claim badge, row checkboxes, sticky «Подтвердить всех
+  заявивших (N)» bar, per-row «Не пришёл».
+- Participant ticket on `/rides/[id]`: «Я финишировал» → «Ждёт подтверждения» →
+  «Финиш подтверждён» / «Не отмечен».
 
 ## Acceptance criteria
 
-- Choosing a row (hover/focus/pin) draws its route in; the preview→full upgrade
-  does not restart it; theme change does not redraw.
-- Active start ring pulses three times then stops.
-- Difficulty tag on the line; summit tag once elevation is known.
-- Unit tests (adapter, DiscoveryMap, pure lib); typecheck/lint/coverage; docs.
+- A claim never changes a participant's recorded outcome by itself.
+- Batch confirm touches only claimed + undecided rows of this ride; a non-owner gets
+  403/404; a cancelled registration is never touched.
+- No-show is reversible; confirmed outcome is attributable (`attendanceBy/At`).
+- Tests: service/routes (ownership, idempotency, status gating, batch), web
+  (organizer table, ticket states); migration with CHECK invariants; typecheck/lint/
+  coverage; docs (`api.md`, `database.md`, `design.md`), ADR only if the owner picks
+  an outcome that changes review eligibility.
 
 ## Planned files
 
-- `packages/maps-core/src/render.ts`, `packages/maps-2gis/src/render.ts` (+ test)
-- `apps/web/src/features/participant/discovery/components/DiscoveryMap.tsx`
-- `apps/web/src/features/participant/discovery/lib/route-highlights.ts` (+ test)
-- `apps/web/src/features/participant/discovery/discovery.test.tsx`
-- `packages/ui/src/terminology.ts`
-- `docs/design.md`, `.claude/rules/maps.md`, changelog/tasks/state
+- `packages/db/src/schema/registration.ts` + migration `0023_registration_attendance`
+- `packages/types/src/api/registrations.ts`
+- `apps/api/src/modules/registrations/` (service, routes, tests)
+- `apps/web/src/features/organizer/participants/`, `participant/ride-detail/`
+- `packages/ui/src/terminology.ts`, Storybook stories for new states
+- docs/context files
 
 ## Implementation progress
 
-- [x] Contract (`drawInMs`, `pulse`, `revealDelayMs`, `meter`, `shape: 'tag'`)
-- [x] Adapter: reconcile by id, pulse, tag, reveal, draw (`linePrefix`)
-- [x] Highlights lib (`route-highlights.ts`)
-- [x] DiscoveryMap wiring (line effect before markers effect)
-- [x] Tests
-- [x] Validation (incl. live map check)
-- [x] Docs/context
+- [x] Owner decisions (started+finished; separate `attendance` field; review only after confirmation)
+- [x] Migration 0023, types, API (4 endpoints), review gate
+- [x] Web: ticket check-in, review hint, organizer panel + row actions
+- [x] Tests, stories, docs, ADR-027
+
+## Decisions (owner, 2026-10-02)
+
+1. Claim window: `started` and `finished`.
+2. `attendance` is its own field; no-show stays an active registration.
+3. Review only after the organizer confirms (ADR-027).
 
 ## Validation results
 
-- `apps/web` unit 538; `packages/maps-2gis` 62 (+5 skipped); `packages/ui` 212;
-  Storybook 90; `apps/api` 546 on the live stack; 17/17 typecheck+lint.
-- Coverage holds; baseline regenerated (two auth floors kept).
-- Live: draw, pulse, «Средний» + «▲ 192 м» on the Krylatskoe route.
+typecheck 8/8, lint 9/9, tests: api 556 (+8 live skipped), web 570, ui 219, maps-2gis 65;
+Storybook 100/100 (axe). New: `attendance.routes.test.ts` 13, ticket 7, organizer panel 6.
 
 ## Discovered issues
 
-- Hover does not move the camera (CR-170), and a pan keeps the zoom, so on a
-  long route the notes can sit off-screen. Fitting the route on selection
-  would show them, but that is a product decision (bigger camera move).
-- No Storybook story for adapter-drawn map effects (no key; stories may not
-  import `maps-2gis`).
-
-## Follow-up — CR-172 (owner approved)
-
-The off-screen-notes issue above is resolved: selection now frames the whole
-route (eased `fitBounds`, `MapFitOptions.durationMs`); no-route rides still pan.
-Validation: web unit 539, maps-2gis 65, typecheck+lint, coverage holds; live
-check frames the Krylatskoe loop with both notes in view.
+Existing review tests silently relied on "active registrant may review"; they now go
+through the real claim + confirm-claimed flow.
 
 ## Final result
 
-Done. CR-169, CR-170, CR-171, CR-172 are committed together.
+Implemented, not committed. Not run: coverage gate, Playwright, live browser check.

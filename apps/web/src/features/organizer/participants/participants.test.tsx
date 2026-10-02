@@ -1,12 +1,21 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ParticipantTable } from './components/ParticipantTable';
 import { WaitlistTable } from './components/WaitlistTable';
 import {
   ApiError,
+  confirmClaimedFinishes,
   getRideGroups,
   getRideParticipants,
+  getRideStatus,
   getRideWaitlist,
+  setAttendance,
   type RideGroupSummary,
   type RideParticipantSummary,
 } from './api';
@@ -18,17 +27,24 @@ vi.mock('./api', async () => {
     getRideParticipants: vi.fn(),
     getRideWaitlist: vi.fn(),
     getRideGroups: vi.fn(),
+    getRideStatus: vi.fn(),
+    setAttendance: vi.fn(),
+    confirmClaimedFinishes: vi.fn(),
   };
 });
 
 const getRideParticipantsMock = vi.mocked(getRideParticipants);
 const getRideWaitlistMock = vi.mocked(getRideWaitlist);
 const getRideGroupsMock = vi.mocked(getRideGroups);
+const getRideStatusMock = vi.mocked(getRideStatus);
+const setAttendanceMock = vi.mocked(setAttendance);
+const confirmClaimedMock = vi.mocked(confirmClaimedFinishes);
 
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: a ride without pace groups (the pre-CR-120 flat list).
   getRideGroupsMock.mockResolvedValue([]);
+  getRideStatusMock.mockResolvedValue('registration_open');
 });
 
 const first: RideParticipantSummary = {
@@ -37,6 +53,8 @@ const first: RideParticipantSummary = {
   displayName: 'Анна Смирнова',
   createdAt: '2027-01-01T10:00:00.000Z',
   group: null,
+  finishClaimedAt: null,
+  attendance: null,
 };
 const second: RideParticipantSummary = {
   id: 'reg-2',
@@ -44,6 +62,8 @@ const second: RideParticipantSummary = {
   displayName: null,
   createdAt: '2027-01-02T10:00:00.000Z',
   group: null,
+  finishClaimedAt: null,
+  attendance: null,
 };
 
 describe('ParticipantTable', () => {
@@ -163,6 +183,8 @@ describe('ParticipantTable — pace groups', () => {
           displayName: 'Вера',
           createdAt: '2027-01-03T10:00:00.000Z',
           group: null,
+          finishClaimedAt: null,
+          attendance: null,
         },
       ],
       nextCursor: null,
@@ -288,5 +310,165 @@ describe('getRideGroups', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('ParticipantTable — finish check-in (CR-181)', () => {
+  const claimed: RideParticipantSummary = {
+    ...first,
+    id: 'reg-claimed',
+    displayName: 'Заявил Финиш',
+    finishClaimedAt: '2027-05-01T09:00:00.000Z',
+  };
+  const silent: RideParticipantSummary = {
+    ...second,
+    id: 'reg-silent',
+    displayName: 'Молчун',
+  };
+  const confirmed: RideParticipantSummary = {
+    ...first,
+    id: 'reg-confirmed',
+    displayName: 'Уже Подтверждён',
+    finishClaimedAt: '2027-05-01T09:00:00.000Z',
+    attendance: 'finished',
+  };
+
+  async function renderStarted(items: RideParticipantSummary[]) {
+    getRideStatusMock.mockResolvedValue('started');
+    getRideParticipantsMock.mockResolvedValue({ items, nextCursor: null });
+    render(<ParticipantTable rideId="ride-1" />);
+    await screen.findByTestId('attendance-panel');
+  }
+
+  it('shows no finish controls before the ride has started', async () => {
+    getRideParticipantsMock.mockResolvedValue({
+      items: [claimed],
+      nextCursor: null,
+    });
+    render(<ParticipantTable rideId="ride-1" />);
+
+    await screen.findByText('Заявил Финиш');
+    expect(screen.queryByTestId('attendance-panel')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Не пришёл' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('summarises the ride and counts only undecided claims in the batch button', async () => {
+    await renderStarted([claimed, silent, confirmed]);
+
+    const panel = screen.getByTestId('attendance-panel');
+    expect(
+      within(panel).getByText(
+        'Финишировали: 1 · Заявили финиш: 1 · Сошли: 0 · Не пришли: 0',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole('button', {
+        name: 'Подтвердить всех заявивших (1)',
+      }),
+    ).toBeEnabled();
+  });
+
+  it('disables the batch button when nobody is waiting for a decision', async () => {
+    await renderStarted([silent, confirmed]);
+
+    expect(
+      screen.getByRole('button', { name: 'Подтвердить всех заявивших (0)' }),
+    ).toBeDisabled();
+  });
+
+  it('confirms every claim in one call and updates the rows', async () => {
+    confirmClaimedMock.mockResolvedValue({ updated: 1 });
+    await renderStarted([claimed, silent]);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Подтвердить всех заявивших (1)' }),
+    );
+
+    await waitFor(() =>
+      expect(confirmClaimedMock).toHaveBeenCalledWith('ride-1'),
+    );
+    const claimedRow = screen.getByRole('group', {
+      name: 'Финиш: Заявил Финиш',
+    });
+    expect(
+      await within(claimedRow).findByText('Финиш подтверждён'),
+    ).toBeInTheDocument();
+    // The rider who never claimed is untouched.
+    const silentRow = screen.getByRole('group', { name: 'Финиш: Молчун' });
+    expect(
+      within(silentRow).queryByText('Финиш подтверждён'),
+    ).not.toBeInTheDocument();
+    expect(setAttendanceMock).not.toHaveBeenCalled();
+  });
+
+  it('confirms or marks a single rider, and can undo it', async () => {
+    setAttendanceMock.mockResolvedValue({ updated: 1 });
+    await renderStarted([silent]);
+    const row = () => screen.getByRole('group', { name: 'Финиш: Молчун' });
+
+    fireEvent.click(within(row()).getByRole('button', { name: 'Не пришёл' }));
+    await waitFor(() =>
+      expect(setAttendanceMock).toHaveBeenLastCalledWith(
+        'ride-1',
+        ['reg-silent'],
+        'no_show',
+      ),
+    );
+    expect(await within(row()).findByText('Не пришёл')).toBeInTheDocument();
+
+    fireEvent.click(within(row()).getByRole('button', { name: 'Вернуть' }));
+    await waitFor(() =>
+      expect(setAttendanceMock).toHaveBeenLastCalledWith(
+        'ride-1',
+        ['reg-silent'],
+        null,
+      ),
+    );
+    expect(
+      await within(row()).findByRole('button', { name: 'Подтвердить' }),
+    ).toBeInTheDocument();
+  });
+
+  it('re-reads the list instead of guessing when a save fails', async () => {
+    setAttendanceMock.mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Participant not found',
+        status: 404,
+        detail: 'Some of the selected participants are not active.',
+        instance: '/v1/rides/ride-1/attendance',
+        code: 'participant_not_found',
+      }),
+    );
+    await renderStarted([silent]);
+    getRideParticipantsMock.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+
+    await waitFor(() =>
+      expect(getRideParticipantsMock).toHaveBeenCalledTimes(1),
+    );
+    // Nothing was marked locally.
+    expect(screen.queryByText('Финиш подтверждён')).not.toBeInTheDocument();
+  });
+
+  it('marks a rider as «сошёл» and shows the badge (CR-182)', async () => {
+    setAttendanceMock.mockResolvedValue({ updated: 1 });
+    await renderStarted([silent]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сошёл' }));
+
+    await waitFor(() =>
+      expect(setAttendanceMock).toHaveBeenCalledWith(
+        'ride-1',
+        ['reg-silent'],
+        'dnf',
+      ),
+    );
+    const row = screen.getByRole('group', { name: 'Финиш: Молчун' });
+    expect(await within(row).findByText('Сошёл')).toBeInTheDocument();
+    expect(screen.getByText(/Сошли: 1/)).toBeInTheDocument();
   });
 });

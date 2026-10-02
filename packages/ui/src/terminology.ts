@@ -1517,6 +1517,43 @@ function greetingFor(hour: number): string {
   return 'Доброй ночи';
 }
 
+/** `/organizer`'s live-rides and upcoming-rides blocks (ADR-024 mockup screen 4). */
+export const ORGANIZER_LIVE_TERMS = {
+  liveTitle: 'Заезды сейчас',
+  liveCount: (count: number) => `${count}\u00a0идёт`,
+  liveBadge: 'Идёт сейчас',
+  startLabel: 'Старт',
+  onStartLabel: 'На старте',
+  participantsCount: (count: number) =>
+    `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
+  formatLabel: 'Формат',
+  finishControl: 'Контроль финиша',
+  confirmedOf: (confirmed: number, total: number) =>
+    `${confirmed} из ${total} подтверждены`,
+  legendConfirmed: 'финиш подтверждён',
+  legendClaimed: 'нужна сверка',
+  legendOnRoute: 'на маршруте',
+  legendDnf: 'сошёл',
+  stateClaimed: 'Ждёт подтверждения',
+  stateOnRoute: 'На маршруте',
+  stateConfirmed: 'Финиш подтверждён',
+  stateDnf: 'Сошёл',
+  claimedAt: (time: string) => `отметил финиш · ${time}`,
+  confirm: 'Подтвердить',
+  confirmError: 'Не удалось подтвердить финиш. Попробуйте ещё раз.',
+  noParticipants: 'На этот заезд никто не записан.',
+  moreWithoutStatus: (count: number) =>
+    `Ещё ${count} ${pluralRu(count, 'участник', 'участника', 'участников')} без итогового статуса · записи не считаются стартовавшими`,
+  openParticipants: 'Открыть всех участников',
+  upcomingTitle: 'Ближайшие заезды',
+  upcomingRegistered: (count: number, limit: number | null) =>
+    limit === null
+      ? `${count} записались`
+      : `${count} записались · мест осталось ${Math.max(limit - count, 0)}`,
+  upcomingOpen: 'Открыть',
+  loadError: 'Не удалось загрузить заезды.',
+} as const;
+
 /** `/organizer`'s header and KPI cells (CR-131). */
 export const ORGANIZER_OVERVIEW_TERMS = {
   greeting: greetingFor,
@@ -1701,3 +1738,72 @@ export const RIDE_PAGE_TERMS = {
 } as const;
 
 // --------------------------- end CR-155 block ------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-181 («Самоотметка финиша»): the participant claims «I finished», the
+// organizer confirms selectively or in one batch. A claim stays a claim until
+// the organizer decides. Shared by both cabinets, so it lives here. Error copy
+// is keyed by the API's stable `code` (`docs/api.md` → "Finish check-in").
+// ---------------------------------------------------------------------------
+
+export const FINISH_CHECKIN_TERMS = {
+  // Participant (the registration ticket).
+  claimButton: 'Отметить финиш',
+  claimHint:
+    'Отметка уйдёт организатору — он подтвердит её в списке участников.',
+  claimedTitle: 'Финиш отмечен',
+  claimedHint: 'Ждём подтверждения организатора.',
+  withdrawButton: 'Отозвать отметку',
+  confirmedTitle: 'Финиш подтверждён',
+  confirmedHint: 'Организатор подтвердил, что вы проехали маршрут.',
+  noShowTitle: 'Не отмечен на заезде',
+  noShowHint: 'Организатор не отметил вас среди участников заезда.',
+  dnfTitle: 'Отмечено: сошли с дистанции',
+  dnfHint: 'Организатор отметил, что вы не доехали до финиша.',
+  claimSuccess: 'Отметка отправлена организатору',
+  withdrawSuccess: 'Отметка отозвана',
+  actionError: 'Не удалось сохранить отметку. Попробуйте ещё раз.',
+  alreadyDecided: 'Организатор уже принял решение — отметку изменить нельзя.',
+  rideNotInProgress: 'Отметить финиш можно после старта заезда.',
+  // Review gate (`ReviewsSection`).
+  reviewAwaiting:
+    'Отзыв можно оставить после того, как организатор подтвердит ваш финиш.',
+  reviewDnf:
+    'Организатор отметил, что вы сошли с дистанции, поэтому оставить отзыв нельзя.',
+  reviewNoShow:
+    'Организатор не отметил вас среди участников, поэтому оставить отзыв нельзя.',
+
+  // Organizer (the participants page).
+  sectionTitle: 'Финиш',
+  summary: (confirmed: number, claimed: number, dnf: number, noShow: number) =>
+    `Финишировали: ${confirmed} · Заявили финиш: ${claimed} · Сошли: ${dnf} · Не пришли: ${noShow}`,
+  confirmAll: (count: number) => `Подтвердить всех заявивших (${count})`,
+  confirmAllEmpty: 'Нет заявивших, ожидающих подтверждения',
+  confirmAllSuccess: (count: number) =>
+    `Подтверждено: ${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
+  confirmOne: 'Подтвердить',
+  markDnf: 'Сошёл',
+  markNoShow: 'Не пришёл',
+  undo: 'Вернуть',
+  badgeClaimed: 'Заявил финиш',
+  badgeConfirmed: 'Финиш подтверждён',
+  badgeDnf: 'Сошёл',
+  badgeNoShow: 'Не пришёл',
+  // A ride can be closed with riders still undecided; it then says so instead of
+  // reading as «everyone finished» (`GET /v1/rides/:id` → `attendanceSummary`).
+  unresolvedBeforeFinish: (count: number) =>
+    `У ${count} ${pluralRu(count, 'участника', 'участников', 'участников')} нет итогового статуса. Заезд можно завершить — он получит пометку «есть неподтверждённые».`,
+  finishedWithUnresolved: (count: number) =>
+    `Заезд завершён, но у ${count} ${pluralRu(count, 'участника', 'участников', 'участников')} нет итогового статуса. Отметьте их на странице «Участники».`,
+  resultsTitle: 'Итоги заезда',
+  resultsLine: (finished: number, total: number) =>
+    `Финишировали: ${finished} из ${total}`,
+  resultsDnf: (count: number) => `Сошли: ${count}`,
+  resultsNoShow: (count: number) => `Не пришли: ${count}`,
+  resultsUnresolved: (count: number) =>
+    `Не подтверждено: ${count} — итоги ещё не закрыты`,
+  rowActionsLabel: (name: string) => `Финиш: ${name}`,
+  saveError: 'Не удалось сохранить. Список обновлён — проверьте и повторите.',
+} as const;
+
+// --------------------------- end CR-181 block ------------------------------

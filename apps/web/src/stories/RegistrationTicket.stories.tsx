@@ -21,6 +21,8 @@ const registration: Registration = {
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
   cancelledAt: null,
+  finishClaimedAt: null,
+  attendance: null,
 };
 
 const base: RegistrationTicketProps = {
@@ -78,6 +80,85 @@ export const Registered: Story = {
     registrationsCount: 13,
     viewerRegistration: registration,
     viewerStartNumber: 13,
+  },
+};
+
+/** CR-181: the ride is under way — the rider can report a finish. */
+export const FinishCheckInOpen: Story = {
+  args: {
+    state: 'registered',
+    rideStatus: 'started',
+    statusTerm: RIDE_STATUS_TERMS.started,
+    registrationsCount: 13,
+    viewerRegistration: registration,
+    viewerStartNumber: 13,
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('button', { name: 'Отметить финиш' }),
+    ).toBeVisible();
+  },
+};
+
+/** CR-181: claimed, waiting for the organizer — can be withdrawn. */
+export const FinishClaimed: Story = {
+  args: {
+    ...FinishCheckInOpen.args,
+    viewerRegistration: {
+      ...registration,
+      finishClaimedAt: '2026-10-03T09:00:00.000Z',
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText('Ждём подтверждения организатора.'),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: 'Отозвать отметку' }),
+    ).toBeVisible();
+  },
+};
+
+/** CR-181: the organizer confirmed the finish — read-only. */
+export const FinishConfirmed: Story = {
+  args: {
+    ...FinishCheckInOpen.args,
+    rideStatus: 'finished',
+    statusTerm: RIDE_STATUS_TERMS.finished,
+    viewerRegistration: {
+      ...registration,
+      finishClaimedAt: '2026-10-03T09:00:00.000Z',
+      attendance: 'finished',
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Финиш подтверждён')).toBeVisible();
+  },
+};
+
+/** CR-182: the organizer recorded «сошёл» — read-only. */
+export const FinishDnf: Story = {
+  args: {
+    ...FinishCheckInOpen.args,
+    rideStatus: 'finished',
+    statusTerm: RIDE_STATUS_TERMS.finished,
+    viewerRegistration: { ...registration, attendance: 'dnf' },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Отмечено: сошли с дистанции')).toBeVisible();
+  },
+};
+
+/** CR-181: the organizer did not mark the rider — no action left. */
+export const FinishNoShow: Story = {
+  args: {
+    ...FinishCheckInOpen.args,
+    rideStatus: 'finished',
+    statusTerm: RIDE_STATUS_TERMS.finished,
+    viewerRegistration: { ...registration, attendance: 'no_show' },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Не отмечен на заезде')).toBeVisible();
   },
 };
 
