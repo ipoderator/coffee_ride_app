@@ -1,54 +1,42 @@
-# Current task — CR-188: KI-085 follow-ups + red `main` CI — DONE (committed)
+# Current task — CR-189..CR-194: QA report for 13653ed (2026-10-02) — IN PROGRESS
 
-Source: the owner's list of CR-187 leftovers (KI-085 and the end-of-run «Found»),
-worked through in order. Frontend + test config only — no API/schema/migration change.
+Source: the owner's QA report `QA_13653ed_2026-10-02.md` (checked against HEAD
+`7d67990`, which is newer than the report — every item is re-checked before fixing).
+Branch: `fix/qa-13653ed`. Split across parallel subagents in their own git worktrees,
+by priority and complexity; the lead merges and updates docs/context at the end.
 
-## Goal / acceptance
+## Shared ground rules (every subagent)
 
-1. A ride-workspace tab reads `GET /v1/rides/:id` once (frame only).
-2. No form shows Zod's English `issue.message`; field errors are Russian.
-3. `password-reset.spec.ts` passes without exporting `DATABASE_URL`.
-4. Explain the 622 → 620 web test count.
-5. «Обновления» doesn't hyphenate in the ride tabs on a phone.
-6. KI-084 baselines + coverage baseline: unblock CI.
-7. MCP connectors: not fixable from here (owner authorizes them).
+- Never touch the user's processes on :3000/:4000/:6006 or the `.env` `DATABASE_URL`.
+  E2E runs isolated: `E2E_WEB_PORT`/`E2E_API_PORT` (new in this task,
+  `apps/web/playwright.config.ts`) + `DATABASE_URL` pointing at a disposable,
+  migrated `coffee_ride_test_<id>` in the docker Postgres (127.0.0.1:5432).
+- API tests only with `TEST_DATABASE_URL` = that disposable DB.
+- Docs/context (`changelog`, `project-state`, `tasks`, `decisions`, `known-issues`)
+  are written by the lead after merging; reserved: migration `0025` + ADR-029 for
+  CR-190, ADR-030 for CR-193 if needed.
 
-## Done
+## Split
 
-1. Sections use `useRideWorkspace()` data and re-read via `refresh()`:
-   `RouteUploadForm` (`route/api.ts` `routeStateOf`), `CoverImageUploadForm` (seeded),
-   `useRideGroups(rideId, knownRideStatus?)`, `ParticipantTable`/`WaitlistTable`.
-   Participants tab: 4 ride reads → 1. Tests: a `KI-085` case per section
-   (`src/test-support/ride-workspace.tsx` = `TestRideWorkspace`).
-2. `lib/forms/field-errors.ts` (`fieldErrorMessage`, `serverFieldErrorMessage`) +
-   `VALIDATION_TERMS`/`RIDE_CONTACT_VALUE_ERRORS` in `packages/ui`;
-   `features/organizer/rides/field-errors.ts` (`rideFieldShapeError`). Applied to 11
-   forms. Tests updated from English to Russian; new draft-title case.
-3. `playwright.config.ts` loads the root `.env` (env wins). Verified: fails without the
-   change, passes with it.
-4. 622 was recorded 15:48:54 (session 3894e8fd); `fetchOwnRide (CR-185)` (2 tests) was
-   deleted 15:50 in the same session, before the 620 run. Nothing lost.
-5. Real page fit at 390 px already (the report came from Storybook's narrower frame);
-   it broke at 320–360. `RideWorkspaceTabs`: `@container` + `grid-cols-2
-max-md:@min-[21rem]:grid-cols-3`. Measured 320…1280: every label fits.
-6. CI on `main` was red: coverage gate (CR-187) + e2e screenshots (CR-185). Coverage
-   raised with tests (`route-track-sketch.test.tsx`, `terminology-ride-workspace.test.ts`,
-   readiness cases, field-errors tests); baseline raised for web/ui only. KI-084: six
-   baselines from CI run 37022093199's actuals, every diff checked. Found the
-   `route-points-stops` flake's cause (busy guard drops a click on an enabled-looking
-   button) — row actions now disabled while saving.
+| CR     | Priority | Item                                                                                                                                                                                   | Owner             |
+| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| CR-189 | P1       | 1. Finish control: «Не подтверждено»/results refresh without reload (+ test 1 → 0)                                                                                                     | subagent (sonnet) |
+| CR-190 | P1       | 2. Reschedule a published ride before start (date/time, reason, confirm, all displays + ICS, notify registrants + waitlist)                                                            | subagent (opus)   |
+| CR-191 | P1       | 3. `seed:demo --no-routes` `403 finish_not_confirmed` + re-run; 4. `pnpm lint` after clean install (`eslint-plugin-react-hooks`)                                                       | subagent (sonnet) |
+| CR-192 | P2/P3    | 5. Explicit warning before publishing without a route; 6. zero-recipient update result; 9. overview hint (groups editable) + leave the «Новый заезд · шаг 4 из 4» wizard after publish | subagent (sonnet) |
+| CR-193 | P2       | 7. `/me` «Предстоящие» without cancelled/finished; catalog separates unavailable rides, no «Осталось N мест» on them                                                                   | subagent (opus)   |
+| CR-194 | P2       | 8. Russian validation errors (registration, organizer profile, related forms + API errors)                                                                                             | subagent (sonnet) |
 
-## Validation
+Lead (done before the split): `E2E_WEB_PORT`/`E2E_API_PORT` in `playwright.config.ts`
+and `e2e/helpers/{api-fixtures,ui}.ts` — verified `critical-journeys.spec.ts` 3/3 on
+3199/4199 against `coffee_ride_test_qa_base`.
 
-- web unit 651/651, ui 238/238; tsc + eslint web/ui clean; prettier clean.
-- Storybook 145/145 (axe); live Storybook renders the new contact error string.
-- e2e chromium 40/40 (twice, no `DATABASE_URL` exported); mobile functional 3/3;
-  `route-points-stops` 16/16 with `--repeat-each 8` (unchanged code: 10/12).
-- coverage: web 79.00/77.49/77.09/77.51, ui 100/99.56/100/93.32 — at/above the floor.
+## Progress
 
-## Open
-
-- KI-084 closes after the next CI run is green.
-- KI-086: sidebar highlight on participants/updates tabs — owner decision.
-- MCP connectors (claude.ai Strava/Supabase, plugin GitHub/Linear/Slack…) need the
-  owner to authorize them (claude.ai connector settings / `/mcp`).
+- [ ] CR-189
+- [ ] CR-190
+- [ ] CR-191
+- [ ] CR-192
+- [ ] CR-193
+- [ ] CR-194
+- [ ] merge, full validation, docs/context

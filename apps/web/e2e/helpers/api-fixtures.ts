@@ -9,7 +9,8 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
 // same path a real browser session uses, so a `login()` call's session cookie
 // is directly reusable by `page.goto(...)` when `request` is `page.request`.
 
-const WEB_ORIGIN = 'http://localhost:3000';
+// CR-189: follows playwright.config.ts's E2E_WEB_PORT.
+const WEB_ORIGIN = `http://localhost:${process.env.E2E_WEB_PORT ?? '3000'}`;
 // Every unsafe method needs this — same CSRF Origin/Referer check
 // (`apps/api/src/plugins/csrf.ts`, ADR-013) a real same-origin browser fetch
 // satisfies automatically; Playwright's raw APIRequestContext does not send

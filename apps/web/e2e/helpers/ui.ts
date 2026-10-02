@@ -11,7 +11,8 @@ import { login, registerAndVerify } from './api-fixtures';
 // CR-135: shared by every spec that drives more than one actor. Moved here
 // from critical-journeys.spec.ts (CR-092), unchanged.
 
-export const WEB_BASE_URL = 'http://localhost:3000';
+// CR-189: follows playwright.config.ts's E2E_WEB_PORT.
+export const WEB_BASE_URL = `http://localhost:${process.env.E2E_WEB_PORT ?? '3000'}`;
 
 export async function loginViaUi(page: Page, email: string, password: string) {
   await page.goto('/login');

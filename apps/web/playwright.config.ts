@@ -32,6 +32,16 @@ try {
 // time (apps/api's own `server.ts` additionally loads the root .env itself,
 // but CI has no such file — these defaults plus ci.yml's real job env cover
 // both cases without duplicating values here).
+// CR-189: E2E_WEB_PORT/E2E_API_PORT move the whole run off 3000/4000, so a
+// developer's own dev servers there are never reused — or written to — by a
+// test run (`reuseExistingServer` only matches the port it waits on). Unset,
+// both keep the old ports: CI and a plain local run are unchanged.
+const ISOLATED_PORTS = Boolean(
+  process.env.E2E_WEB_PORT || process.env.E2E_API_PORT,
+);
+const WEB_URL = `http://localhost:${process.env.E2E_WEB_PORT ?? '3000'}`;
+const API_URL = `http://localhost:${process.env.E2E_API_PORT ?? '4000'}`;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -43,7 +53,7 @@ export default defineConfig({
   // local re-run.
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: WEB_URL,
     trace: 'on-first-retry',
   },
   // CR-138. `maxDiffPixelRatio` tolerates sub-pixel anti-aliasing noise
@@ -70,18 +80,22 @@ export default defineConfig({
     {
       command: 'pnpm exec tsx src/server.ts',
       cwd: '../api',
-      url: 'http://localhost:4000/health',
+      url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: {
         ...process.env,
         NODE_ENV: 'test',
-        API_PORT: '4000',
+        API_PORT: new URL(API_URL).port,
         DATABASE_URL:
           process.env.DATABASE_URL ??
           'postgresql://postgres:postgres@localhost:5432/coffee_ride',
         AUTH_SECRET: process.env.AUTH_SECRET ?? 'e2e-local-secret',
-        WEB_ORIGIN: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+        // The root .env's WEB_ORIGIN names :3000 — an isolated run's CSRF
+        // Origin check must accept its own web port instead.
+        WEB_ORIGIN: ISOLATED_PORTS
+          ? WEB_URL
+          : (process.env.WEB_ORIGIN ?? WEB_URL),
         // KI-014: critical-journeys.spec.ts alone makes 5 register + 5 login
         // calls per run — exactly the auth tier's 5/min cap, and its counters
         // can live in Redis across API restarts, so a second run within a
@@ -97,10 +111,14 @@ export default defineConfig({
       },
     },
     {
-      command: 'pnpm dev',
-      url: 'http://localhost:3000',
+      command: `pnpm dev --port ${new URL(WEB_URL).port}`,
+      url: WEB_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
+      env: {
+        ...process.env,
+        ...(ISOLATED_PORTS ? { API_INTERNAL_URL: API_URL } : {}),
+      },
     },
   ],
   projects: [
