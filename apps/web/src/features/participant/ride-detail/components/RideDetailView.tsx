@@ -44,6 +44,7 @@ import {
   METRIC_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
+  ORGANIZER_JOURNAL_TERMS,
   RIDE_DETAIL_TERMS,
   RIDE_PAGE_TERMS,
   RIDE_POSTER_TERMS,
@@ -75,6 +76,7 @@ import { ElevationProfileChart } from './ElevationProfileChart';
 import { RegistrationTicket } from './RegistrationTicket';
 import { ReviewForm } from './ReviewForm';
 import { ReviewList, type ReviewListStatus } from './ReviewList';
+import { OrganizerJournal } from './OrganizerJournal';
 import { RideHero, type HeroMetric, type HeroView } from './RideHero';
 import { RidersSection } from './RidersSection';
 import { RouteMap } from './RouteMap';
@@ -773,6 +775,21 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                 </Chip>
               </div>
             </section>
+
+            {organizer.journal ? (
+              <section
+                className="flex min-w-0 flex-col gap-3.5"
+                aria-labelledby="ride-organizer-journal-title"
+              >
+                <h2
+                  id="ride-organizer-journal-title"
+                  className={SECTION_TITLE_CLASSNAME}
+                >
+                  {ORGANIZER_JOURNAL_TERMS.title}
+                </h2>
+                <OrganizerJournal journal={organizer.journal} />
+              </section>
+            ) : null}
 
             {requirements.length > 0 ? (
               <section

@@ -807,6 +807,26 @@ export const RIDE_EDIT_TERMS = {
  * never going to be told which). Services/requirements/waitlist still have no data
  * model yet (CR-036..); route/stops (CR-027/030) and registration (CR-032/033) do.
  */
+/**
+ * CR-173 («Журнал организатора»): the organizer's past rides as plain, quiet
+ * lines — a trail log, not a scoreboard. Counts are words, never badges; a
+ * percentage appears only beside the counts it summarises.
+ */
+export const ORGANIZER_JOURNAL_TERMS = {
+  title: 'Журнал организатора',
+  noFinished: 'Завершённых заездов пока нет — это один из первых.',
+  finished: (count: number): string =>
+    `Провёл ${count} ${pluralRu(count, 'заезд', 'заезда', 'заездов')}`,
+  completion: (finished: number, closed: number, percent: number): string =>
+    `Состоялись ${finished} из ${closed} · ${percent} %`,
+  cancelled: (count: number): string =>
+    `${pluralRu(count, 'Отменён', 'Отменено', 'Отменено')} ${count} ${pluralRu(count, 'заезд', 'заезда', 'заездов')}`,
+  typicalLabel: 'Обычно',
+  typicalPace: (pace: string): string => `темп ${pace}`,
+  typicalDistance: (distance: string): string => `дистанция около ${distance}`,
+  bicycleTypesLabel: 'Чаще едет на',
+} as const;
+
 export const RIDE_DETAIL_TERMS = {
   notFoundTitle: 'Заезд не найден',
   notFoundDescription: 'Такого заезда нет, либо он больше не доступен.',

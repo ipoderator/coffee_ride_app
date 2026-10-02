@@ -70,6 +70,7 @@ import {
 // computed the same way `organizers.service.ts` computes `OrganizerProfile.
 // avatarUrl`, so this reuses that one function rather than a second copy.
 import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
+import { getOrganizerJournal } from './organizer-journal.js';
 import {
   CursorError,
   clampLimit,
@@ -1091,6 +1092,8 @@ export async function getRideForViewer(
   // CR-043 ("Organizer rating summary"): additive, same `getOrganizerRatingSummary`
   // aggregate `listPublicRides` batches for its own page of rides.
   const ratingSummary = await getOrganizerRatingSummary(db, row.organizerId);
+  // CR-173 («Журнал организатора»): finished/cancelled facts, this endpoint only.
+  const journal = await getOrganizerJournal(db, row.organizerId);
 
   // CR-042 ("Review"): additive `viewerReview` (the caller's own review, `null` if
   // none/unauthenticated), same embedding precedent as `viewerRegistration`/
@@ -1142,6 +1145,7 @@ export async function getRideForViewer(
         : null,
       rating: ratingSummary.rating,
       reviewCount: ratingSummary.reviewCount,
+      journal,
     },
     route: routeRow ? toRouteSummary(routeRow) : null,
     stops: stopRows.map(toStop),

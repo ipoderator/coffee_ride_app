@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   GetRideResponse,
+  OrganizerJournal as OrganizerJournalData,
   Registration,
   Ride,
   RideGroupSummary,
@@ -1055,6 +1056,97 @@ describe('RideDetailView', () => {
       expect(organizerLine.textContent).toContain('3 отзыва');
     });
   });
+  describe('organizer journal (CR-173)', () => {
+    const organizerWith = (journal: OrganizerJournalData) => ({
+      id: 'org-1',
+      name: 'Гравийный клуб',
+      avatarUrl: null,
+      rating: null,
+      reviewCount: 0,
+      journal,
+    });
+
+    it('lists counts, completion, typical pace/distance and bike types as plain lines', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          organizer: organizerWith({
+            finishedCount: 11,
+            cancelledCount: 1,
+            completionPercent: 92,
+            typicalPaceKmh: 26,
+            typicalDistanceKm: 80,
+            bicycleTypes: ['gravel', 'road'],
+          }),
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const journal = await screen.findByTestId('organizer-journal');
+      // formatters join number and unit with a no-break space
+      const text = journal.textContent!.replace(/\u00a0/g, ' ');
+      expect(text).toContain('Провёл 11 заездов');
+      expect(text).toContain('Состоялись 11 из 12 · 92 %');
+      expect(text).toContain('темп 26 км/ч');
+      expect(text).toContain('дистанция около 80,0 км');
+      expect(text).toContain('гравийный, шоссейный');
+      expect(text).not.toContain('★');
+    });
+
+    it('says plainly that there are no finished rides yet, with no percentage or zero tiles', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          organizer: organizerWith({
+            finishedCount: 0,
+            cancelledCount: 0,
+            completionPercent: null,
+            typicalPaceKmh: null,
+            typicalDistanceKm: null,
+            bicycleTypes: [],
+          }),
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const journal = await screen.findByTestId('organizer-journal');
+      expect(journal.textContent).toContain('Завершённых заездов пока нет');
+      expect(journal.textContent).not.toContain('%');
+      expect(journal.textContent).not.toContain('Обычно');
+    });
+
+    it('names a cancellation without a percentage while the sample is thin', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          organizer: organizerWith({
+            finishedCount: 1,
+            cancelledCount: 1,
+            completionPercent: null,
+            typicalPaceKmh: null,
+            typicalDistanceKm: null,
+            bicycleTypes: [],
+          }),
+        }),
+      );
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const journal = await screen.findByTestId('organizer-journal');
+      expect(journal.textContent).toContain('Провёл 1 заезд');
+      expect(journal.textContent).toContain('Отменён 1 заезд');
+      expect(journal.textContent).not.toContain('%');
+    });
+
+    it('renders no journal section when the API sends none', async () => {
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      expect(screen.queryByTestId('organizer-journal')).not.toBeInTheDocument();
+    });
+  });
+
   describe('pace groups (CR-119)', () => {
     const openWithGroups = (overrides: Partial<GetRideResponse> = {}) =>
       baseDetailResponse({

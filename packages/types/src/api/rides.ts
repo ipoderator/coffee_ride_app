@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { BICYCLE_TYPES, type Ride, type RideContact } from '../domain/ride.js';
+import {
+  BICYCLE_TYPES,
+  type BicycleType,
+  type Ride,
+  type RideContact,
+} from '../domain/ride.js';
 import { rideContactSchema } from './ride-contact.js';
 import type { RouteGeometryPoint, RouteSummary } from '../domain/route.js';
 import type { Stop } from '../domain/stop.js';
@@ -92,13 +97,45 @@ export interface CreateRideResponse {
 // as `rating`/`reviewCount` (CR-043) — `RideCard`/organizer identity needs a photo
 // alongside the name, and there is still no separate public organizer-read
 // endpoint. `null` when the organizer has no avatar uploaded.
+// CR-173 («Журнал организатора»): additive `journal` — plain facts about the
+// organizer's past rides, only on `GET /v1/rides/:id` (one aggregate per request;
+// the ride list does not carry it). Absent where the summary is built without it.
 export interface RideOrganizerSummary {
   id: string;
   name: string;
   avatarUrl: string | null;
   rating: number | null;
   reviewCount: number;
+  journal?: OrganizerJournal;
 }
+
+/**
+ * CR-173: what an organizer's finished rides say about how they ride. Every
+ * figure is derived from `finished`/`cancelled` rides only (a draft or a ride
+ * still to come proves nothing), and a figure too thin to mean anything is
+ * `null`/empty rather than a misleading number (`docs/design.md` §6: missing
+ * is `—`, never `0`).
+ */
+export interface OrganizerJournal {
+  /** Rides that reached `finished`. */
+  finishedCount: number;
+  /** Rides cancelled after publication. */
+  cancelledCount: number;
+  /**
+   * Whole percent of finished among finished + cancelled; `null` until at
+   * least {@link ORGANIZER_JOURNAL_MIN_CLOSED_RIDES} rides are closed — one
+   * cancellation out of two is not a «50 %» reputation.
+   */
+  completionPercent: number | null;
+  /** Median planned pace (km/h, 1 decimal) of finished rides that state one. */
+  typicalPaceKmh: number | null;
+  /** Median distance (km, 1 decimal) of finished rides that state one. */
+  typicalDistanceKm: number | null;
+  /** Up to two most frequent bike types of finished rides (never `any`), commonest first. */
+  bicycleTypes: BicycleType[];
+}
+
+export const ORGANIZER_JOURNAL_MIN_CLOSED_RIDES = 3;
 
 // CR-023: `GET /v1/rides/:id`'s response shape, extended from a bare `{ ride }` —
 // additive (existing owner-only consumers destructuring `{ ride }` are unaffected).

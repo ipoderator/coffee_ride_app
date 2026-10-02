@@ -1286,6 +1286,15 @@ describe('/v1/rides', () => {
         avatarUrl: null,
         rating: null,
         reviewCount: 0,
+        // CR-173: the journal is a detail-only field; a fresh organizer has none.
+        journal: {
+          finishedCount: 0,
+          cancelledCount: 0,
+          completionPercent: null,
+          typicalPaceKmh: null,
+          typicalDistanceKm: null,
+          bicycleTypes: [],
+        },
       });
       // KI-069: an anonymous viewer never owns the ride.
       expect(body.isOwner).toBe(false);

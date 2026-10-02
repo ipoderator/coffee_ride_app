@@ -51,6 +51,16 @@ export const rideContactResponseSchema = z.object({
 // (`.claude/context/current-task.md`).
 // CR-043 ("Organizer rating summary"): additive `rating`/`reviewCount` — see
 // `RideOrganizerSummary`'s own doc comment (`packages/types/src/api/rides.ts`).
+// CR-173 («Журнал организатора»): see `OrganizerJournal` (`packages/types`).
+const organizerJournalSchema = z.object({
+  finishedCount: z.number(),
+  cancelledCount: z.number(),
+  completionPercent: z.number().nullable(),
+  typicalPaceKmh: z.number().nullable(),
+  typicalDistanceKm: z.number().nullable(),
+  bicycleTypes: z.array(z.enum(['road', 'gravel', 'mtb', 'any'])),
+});
+
 export const rideOrganizerSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -58,6 +68,8 @@ export const rideOrganizerSummarySchema = z.object({
   avatarUrl: z.string().nullable(),
   rating: z.number().nullable(),
   reviewCount: z.number(),
+  // CR-173: only `GET /v1/rides/:id` fills it.
+  journal: organizerJournalSchema.optional(),
 });
 
 // CR-024 ("Ride list", public discovery): each item of `GET /v1/rides` carries the
