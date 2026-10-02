@@ -1,4 +1,4 @@
-import { BACK_LINK_TERMS, RIDE_EDIT_TERMS, RIDE_WIZARD_TERMS } from 'ui';
+import { BACK_LINK_TERMS, RIDE_WIZARD_TERMS } from 'ui';
 import { BackLink } from '@/components/site/BackLink';
 import { RideWizardFrame } from '@/features/organizer/rides/components/RideWizardFrame';
 import { isWizardMode } from '@/features/organizer/rides/wizard-steps';
@@ -13,6 +13,8 @@ import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 // public ride-detail endpoint (CR-023), so `EditRideForm` additionally checks the
 // response's `isOwner` (KI-069) to show its not-found state for a ride that exists
 // and isn't a draft but isn't the caller's, instead of rendering the form.
+// CR-184: `EditRideForm` renders the `h1` — «Редактирование заезда» for a draft,
+// «Управление заездом» once published — since only it knows the status.
 //
 // Next.js 15: `params` is a `Promise` for a dynamic route page, not a plain object.
 export default async function EditRidePage({
@@ -30,7 +32,6 @@ export default async function EditRidePage({
         href="/organizer/rides"
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
-      <h1 className="text-h1 text-text">{RIDE_EDIT_TERMS.pageTitle}</h1>
       <EditRideForm
         rideId={id}
         sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}

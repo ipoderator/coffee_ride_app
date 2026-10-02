@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { BACK_LINK_TERMS, RIDE_UPDATES_TERMS } from 'ui';
+import { RideContextHeader } from '@/components/cabinet/RideContextHeader';
 import { BackLink } from '@/components/site/BackLink';
 import { UpdateComposer } from '@/features/organizer/updates/components/UpdateComposer';
 
@@ -17,19 +17,17 @@ export default async function RideUpdatesPage({
   const { id } = await params;
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <BackLink
-          href="/organizer/rides"
-          label={BACK_LINK_TERMS.toOrganizerRides}
-        />
+      <BackLink
+        href="/organizer/rides"
+        label={BACK_LINK_TERMS.toOrganizerRides}
+      />
+      {/* CR-185: the ride these updates go to (title, start, status, a link
+          to its management view) — the sidebar lands here for the nearest
+          ride. Replaces the bare «К редактированию заезда» link. */}
+      <header className="flex flex-col gap-3">
         <h1 className="text-h1 text-text">{RIDE_UPDATES_TERMS.pageTitle}</h1>
-        <Link
-          href={`/organizer/rides/${id}/edit`}
-          className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-        >
-          {RIDE_UPDATES_TERMS.backToEdit}
-        </Link>
-      </div>
+        <RideContextHeader rideId={id} />
+      </header>
       <UpdateComposer rideId={id} />
     </div>
   );

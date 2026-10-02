@@ -1,5 +1,6 @@
 import { CABINET_TERMS } from 'ui';
-import type { CabinetNavItem } from '@/lib/cabinet/types';
+import type { CabinetNavItem, DashboardWidget } from '@/lib/cabinet/types';
+import { UpcomingRegistrationsWidget } from './components/UpcomingRegistrationsWidget';
 
 // ADR-009: this feature registers itself into the shared participant nav
 // list (`@/lib/cabinet/participant-nav.ts`) instead of the shell branching on
@@ -11,4 +12,11 @@ export const myRegistrationsNavItem: CabinetNavItem = {
   href: '/me/rides',
   order: 15,
   icon: 'Ticket',
+};
+
+// CR-185: `/me`'s first widget (`@/lib/cabinet/participant-widgets.ts`).
+export const upcomingRegistrationsWidget: DashboardWidget = {
+  id: 'participant-upcoming-registrations',
+  order: 10,
+  Component: UpcomingRegistrationsWidget,
 };

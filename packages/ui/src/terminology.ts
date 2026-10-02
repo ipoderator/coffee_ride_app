@@ -375,9 +375,6 @@ export const CABINET_TERMS = {
   loadingCurrentUser: 'Загрузка личного кабинета…',
   loadCurrentUserError: 'Не удалось загрузить данные аккаунта.',
   homeTitle: 'Личный кабинет',
-  homeEmptyTitle: 'Пока здесь нечего показать',
-  homeEmptyDescription:
-    'Управление профилем доступно в разделе «Профиль». Заезды и регистрации появятся здесь позже.',
   profileNavLabel: 'Профиль',
   // CR-091 ("My registrations"): the participant cabinet's second nav entry.
   myRegistrationsNavLabel: 'Мои регистрации',
@@ -390,7 +387,6 @@ export const CABINET_TERMS = {
   organizerCtaTitle: 'Организуете заезды?',
   organizerCtaDescription:
     'Создайте профиль организатора, чтобы публиковать заезды и управлять регистрациями.',
-  organizerCtaLink: 'Профиль организатора',
   // `/organizer` page title (CR-014). Body content is now real widgets
   // (CR-015, `ORGANIZER_TERMS`'s `dashboardWidget*` entries) — the old stub
   // empty-state copy that used to fill this page is gone, replaced by the
@@ -688,6 +684,10 @@ export const RIDE_LIST_TERMS = {
   emptyDescription:
     'Создайте свой маршрут и соберите группу — заезд появится здесь.',
   summaryStartLabel: 'Старт',
+  // CR-184: start passed, ride still before `started` — never auto-changed.
+  overdueBadge: 'Требует решения',
+  overdueHint:
+    'Время старта прошло, а заезд не начат — откройте его и решите, что делать.',
 } as const;
 
 /** `/organizer/rides/[id]/edit` (CR-018, `docs/design.md` §8 "Edit draft"). Every
@@ -764,7 +764,6 @@ export const RIDE_EDIT_TERMS = {
   participantsLink: 'Участники →',
   // CR-039 ("Ride updates"): link into `/organizer/rides/[id]/updates`.
   updatesLink: 'Обновления →',
-  notEditable: 'Редактировать можно только черновик заезда.',
   save: 'Сохранить',
   savePending: 'Сохранение…',
   saveSuccess: 'Изменения сохранены.',
@@ -798,6 +797,33 @@ export const RIDE_EDIT_TERMS = {
   finish: 'Завершить заезд',
   finishPending: 'Завершение…',
   finishSuccess: 'Заезд завершён.',
+  // CR-184: a non-draft ride opens as «Управление заездом» — status, the next
+  // lifecycle step, a short summary and the sections — not as a locked form.
+  manageTitle: 'Управление заездом',
+  nextActionTitle: 'Ближайшее действие',
+  nextActionHint: {
+    published: 'Откройте регистрацию, чтобы участники могли записаться.',
+    registration_open:
+      'Идёт регистрация. Закройте её перед стартом — после этого заезд можно начать.',
+    registration_closed:
+      'Регистрация закрыта. Начните заезд, когда участники соберутся на старте.',
+    started: 'Заезд идёт. Отметьте итоги участников и завершите заезд.',
+    finished: 'Заезд завершён. Итоги участников — в разделе «Участники».',
+    cancelled: 'Заезд отменён. Участники видят статус «Отменён».',
+  },
+  // Never changed automatically: the organizer decides what happens next.
+  overdueStart: (when: string) =>
+    `Время старта прошло (${when}), а заезд не начат. Статус сам не изменится — начните заезд или отмените его.`,
+  summaryTitle: 'Кратко о заезде',
+  summaryStart: 'Старт',
+  summaryDistance: 'Дистанция',
+  summaryRegistered: 'Записано',
+  summaryPrice: 'Стоимость',
+  sectionsTitle: 'Разделы',
+  settingsTitle: 'Что можно изменить',
+  settingsHint:
+    'После публикации меняются только видимость списка участников и способ связи. Остальные поля заезда зафиксированы.',
+  dangerTitle: 'Отмена заезда',
 } as const;
 
 /**
@@ -1270,13 +1296,36 @@ export const MY_REGISTRATIONS_TERMS = {
 } as const;
 
 /**
+ * CR-185 (UX handoff P2): `/me`'s widgets — the next registrations (empty:
+ * a direct «Найти заезд») and the organizer card, which tells an existing
+ * organizer the way to their cabinet instead of offering a profile they
+ * already have.
+ */
+export const PARTICIPANT_HOME_TERMS = {
+  registrationsLabel: 'Мои регистрации',
+  registrationsTitle: 'Ближайшие заезды',
+  registrationsEmptyTitle: 'Пока нет предстоящих заездов',
+  registrationsEmptyDescription:
+    'Найдите подходящий маршрут и выберите группу. После записи здесь появятся время старта и обновления организатора.',
+  findRide: 'Найти заезд',
+  allRegistrations: 'Все регистрации',
+  registrationsLoadError: 'Не удалось загрузить регистрации.',
+  organizerLabel: 'Организатору',
+  organizerTitle: 'Кабинет организатора',
+  organizerDescription: (name: string) =>
+    `Вы организуете заезды как «${name}». Заезды, участники и обновления — в кабинете.`,
+  organizerOpen: 'Перейти в кабинет',
+  organizerCreateLink: 'Создать профиль организатора',
+  organizerLoadError: 'Не удалось проверить профиль организатора.',
+} as const;
+
+/**
  * `/organizer/rides/[id]/updates` (CR-039, `docs/design.md` §8 "Ride updates
  * composer", §9's `UpdateComposer`). No edit/delete of a sent update — only
  * compose + history (`.claude/context/current-task.md`'s scope decision).
  */
 export const RIDE_UPDATES_TERMS = {
   pageTitle: 'Обновления заезда',
-  backToEdit: 'К редактированию заезда',
   messageLabel: 'Сообщение участникам',
   messagePlaceholder: 'Например: старт перенесён на 9:00.',
   send: 'Отправить',
@@ -1455,6 +1504,12 @@ export const RIDE_DISCOVERY_ROW_TERMS = {
   // The map region's accessible name (it is `role="img"`; the list is its
   // keyboard/screen-reader equivalent, `docs/design.md` §12).
   mapLabel: 'Карта стартов заездов',
+  // CR-185 (UX handoff P2): the map exists but its basemap didn't load
+  // (tiles refused/unreachable, style failed) — said over the map area.
+  basemapUnavailableTitle: 'Карта недоступна',
+  basemapUnavailableDescription:
+    'Подложка карты не загрузилась. Список заездов и фильтры работают как обычно.',
+  basemapRetry: 'Повторить',
   listLabel: 'Список заездов',
   // Mobile: the ride card raised over the map after a pin tap.
   closeSelected: 'Скрыть карточку заезда',
@@ -1523,19 +1578,25 @@ export const ORGANIZER_LIVE_TERMS = {
   liveCount: (count: number) => `${count}\u00a0идёт`,
   liveBadge: 'Идёт сейчас',
   startLabel: 'Старт',
-  onStartLabel: 'На старте',
+  // CR-184: every active registration, no-shows included — not «На старте».
+  listedLabel: 'В списке',
   participantsCount: (count: number) =>
     `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`,
   formatLabel: 'Формат',
   finishControl: 'Контроль финиша',
   confirmedOf: (confirmed: number, total: number) =>
     `${confirmed} из ${total} подтверждены`,
+  // CR-184: five segments that add up to the list — the outcome unknown is
+  // «без итога», not «на маршруте» (a rider without a status may never have come).
+  resolvedOf: (resolved: number, total: number) =>
+    `Итоговый статус у ${resolved} из ${total}`,
   legendConfirmed: 'финиш подтверждён',
-  legendClaimed: 'нужна сверка',
-  legendOnRoute: 'на маршруте',
+  legendClaimed: 'заявка на финиш',
+  legendOnRoute: 'без итога',
   legendDnf: 'сошёл',
+  legendNoShow: 'не стартовал',
   stateClaimed: 'Ждёт подтверждения',
-  stateOnRoute: 'На маршруте',
+  stateOnRoute: 'Без итога',
   stateConfirmed: 'Финиш подтверждён',
   stateDnf: 'Сошёл',
   claimedAt: (time: string) => `отметил финиш · ${time}`,
@@ -1546,6 +1607,11 @@ export const ORGANIZER_LIVE_TERMS = {
     `Ещё ${count} ${pluralRu(count, 'участник', 'участника', 'участников')} без итогового статуса · записи не считаются стартовавшими`,
   openParticipants: 'Открыть всех участников',
   upcomingTitle: 'Ближайшие заезды',
+  // CR-184: a ride whose start has passed while it still sits before `started`.
+  // Never changed automatically — the organizer decides.
+  attentionTitle: 'Требует решения',
+  overdueStart: (when: string) => `Старт был ${when} · заезд не начат`,
+  overdueAction: 'Перейти к управлению',
   upcomingRegistered: (count: number, limit: number | null) =>
     limit === null
       ? `${count} записались`
@@ -1583,6 +1649,17 @@ export const ORGANIZER_OVERVIEW_TERMS = {
  * the nearest ride's pages (CR-131, `/organizer/participants`,
  * `/organizer/updates`).
  */
+/**
+ * CR-185 (UX handoff P1): the block on a ride's own organizer sub-pages
+ * (participants, updates) that says which ride the page is about — the
+ * sidebar's «Участники»/«Обновления» land there for the nearest ride.
+ */
+export const RIDE_CONTEXT_TERMS = {
+  label: 'Заезд',
+  manageLink: 'Управление заездом',
+  loadError: 'Не удалось загрузить данные заезда.',
+} as const;
+
 export const ORGANIZER_NEAREST_RIDE_TERMS = {
   overviewNavLabel: 'Обзор',
   participantsNavLabel: 'Участники',
@@ -1793,6 +1870,13 @@ export const FINISH_CHECKIN_TERMS = {
   // reading as «everyone finished» (`GET /v1/rides/:id` → `attendanceSummary`).
   unresolvedBeforeFinish: (count: number) =>
     `У ${count} ${pluralRu(count, 'участника', 'участников', 'участников')} нет итогового статуса. Заезд можно завершить — он получит пометку «есть неподтверждённые».`,
+  // CR-185 (UX handoff): finishing with undecided riders asks first and names
+  // how many; with every outcome final there is no dialog.
+  finishConfirmTitle: 'Завершить заезд?',
+  finishConfirmUnresolved: (count: number) =>
+    `У ${count} ${pluralRu(count, 'участника', 'участников', 'участников')} нет итогового статуса — финиш, сход или неявка не отмечены. Заезд получит пометку «есть неподтверждённые»; статусы можно будет отметить и после завершения.`,
+  finishConfirmAction: 'Завершить',
+  finishConfirmCancel: 'Вернуться',
   finishedWithUnresolved: (count: number) =>
     `Заезд завершён, но у ${count} ${pluralRu(count, 'участника', 'участников', 'участников')} нет итогового статуса. Отметьте их на странице «Участники».`,
   resultsTitle: 'Итоги заезда',

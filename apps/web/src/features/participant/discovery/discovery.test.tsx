@@ -691,6 +691,48 @@ describe('DiscoveryMap ↔ list sync (CR-118)', () => {
   });
 });
 
+describe('DiscoveryMap basemap failure (CR-185)', () => {
+  beforeEach(() => {
+    renderState.available = true;
+  });
+
+  it('says the map is unavailable over the map area and retries in place, keeping the filters', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [plottableA, plottableB],
+      nextCursor: null,
+      total: 0,
+    });
+
+    render(<DiscoveryList />);
+    await waitFor(() => expect(lastMarkers()).toHaveLength(2));
+    fireEvent.change(screen.getByLabelText('Тип велосипеда'), {
+      target: { value: 'road' },
+    });
+    await waitFor(() => expect(listPublicRidesMock).toHaveBeenCalledTimes(2));
+
+    const firstHandle = renderState.handle!;
+    act(() => renderState.options!.onBasemapUnavailable!());
+
+    expect(await screen.findByText('Карта недоступна')).toBeInTheDocument();
+    // The list stays usable.
+    expect(
+      screen.getByRole('link', { name: plottableA.title }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+
+    await waitFor(() => expect(renderState.handle).not.toBe(firstHandle));
+    expect(firstHandle.destroy).toHaveBeenCalled();
+    expect(screen.queryByText('Карта недоступна')).toBeNull();
+    // Re-creating the map neither refetches nor resets the filters.
+    expect(listPublicRidesMock).toHaveBeenCalledTimes(2);
+    expect(
+      (screen.getByLabelText('Тип велосипеда') as HTMLSelectElement).value,
+    ).toBe('road');
+    await waitFor(() => expect(lastMarkers()).toHaveLength(2));
+  });
+});
+
 describe('DiscoveryMap camera on selection (CR-170, CR-171)', () => {
   beforeEach(() => {
     renderState.available = true;

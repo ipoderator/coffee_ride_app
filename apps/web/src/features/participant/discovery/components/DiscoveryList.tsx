@@ -385,8 +385,13 @@ export function DiscoveryList({
               : RIDE_DISCOVERY_TERMS.expandMapLabel
           }
           // KI-078: nothing to expand while the map is degraded, and the
-          // button would cover the notice's first word.
-          className="absolute top-4 left-4 z-20 hidden shadow-overlay lg:inline-flex lg:group-has-[[data-map-unavailable]]/map:hidden"
+          // button would cover the notice's first word. A basemap that fails
+          // while already expanded keeps the button, the only way back.
+          className={cn(
+            'absolute top-4 left-4 z-20 hidden shadow-overlay lg:inline-flex lg:group-has-[[data-map-unavailable]]/map:hidden',
+            !isMapFullscreen &&
+              'lg:group-has-[[data-basemap-unavailable]]/map:hidden',
+          )}
         >
           {isMapFullscreen ? (
             <Minimize2 className="size-5" aria-hidden="true" />

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   createOrganizerProfile,
+  createPublishedRide,
   login,
   registerAndVerify,
 } from './helpers/api-fixtures';
@@ -55,4 +56,28 @@ test('participant cabinet switches between the header nav and bottom tab bar at 
     await expect(hamburger).toBeVisible();
     await expect(bottomTabBar).toBeVisible();
   }
+});
+
+// CR-185 (UX handoff P2): a long ride title used to widen `/organizer`'s
+// implicit grid track to its nowrap width — the whole page scrolled sideways
+// on a phone (390 → 768 px). Both projects: no horizontal page scroll.
+test('organizer dashboard never scrolls sideways with a long ride title', async ({
+  page,
+}) => {
+  const organizer = await registerAndVerify(page.request);
+  await login(page.request, organizer.email, organizer.password);
+  await createOrganizerProfile(page.request, 'Клуб e2e: длинные названия');
+  const title =
+    'Большой гравийный марафон по Подмосковью через Звенигород и Рузу с остановкой на кофе';
+  await createPublishedRide(page.request, title, {
+    startsInMs: 2 * 24 * 60 * 60 * 1000,
+  });
+
+  await page.goto('/organizer');
+  await expect(page.getByRole('link', { name: title })).toBeVisible();
+  const [scrollWidth, clientWidth] = await page.evaluate(() => [
+    document.documentElement.scrollWidth,
+    document.documentElement.clientWidth,
+  ]);
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 });

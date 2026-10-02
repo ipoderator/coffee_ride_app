@@ -309,6 +309,53 @@ describe('onClick', () => {
   });
 });
 
+describe('onBasemapUnavailable (CR-185)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function listener(event: string) {
+    const call = mapOn.mock.calls.find(([name]) => name === event);
+    return call?.[1] as (payload?: { type: string }) => void;
+  }
+
+  it('reports a fatal map error once and ignores the rest', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null)));
+    const onBasemapUnavailable = vi.fn();
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    await renderer.render({
+      container: {} as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+      onBasemapUnavailable,
+    });
+
+    listener('styleload')();
+    listener('error')({ type: 'rasterTileLoadError' });
+    expect(onBasemapUnavailable).not.toHaveBeenCalled();
+    listener('error')({ type: 'invalidtilekey' });
+    listener('error')({ type: 'invalidtilekey' });
+    expect(onBasemapUnavailable).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://tile0-sdk.maps.2gis.com/',
+      expect.objectContaining({ mode: 'no-cors' }),
+    );
+  });
+
+  it('stops watching once the map is destroyed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null)));
+    const onBasemapUnavailable = vi.fn();
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    const handle = await renderer.render({
+      container: {} as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+      onBasemapUnavailable,
+    });
+    handle.destroy();
+    listener('styleloaderror')();
+    expect(onBasemapUnavailable).not.toHaveBeenCalled();
+  });
+});
+
 describe('zoomControlPosition', () => {
   it('moves the zoom buttons to the requested side', async () => {
     const renderer = create2GisMapRenderer({ apiKey: 'test-key' });

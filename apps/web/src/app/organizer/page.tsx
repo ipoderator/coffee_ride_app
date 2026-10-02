@@ -30,7 +30,10 @@ export default function OrganizerCabinetHomePage() {
           description={CABINET_TERMS.dashboardNoWidgetsDescription}
         />
       ) : (
-        <div className="grid gap-4">
+        // CR-185: an explicit `minmax(0,1fr)` track — the implicit `auto`
+        // column grew to a long nowrap ride title's width and made the whole
+        // page scroll sideways on a phone (390 → 768 px).
+        <div className="grid grid-cols-1 gap-4">
           {widgets.map(({ id, Component }) => (
             <Component key={id} />
           ))}

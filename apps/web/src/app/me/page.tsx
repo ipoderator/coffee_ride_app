@@ -1,38 +1,23 @@
-'use client';
+import { CABINET_TERMS } from 'ui';
+import { filterEnabled } from '@/lib/cabinet/feature-flags';
+import { PARTICIPANT_WIDGETS } from '@/lib/cabinet/participant-widgets';
 
-import Link from 'next/link';
-import { CABINET_TERMS, EmptyState } from 'ui';
-import { useCurrentUser } from '@/lib/auth/current-user-context';
-
-// Minimal cabinet-home stub (`docs/design.md` §8: "Participant cabinet
-// home") — just enough that the route isn't a 404 now that `CabinetShell`
-// exists. Widgets/registry content for this screen are CR-015/CR-054, out of
-// this ticket's scope (CR-013 is the Profile screen).
+// `/me` — participant cabinet home (`docs/design.md` §8). CR-185 (UX handoff
+// P2) replaced the CR-013 stub with `PARTICIPANT_WIDGETS` (ADR-009 registry,
+// same shape as `/organizer`): the next registrations and the organizer card.
+// A Server Component so `filterEnabled` (CR-055) runs server-side; each
+// widget is its own Client Component. Who is signed in is already on the
+// account bar above (`CabinetShell`), so the page doesn't repeat the email.
 export default function ParticipantCabinetHomePage() {
-  const user = useCurrentUser();
+  const widgets = filterEnabled(PARTICIPANT_WIDGETS);
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-h1 text-text">{CABINET_TERMS.homeTitle}</h1>
-      <p className="text-body-sm text-text-secondary">{user.email}</p>
-      <EmptyState
-        title={CABINET_TERMS.homeEmptyTitle}
-        description={CABINET_TERMS.homeEmptyDescription}
-      />
-      {/* CR-014: the only entry point into the organizer cabinet until CR-015's
-          dashboard exists — without this, `/organizer/profile` would only be
-          reachable by typing the URL by hand. */}
-      <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-        <h2 className="text-h2 text-text">{CABINET_TERMS.organizerCtaTitle}</h2>
-        <p className="text-body-sm text-text-secondary">
-          {CABINET_TERMS.organizerCtaDescription}
-        </p>
-        <Link
-          href="/organizer/profile"
-          className="self-start inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-        >
-          {CABINET_TERMS.organizerCtaLink}
-        </Link>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        {widgets.map(({ id, Component }) => (
+          <Component key={id} />
+        ))}
       </div>
     </div>
   );

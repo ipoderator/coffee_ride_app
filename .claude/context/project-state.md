@@ -37,13 +37,32 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-CR-182 (2026-10-02, not committed, on top of CR-181): `attendance` gained `dnf`
+CR-185 (2026-10-02, committed together with CR-184): the
+owner's UX handoff P1/P2. Dashboard: active work (live / «Требует решения» / upcoming)
+above the KPIs — the overview widget split into head + `OrganizerKpiWidget`, one shared
+load. «Завершить заезд» asks first when riders are undecided (fresh count re-read after
+the start and before finishing). `RideContextHeader` on a ride's participants/updates.
+`/me` renders a participant widget registry (upcoming registrations, organizer entry).
+Featured card only for a ride with a route; a route-less grid card has a compact head.
+Additive `MapRenderOptions.onBasemapUnavailable` + `maps-2gis/src/basemap-watch.ts`:
+discovery shows «Карта недоступна» with «Повторить», the ride page its placeholder.
+`Dialog` returns focus to its opener. No API/schema change. Open: KI-082, KI-083,
+KI-084 (visual baselines not regenerated — CI e2e fails until replaced).
+
+CR-184 (2026-10-02, committed with CR-185, on top of CR-181..CR-183): a non-draft ride's
+`/edit` opens as «Управление заездом» (next lifecycle action first, summary, sections,
+then visibility/contact; no locked form); the dashboard flags rides whose start passed
+without being started («Требует решения», never auto-changed; also marked in
+`/organizer/rides`, one rule in `lib/rides/overdue.ts`); the live-ride bar counts
+no-shows («В списке», five segments, «Итоговый статус у N из M»). Frontend only.
+
+CR-182 (2026-10-02, committed in `5404297`, on top of CR-181): `attendance` gained `dnf`
 («сошёл», migration `0024_attendance_dnf`, dev DB now `0000`–`0024`);
 `GET /v1/rides/:id` gained `attendanceSummary` (counts incl. `unresolved`, null before the
 start). A ride can be finished with undecided riders — the organizer form warns
 before, the closed ride shows «Итоги заезда» with «Не подтверждено: N» (ADR-028).
 
-CR-181 (2026-10-02, not committed): finish check-in (ADR-027). A rider claims
+CR-181 (2026-10-02, committed in `5404297`): finish check-in (ADR-027). A rider claims
 «Отметить финиш» (`POST/DELETE /v1/rides/:id/finish-claim`, `started`/`finished`
 rides); the organizer confirms on the participants page, selectively (`PUT
 .../attendance` with an id list, also `no_show`/clear) or in one click (`POST
@@ -865,17 +884,16 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-164 is complete, validated (typecheck/lint green, web 499, api rides 217)
-and committed.
+None — CR-184 + CR-185 are committed; KI-084 (screenshot baselines from CI's
+artifact) is the follow-up once CI has run.
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
-1. **`coverage-baseline.json` refresh** — `pnpm test:coverage && pnpm coverage:baseline`
-   in the CI environment (Postgres/Redis/S3 up, the live-test flags set, no
-   `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, see `.claude/rules/testing.md` → Coverage);
-   `packages/ui` is at 100 % lines now, so the floor can rise.
+1. **KI-084** — after CR-184/CR-185 are pushed, replace the screenshot baselines with
+   CI's `*-actual.png` (checked against `*-diff.png`), or regenerate on amd64 Docker.
+   (`coverage-baseline.json` was refreshed by CR-185 with the live stack.)
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
    style id from their 2GIS account; then an additive `theme` option on
    `MapRenderOptions` mapped inside `packages/maps-2gis`.
@@ -1264,4 +1282,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-10-01 (CR-164)
+2026-10-02 (CR-185)

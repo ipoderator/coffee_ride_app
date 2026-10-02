@@ -172,17 +172,30 @@ export function rideCardSeats(
 }
 
 /**
- * CR-153: the featured «Ближайший» card — the soonest ride that is open for
- * registration (the list is already soonest-first), else simply the soonest.
+ * CR-185 (UX handoff P2): a ride worth the featured card's space — it shows
+ * a route and the facts to choose by. Open for registration, a drawn route
+ * (≥ 2 points), a start point and a distance.
+ */
+export function isFeatureable(ride: PublicRideListItem): boolean {
+  return (
+    ride.status === 'registration_open' &&
+    (ride.routePreview?.length ?? 0) >= 2 &&
+    ride.startLat !== null &&
+    ride.startLng !== null &&
+    ride.distanceKm !== null
+  );
+}
+
+/**
+ * The featured «Ближайший» card (CR-153): the soonest ride that
+ * {@link isFeatureable} (the list is already soonest-first). CR-185: no more
+ * fallback to the soonest ride of any kind — without a qualifying ride there
+ * is no featured card, rather than half a phone screen of empty cover.
  */
 export function pickFeaturedRide(
   rides: readonly PublicRideListItem[],
 ): PublicRideListItem | null {
-  return (
-    rides.find((ride) => ride.status === 'registration_open') ??
-    rides[0] ??
-    null
-  );
+  return rides.find(isFeatureable) ?? null;
 }
 
 /** Seats-left chip text, or `null` when the ride has no capacity limit. */

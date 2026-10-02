@@ -8,6 +8,7 @@ import type {
   MapRenderer,
   MapRenderOptions,
 } from 'maps-core';
+import { FATAL_MAP_ERRORS, watchBasemap } from './basemap-watch.js';
 
 export interface TwoGisMapRendererConfig {
   /** Public MapGL key (`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`). Never the
@@ -346,6 +347,20 @@ export function create2GisMapRenderer(
           : {}),
       });
 
+      // CR-185: a map that exists but never draws its basemap is reported,
+      // not left blank (`./basemap-watch.ts` has what MapGL does and doesn't
+      // tell us).
+      const basemap = options.onBasemapUnavailable
+        ? watchBasemap({ onUnavailable: options.onBasemapUnavailable })
+        : null;
+      if (basemap) {
+        map.on('styleload', () => basemap.styleLoaded());
+        map.on('styleloaderror', () => basemap.fail());
+        map.on('error', (event) => {
+          if (FATAL_MAP_ERRORS.has(event.type)) basemap.fail();
+        });
+      }
+
       if (options.onClick) {
         const onClick = options.onClick;
         map.on('click', (event) => {
@@ -653,6 +668,7 @@ export function create2GisMapRenderer(
           );
         },
         destroy() {
+          basemap?.stop();
           resizeObserver?.disconnect();
           if (containerGeneration.get(options.container) === generation) {
             containerGeneration.delete(options.container);

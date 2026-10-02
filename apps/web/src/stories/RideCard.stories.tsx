@@ -36,6 +36,19 @@ export const RegistrationOpen: Story = {
   },
 };
 
+/** CR-185: no drawn route — no empty cover, an explicit line instead. */
+export const NoRoute: Story = {
+  args: { ride: makeRide({ routePreview: null }) },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(
+      canvas.getByText(RIDE_DISCOVERY_TERMS.routeMissing),
+    ).toBeVisible();
+    await expect(
+      canvasElement.querySelector('[data-route-missing]'),
+    ).not.toBeNull();
+  },
+};
+
 export const LowSeats: Story = {
   args: { ride: makeRide({ registrationsCount: 18, priceRub: 1500 }) },
   play: async ({ canvas }) => {

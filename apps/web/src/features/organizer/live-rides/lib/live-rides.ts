@@ -1,4 +1,5 @@
 import type { Ride, RideParticipantSummary } from 'types';
+import { isRideOverdue } from '@/lib/rides/overdue';
 
 const UPCOMING: ReadonlySet<Ride['status']> = new Set([
   'published',
@@ -23,6 +24,21 @@ export function upcomingRides(rides: Ride[], now: Date, max: number): Ride[] {
     )
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .slice(0, max);
+}
+
+/**
+ * CR-184: rides still before `started` whose start time has passed — neither
+ * upcoming nor live, so they need the organizer's decision. Oldest first.
+ */
+export function overdueRides(rides: Ride[], now: Date): Ride[] {
+  return rides
+    .filter((ride) => isRideOverdue(ride, now))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+}
+
+/** Riders whose outcome is settled: confirmed finish, dnf or no-show. */
+export function resolvedCount(tally: FinishTally): number {
+  return tally.confirmed + tally.dnf + tally.noShow;
 }
 
 export interface FinishTally {

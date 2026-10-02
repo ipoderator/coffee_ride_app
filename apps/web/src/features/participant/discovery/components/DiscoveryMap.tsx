@@ -20,6 +20,7 @@ import {
   type ElevatedPoint,
 } from '../lib/route-highlights';
 import { smoothRoutePreview } from '../lib/route-preview';
+import { BasemapUnavailableNotice } from './BasemapUnavailableNotice';
 import { RideMapPlaceholder } from './RideMapPlaceholder';
 
 // A ride with no start location can't get a pin — same "missing data" stance
@@ -97,6 +98,14 @@ function useThemeVersion(): number {
  * itself in, its start ring pulses a few times, and two quiet notes sit on
  * the line (difficulty halfway, the summit once elevation is known), fading
  * in as the line reaches them. Reduced motion: all of it shown at once.
+ *
+ * CR-185 (UX handoff P2): a map that was created but whose basemap never
+ * drew (`MapRenderOptions.onBasemapUnavailable` — tiles refused or
+ * unreachable, the style failed) gets a «Карта недоступна» notice over the
+ * map area with «Повторить», which re-creates the map in place — the
+ * filters and the list (the parent's state and URL) are untouched. A render
+ * that fails outright gets the same notice; only a missing key keeps the
+ * plain placeholder (retrying can't help there).
  */
 export function DiscoveryMap({
   rides,
@@ -114,6 +123,10 @@ export function DiscoveryMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const [handle, setHandle] = useState<MapHandle | null>(null);
   const [renderFailed, setRenderFailed] = useState(false);
+  const [basemapUnavailable, setBasemapUnavailable] = useState(false);
+  // CR-185: bumping this re-creates the map («Повторить»).
+  const [attempt, setAttempt] = useState(0);
+  const noKey = useMemo(() => createMapRenderer() === null, []);
   const themeVersion = useThemeVersion();
 
   // The render options are fixed at map creation; route the click through a
@@ -133,13 +146,12 @@ export function DiscoveryMap({
 
   useEffect(() => {
     const renderer = createMapRenderer();
-    if (!renderer || !containerRef.current) {
-      setRenderFailed(!renderer);
-      return;
-    }
+    if (!renderer || !containerRef.current) return;
 
     let cancelled = false;
     let rendered: MapHandle | undefined;
+    setRenderFailed(false);
+    setBasemapUnavailable(false);
 
     renderer
       .render({
@@ -147,6 +159,9 @@ export function DiscoveryMap({
         center: DEFAULT_CENTER,
         zoom: 9,
         onMarkerClick: (id) => onSelectRef.current(id),
+        onBasemapUnavailable: () => {
+          if (!cancelled) setBasemapUnavailable(true);
+        },
       })
       .then((renderedHandle) => {
         if (cancelled) {
@@ -165,7 +180,7 @@ export function DiscoveryMap({
       rendered?.destroy();
       setHandle(null);
     };
-  }, []);
+  }, [attempt]);
 
   // Camera: frame every start point when the set of pins changes.
   useEffect(() => {
@@ -394,7 +409,7 @@ export function DiscoveryMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handle, focusKey]);
 
-  if (renderFailed) {
+  if (noKey) {
     return (
       <div data-map-unavailable className="p-4">
         <RideMapPlaceholder />
@@ -402,12 +417,25 @@ export function DiscoveryMap({
     );
   }
 
+  const unavailable = renderFailed || basemapUnavailable;
+
   return (
-    <div
-      ref={containerRef}
-      role="img"
-      aria-label={RIDE_DISCOVERY_ROW_TERMS.mapLabel}
-      className={cn('h-full w-full', className)}
-    />
+    <div className={cn('relative h-full w-full', className)}>
+      <div
+        ref={containerRef}
+        role="img"
+        aria-label={RIDE_DISCOVERY_ROW_TERMS.mapLabel}
+        className="h-full w-full"
+      />
+      {/* Always mounted: a live region must exist before its text changes. */}
+      <div
+        role="status"
+        className="pointer-events-none absolute top-2 right-14 left-2 z-10 flex lg:top-auto lg:right-auto lg:bottom-8 lg:left-4"
+      >
+        {unavailable ? (
+          <BasemapUnavailableNotice onRetry={() => setAttempt((n) => n + 1)} />
+        ) : null}
+      </div>
+    </div>
   );
 }

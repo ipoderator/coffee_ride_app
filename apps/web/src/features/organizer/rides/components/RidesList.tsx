@@ -19,6 +19,7 @@ import {
   formatDate,
   formatTime,
 } from 'ui';
+import { isRideOverdue } from '@/lib/rides/overdue';
 import { listMyRides } from '../api';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
@@ -91,6 +92,8 @@ export function RidesList() {
     );
   }
 
+  const now = new Date();
+
   if (rides.length === 0) {
     return (
       <EmptyState
@@ -126,10 +129,11 @@ export function RidesList() {
           <div className="flex flex-col gap-3">
             {groupRides.map((ride) => {
               const startDate = new Date(ride.startsAt);
+              const overdue = isRideOverdue(ride, now);
               return (
                 <Link key={ride.id} href={`/organizer/rides/${ride.id}/edit`}>
                   <Card className="flex flex-col gap-3 transition-opacity hover:opacity-90">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <p className="text-body-sm font-medium text-text">
                         {ride.title}
                       </p>
@@ -137,7 +141,18 @@ export function RidesList() {
                         label={RIDE_STATUS_TERMS[ride.status].label}
                         tone={RIDE_STATUS_TERMS[ride.status].tone}
                       />
+                      {overdue && (
+                        <StatusBadge
+                          label={RIDE_LIST_TERMS.overdueBadge}
+                          tone="warning"
+                        />
+                      )}
                     </div>
+                    {overdue && (
+                      <p className="text-body-sm text-warning">
+                        {RIDE_LIST_TERMS.overdueHint}
+                      </p>
+                    )}
                     <MetricRow>
                       <MetricTile
                         label={RIDE_LIST_TERMS.summaryStartLabel}

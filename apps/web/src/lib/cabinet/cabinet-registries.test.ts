@@ -3,6 +3,7 @@ import { ORGANIZER_NAV_ITEMS } from './organizer-nav';
 import { ORGANIZER_RIDE_SECTIONS } from './organizer-ride-sections';
 import { ORGANIZER_WIDGETS } from './organizer-widgets';
 import { PARTICIPANT_NAV_ITEMS } from './participant-nav';
+import { PARTICIPANT_WIDGETS } from './participant-widgets';
 
 // ADR-009 (`.claude/rules/extensibility.md`): each registry sorts itself by
 // `order` at module load so `AppHeader`/the widget grid can render the
@@ -32,5 +33,10 @@ describe('cabinet registries', () => {
   it('sorts the organizer widget registry by order', () => {
     expect(ORGANIZER_WIDGETS.length).toBeGreaterThan(0);
     expectSortedByOrder(ORGANIZER_WIDGETS);
+  });
+
+  it('sorts the participant widget registry by order (CR-185)', () => {
+    expect(PARTICIPANT_WIDGETS.length).toBeGreaterThan(0);
+    expectSortedByOrder(PARTICIPANT_WIDGETS);
   });
 });

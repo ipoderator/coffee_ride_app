@@ -50,7 +50,35 @@ const PEOPLE = [
     finishClaimedAt: '2026-10-02T09:18:00Z',
     attendance: 'finished',
   },
+  // CR-184: the bar has a segment for every outcome, no-shows included.
+  {
+    id: 'p4',
+    userId: 'u4',
+    displayName: 'Ольга Смирнова',
+    createdAt: '2026-09-30T06:00:00Z',
+    group: null,
+    finishClaimedAt: null,
+    attendance: 'dnf',
+  },
+  {
+    id: 'p5',
+    userId: 'u5',
+    displayName: 'Павел Орлов',
+    createdAt: '2026-09-30T06:00:00Z',
+    group: null,
+    finishClaimedAt: null,
+    attendance: 'no_show',
+  },
 ];
+// CR-184: start passed, still `registration_open` — «Требует решения».
+const OVERDUE = {
+  id: 'late-1',
+  title: 'Утро на Лосином острове',
+  status: 'registration_open',
+  startsAt: '2026-10-01T05:00:00Z',
+  startTimezone: 'Europe/Moscow',
+  distanceKm: 35,
+};
 
 function stub(rides: unknown[], error = false) {
   return () => {
@@ -96,6 +124,56 @@ export const LiveAndUpcoming: Story = {
       canvas.getByRole('button', { name: ORGANIZER_LIVE_TERMS.confirm }),
     ).toBeVisible();
     await expect(canvas.getByText(NEXT.title)).toBeVisible();
+  },
+};
+
+/** A ride whose start passed without being started, below the live one
+ * (CR-185: the started ride is the first working block). */
+export const NeedsDecision: Story = {
+  beforeEach: stub([OVERDUE, LIVE]),
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByText(ORGANIZER_LIVE_TERMS.attentionTitle),
+    ).toBeVisible();
+    await expect(canvas.getByText(OVERDUE.title)).toBeVisible();
+    await expect(
+      canvas.getByText(ORGANIZER_LIVE_TERMS.legendNoShow),
+    ).toBeVisible();
+    await expect(
+      canvas.getByText(ORGANIZER_LIVE_TERMS.resolvedOf(3, 5)),
+    ).toBeVisible();
+  },
+};
+
+/** CR-185: a phone-width column with long titles — they wrap (two lines
+ * at most), the date and action drop to their own line, nothing overflows. */
+export const LongTitlesOnAPhone: Story = {
+  beforeEach: stub([
+    OVERDUE,
+    {
+      ...NEXT,
+      title:
+        'Большой гравийный марафон по Подмосковью через Звенигород и Рузу с остановкой на кофе',
+    },
+  ]),
+  decorators: [
+    (Story) => (
+      <div data-testid="phone-column" className="w-[358px]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByText(/Большой гравийный марафон/),
+    ).toBeVisible();
+    const column = canvas.getByTestId('phone-column');
+    await expect(column.scrollWidth).toBeLessThanOrEqual(column.clientWidth);
+    for (const link of canvas.getAllByRole('link', { name: /→$/ })) {
+      await expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(
+        44,
+      );
+    }
   },
 };
 

@@ -102,10 +102,13 @@ export function FeaturedRideCard({ ride }: { ride: PublicRideListItem }) {
                 <dt className="font-mono text-xs leading-tight font-medium break-words text-text-muted uppercase">
                   {metric.label}
                 </dt>
-                <dd className="flex items-baseline whitespace-nowrap">
+                {/* CR-185: on a phone a range like «25–35 км/ч» is wider
+                    than its third of the card — the unit drops under the
+                    value instead of being clipped at the card's edge. */}
+                <dd className="flex flex-wrap items-baseline">
                   <span
                     className={cn(
-                      'font-num text-metric font-extrabold tabular-nums',
+                      'font-num text-metric font-extrabold whitespace-nowrap tabular-nums',
                       metric.missing
                         ? 'text-text-muted'
                         : metric.key === 'elevation'
@@ -116,7 +119,7 @@ export function FeaturedRideCard({ ride }: { ride: PublicRideListItem }) {
                     {metric.parts.value}
                   </span>
                   {metric.parts.unit ? (
-                    <span className="font-mono text-xs text-text-secondary">
+                    <span className="font-mono text-xs whitespace-nowrap text-text-secondary">
                       {NBSP}
                       {metric.parts.unit}
                     </span>

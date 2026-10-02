@@ -1336,3 +1336,11 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       organizer's confirmation (ADR-027). See `docs/changelog.md`.
 - [x] CR-182 Ride closing: «сошёл» outcome, public results summary, finishing allowed with
       undecided riders and labelled «не подтверждено» (ADR-028). See `docs/changelog.md`.
+- [x] CR-184 Organizer-screen audit fixes: «Управление заездом» instead of a locked form for
+      a published ride, «Требует решения» for a past start never started, the finish-control
+      bar counts no-shows («В списке», five segments); `/organizer/rides` marks the same
+      overdue rides. See `docs/changelog.md`.
+- [x] CR-185 UX handoff P1/P2: active work above the dashboard KPIs, finish confirmation
+      naming undecided riders, ride context on participants/updates, `/me` widget registry,
+      featured card only for a ride with a route, «Карта недоступна» with «Повторить» when the
+      basemap fails, no sideways scroll on the phone dashboard. See `docs/changelog.md`.

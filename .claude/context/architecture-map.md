@@ -1017,6 +1017,24 @@ Condensed); Sofia Sans Condensed / `font-display` is gone. Discovery: `RideGrid`
 and `DiscoveryList` take an optional `viewSwitch` node rendered beside their `h1`
 (`DiscoveryTabs` supplies it).
 
+CR-185 (UX handoff, frontend + one additive maps-core option):
+
+- **apps/web**: `lib/cabinet/participant-widgets.ts` — `/me`'s ADR-009 widget
+  registry (`app/me/page.tsx` is a Server Component rendering it), fed by
+  `features/participant/my-rides/nav.ts` (`UpcomingRegistrationsWidget`) and the new
+  module `features/participant/organizer-entry/` («Перейти в кабинет» or the
+  create-profile offer). `features/organizer/overview/` split into the head
+  (`OrganizerOverviewWidget`) and `OrganizerKpiWidget` (order 25, after live rides
+  20), sharing one load through `hooks/useOverviewData.ts`.
+  `components/cabinet/RideContextHeader.tsx` heads a ride's participants/updates
+  pages (data via `lib/organizer/own-rides.ts`'s new `fetchOwnRide`).
+  `lib/rides/overdue.ts` (`isRideOverdue`, CR-184) is the one «Требует решения» rule.
+  Discovery's `BasemapUnavailableNotice` sits over `DiscoveryMap`.
+- **packages/maps-core**: `MapRenderOptions.onBasemapUnavailable`.
+- **packages/maps-2gis**: `src/basemap-watch.ts` (fatal SDK events, style timeout,
+  tile-host probe via `packages/resilience`), wired in `render.ts`.
+- **packages/ui**: `Dialog` returns focus to its opener on close.
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the

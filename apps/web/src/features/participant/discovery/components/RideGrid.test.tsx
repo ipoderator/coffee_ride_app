@@ -30,8 +30,9 @@ function makeRide(
     bicycleType: 'road',
     startsAt: '2026-10-04T06:00:00.000Z',
     startTimezone: 'Europe/Moscow',
-    startLat: null,
-    startLng: null,
+    // CR-185: featureable by default (route + start point + distance).
+    startLat: 55.76,
+    startLng: 37.41,
     participantLimit: 20,
     priceRub: null,
     distanceKm: 69.5,
@@ -54,7 +55,10 @@ function makeRide(
     registrationsCount: 13,
     startLabel: 'Велотрек Крылатское',
     startDescription: null,
-    routePreview: null,
+    routePreview: [
+      [55.76, 37.41],
+      [55.77, 37.43],
+    ],
     groups: [],
     waitlistCount: 0,
     ...overrides,
@@ -105,6 +109,27 @@ describe('RideGrid (CR-153)', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Показать ещё/ })).toBeNull();
+  });
+
+  it('shows no featured card when no ride has a route to show (CR-185)', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [
+        makeRide('a', { routePreview: null }),
+        makeRide('b', { startLat: null, startLng: null }),
+      ],
+      nextCursor: null,
+      total: 2,
+    });
+
+    render(<RideGrid />);
+
+    const all = await screen.findByRole('region', { name: 'Все заезды' });
+    expect(screen.queryByText('Ближайший')).toBeNull();
+    expect(
+      within(all)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/rides/a', '/rides/b']);
   });
 
   // KI-060 (CR-164): a start point labelled just «Старт» used to render

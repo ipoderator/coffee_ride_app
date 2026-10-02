@@ -98,6 +98,11 @@ export interface MapRenderOptions {
    * of its own overlay (the ride hero's view switch is top-right). Omit for
    * the provider's default corner. */
   zoomControlPosition?: 'topRight' | 'centerRight' | 'bottomRight';
+  /** CR-185: called at most once when the map was created but its basemap
+   * can't be shown (tiles refused or unreachable, the style failed or never
+   * loaded) — the caller shows its own degraded state over the map area.
+   * A render that fails outright still rejects `render()` instead. */
+  onBasemapUnavailable?: () => void;
 }
 
 export interface MapHandle {

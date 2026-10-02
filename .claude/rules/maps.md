@@ -163,6 +163,10 @@ export interface MapRenderOptions {
   onMarkerClick?: (id: string) => void;
   // CR-151 follow-up: where the zoom buttons sit (default: provider's corner).
   zoomControlPosition?: 'topRight' | 'centerRight' | 'bottomRight';
+  // CR-185: at most once, when the map exists but its basemap can't be shown
+  // (tiles refused/unreachable, style failed or never loaded). An outright
+  // render failure still rejects `render()`.
+  onBasemapUnavailable?: () => void;
 }
 
 export interface MapHandle {
@@ -204,6 +208,17 @@ reconciles by marker `id` (an unchanged marker keeps its SDK object, a moved one
 is moved in place via `setCoordinates`, only a changed look is rebuilt), so an
 unrelated update never restarts a pulse; the draw-in rebuilds the line prefix
 per animation frame, since MapGL's `Polyline` has no `setCoordinates`.
+
+CR-185 added `onBasemapUnavailable` the same additive way, no new ADR. MapGL can
+build a map whose basemap never draws without throwing, so
+`packages/maps-2gis/src/basemap-watch.ts` decides: a fatal `error` event
+(`invalidtilekey`, `styleloaderror`, `webglcontextlost`), `styleloaderror`, no
+`styleload` within 10 s, or a `no-cors` reachability probe of the tile host
+(`TILE_PROBE_URL`) failing — that probe goes through `callWithResilience` (8 s
+timeout, 2 attempts, one shared breaker). Unreachable tile servers produce no SDK
+event at all and tiles load inside MapGL's worker, hence the probe; the weekly
+contract test checks the probe host still answers. The caller owns the degraded UI
+(discovery's notice with «Повторить», the ride page's placeholder).
 
 CR-118 extended markers the same additive way, no new ADR: `shape: 'ring'` draws an
 orienteering control circle (hollow ring in `color`, `haloColor` knock-out, `label` as

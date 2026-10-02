@@ -1,4 +1,5 @@
 import { BACK_LINK_TERMS, PARTICIPANTS_TERMS } from 'ui';
+import { RideContextHeader } from '@/components/cabinet/RideContextHeader';
 import { BackLink } from '@/components/site/BackLink';
 import { ParticipantTable } from '@/features/organizer/participants/components/ParticipantTable';
 import { WaitlistTable } from '@/features/organizer/participants/components/WaitlistTable';
@@ -21,7 +22,12 @@ export default async function RideParticipantsPage({
         href="/organizer/rides"
         label={BACK_LINK_TERMS.toOrganizerRides}
       />
-      <h1 className="text-h1 text-text">{PARTICIPANTS_TERMS.pageTitle}</h1>
+      {/* CR-185: which ride's list this is — the sidebar lands here for the
+          nearest ride. */}
+      <header className="flex flex-col gap-3">
+        <h1 className="text-h1 text-text">{PARTICIPANTS_TERMS.pageTitle}</h1>
+        <RideContextHeader rideId={id} />
+      </header>
       <ParticipantTable rideId={id} />
       <WaitlistTable rideId={id} />
     </div>

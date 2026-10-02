@@ -1,3 +1,4 @@
+import { RouteOff } from 'lucide-react';
 import Link from 'next/link';
 import type { PublicRideListItem } from 'types';
 import {
@@ -31,6 +32,10 @@ const TAG_CLASSNAME =
  * missing one left out, never `0`), seats «4 из 10 · Осталось 6 мест» over a
  * bar, and tags — bike type, difficulty, pace groups, price.
  *
+ * CR-185 (UX handoff P2): a ride without a drawn route gets no cover at all
+ * — a compact head (status + an explicit «Маршрут пока не загружен») instead
+ * of a full-height empty contour panel.
+ *
  * No participant avatars here on purpose: `GET /v1/rides` is fully public
  * (no session), and showing riders' photos/names to an anonymous visitor
  * would leak identity the ride-detail riders list only shows once
@@ -44,19 +49,36 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
   const metrics = buildRideRowMetrics(ride);
   const seats = rideCardSeats(ride, { short: true });
   const cancelled = ride.status === 'cancelled';
+  const hasRoute = (ride.routePreview?.length ?? 0) >= 2;
 
   return (
     <Link
       href={`/rides/${ride.id}`}
       className="flex h-full flex-col overflow-hidden rounded-3xl border border-border bg-bg-raised text-text transition-[border-color,transform] duration-150 hover:border-border-input focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-safe:hover:-translate-y-0.5"
     >
-      <RouteCover
-        routePreview={ride.routePreview}
-        seed={ride.id}
-        cancelled={cancelled}
-        emptyLabel={RIDE_DISCOVERY_TERMS.routeMissing}
-        topLeft={<RideStatusPill {...statusTerm} />}
-      />
+      {hasRoute ? (
+        <RouteCover
+          routePreview={ride.routePreview}
+          seed={ride.id}
+          cancelled={cancelled}
+          topLeft={<RideStatusPill {...statusTerm} />}
+        />
+      ) : (
+        <div
+          data-route-missing
+          className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5"
+        >
+          <StatusBadge
+            label={statusTerm.label}
+            tone={statusTerm.tone}
+            className="rounded-full px-3 py-1.5 text-xs leading-4 font-semibold"
+          />
+          <span className="inline-flex items-center gap-1.5 text-body-sm text-text-muted">
+            <RouteOff className="size-4" aria-hidden="true" />
+            {RIDE_DISCOVERY_TERMS.routeMissing}
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div className="grid gap-1.5">

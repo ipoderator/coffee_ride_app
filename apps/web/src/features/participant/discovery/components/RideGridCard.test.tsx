@@ -152,9 +152,17 @@ describe('RideGridCard (CR-144, compact in CR-153)', () => {
     expect(screen.queryByText(/участник/)).toBeNull();
   });
 
-  it('says the route is missing on the cover when there is none', () => {
-    render(<RideGridCard ride={makeRide({ routePreview: null })} />);
+  it('drops the cover for a ride without a route and says so (CR-185)', () => {
+    const { container } = render(
+      <RideGridCard
+        ride={makeRide({ routePreview: null, registrationsCount: 5 })}
+      />,
+    );
     expect(screen.getByText('Маршрут пока не загружен')).toBeInTheDocument();
+    expect(container.querySelector('[data-route-missing]')).not.toBeNull();
+    expect(container.querySelector('svg polyline')).toBeNull();
+    // The status still shows, as text.
+    expect(screen.getByText('Регистрация открыта')).toBeInTheDocument();
   });
 
   it('shows bike type, difficulty word and price as chips', () => {

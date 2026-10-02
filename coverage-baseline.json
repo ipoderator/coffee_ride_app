@@ -4,10 +4,10 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 92.44,
-        "statements": 91.39,
-        "functions": 96.03,
-        "branches": 81.01
+        "lines": 92.57,
+        "statements": 91.55,
+        "functions": 96.21,
+        "branches": 81.29
       },
       "scopes": {
         "src/modules/auth/": {
@@ -17,16 +17,16 @@
           "branches": 80.64
         },
         "src/modules/registrations/": {
-          "lines": 93.6,
-          "statements": 93.44,
-          "functions": 94.2,
-          "branches": 84.56
+          "lines": 93.83,
+          "statements": 93.69,
+          "functions": 95.34,
+          "branches": 85.26
         },
         "src/modules/rides/": {
-          "lines": 94.11,
-          "statements": 92.64,
-          "functions": 99.44,
-          "branches": 84.46
+          "lines": 94.21,
+          "statements": 92.76,
+          "functions": 99.46,
+          "branches": 84.48
         },
         "src/modules/organizers/": {
           "lines": 83.21,
@@ -47,10 +47,10 @@
           "branches": 67.27
         },
         "src/modules/reviews/": {
-          "lines": 85.33,
-          "statements": 84.41,
-          "functions": 86.66,
-          "branches": 61.9
+          "lines": 86.07,
+          "statements": 85.18,
+          "functions": 87.5,
+          "branches": 63.63
         },
         "src/plugins/": {
           "lines": 95.29,
@@ -68,26 +68,26 @@
     },
     "apps/web": {
       "total": {
-        "lines": 77.33,
-        "statements": 75.63,
-        "functions": 74.87,
-        "branches": 76.2
+        "lines": 78.7,
+        "statements": 77.06,
+        "functions": 76.6,
+        "branches": 77.29
       }
     },
     "packages/ui": {
       "total": {
-        "lines": 99.81,
-        "statements": 99.35,
+        "lines": 100,
+        "statements": 99.54,
         "functions": 100,
-        "branches": 92.8
+        "branches": 93.08
       }
     },
     "packages/maps-2gis": {
       "total": {
-        "lines": 99.41,
-        "statements": 98.12,
-        "functions": 98.07,
-        "branches": 90.54
+        "lines": 99.45,
+        "statements": 98.27,
+        "functions": 98.36,
+        "branches": 90.87
       }
     },
     "packages/resilience": {

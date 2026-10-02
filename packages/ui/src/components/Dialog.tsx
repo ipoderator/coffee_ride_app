@@ -58,7 +58,18 @@ export function Dialog({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (open) dialogRef.current?.focus();
+    if (!open) return;
+    // CR-185: closing hands focus back to whatever opened the dialog (WCAG
+    // 2.4.3), unless that control is gone — e.g. a confirmed action removed
+    // its own button.
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialogRef.current?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
   }, [open]);
 
   if (!open) return null;

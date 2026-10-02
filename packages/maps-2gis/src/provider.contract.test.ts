@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TILE_PROBE_URL } from './basemap-watch.js';
 import { MapProviderError } from './errors.js';
 import { create2GisMapProvider } from './provider.js';
 
@@ -43,6 +44,19 @@ describe.skipIf(!enabled)('2GIS contract (live API)', () => {
     apiKey: apiKey ?? '',
     timeoutMs: TIMEOUT_MS,
   });
+
+  // CR-185: the map's basemap watch probes this host; if 2GIS moved its
+  // tiles, every map would wrongly show «Карта недоступна».
+  it(
+    'tile host: the basemap probe target still answers over HTTP',
+    async () => {
+      const response = await fetch(TILE_PROBE_URL, {
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      expect(response.status).toBeGreaterThan(0);
+    },
+    TEST_TIMEOUT_MS,
+  );
 
   it(
     'geocode: a well-known address resolves to a labelled point nearby',

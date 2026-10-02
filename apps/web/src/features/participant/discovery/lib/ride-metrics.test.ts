@@ -216,12 +216,50 @@ describe('rideCardSeats (CR-144)', () => {
   });
 });
 
-describe('pickFeaturedRide (CR-153)', () => {
-  it('picks the soonest ride open for registration, else the soonest', () => {
-    const closed = makeRide({ id: 'closed', status: 'registration_closed' });
-    const open = makeRide({ id: 'open' });
+describe('pickFeaturedRide (CR-153, CR-185)', () => {
+  const routed = {
+    routePreview: [
+      [55.75, 37.6],
+      [55.76, 37.62],
+    ] as Array<[number, number]>,
+    startLat: 55.75,
+    startLng: 37.6,
+  };
+
+  it('picks the soonest open ride with a route, a start point and a distance', () => {
+    const closed = makeRide({
+      id: 'closed',
+      status: 'registration_closed',
+      ...routed,
+    });
+    const open = makeRide({ id: 'open', ...routed });
     expect(pickFeaturedRide([closed, open])?.id).toBe('open');
-    expect(pickFeaturedRide([closed])?.id).toBe('closed');
     expect(pickFeaturedRide([])).toBeNull();
+  });
+
+  it('never features a ride without a route, start point or distance', () => {
+    const noRoute = makeRide({ id: 'no-route', ...routed, routePreview: null });
+    const onePoint = makeRide({
+      id: 'one-point',
+      ...routed,
+      routePreview: [[55.75, 37.6]],
+    });
+    const noStart = makeRide({ id: 'no-start', ...routed, startLat: null });
+    const noDistance = makeRide({
+      id: 'no-distance',
+      ...routed,
+      distanceKm: null,
+    });
+    const good = makeRide({ id: 'good', ...routed });
+    expect(
+      pickFeaturedRide([noRoute, onePoint, noStart, noDistance, good])?.id,
+    ).toBe('good');
+    // No qualifying ride: no featured card (no fallback to the soonest).
+    expect(pickFeaturedRide([noRoute, noStart])).toBeNull();
+    expect(
+      pickFeaturedRide([
+        makeRide({ id: 'closed', status: 'registration_closed', ...routed }),
+      ]),
+    ).toBeNull();
   });
 });

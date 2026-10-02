@@ -420,7 +420,8 @@ Rules:
 after the ADR-024 card read as cluttered — every fact was stacked over the route art.
 
 - **Cover** (`RouteCover`, fixed 160px): route track + status chip only. No route →
-  a quiet «Маршрут пока не загружен» caption. The chip sits in a `dark` token scope
+  no cover (CR-185): a compact head with the status chip and «Маршрут пока не
+  загружен» beside a `RouteOff` icon. The chip sits in a `dark` token scope
   so its tone ink stays legible on the always-dark cover in the light theme.
 - **Panel** (`bg-raised`, theme-aware), top to bottom: start line → title (Golos 600
   `text-h3`, clamped to two lines and always two lines tall, so a grid row's
@@ -458,8 +459,10 @@ phone 390), top to bottom:
   as chips; a chosen chip is outlined `primary` on `primary-tint` plus
   `aria-pressed`/its own value. One sideways-scrolling row on a phone. «N заездов»
   (the API's `total`) on the right from `md`.
-- **Featured card** (`FeaturedRideCard`): the soonest ride open for registration
-  (else the soonest), never repeated in the grid. `RouteCover variant="hero"` left
+- **Featured card** (`FeaturedRideCard`): the soonest ride that is open for
+  registration and has a route (≥ 2 points), a start point and a distance
+  (`isFeatureable`, CR-185); none qualifies → no featured card, never a fallback to
+  a ride with an empty cover. Never repeated in the grid. `RouteCover variant="hero"` left
   (1.25fr) on desktop / 208px on top on a phone, status chip + distance tag on it;
   then «БЛИЖАЙШИЙ» (mono label, `primary`), start line, title (`text-h2`), «Старт: …»,
   three big metrics (`text-metric`, «—» when missing), seats, «Подробнее и запись»
@@ -611,7 +614,7 @@ Public / participant:
 | `/rides/[id]`                                        | Ride detail              | Cover, metrics, route + profile, stops, services, requirements, organizer, registration action |
 | `/login` `/register`                                 | Auth                     |                                                                                                |
 | `/forgot-password` `/reset-password` `/verify-email` | Auth flows               | CR-059, CR-060                                                                                 |
-| `/me`                                                | Participant cabinet home |                                                                                                |
+| `/me`                                                | Participant cabinet home | Widgets from the ADR-009 participant registry (CR-185)                                         |
 | `/me/rides`                                          | My registrations         | Upcoming / past tabs                                                                           |
 | `/me/profile`                                        | Profile settings         |                                                                                                |
 | `/me/notifications`                                  | In-app notifications     | CR-041                                                                                         |
@@ -625,7 +628,7 @@ Organizer cabinet:
 | `/organizer/updates`                 | → nearest ride's updates (CR-131)             |
 | `/organizer/rides`                   | My rides, grouped by status                   |
 | `/organizer/rides/new`               | Create ride — wizard step 1 (CR-156)          |
-| `/organizer/rides/[id]/edit`         | Edit draft                                    |
+| `/organizer/rides/[id]/edit`         | Edit draft; ride management once published    |
 | `/organizer/rides/[id]/route`        | Route, GPX upload, stops, route points        |
 | `/organizer/rides/[id]/participants` | Participants + waitlist                       |
 | `/organizer/rides/[id]/updates`      | Ride updates composer                         |
@@ -670,7 +673,10 @@ above it via `--app-bottom-inset`.
 
 The organizer dashboard (`/organizer`, CR-131 — mockup screen 4) opens with the
 organizer's name as an eyebrow, a time-of-day greeting and a secondary
-«Отправить обновление» (the nearest ride's updates); then four KPI cells —
+«Отправить обновление» (the nearest ride's updates); then the active work (CR-185 —
+`LiveRidesWidget`: «Заезды сейчас», «Требует решения», «Ближайшие заезды», in that
+order); then four KPI cells (`OrganizerKpiWidget`, one data load shared with the
+head) —
 Ближайший (days to the start + a short start line), Записано (`N/M` on the nearest
 ride + «+N за сутки»), Лист ожидания (the nearest ride's, «на «Название»» — all
 rides only without one, CR-132), Рейтинг (+ review count), numerals one size up
@@ -684,6 +690,15 @@ way, else the soonest upcoming published one. The organizer sidebar lists «Об
 then the ADR-009 registry — Заезды, Участники, Обновления (both open the nearest
 ride's page; an empty state when there is none), Профиль организатора. The registered viewer's block on `/rides/[id]`
 opens with a days/hours/minutes countdown to the start («До старта»).
+
+A ride's participants and updates pages (`/organizer/rides/[id]/participants`,
+`/updates`) open with `RideContextHeader` (CR-185): title, start, status, a «Требует
+решения» badge when the start passed unstarted, and «Управление заездом →».
+
+The participant home (`/me`, CR-185) renders its own registry
+(`lib/cabinet/participant-widgets.ts`): «Ближайшие заезды» (up to three upcoming
+registrations; empty → «Найти заезд») and the organizer entry — an organizer gets
+«Перейти в кабинет», anyone else the create-profile offer.
 
 Every top-level item in the bar — plain link or dropdown trigger — shares one type
 style, `packages/ui`'s `NAV_BAR_ITEM_CLASSNAME` (CR-122): Golos 600, 16px, tracking
@@ -757,6 +772,10 @@ done (`docs/definition-of-done.md`).
 4. **Degraded** (CR-052, `.claude/rules/resilience.md`) — a failing dependency degrades
    locally, it does not blank the page:
    - 2GIS unavailable → map area shows an inline notice, the list/route data stays usable;
+     discovery's map (CR-185) also catches a basemap that never loads — «Карта
+     недоступна» over the map (top on a phone, clear of the zoom buttons; bottom-left
+     on desktop) with «Повторить», which re-creates only the map; the ride page's
+     route map falls back to its static placeholder;
    - S3 unavailable → upload control shows "Загрузка недоступна", the rest of the form
      still submits;
    - never a blank screen, never a full-page crash for a partial failure.

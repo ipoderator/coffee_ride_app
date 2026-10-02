@@ -64,9 +64,13 @@ test('map view hides the fullscreen toggle while the map is unavailable', async 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?view=map');
 
+  // No key (CI) → the static placeholder; a key whose SDK never loads →
+  // CR-185's «Карта недоступна» notice with «Повторить».
   const mapPanel = page.getByTestId('discovery-map-panel');
   await expect(
-    mapPanel.getByText(RIDE_DISCOVERY_TERMS.mapUnavailable),
+    mapPanel
+      .getByText(RIDE_DISCOVERY_TERMS.mapUnavailable)
+      .or(mapPanel.getByText(RIDE_DISCOVERY_ROW_TERMS.basemapUnavailableTitle)),
   ).toBeVisible();
   await expect(
     mapPanel.getByRole('button', { name: RIDE_DISCOVERY_TERMS.expandMapLabel }),

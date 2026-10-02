@@ -1192,12 +1192,8 @@ async function getAttendanceSummary(
     .where(
       and(eq(registrations.rideId, rideId), eq(registrations.status, 'active')),
     );
-  return {
-    finished: row?.finished ?? 0,
-    dnf: row?.dnf ?? 0,
-    noShow: row?.noShow ?? 0,
-    unresolved: row?.unresolved ?? 0,
-  };
+  // An aggregate without GROUP BY always yields one row.
+  return row ?? { finished: 0, dnf: 0, noShow: 0, unresolved: 0 };
 }
 
 /** CR-155: a ride's «Требования» lines in the organizer's order. */

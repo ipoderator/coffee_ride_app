@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyRegistrationSummary, PublicRide } from 'types';
 import { MyRidesView } from './components/MyRidesView';
+import { UpcomingRegistrationsWidget } from './components/UpcomingRegistrationsWidget';
 import { listMyRegistrations } from './api';
 
 vi.mock('./api', async () => {
@@ -127,5 +128,56 @@ describe('MyRidesView', () => {
 
     const link = (await screen.findByText(baseRide.title)).closest('a');
     expect(link).toHaveAttribute('href', '/rides/ride-1');
+  });
+});
+
+describe('UpcomingRegistrationsWidget (CR-185)', () => {
+  beforeEach(() => {
+    listMyRegistrationsMock.mockReset();
+  });
+
+  it('lists the next registrations with a link to all of them', async () => {
+    listMyRegistrationsMock.mockResolvedValue({
+      items: [baseItem],
+      nextCursor: null,
+    });
+    render(<UpcomingRegistrationsWidget />);
+
+    expect(
+      await screen.findByRole('link', { name: baseRide.title }),
+    ).toHaveAttribute('href', '/rides/ride-1');
+    expect(screen.getByText('Регистрация открыта')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Все регистрации →' }),
+    ).toHaveAttribute('href', '/me/rides');
+    expect(listMyRegistrationsMock).toHaveBeenCalledWith({
+      when: 'upcoming',
+      limit: 3,
+    });
+  });
+
+  it('offers «Найти заезд» when nothing is booked', async () => {
+    listMyRegistrationsMock.mockResolvedValue({ items: [], nextCursor: null });
+    render(<UpcomingRegistrationsWidget />);
+
+    expect(
+      await screen.findByText('Пока нет предстоящих заездов'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Найти заезд' })).toHaveAttribute(
+      'href',
+      '/',
+    );
+  });
+
+  it('shows an error with retry', async () => {
+    listMyRegistrationsMock
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ items: [], nextCursor: null });
+    render(<UpcomingRegistrationsWidget />);
+
+    fireEvent.click(await screen.findByRole('button'));
+    expect(
+      await screen.findByText('Пока нет предстоящих заездов'),
+    ).toBeInTheDocument();
   });
 });

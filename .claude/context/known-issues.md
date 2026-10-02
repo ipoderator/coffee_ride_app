@@ -426,6 +426,58 @@ Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
 
+### KI-082 — The basemap watch probes an undocumented 2GIS tile host
+
+Status: open. Discovered: 2026-10-02 (CR-185).
+Problem: MapGL reports nothing when its tile servers are unreachable, so
+`packages/maps-2gis/src/basemap-watch.ts` probes `TILE_PROBE_URL`
+(`https://tile0-sdk.maps.2gis.com/`) with a `no-cors` fetch. The host is a 2GIS
+implementation detail, not a documented API. A probe failure shows «Карта
+недоступна» even if MapGL itself could still have drawn tiles from another host.
+Impact: low — a moved host would show the notice on a working map (the list,
+filters and pins still work, «Повторить» re-checks). A network that blocks only the
+probe host is the same case.
+Workaround: none needed; the weekly `maps-contract.yml` job asserts the host still
+answers, so a move shows up there before users see it.
+Next action: if 2GIS ever exposes a load/error signal for blocked tiles, drop the
+probe for it; otherwise keep the contract check. `apps/web` sends no CSP today; a
+future `connect-src` must allow the probe host, or every map shows the notice.
+
+### KI-083 — `/me`'s «Ближайшие заезды» omits a ride the participant is on right now
+
+Status: open. Discovered: 2026-10-02 (CR-185).
+Problem: `UpcomingRegistrationsWidget` reads `GET /v1/registrations/mine?when=upcoming`
+(`startsAt >= now`). Once a ride's start time passes, it leaves the widget — even
+while it is `started` and the rider could still «Отметить финиш» from the ticket.
+Impact: low — the ride stays reachable from `/me/rides` («Прошедшие») and the ride
+page; only the home shortcut is missing during the ride.
+Workaround: `/me/rides`.
+Next action: product decision — show `started` rides first on `/me` (needs either a
+`when=current` filter or a status-aware query in the API), then add it there.
+
+### KI-084 — CR-185's visual baselines are not regenerated; CI's screenshot specs will fail
+
+Status: open. Discovered: 2026-10-02 (CR-185).
+Problem: CR-185 changes what the seeded screens show — the seeded ride has no route, so
+discovery has no featured card and the grid card gets the compact no-route head; the
+organizer dashboard puts live rides above the KPI row. Expected to differ:
+`discovery-grid`, `ride-card`, `organizer-dashboard` (chromium + mobile) and
+`themes.spec.ts`'s discovery light/dark; `discovery-map`/`ride-detail` unverified.
+Regenerating needs an x86_64 render (`.claude/rules/testing.md`); the
+`mcr.microsoft.com/playwright:v1.63.0-jammy` amd64 image would not download here
+(layers kept failing and retrying for ~40 min; only the arm64 one is cached, which the
+rules forbid for baselines). A native macOS run proves nothing — it has no `darwin`
+baselines and only writes new ones (deleted, never commit them).
+Impact: the `ci` job's e2e step fails on these screenshots until fixed; no user impact.
+Workaround: none locally.
+Next action: after the commit is pushed, take the `*-actual.png` files from the failed
+run's `playwright-report` artifact (`gh run download <run> -n playwright-report`),
+check each `*-diff.png` shows only the intended CR-185 changes, copy them over the
+`*-linux.png` baselines and push. Or retry the amd64 image when the network allows,
+with CR-138's procedure: repo copied into the container (not bind-mounted), the
+container on the compose network, CI's env with an empty MapGL key,
+`--update-snapshots`, then a verify run without it.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

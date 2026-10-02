@@ -7,6 +7,7 @@ import {
   listAllRideWaitlist,
 } from '@/lib/organizer/own-rides';
 import { ApiError, getOwnOrganizerProfile, getOwnRideSummary } from './api';
+import { OrganizerKpiWidget } from './components/OrganizerKpiWidget';
 import { OrganizerOverviewWidget } from './components/OrganizerOverviewWidget';
 import { nearestRideValue, registeredValue } from './lib/overview';
 
@@ -77,6 +78,17 @@ function participants(count: number, recent: number) {
   }));
 }
 
+// CR-185: the head and the KPI row are two registry widgets sharing one load
+// — rendered together, as on `/organizer`.
+function Dashboard() {
+  return (
+    <>
+      <OrganizerOverviewWidget />
+      <OrganizerKpiWidget />
+    </>
+  );
+}
+
 function cell(label: string): HTMLElement {
   return screen.getByText(label).closest('dl') as HTMLElement;
 }
@@ -109,7 +121,7 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
   });
 
   it('renders the mockup head and KPI cells from real data', async () => {
-    render(<OrganizerOverviewWidget />);
+    render(<Dashboard />);
 
     expect(await screen.findByText('Доброе утро')).toBeInTheDocument();
     expect(screen.getByText('Тестовый организатор')).toBeInTheDocument();
@@ -139,7 +151,7 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
 
   it('degrades without a nearest ride: dashes, no update button', async () => {
     nearestMock.mockResolvedValue(null);
-    render(<OrganizerOverviewWidget />);
+    render(<Dashboard />);
 
     expect(
       await screen.findByText('Нет запланированных заездов'),
@@ -172,7 +184,7 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
     // profile their failures must not turn into the error state.
     summaryMock.mockRejectedValue(new Error('forbidden'));
     nearestMock.mockRejectedValue(new Error('forbidden'));
-    render(<OrganizerOverviewWidget />);
+    render(<Dashboard />);
 
     expect(
       await screen.findByRole('link', { name: 'Создать профиль' }),
@@ -187,7 +199,7 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
         resolveProfile = resolve;
       }),
     );
-    render(<OrganizerOverviewWidget />);
+    render(<Dashboard />);
 
     expect(nearestMock).toHaveBeenCalledTimes(1);
     expect(summaryMock).toHaveBeenCalledTimes(1);
@@ -197,10 +209,27 @@ describe('OrganizerOverviewWidget (CR-131)', () => {
 
   it('shows an error with retry', async () => {
     summaryMock.mockRejectedValueOnce(new Error('network'));
-    render(<OrganizerOverviewWidget />);
+    render(<Dashboard />);
 
     fireEvent.click(await screen.findByRole('button'));
     expect(await screen.findByText('Доброе утро')).toBeInTheDocument();
+    // The head's retry reloads the KPI row too.
+    expect(await screen.findByText('Лист ожидания')).toBeInTheDocument();
+  });
+
+  it('loads once for both parts and keeps the KPI row out of the no-profile state (CR-185)', async () => {
+    render(<Dashboard />);
+    expect(await screen.findByText('Лист ожидания')).toBeInTheDocument();
+    expect(profileMock).toHaveBeenCalledTimes(1);
+    expect(summaryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the KPI row as nothing on error — the head carries the retry (CR-185)', async () => {
+    summaryMock.mockRejectedValue(new Error('network'));
+    render(<Dashboard />);
+
+    expect(await screen.findAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByText('Лист ожидания')).not.toBeInTheDocument();
   });
 });
 

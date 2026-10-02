@@ -84,6 +84,11 @@ export function RouteMap({
         zoom: 13,
         // The hero's «Трек/Карта» switch owns the top-right corner.
         zoomControlPosition: 'centerRight',
+        // CR-185: a map whose basemap never drew says so (the same notice
+        // as a failed render) instead of a blank sheet under the line.
+        onBasemapUnavailable: () => {
+          if (!cancelled) setRenderFailed(true);
+        },
       })
       .then((renderedHandle) => {
         if (cancelled) {

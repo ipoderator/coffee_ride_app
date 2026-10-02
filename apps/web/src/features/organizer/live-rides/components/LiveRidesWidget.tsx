@@ -19,13 +19,26 @@ import { confirmFinish, listOwnRides, listRideParticipants } from '../api';
 import {
   finishTally,
   liveRides,
+  overdueRides,
   previewRows,
+  resolvedCount,
   type RowState,
   upcomingRides,
 } from '../lib/live-rides';
 
 const MAX_UPCOMING = 3;
 const MAX_ROWS = 3;
+
+// CR-185 (handoff P2): a ride row never pushes the page wider than the
+// screen. Phone: the title (up to two lines) on its own, the date and the
+// action on the line below; from `md`, the action moves up beside the title.
+const ROW_CLASSNAME =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5 py-3';
+const ROW_TITLE_CLASSNAME =
+  'col-span-2 line-clamp-2 font-medium text-text wrap-anywhere md:col-span-1';
+const ROW_META_CLASSNAME = 'text-sm text-text-secondary';
+const ROW_ACTION_CLASSNAME =
+  'inline-flex min-h-11 items-center justify-self-end text-sm font-medium text-primary hover:underline md:col-start-2 md:row-span-2 md:row-start-1';
 
 interface LiveEntry {
   ride: Ride;
@@ -35,7 +48,12 @@ interface LiveEntry {
 type State =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'ready'; live: LiveEntry[]; upcoming: Ride[] };
+  | {
+      status: 'ready';
+      live: LiveEntry[];
+      overdue: Ride[];
+      upcoming: Ride[];
+    };
 
 const DOT: Record<RowState, string> = {
   claimed: 'bg-warning',
@@ -93,11 +111,22 @@ function LiveRideCard({
     }
   }
 
-  const segments: { count: number; className: string }[] = [
-    { count: tally.confirmed, className: 'bg-success' },
-    { count: tally.claimed, className: 'bg-warning' },
-    { count: tally.onRoute, className: 'bg-brand' },
-    { count: tally.dnf, className: 'bg-text-muted' },
+  // CR-184: every active registration lands in exactly one segment, so the
+  // bar never reads as full while no-shows are left out of it.
+  const segments: { count: number; className: string; label: string }[] = [
+    {
+      count: tally.confirmed,
+      className: 'bg-success',
+      label: T.legendConfirmed,
+    },
+    { count: tally.claimed, className: 'bg-warning', label: T.legendClaimed },
+    { count: tally.onRoute, className: 'bg-brand', label: T.legendOnRoute },
+    { count: tally.dnf, className: 'bg-text-muted', label: T.legendDnf },
+    {
+      count: tally.noShow,
+      className: 'bg-text-muted/40',
+      label: T.legendNoShow,
+    },
   ];
 
   return (
@@ -106,7 +135,7 @@ function LiveRideCard({
         <div className="flex min-w-0 flex-col gap-1">
           <Link
             href={`/organizer/rides/${ride.id}/edit`}
-            className="font-title text-h3 text-text hover:underline"
+            className="font-title text-h3 text-text wrap-anywhere hover:underline"
           >
             {ride.title}
           </Link>
@@ -125,7 +154,7 @@ function LiveRideCard({
           </span>
         </span>
         <span>
-          {T.onStartLabel}{' '}
+          {T.listedLabel}{' '}
           <span className="text-text">{T.participantsCount(total)}</span>
         </span>
         {ride.distanceKm !== null && (
@@ -163,32 +192,23 @@ function LiveRideCard({
             )}
           </div>
           <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-text-secondary">
-            <li className="flex items-center gap-2">
-              <Dot className="bg-success" />
-              <span className="tabular-nums">{tally.confirmed}</span>{' '}
-              {T.legendConfirmed}
-            </li>
-            <li className="flex items-center gap-2">
-              <Dot className="bg-warning" />
-              <span className="tabular-nums">{tally.claimed}</span>{' '}
-              {T.legendClaimed}
-            </li>
-            <li className="flex items-center gap-2">
-              <Dot className="bg-brand" />
-              <span className="tabular-nums">{tally.onRoute}</span>{' '}
-              {T.legendOnRoute}
-            </li>
-            <li className="flex items-center gap-2">
-              <Dot className="bg-text-muted" />
-              <span className="tabular-nums">{tally.dnf}</span> {T.legendDnf}
-            </li>
+            {segments.map((segment) => (
+              <li key={segment.label} className="flex items-center gap-2">
+                <Dot className={segment.className} />
+                <span className="tabular-nums">{segment.count}</span>{' '}
+                {segment.label}
+              </li>
+            ))}
           </ul>
+          <p className="text-sm tabular-nums text-text-secondary">
+            {T.resolvedOf(resolvedCount(tally), total)}
+          </p>
 
           <ul className="divide-y divide-border border-t border-border">
             {rows.map(({ item, state }) => (
               <li
                 key={item.id}
-                className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 py-3 md:grid-cols-[auto_1fr_1fr_auto]"
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto]"
               >
                 <Avatar name={item.displayName ?? ''} size="md" />
                 <div className="flex min-w-0 flex-col">
@@ -238,7 +258,7 @@ function LiveRideCard({
         </p>
         <Link
           href={`/organizer/rides/${ride.id}/participants`}
-          className="font-medium text-primary hover:underline"
+          className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
         >
           {T.openParticipants} →
         </Link>
@@ -249,8 +269,10 @@ function LiveRideCard({
 
 /**
  * `/organizer` dashboard (ADR-024 mockup screen 4): the organizer's rides
- * under way with the finish control (CR-181 claims, one-click confirm), and
- * the published rides still to come. Existing endpoints only: `/rides/mine`
+ * under way with the finish control (CR-181 claims, one-click confirm), the
+ * rides whose start passed without being started (CR-184, «Требует решения»),
+ * and the published rides still to come — in that order (CR-185 handoff: the
+ * started ride is the first working block). Existing endpoints only: `/rides/mine`
  * and each live ride's `/participants`.
  */
 export function LiveRidesWidget() {
@@ -267,10 +289,12 @@ export function LiveRidesWidget() {
           participants: await listRideParticipants(ride.id),
         })),
       );
+      const now = new Date();
       return {
         status: 'ready',
         live,
-        upcoming: upcomingRides(rides, new Date(), MAX_UPCOMING),
+        overdue: overdueRides(rides, now),
+        upcoming: upcomingRides(rides, now, MAX_UPCOMING),
       };
     })()
       .then((next) => {
@@ -303,8 +327,10 @@ export function LiveRidesWidget() {
     );
   }
 
-  const { live, upcoming } = state;
-  if (live.length === 0 && upcoming.length === 0) return null;
+  const { live, overdue, upcoming } = state;
+  if (live.length === 0 && overdue.length === 0 && upcoming.length === 0) {
+    return null;
+  }
 
   return (
     <div className="col-span-full flex flex-col gap-6">
@@ -335,6 +361,41 @@ export function LiveRidesWidget() {
         </section>
       )}
 
+      {overdue.length > 0 && (
+        <section
+          aria-labelledby="attention-rides-title"
+          className="flex flex-col gap-3"
+        >
+          <h2
+            id="attention-rides-title"
+            className="flex items-center gap-2 font-mono text-label text-warning uppercase"
+          >
+            <Dot className="bg-warning" />
+            {T.attentionTitle}
+          </h2>
+          <ul className="flex flex-col divide-y divide-border border-y border-border">
+            {overdue.map((ride) => (
+              <li key={ride.id} className={ROW_CLASSNAME}>
+                <span className={ROW_TITLE_CLASSNAME}>{ride.title}</span>
+                <span className={ROW_META_CLASSNAME}>
+                  {T.overdueStart(
+                    formatShortStart(new Date(ride.startsAt), {
+                      timeZone: ride.startTimezone,
+                    }),
+                  )}
+                </span>
+                <Link
+                  href={`/organizer/rides/${ride.id}/edit`}
+                  className={ROW_ACTION_CLASSNAME}
+                >
+                  {T.overdueAction} →
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {upcoming.length > 0 && (
         <section
           aria-labelledby="upcoming-rides-title"
@@ -348,26 +409,21 @@ export function LiveRidesWidget() {
           </h2>
           <ul className="flex flex-col divide-y divide-border border-y border-border">
             {upcoming.map((ride) => (
-              <li
-                key={ride.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
-              >
-                <div className="flex min-w-0 flex-col">
-                  <Link
-                    href={`/organizer/rides/${ride.id}/edit`}
-                    className="truncate font-medium text-text hover:underline"
-                  >
-                    {ride.title}
-                  </Link>
-                  <span className="text-sm text-text-secondary">
-                    {formatShortStart(new Date(ride.startsAt), {
-                      timeZone: ride.startTimezone,
-                    })}
-                  </span>
-                </div>
+              <li key={ride.id} className={ROW_CLASSNAME}>
+                <Link
+                  href={`/organizer/rides/${ride.id}/edit`}
+                  className={cn(ROW_TITLE_CLASSNAME, 'hover:underline')}
+                >
+                  {ride.title}
+                </Link>
+                <span className={ROW_META_CLASSNAME}>
+                  {formatShortStart(new Date(ride.startsAt), {
+                    timeZone: ride.startTimezone,
+                  })}
+                </span>
                 <Link
                   href={`/organizer/rides/${ride.id}/participants`}
-                  className="text-sm font-medium text-primary hover:underline"
+                  className={ROW_ACTION_CLASSNAME}
                 >
                   {T.openParticipants} →
                 </Link>

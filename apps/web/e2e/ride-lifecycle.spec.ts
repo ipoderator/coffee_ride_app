@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
-import { RIDE_EDIT_TERMS, RIDE_STATUS_TERMS } from 'ui';
+import { FINISH_CHECKIN_TERMS, RIDE_EDIT_TERMS, RIDE_STATUS_TERMS } from 'ui';
 import {
   createDraftRide,
   createOrganizerProfile,
   createPublishedRide,
   login,
   registerAndVerify,
+  registerForRide,
 } from './helpers/api-fixtures';
-import { newIsolatedRequest } from './helpers/ui';
+import { confirmInDialog, newIsolatedRequest } from './helpers/ui';
 
 // CR-135. The organizer-side ride lifecycle through `EditRideForm`'s buttons
 // (`docs/product.md` → Lifecycle): draft → published → registration_open →
@@ -27,7 +28,7 @@ async function transition(
   successMessage: string,
 ) {
   await page.getByRole('button', { name: buttonLabel }).click();
-  await expect(page.getByText(successMessage)).toBeVisible();
+  await expect(page.getByText(successMessage, { exact: true })).toBeVisible();
 }
 
 async function publicStatus(rideId: string): Promise<number> {
@@ -88,6 +89,50 @@ test('organizer takes a ride from draft to finished', async ({ page }) => {
   ).toBeVisible();
 });
 
+// CR-185: finishing with riders whose outcome is still undecided asks first
+// and names how many; declining leaves the ride started.
+test('organizer confirms finishing a ride with unresolved riders', async ({
+  page,
+}) => {
+  await signInOrganizer(page, 'Клуб e2e: завершение');
+  const { rideId } = await createPublishedRide(
+    page.request,
+    `E2E завершение ${Date.now()}`,
+  );
+  const rider = await newIsolatedRequest();
+  const account = await registerAndVerify(rider);
+  await login(rider, account.email, account.password);
+  await registerForRide(rider, rideId);
+  await rider.dispose();
+
+  await page.goto(`/organizer/rides/${rideId}/edit`);
+  await transition(
+    page,
+    RIDE_EDIT_TERMS.closeRegistration,
+    RIDE_EDIT_TERMS.closeRegistrationSuccess,
+  );
+  await transition(page, RIDE_EDIT_TERMS.start, RIDE_EDIT_TERMS.startSuccess);
+
+  const finish = page.getByRole('button', { name: RIDE_EDIT_TERMS.finish });
+  const dialog = page.getByRole('dialog');
+  await finish.click();
+  await expect(dialog).toContainText(
+    FINISH_CHECKIN_TERMS.finishConfirmUnresolved(1),
+  );
+  await dialog
+    .getByRole('button', { name: FINISH_CHECKIN_TERMS.finishConfirmCancel })
+    .click();
+  await expect(dialog).toBeHidden();
+  await expect(finish).toBeFocused();
+
+  await finish.click();
+  await confirmInDialog(page, FINISH_CHECKIN_TERMS.finishConfirmAction);
+  await expect(
+    page.getByText(FINISH_CHECKIN_TERMS.finishedWithUnresolved(1)),
+  ).toBeVisible();
+  await expect(finish).toHaveCount(0);
+});
+
 test('organizer cancels a ride with registration open', async ({ page }) => {
   await signInOrganizer(page, 'Клуб e2e: отмена');
   const rideTitle = `E2E отмена ${Date.now()}`;
@@ -102,14 +147,18 @@ test('organizer cancels a ride with registration open', async ({ page }) => {
     void dialog.dismiss();
   });
   await cancel.click();
-  await expect(page.getByText(RIDE_EDIT_TERMS.cancelSuccess)).toHaveCount(0);
+  await expect(
+    page.getByText(RIDE_EDIT_TERMS.cancelSuccess, { exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: RIDE_EDIT_TERMS.closeRegistration }),
   ).toBeVisible();
 
   page.once('dialog', (dialog) => void dialog.accept());
   await cancel.click();
-  await expect(page.getByText(RIDE_EDIT_TERMS.cancelSuccess)).toBeVisible();
+  await expect(
+    page.getByText(RIDE_EDIT_TERMS.cancelSuccess, { exact: true }),
+  ).toBeVisible();
   await expect(cancel).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: RIDE_EDIT_TERMS.closeRegistration }),

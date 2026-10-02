@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ride } from 'types';
 import { CreateRideForm } from './components/CreateRideForm';
@@ -457,6 +463,43 @@ describe('RidesList', () => {
     expect(
       screen.getByRole('link', { name: /Опубликованный заезд/ }),
     ).toHaveAttribute('href', '/organizer/rides/ride-published/edit');
+    // baseRide starts in 2027 — nothing is overdue here.
+    expect(screen.queryByText('Требует решения')).not.toBeInTheDocument();
+  });
+
+  // CR-184: a past start left before `started` is marked, its status untouched.
+  it('marks a ride whose start passed without being started', async () => {
+    listMyRidesMock.mockResolvedValue({
+      items: [
+        {
+          ...baseRide,
+          id: 'ride-late',
+          title: 'Утро на Лосином острове',
+          status: 'registration_open',
+          startsAt: '2020-10-01T05:00:00.000Z',
+        },
+        {
+          ...baseRide,
+          id: 'ride-done',
+          title: 'Прошедший заезд',
+          status: 'finished',
+          startsAt: '2020-09-01T05:00:00.000Z',
+        },
+      ],
+      nextCursor: null,
+    });
+
+    render(<RidesList />);
+
+    const late = await screen.findByRole('link', {
+      name: /Утро на Лосином острове/,
+    });
+    expect(late).toHaveTextContent('Регистрация открыта');
+    expect(late).toHaveTextContent('Требует решения');
+    expect(late).toHaveTextContent('Время старта прошло, а заезд не начат');
+    expect(
+      screen.getByRole('link', { name: /Прошедший заезд/ }),
+    ).not.toHaveTextContent('Требует решения');
   });
 });
 
@@ -563,7 +606,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.change(screen.getByLabelText('Название'), {
       target: { value: 'Обновлённое название' },
@@ -619,7 +662,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.change(screen.getByLabelText('Широта старта'), {
       target: { value: '55.751244' },
@@ -636,22 +679,105 @@ describe('EditRideForm', () => {
     );
   });
 
-  it('renders a non-draft ride read-only, with no save button', async () => {
+  // CR-184: a published ride is managed, not shown as a locked form.
+  it('opens a non-draft ride as «Управление заездом», with no form fields', async () => {
     getRideMock.mockResolvedValue({
       isOwner: true,
       requirements: [],
-      ride: { ...baseRide, status: 'published' },
+      registrationsCount: 7,
+      ride: {
+        ...baseRide,
+        status: 'published',
+        participantLimit: 20,
+        distanceKm: 42,
+      },
+    });
+
+    render(
+      <EditRideForm
+        rideId="ride-1"
+        sections={[
+          { segment: 'participants', label: 'Участники →', order: 40 },
+        ]}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Управление заездом',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: baseRide.title }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Ближайшее действие' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Откройте регистрацию, чтобы участники могли записаться.',
+      ),
+    ).toBeInTheDocument();
+    // The next step comes before the editable settings in document order.
+    const next = screen.getByRole('button', { name: 'Открыть регистрацию' });
+    const contactSave = screen.getByRole('button', {
+      name: 'Сохранить способ связи',
+    });
+    expect(
+      next.compareDocumentPosition(contactSave) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText('7 из 20')).toBeInTheDocument();
+    expect(screen.getByText('42,0 км')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Участники →' }).getAttribute('href'),
+    ).toBe('/organizer/rides/ride-1/participants');
+    expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Сохранить' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('overdue-start')).not.toBeInTheDocument();
+  });
+
+  it('keeps the draft title «Редактирование заезда»', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
     });
 
     render(<EditRideForm rideId="ride-1" />);
 
     expect(
-      await screen.findByText('Редактировать можно только черновик заезда.'),
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Редактирование заезда',
+      }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toBeEnabled();
+  });
+
+  it('flags a past start that was never started, without changing it', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: {
+        ...baseRide,
+        status: 'registration_open',
+        startsAt: '2020-10-01T05:00:00.000Z',
+      },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    expect(await screen.findByTestId('overdue-start')).toHaveTextContent(
+      /Время старта прошло .* Статус сам не изменится/,
+    );
     expect(
-      screen.queryByRole('button', { name: 'Сохранить' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Название')).toBeDisabled();
+      screen.getByRole('button', { name: 'Закрыть регистрацию' }),
+    ).toBeInTheDocument();
+    expect(closeRegistrationMock).not.toHaveBeenCalled();
   });
 
   it('maps a server validation error onto the matching field', async () => {
@@ -673,7 +799,7 @@ describe('EditRideForm', () => {
     );
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     expect(
@@ -692,16 +818,17 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
 
     expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
     expect(publishRideMock).toHaveBeenCalledWith('ride-1');
-    // The form flips to read-only immediately once published.
+    // The screen flips to the management view immediately once published.
     expect(
-      screen.getByText('Редактировать можно только черновик заезда.'),
+      screen.getByRole('heading', { level: 1, name: 'Управление заездом' }),
     ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
   });
 
   it('shows a guiding message when publishing requires email verification', async () => {
@@ -722,7 +849,7 @@ describe('EditRideForm', () => {
     );
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
 
@@ -740,7 +867,7 @@ describe('EditRideForm', () => {
 
     render(<EditRideForm rideId="ride-1" />);
 
-    await screen.findByText('Редактировать можно только черновик заезда.');
+    await screen.findByRole('heading', { name: 'Управление заездом' });
     expect(
       screen.queryByRole('button', { name: 'Опубликовать' }),
     ).not.toBeInTheDocument();
@@ -757,7 +884,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Открыть регистрацию' }),
@@ -782,7 +909,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByRole('button', { name: 'Открыть регистрацию' }),
@@ -800,7 +927,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Закрыть регистрацию' }),
@@ -829,7 +956,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
     const toggle = screen.getByLabelText('Показывать список участников');
     expect(toggle).toBeEnabled();
 
@@ -865,7 +992,7 @@ describe('EditRideForm', () => {
     );
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
     const toggle = screen.getByLabelText('Показывать список участников');
 
     fireEvent.click(toggle);
@@ -886,7 +1013,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
     const toggle = screen.getByLabelText('Показывать список участников');
 
     fireEvent.click(toggle);
@@ -908,13 +1035,10 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
-    // The rest of the form is still read-only — the rule is not loosened.
-    expect(
-      screen.getByText('Редактировать можно только черновик заезда.'),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText('Название')).toBeDisabled();
+    // The rest of the ride is not editable — the rule is not loosened.
+    expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
 
     const value = screen.getByLabelText('Контакт');
     expect(value).toBeEnabled();
@@ -948,7 +1072,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.change(screen.getByLabelText('Как связаться'), {
       target: { value: '' },
@@ -972,7 +1096,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.change(screen.getByLabelText('Контакт'), {
       target: { value: 'не телефон' },
@@ -1008,7 +1132,7 @@ describe('EditRideForm', () => {
     );
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Сохранить способ связи' }),
@@ -1030,7 +1154,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     // No second save path while the ride is a draft.
     expect(
@@ -1059,7 +1183,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByRole('button', { name: 'Закрыть регистрацию' }),
@@ -1076,7 +1200,7 @@ describe('EditRideForm', () => {
       });
 
       render(<EditRideForm rideId="ride-1" />);
-      await screen.findByDisplayValue(baseRide.title);
+      await screen.findByRole('heading', { level: 1 });
 
       expect(
         screen.getByRole('button', { name: 'Отменить заезд' }),
@@ -1092,7 +1216,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByRole('button', { name: 'Отменить заезд' }),
@@ -1108,7 +1232,7 @@ describe('EditRideForm', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Отменить заезд' }));
 
@@ -1127,7 +1251,7 @@ describe('EditRideForm', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Отменить заезд' }));
 
@@ -1146,7 +1270,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByRole('button', { name: 'Отменить заезд' }),
@@ -1164,7 +1288,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Начать заезд' }));
 
@@ -1186,7 +1310,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByRole('button', { name: 'Начать заезд' }),
@@ -1204,7 +1328,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
 
@@ -1227,17 +1351,103 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(screen.getByTestId('unresolved-before-finish')).toHaveTextContent(
       'У 2 участников нет итогового статуса',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
 
+    // CR-185: a confirmation naming the count comes first; nothing is sent
+    // until it is confirmed.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Завершить заезд?',
+    });
+    expect(dialog).toHaveTextContent('У 2 участников нет итогового статуса');
+    expect(finishRideMock).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Завершить' }));
+
     expect(
       await screen.findByText(/Заезд завершён, но у 2 участников/),
     ).toBeInTheDocument();
+    expect(finishRideMock).toHaveBeenCalledWith('ride-1');
     expect(screen.queryByText('Заезд завершён.')).not.toBeInTheDocument();
+  });
+
+  it('backs out of finishing from the confirmation without a request (CR-185)', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'started' },
+      attendanceSummary: { finished: 3, dnf: 0, noShow: 0, unresolved: 1 },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('У 1 участника нет итогового статуса');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Вернуться' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(finishRideMock).not.toHaveBeenCalled();
+  });
+
+  it('asks before finishing a ride started on the same page (CR-185)', async () => {
+    getRideMock
+      .mockResolvedValueOnce({
+        isOwner: true,
+        requirements: [],
+        ride: { ...baseRide, status: 'registration_closed' },
+        attendanceSummary: null,
+      })
+      .mockResolvedValue({
+        isOwner: true,
+        requirements: [],
+        ride: { ...baseRide, status: 'started' },
+        attendanceSummary: { finished: 0, dnf: 0, noShow: 0, unresolved: 4 },
+      });
+    startRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'started' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Начать заезд' }));
+    expect(
+      await screen.findByTestId('unresolved-before-finish'),
+    ).toHaveTextContent('У 4 участников');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('У 4 участников нет итогового статуса');
+    expect(finishRideMock).not.toHaveBeenCalled();
+  });
+
+  it('finishes without asking once the fresh count reaches zero (CR-185)', async () => {
+    getRideMock
+      .mockResolvedValueOnce({
+        isOwner: true,
+        requirements: [],
+        ride: { ...baseRide, status: 'started' },
+        attendanceSummary: { finished: 2, dnf: 0, noShow: 0, unresolved: 1 },
+      })
+      .mockResolvedValue({
+        isOwner: true,
+        requirements: [],
+        ride: { ...baseRide, status: 'started' },
+        attendanceSummary: { finished: 3, dnf: 0, noShow: 0, unresolved: 0 },
+      });
+    finishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'finished' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Завершить заезд' }));
+
+    expect(await screen.findByText('Заезд завершён.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('shows no unresolved warning when every rider has a status', async () => {
@@ -1249,7 +1459,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByTestId('unresolved-before-finish'),
@@ -1264,7 +1474,7 @@ describe('EditRideForm', () => {
     });
 
     render(<EditRideForm rideId="ride-1" />);
-    await screen.findByDisplayValue(baseRide.title);
+    await screen.findByRole('heading', { level: 1 });
 
     expect(
       screen.queryByRole('button', { name: 'Завершить заезд' }),

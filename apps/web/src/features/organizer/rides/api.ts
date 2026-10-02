@@ -104,7 +104,8 @@ type EditableRide = Pick<
   'ride' | 'isOwner' | 'requirements' | 'contact'
 > &
   // CR-182: optional here so ownership-only callers need not supply it.
-  Partial<Pick<GetRideResponse, 'attendanceSummary'>>;
+  // CR-184: `registrationsCount` likewise, for the management view's summary.
+  Partial<Pick<GetRideResponse, 'attendanceSummary' | 'registrationsCount'>>;
 
 export async function getRide(id: string): Promise<EditableRide> {
   const response = await fetch(`${RIDES_ENDPOINT}/${id}`);
