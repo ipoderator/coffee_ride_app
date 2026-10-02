@@ -14,6 +14,12 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+    ignore:
+      # eslint-config-next's major tracks Next's: 16 fails to lint under the
+      # pinned Next 15 (PR #27, "Converting circular structure to JSON"). Bump
+      # it together with `next` when migrating to Next 16 (PR #22).
+      - dependency-name: 'eslint-config-next'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'github-actions'
     directory: '/'
