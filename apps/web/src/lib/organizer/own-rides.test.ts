@@ -4,7 +4,6 @@ import { ApiError } from '@/lib/api/errors';
 import { loadOrganizerNavBadges } from './nav-badges';
 import {
   fetchNearestOwnRide,
-  fetchOwnRide,
   listAllRideParticipants,
   listOwnRidesPage,
   pickNearestRide,
@@ -202,30 +201,5 @@ describe('in-flight GET de-duplication (CR-133, KI-066)', () => {
     expect(
       fetchMock.mock.calls.filter(([url]) => url === MINE_URL),
     ).toHaveLength(1);
-  });
-});
-
-describe('fetchOwnRide (CR-185)', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("refuses someone else's published ride like a missing one (KI-069)", async () => {
-    vi.stubGlobal('fetch', async () =>
-      jsonResponse({ ride: ride('theirs'), isOwner: false }),
-    );
-
-    const error = await fetchOwnRide('theirs').catch((caught) => caught);
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).problem.code).toBe('ride_not_found');
-  });
-
-  it("returns the caller's own ride", async () => {
-    vi.stubGlobal('fetch', async () =>
-      jsonResponse({ ride: ride('mine'), isOwner: true }),
-    );
-
-    await expect(fetchOwnRide('mine')).resolves.toMatchObject({ id: 'mine' });
   });
 });

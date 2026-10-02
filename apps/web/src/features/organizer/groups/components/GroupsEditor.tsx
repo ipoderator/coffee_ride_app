@@ -1,14 +1,15 @@
 'use client';
 
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Lock } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { RIDE_GROUP_MAX_PER_RIDE, type RideStatus } from 'types';
+import { RIDE_GROUP_MAX_PER_RIDE } from 'types';
 import {
   Button,
   Card,
   ConfirmDialog,
   EmptyState,
   ErrorState,
+  Notice,
   ORGANIZER_GROUPS_TERMS as T,
   RIDE_EDIT_TERMS,
   Skeleton,
@@ -21,13 +22,12 @@ import {
   updateRideGroup,
   type RideGroupWithCount,
 } from '../api';
+import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
+import { isGroupsEditable } from '../editable';
 import { useRideGroups } from '../hooks/useRideGroups';
 import type { GroupFieldErrors, GroupFormState } from '../types';
 import { paceToInput, validateGroupForm } from '../validation';
 import { GroupForm } from './GroupForm';
-
-// `docs/api.md` → "Pace groups": editable in every status except these two.
-const LOCKED_STATUSES: ReadonlyArray<RideStatus> = ['finished', 'cancelled'];
 
 type Mode = { kind: 'idle' } | { kind: 'add' } | { kind: 'edit'; id: string };
 type Busy = null | 'save' | 'delete' | { moving: string };
@@ -50,6 +50,11 @@ function suggestName(groups: RideGroupWithCount[]): string {
  * server-side (owner-only, ≤6, unique name, no delete while occupied, locked
  * once `finished`/`cancelled`); the UI mirrors them so the common case never
  * reaches a 409, and maps each 409 `code` to its own message when it does.
+ *
+ * CR-187: an occupied group shows why it can't be deleted instead of a delete
+ * button that would only 409; the rules are one line under the list; a
+ * closed ride gets a lock notice. Inside the ride workspace a change also
+ * refreshes the workspace's «Группы» chip and overview row.
  */
 export function GroupsEditor({ rideId }: { rideId: string }) {
   const { status, rideStatus, groups, refresh, retry } = useRideGroups(rideId);
@@ -73,6 +78,13 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
     direction: Direction;
   } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const refreshWorkspace = useRideWorkspace()?.refresh;
+
+  /** The list, then the workspace's chip/overview row. */
+  async function refreshAll() {
+    await refresh();
+    void refreshWorkspace?.();
+  }
 
   // Keyboard users keep their place: after a move, focus follows the group to
   // its new row (same direction if it can still move that way, else the other).
@@ -90,8 +102,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
   }, [focusAfterMove, groups]);
 
   const readOnly =
-    lockedByServer ||
-    (rideStatus !== null && LOCKED_STATUSES.includes(rideStatus));
+    lockedByServer || (rideStatus !== null && !isGroupsEditable(rideStatus));
   const isBusy = busy !== null;
   const atLimit = groups.length >= RIDE_GROUP_MAX_PER_RIDE;
 
@@ -172,7 +183,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
         setSuccess(T.updateSuccess);
       }
       setMode({ kind: 'idle' });
-      await refresh();
+      await refreshAll();
     } catch (error) {
       handleError(error, 'form');
     } finally {
@@ -190,7 +201,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
     let moved = false;
     try {
       await updateRideGroup(rideId, group.id, { position });
-      await refresh();
+      await refreshAll();
       setSuccess(T.reorderSuccess);
       moved = true;
     } catch (error) {
@@ -209,7 +220,7 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
       await deleteRideGroup(rideId, deleteTarget.id);
       setDeleteTarget(null);
       setSuccess(T.deleteSuccess);
-      await refresh();
+      await refreshAll();
     } catch (error) {
       setDeleteTarget(null);
       handleError(error, 'list');
@@ -261,12 +272,12 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
 
   return (
     <div ref={rootRef} className="flex flex-col gap-4">
-      <p className="text-body-sm text-text-secondary">{T.hint}</p>
+      {/* CR-187: the workspace's section head says what groups are for. */}
 
       {readOnly && (
-        <p role="status" className="text-body-sm text-warning">
+        <Notice title={T.lockedTitle} icon={<Lock className="size-5" />}>
           {T.notEditable}
-        </p>
+        </Notice>
       )}
 
       <Card className="flex flex-col gap-4">
@@ -362,18 +373,25 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
                       >
                         {T.edit}
                       </Button>
-                      <Button
-                        variant="danger"
-                        className="px-3"
-                        aria-label={T.deleteAria(group.name)}
-                        disabled={isBusy}
-                        onClick={() => {
-                          clearMessages();
-                          setDeleteTarget(group);
-                        }}
-                      >
-                        {T.delete}
-                      </Button>
+                      {group.registrationsCount > 0 ? (
+                        // The server refuses it (`group_has_registrations`).
+                        <p className="text-body-sm text-text-secondary">
+                          {T.occupiedNoDelete}
+                        </p>
+                      ) : (
+                        <Button
+                          variant="danger"
+                          className="px-3"
+                          aria-label={T.deleteAria(group.name)}
+                          disabled={isBusy}
+                          onClick={() => {
+                            clearMessages();
+                            setDeleteTarget(group);
+                          }}
+                        >
+                          {T.delete}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </li>
@@ -404,6 +422,10 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
           <p className="text-body-sm text-text-secondary">{T.limitNotice}</p>
         )}
       </Card>
+
+      {!readOnly && (
+        <p className="text-body-sm text-text-muted">{T.rulesHint}</p>
+      )}
 
       {listError && (
         <p role="alert" className="text-body-sm text-danger">

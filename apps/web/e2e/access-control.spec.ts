@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { PARTICIPANTS_TERMS, RIDE_EDIT_TERMS } from 'ui';
+import { RIDE_EDIT_TERMS } from 'ui';
 import {
   createOrganizerProfile,
   createPublishedRide,
@@ -106,10 +106,11 @@ for (const kind of ['participant', 'other organizer'] as const) {
     }
     await expectRideUnchanged(fixture);
 
-    // The participants screen: both lists (riders + waitlist) end in an error
-    // state, never the data.
+    // The participants screen. CR-187: the ride workspace refuses the whole
+    // page for a non-owner (the same `isOwner` check as the edit screen), so
+    // neither list is even requested — and the data never shows.
     await page.goto(`/organizer/rides/${fixture.rideId}/participants`);
-    await expect(page.getByText(PARTICIPANTS_TERMS.loadError)).toHaveCount(2);
+    await expect(page.getByText(RIDE_EDIT_TERMS.notFoundTitle)).toBeVisible();
     await expect(page.getByText(VICTIM_NAME)).toHaveCount(0);
 
     // The edit screen. KI-069 (resolved): it loads through the public ride

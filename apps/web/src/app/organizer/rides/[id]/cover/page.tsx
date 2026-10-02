@@ -1,11 +1,12 @@
-import { BACK_LINK_TERMS, RIDE_COVER_TERMS } from 'ui';
-import { BackLink } from '@/components/site/BackLink';
 import { CoverImageUploadForm } from '@/features/organizer/cover-image/components/CoverImageUploadForm';
+import { RideWorkspace } from '@/features/organizer/rides/components/RideWorkspace';
+import { filterEnabled } from '@/lib/cabinet/feature-flags';
+import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 
-// `/organizer/rides/[id]/cover` (ADR-019/CR-086, `docs/design.md` §14). Inherits
-// `CabinetShell`'s auth gate from `app/organizer/layout.tsx`; ownership is
-// enforced server-side by `GET`/`POST`/`PATCH`/`DELETE /v1/rides/:id/cover`, not
-// here — same precedent as `RideRoutePage`.
+// `/organizer/rides/[id]/cover` (ADR-019/CR-086, `docs/design.md` §14; the
+// ride workspace's «Обложка» tab since CR-187). Inherits `CabinetShell`'s auth
+// gate from `app/organizer/layout.tsx`; ownership is enforced server-side by
+// `GET`/`POST`/`PATCH`/`DELETE /v1/rides/:id/cover`, not here.
 //
 // Next.js 15: `params` is a `Promise` for a dynamic route page, not a plain object.
 export default async function RideCoverPage({
@@ -15,13 +16,12 @@ export default async function RideCoverPage({
 }) {
   const { id } = await params;
   return (
-    <div className="flex flex-col gap-6">
-      <BackLink
-        href="/organizer/rides"
-        label={BACK_LINK_TERMS.toOrganizerRides}
-      />
-      <h1 className="text-h1 text-text">{RIDE_COVER_TERMS.pageTitle}</h1>
+    <RideWorkspace
+      rideId={id}
+      current="cover"
+      sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}
+    >
       <CoverImageUploadForm rideId={id} />
-    </div>
+    </RideWorkspace>
   );
 }

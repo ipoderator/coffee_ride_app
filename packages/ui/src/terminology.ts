@@ -755,15 +755,21 @@ export const RIDE_EDIT_TERMS = {
   // address UI yet (KI-016).
   startLatLabel: 'Широта старта',
   startLngLabel: 'Долгота старта',
-  // CR-027 ("GPX upload"): link into `/organizer/rides/[id]/route`.
-  routeLink: 'Маршрут →',
+  // CR-027 ("GPX upload"): link into `/organizer/rides/[id]/route`. CR-186:
+  // no literal «→» in a section label — the arrow is a decorative icon (it was
+  // read aloud as part of the link name), and each label has a one-line hint.
+  routeLink: 'Маршрут',
+  routeLinkHint: 'Трек, точки и остановки',
   // ADR-019/CR-086 ("Cover image"): link into `/organizer/rides/[id]/cover`.
-  coverLink: 'Обложка →',
+  coverLink: 'Обложка',
+  coverLinkHint: 'Фото на карточке заезда',
   // CR-037 ("Organizer participant list"): link into
   // `/organizer/rides/[id]/participants`.
-  participantsLink: 'Участники →',
+  participantsLink: 'Участники',
+  participantsLinkHint: 'Список записавшихся и итоги',
   // CR-039 ("Ride updates"): link into `/organizer/rides/[id]/updates`.
-  updatesLink: 'Обновления →',
+  updatesLink: 'Обновления',
+  updatesLinkHint: 'Сообщения участникам заезда',
   save: 'Сохранить',
   savePending: 'Сохранение…',
   saveSuccess: 'Изменения сохранены.',
@@ -797,10 +803,8 @@ export const RIDE_EDIT_TERMS = {
   finish: 'Завершить заезд',
   finishPending: 'Завершение…',
   finishSuccess: 'Заезд завершён.',
-  // CR-184: a non-draft ride opens as «Управление заездом» — status, the next
-  // lifecycle step, a short summary and the sections — not as a locked form.
-  manageTitle: 'Управление заездом',
-  nextActionTitle: 'Ближайшее действие',
+  // CR-184: per-status «what next» line — CR-187 shows it under «Следующий
+  // шаг» on the overview tab; the step itself is in the workspace head.
   nextActionHint: {
     published: 'Откройте регистрацию, чтобы участники могли записаться.',
     registration_open:
@@ -814,16 +818,208 @@ export const RIDE_EDIT_TERMS = {
   // Never changed automatically: the organizer decides what happens next.
   overdueStart: (when: string) =>
     `Время старта прошло (${when}), а заезд не начат. Статус сам не изменится — начните заезд или отмените его.`,
-  summaryTitle: 'Кратко о заезде',
-  summaryStart: 'Старт',
-  summaryDistance: 'Дистанция',
-  summaryRegistered: 'Записано',
-  summaryPrice: 'Стоимость',
-  sectionsTitle: 'Разделы',
-  settingsTitle: 'Что можно изменить',
-  settingsHint:
-    'После публикации меняются только видимость списка участников и способ связи. Остальные поля заезда зафиксированы.',
   dangerTitle: 'Отмена заезда',
+} as const;
+
+/**
+ * CR-187 (UX review «Управление», `RIDE_MANAGEMENT_VISUAL_SPEC.md`): the frame
+ * every `/organizer/rides/[id]/*` page shares — status, title, the actions in
+ * priority order and the six local tabs — plus the overview tab's own copy.
+ */
+export const RIDE_WORKSPACE_TERMS = {
+  eyebrow: 'Управление заездом',
+  draftEyebrow: 'Подготовка заезда',
+  tabsLabel: 'Разделы заезда',
+  overviewTab: 'Обзор',
+  actionsLabel: 'Действия с заездом',
+  participantsAction: (count: number): string => `Участники · ${count}`,
+  writeAction: 'Написать участникам',
+  loadError: 'Не удалось загрузить заезд. Попробуйте ещё раз.',
+  overviewTitle: {
+    draft: 'Перед публикацией',
+    published: 'Перед стартом',
+    registration_open: 'Перед стартом',
+    registration_closed: 'Перед стартом',
+    started: 'Заезд идёт',
+    finished: 'После заезда',
+    cancelled: 'Заезд отменён',
+  },
+  overviewDescription: {
+    draft:
+      'Подготовьте маршрут, обложку и группы. После публикации маршрут и обложка закрепляются.',
+    published: 'Проверьте, что всё готово, и откройте регистрацию.',
+    registration_open:
+      'Проверьте материалы, группы и список, затем напишите участникам важные уточнения.',
+    registration_closed:
+      'Регистрация закрыта. Проверьте список и начните заезд, когда все соберутся.',
+    started:
+      'Отмечайте финиш, сход и неявку участников, затем завершите заезд.',
+    finished: 'Проверьте итоги участников — от них зависят отзывы о заезде.',
+    cancelled: 'Участники видят статус «Отменён». Изменить его уже нельзя.',
+  },
+  factsTitle: 'Данные заезда',
+  factStart: 'Старт',
+  factBicycle: 'Велосипед',
+  factRoute: 'Маршрут',
+  factGroups: 'Группы',
+  factPlaces: 'Места',
+  factPrice: 'Стоимость',
+  factRouteValue: (distance: string, elevation: string | null): string =>
+    elevation ? `${distance} · ${elevation} набора` : distance,
+  factNoGroups: 'Без групп — все едут вместе',
+  factPlacesLimited: (count: number, limit: number, waitlist: number): string =>
+    `${count} из ${limit} занято · лист ожидания: ${waitlist}`,
+  factPlacesUnlimited: (count: number, waitlist: number): string =>
+    `${count} записано, без ограничения · лист ожидания: ${waitlist}`,
+  factsHint:
+    'После публикации основные условия зафиксированы — участники записывались именно на них. Меняются только способ связи и видимость списка.',
+  contactTitle: 'Связь с участниками',
+  nextStepTitle: 'Следующий шаг',
+  // A checklist row's link name: «Посмотреть» alone is ambiguous in a links list.
+  rowActionLabel: (action: string, section: string): string =>
+    `${action} — ${section}`,
+} as const;
+
+/** `5 участников записались`, `1 участник записался`. */
+function formatRegisteredTitle(count: number): string {
+  return `${count} ${pluralRu(count, 'участник записался', 'участника записались', 'участников записались')}`;
+}
+
+/**
+ * CR-187: the overview checklist rows and each section's status chip — one
+ * concrete line per section (the spec: «статусы конкретны, а не пять
+ * одинаковых карточек со стрелкой»). Each feature's `readiness.ts` picks from
+ * its own block here.
+ */
+export const RIDE_READINESS_TERMS = {
+  route: {
+    readyTitle: 'Маршрут готов',
+    readyChip: 'Трек загружен',
+    readyDetail: (
+      distance: string,
+      elevation: string | null,
+      stops: number,
+    ): string =>
+      [
+        distance,
+        elevation ? `${elevation} набора` : null,
+        stops > 0
+          ? `${stops} ${pluralRu(stops, 'остановка', 'остановки', 'остановок')}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    missingChip: 'Нет трека',
+    missingDraftTitle: 'Маршрута пока нет',
+    missingDraftDetail: 'Постройте его по карте или загрузите GPX',
+    missingLockedTitle: 'Без трека',
+    missingLockedDetail:
+      'После публикации трек не добавить — участники видят место старта и точки',
+    actionAdd: 'Добавить',
+    actionEdit: 'Изменить',
+    actionView: 'Посмотреть',
+  },
+  cover: {
+    readyTitle: 'Обложка добавлена',
+    readyChip: 'Загружена',
+    readyDetail: 'Участники видят её в карточке заезда',
+    missingChip: 'Нет обложки',
+    missingDraftTitle: 'Обложки пока нет',
+    missingDraftDetail: 'Без неё карточка в каталоге будет без фото',
+    missingLockedTitle: 'Без обложки',
+    missingLockedDetail: 'Карточка в каталоге показывается без фото',
+    actionAdd: 'Загрузить',
+    actionEdit: 'Изменить',
+    actionView: 'Посмотреть',
+  },
+  groups: {
+    readyTitle: (count: number): string =>
+      `${count} ${pluralRu(count, 'группа', 'группы', 'групп')} по темпу`,
+    readyChip: (count: number, max: number): string => `${count} из ${max}`,
+    emptyTitle: 'Без групп',
+    emptyDetail: 'Все едут вместе. Группы помогают выбрать темп',
+    emptyChip: 'Групп нет',
+    actionAdd: 'Добавить',
+    actionEdit: 'Настроить',
+    actionView: 'Посмотреть',
+  },
+  participants: {
+    notOpenTitle: 'Запись ещё не открыта',
+    notOpenDetail: 'Откройте регистрацию, чтобы участники могли записаться',
+    notOpenChip: 'Запись не открыта',
+    noneTitle: 'Пока никто не записался',
+    registeredTitle: formatRegisteredTitle,
+    registeredChip: (count: number): string =>
+      count === 0
+        ? 'Никто не записан'
+        : `${count} ${pluralRu(count, 'записался', 'записались', 'записались')}`,
+    placesLimited: (free: number, limit: number, waitlist: number): string =>
+      `Свободно ${free} из ${limit} · лист ожидания: ${waitlist}`,
+    placesUnlimited: (waitlist: number): string =>
+      `Без ограничения мест · лист ожидания: ${waitlist}`,
+    startedTitle: 'Отметка итогов',
+    startedDetail: (decided: number, total: number): string =>
+      `Итоговый статус у ${decided} из ${total}`,
+    unresolvedChip: (count: number): string => `Не отмечено: ${count}`,
+    allMarkedChip: 'Все отмечены',
+    finishedTitle: 'Итоги заезда',
+    finishedDetail: (finished: number, dnf: number, noShow: number): string =>
+      `Финиш: ${finished} · сошли: ${dnf} · не пришли: ${noShow}`,
+    unconfirmedChip: (count: number): string => `Не подтверждено: ${count}`,
+    finishedChip: 'Итоги подведены',
+    cancelledTitle: 'Заезд отменён',
+    cancelledDetail: 'Участники видят статус «Отменён»',
+    actionOpen: 'Открыть',
+    actionMark: 'Отметить',
+  },
+  updates: {
+    emptyTitle: 'Обновлений пока нет',
+    emptyDetail: 'Расскажите о точке встречи или важных изменениях',
+    emptyChip: 'Пока не отправляли',
+    latestTitle: 'Последнее обновление',
+    latestDetail: (when: string, excerpt: string): string =>
+      `${when} · «${excerpt}»`,
+    latestChip: (date: string): string => `Последнее: ${date}`,
+    unknownTitle: 'Обновления',
+    unknownDetail: 'Историю сейчас не удалось загрузить',
+    unknownChip: 'История недоступна',
+    actionWrite: 'Написать',
+    actionOpen: 'Открыть',
+  },
+  // A section without its own resolver (a future one) still gets a row.
+  fallbackAction: 'Открыть',
+} as const;
+
+/**
+ * CR-187: section heads (task + why) and the «закреплено» notices. Kept with
+ * the workspace so the five sections read as one voice.
+ */
+export const RIDE_SECTION_HEAD_TERMS = {
+  route: {
+    title: 'Маршрут заезда',
+    description:
+      'Трек, место встречи и ключевые точки. Именно этот маршрут видят записавшиеся участники.',
+  },
+  cover: {
+    title: 'Обложка заезда',
+    description:
+      'Обложка помогает узнать заезд в каталоге. Здесь видно, как её увидят участники.',
+  },
+  groups: {
+    title: 'Группы по темпу',
+    description:
+      'Участник выбирает группу при записи. Название и скорость помогают понять, с кем ехать.',
+  },
+  participants: {
+    title: 'Участники',
+    description:
+      'Кто записался и в какой группе. Лист ожидания показан отдельно.',
+  },
+  updates: {
+    title: 'Обновления для участников',
+    description:
+      'Сообщайте то, что влияет на поездку: точку встречи, время, погоду, условия маршрута.',
+  },
 } as const;
 
 /**
@@ -1017,10 +1213,27 @@ export const RIDE_ROUTE_TERMS = {
   // auto-fills them server-side, so this note is the deliberate-mismatch case only.
   metricsMismatch:
     'Дистанция или набор высоты заезда отличаются от данных трека.',
+  // CR-187: after publishing neither side can change, so the same divergence
+  // is a neutral reference line, not a yellow «needs a decision» warning.
+  metricsMismatchLocked:
+    'Дистанция или набор высоты в карточке заезда отличаются от трека — для справки, после публикации они не меняются.',
   metricsMismatchRide: 'В заезде указано',
   metricsMismatchTrack: 'по треку',
   metricsSyncAction: 'Использовать данные трека',
   metricsSyncSuccess: 'Дистанция и набор высоты заезда обновлены из трека.',
+  // CR-187: a published route is a result to look at, not a disabled form.
+  lockedTitle: 'Маршрут закреплён после публикации',
+  lockedText:
+    'Трек, остановки и точки можно посмотреть и скачать. Построить маршрут по карте или заменить GPX можно только в черновике.',
+  sketchTitle: 'Трек заезда',
+  sketchLabel: 'Схема трека: старт, линия маршрута и финиш',
+  sketchCaption: 'Схема по загруженному треку, без подложки карты',
+  sketchUnavailable:
+    'Схему трека сейчас не удалось загрузить — файл можно скачать.',
+  sketchStart: 'Старт',
+  sketchFinish: 'Финиш',
+  detailsTitle: 'Данные трека',
+  downloadShort: 'Скачать GPX',
 } as const;
 
 /**
@@ -1078,6 +1291,19 @@ export const RIDE_COVER_TERMS = {
   coverImageInvalid: 'Файл не распознан как изображение JPEG, PNG или WebP.',
   coverImageTooLarge: 'Файл превышает допустимый размер (8 МБ).',
   storageUnavailable: 'Загрузка недоступна. Попробуйте ещё раз позже.',
+  // CR-187: the published cover is a preview, with the file rules beside it.
+  lockedTitle: 'Обложка закреплена после публикации',
+  lockedText:
+    'Заменить или удалить изображение можно только в черновике. Ниже — так её видят участники.',
+  previewCaption: 'Так обложка выглядит в карточке заезда',
+  previewAlt: 'Обложка заезда',
+  rulesTitle: 'Файл обложки',
+  rulesFormat: 'Формат',
+  rulesFormatValue: 'JPEG, PNG или WebP',
+  rulesSize: 'Размер',
+  rulesSizeValue: 'до 8 МБ',
+  rulesFit: 'Отображение',
+  rulesFitValue: 'по центру, края обрезаются',
 } as const;
 
 /**
@@ -1184,7 +1410,9 @@ export const PARTICIPANTS_TERMS = {
   pageTitle: 'Участники',
   loadError: 'Не удалось загрузить список участников. Попробуйте ещё раз.',
   noNameFallback: 'Без имени',
-  participantsSectionTitle: 'Участники',
+  // CR-187: the workspace head already says «Участники»; this card is the
+  // registered half, beside «Лист ожидания».
+  participantsSectionTitle: 'Записались',
   participantsEmptyTitle: 'Пока никто не зарегистрирован',
   participantsEmptyDescription:
     'Здесь появятся участники после того, как кто-то зарегистрируется на заезд.',
@@ -1193,6 +1421,13 @@ export const PARTICIPANTS_TERMS = {
   waitlistEmptyDescription:
     'Здесь появятся участники, если заезд заполнится и кто-то встанет в очередь.',
   joinedAtLabel: 'Дата регистрации',
+  // CR-187: what this list is for before the start (finish marks come later).
+  draftNoticeTitle: 'Запись ещё не открыта',
+  draftNoticeText:
+    'Участники смогут записаться после публикации и открытия регистрации.',
+  beforeStartNoticeTitle: 'Отметки появятся после старта',
+  beforeStartNoticeText:
+    'Финиш, сход и неявку можно отмечать, когда заезд начнётся. До этого здесь важны список и лист ожидания.',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -1212,10 +1447,10 @@ function formatGroupParticipantsCount(count: number): string {
  */
 export const ORGANIZER_GROUPS_TERMS = {
   pageTitle: 'Группы по темпу',
-  // Link from the ride edit screen's sub-page list (next to «Маршрут →»).
-  rideEditLink: 'Группы →',
+  // Link from the ride edit screen's sub-page list (next to «Маршрут»).
+  rideEditLink: 'Группы',
+  rideEditLinkHint: 'Деление участников по темпу',
   backToEdit: 'К редактированию заезда',
-  hint: 'Если в заезде есть группы, участник при регистрации обязательно выбирает одну из них.',
   loadError: 'Не удалось загрузить группы. Попробуйте ещё раз.',
   emptyTitle: 'Групп нет — все участники едут вместе.',
   emptyDescription: 'Добавьте группы, если заезд делится по темпу.',
@@ -1250,6 +1485,11 @@ export const ORGANIZER_GROUPS_TERMS = {
   deleteConfirmAction: 'Удалить группу',
   limitNotice: 'Добавлено максимальное число групп — 6.',
   notEditable: 'Заезд завершён или отменён — группы больше нельзя менять.',
+  // CR-187: the rules in one line, and why an occupied group has no delete.
+  lockedTitle: 'Группы закрыты',
+  rulesHint:
+    'До 6 групп. Порядок меняется стрелками, удалить можно только группу без участников. После завершения или отмены заезда группы закрываются.',
+  occupiedNoDelete: 'Есть участники — удалить нельзя',
   // Client validation (mirrors `createRideGroupRequestSchema`).
   nameRequired: 'Укажите название группы.',
   nameTooLong: 'Название — не длиннее 60 символов.',
@@ -1336,6 +1576,19 @@ export const RIDE_UPDATES_TERMS = {
     'Не удалось загрузить историю обновлений. Попробуйте ещё раз.',
   historyEmptyTitle: 'Обновлений пока нет',
   historyEmptyDescription: 'Отправленные участникам сообщения появятся здесь.',
+  // CR-187: who receives it, how it reads, and Russian validation (the shared
+  // Zod schema's own messages are English).
+  recipients: (count: number): string =>
+    count === 0
+      ? 'Сейчас никто не записан — сообщение никто не получит.'
+      : `Получ${count % 10 === 1 && count % 100 !== 11 ? 'ит' : 'ат'} ${count} ${pluralRu(count, 'записавшийся участник', 'записавшихся участника', 'записавшихся участников')}. Проверьте текст перед отправкой.`,
+  previewTitle: 'Так увидят участники',
+  previewEmpty: 'Текст появится здесь, когда вы начнёте писать.',
+  messageRequired: 'Напишите сообщение.',
+  messageTooLong: 'Не длиннее 2000 символов.',
+  draftNoticeTitle: 'Пока некому писать',
+  draftNoticeText:
+    'Обновления получают записавшиеся участники. Напишите после публикации и открытия регистрации.',
 } as const;
 
 /**
@@ -1649,17 +1902,6 @@ export const ORGANIZER_OVERVIEW_TERMS = {
  * the nearest ride's pages (CR-131, `/organizer/participants`,
  * `/organizer/updates`).
  */
-/**
- * CR-185 (UX handoff P1): the block on a ride's own organizer sub-pages
- * (participants, updates) that says which ride the page is about — the
- * sidebar's «Участники»/«Обновления» land there for the nearest ride.
- */
-export const RIDE_CONTEXT_TERMS = {
-  label: 'Заезд',
-  manageLink: 'Управление заездом',
-  loadError: 'Не удалось загрузить данные заезда.',
-} as const;
-
 export const ORGANIZER_NEAREST_RIDE_TERMS = {
   overviewNavLabel: 'Обзор',
   participantsNavLabel: 'Участники',

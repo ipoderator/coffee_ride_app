@@ -295,20 +295,19 @@ export function StopsSection({
         {STOPS_TERMS.sectionTitle}
       </p>
 
-      {!isDraft && (
-        <p role="status" className="text-body-sm text-warning">
-          {STOPS_TERMS.notEditable}
-        </p>
-      )}
-
+      {/* CR-187: no per-card «только у черновика» line — the route tab's
+          lock notice says it once for the track, stops and points. */}
       {stops.length === 0 && !addForm && (
         <div className="flex flex-col gap-1">
           <p className="text-body-sm font-medium text-text">
             {STOPS_TERMS.emptyTitle}
           </p>
-          <p className="text-body-sm text-text-secondary">
-            {STOPS_TERMS.emptyDescription}
-          </p>
+          {/* CR-187: an invitation to add only where adding is possible. */}
+          {isDraft && (
+            <p className="text-body-sm text-text-secondary">
+              {STOPS_TERMS.emptyDescription}
+            </p>
+          )}
         </div>
       )}
 

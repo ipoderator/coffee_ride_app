@@ -1,11 +1,13 @@
-import { BACK_LINK_TERMS, PARTICIPANTS_TERMS } from 'ui';
-import { RideContextHeader } from '@/components/cabinet/RideContextHeader';
-import { BackLink } from '@/components/site/BackLink';
 import { ParticipantTable } from '@/features/organizer/participants/components/ParticipantTable';
 import { WaitlistTable } from '@/features/organizer/participants/components/WaitlistTable';
+import { RideWorkspace } from '@/features/organizer/rides/components/RideWorkspace';
+import { filterEnabled } from '@/lib/cabinet/feature-flags';
+import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 
 // `/organizer/rides/[id]/participants` (`docs/design.md` §8 "Participants +
-// waitlist", CR-037). Inherits `CabinetShell`'s auth gate from
+// waitlist", CR-037; the ride workspace's «Участники» tab since CR-187 — the
+// workspace head says which ride this is, which CR-185's `RideContextHeader`
+// did before). Inherits `CabinetShell`'s auth gate from
 // `app/organizer/layout.tsx`; ownership is enforced server-side by
 // `GET /v1/rides/:id/participants` and `.../waitlist`, not here.
 //
@@ -17,19 +19,13 @@ export default async function RideParticipantsPage({
 }) {
   const { id } = await params;
   return (
-    <div className="flex flex-col gap-6">
-      <BackLink
-        href="/organizer/rides"
-        label={BACK_LINK_TERMS.toOrganizerRides}
-      />
-      {/* CR-185: which ride's list this is — the sidebar lands here for the
-          nearest ride. */}
-      <header className="flex flex-col gap-3">
-        <h1 className="text-h1 text-text">{PARTICIPANTS_TERMS.pageTitle}</h1>
-        <RideContextHeader rideId={id} />
-      </header>
+    <RideWorkspace
+      rideId={id}
+      current="participants"
+      sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}
+    >
       <ParticipantTable rideId={id} />
       <WaitlistTable rideId={id} />
-    </div>
+    </RideWorkspace>
   );
 }

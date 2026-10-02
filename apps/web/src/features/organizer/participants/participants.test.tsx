@@ -163,7 +163,10 @@ describe('ParticipantTable — pace groups', () => {
     render(<ParticipantTable rideId="ride-1" />);
 
     await screen.findByText('Анна Смирнова');
-    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    // CR-187: only the card's own «Записались» heading, no group headings.
+    expect(
+      screen.getAllByRole('heading').map((heading) => heading.textContent),
+    ).toEqual(['Записались']);
     expect(screen.queryByText('Без группы')).not.toBeInTheDocument();
   });
 
@@ -192,7 +195,7 @@ describe('ParticipantTable — pace groups', () => {
 
     render(<ParticipantTable rideId="ride-1" />);
 
-    const headings = await screen.findAllByRole('heading', { level: 2 });
+    const headings = await screen.findAllByRole('heading', { level: 4 });
     expect(headings.map((heading) => heading.textContent)).toEqual([
       `Группа 1 · 25${NBSP}км/ч`,
       `Группа 2 · 32,5${NBSP}км/ч`,

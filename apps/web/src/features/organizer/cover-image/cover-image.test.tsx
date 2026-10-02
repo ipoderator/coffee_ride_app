@@ -239,11 +239,14 @@ describe('CoverImageUploadForm', () => {
 
     render(<CoverImageUploadForm rideId="ride-1" />);
 
+    // CR-187: a lock notice and the preview, not a disabled upload.
     expect(
-      await screen.findByText(
-        'Обложку можно менять только у черновика заезда.',
-      ),
+      await screen.findByText('Обложка закреплена после публикации'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'Обложка заезда' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Файл изображения')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Заменить обложку' }),
     ).not.toBeInTheDocument();

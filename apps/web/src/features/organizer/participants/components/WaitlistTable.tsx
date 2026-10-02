@@ -16,6 +16,7 @@ import {
   getRideWaitlist,
   type RideParticipantSummary,
 } from '../api';
+import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
 import { formatGroupRef } from '../group-sections';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
@@ -37,6 +38,7 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
   const [items, setItems] = useState<RideParticipantSummary[]>([]);
   const [rideHasGroups, setRideHasGroups] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const timeZone = useRideWorkspace()?.data.ride.startTimezone;
 
   useEffect(() => {
     let cancelled = false;
@@ -66,9 +68,9 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
 
   return (
     <Card className="flex flex-col gap-4">
-      <p className="text-body-sm font-medium text-text">
+      <h3 className="text-h3 text-text">
         {PARTICIPANTS_TERMS.waitlistSectionTitle}
-      </p>
+      </h3>
 
       {status === 'loading' && (
         <div className="flex flex-col gap-3">
@@ -115,8 +117,9 @@ export function WaitlistTable({ rideId }: { rideId: string }) {
                   )}
                 </div>
                 <p className="text-body-sm text-text-secondary">
-                  {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt)}{' '}
-                  {formatTime(joinedAt)}
+                  {PARTICIPANTS_TERMS.joinedAtLabel}:{' '}
+                  {formatDate(joinedAt, { timeZone })}{' '}
+                  {formatTime(joinedAt, { timeZone })}
                 </p>
               </li>
             );

@@ -68,9 +68,8 @@ describe('UpdateComposer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
-    expect(
-      await screen.findByText('Message cannot be empty.'),
-    ).toBeInTheDocument();
+    // CR-187: in Russian — the shared schema's own message is English.
+    expect(await screen.findByText('Напишите сообщение.')).toBeInTheDocument();
     expect(createRideUpdateMock).not.toHaveBeenCalled();
   });
 

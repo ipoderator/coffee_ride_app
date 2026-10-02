@@ -1,18 +1,22 @@
 'use client';
 
 import Link from 'next/link';
+import { Lock } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
+  buttonClassName,
   Card,
+  cn,
   ErrorState,
   FileInput,
-  MetricTile,
+  Notice,
   RIDE_ROUTE_TERMS,
   Skeleton,
   formatDistanceParts,
   formatElevationParts,
 } from 'ui';
+import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
 import {
   ApiError,
   deleteRoute,
@@ -27,6 +31,7 @@ import {
 } from '../api';
 import { RouteBuilder } from './RouteBuilder';
 import { RoutePointsSection } from './RoutePointsSection';
+import { RouteTrackSketch } from './RouteTrackSketch';
 import { StopsSection } from './StopsSection';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
@@ -40,6 +45,11 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
  * CR-029 ("Route metadata", resolves KI-034): also tracks the ride's own
  * `distanceKm`/`elevationGainMeters` (`Ride`'s organizer-entered fields, distinct
  * from `route`'s GPX-computed ones) to show a reconciliation note when they diverge.
+ *
+ * CR-187: a published ride's route is a result, not a disabled form — a lock
+ * notice saying why, the track sketch with «Скачать GPX», the track facts, then
+ * the read-only stops and points. Inside the ride workspace, every change also
+ * refreshes the workspace (its «Маршрут» chip and overview row).
  */
 export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
@@ -58,6 +68,8 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [isPending, setIsPending] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workspace = useRideWorkspace();
+  const refreshWorkspace = workspace?.refresh;
 
   const reload = useCallback(async () => {
     const state = await getRideRouteState(rideId);
@@ -94,6 +106,12 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
       cancelled = true;
     };
   }, [reload, loadAttempt]);
+
+  /** After a change: this screen's own state, then the workspace's chip. */
+  const reloadAll = useCallback(async () => {
+    await reload();
+    void refreshWorkspace?.();
+  }, [reload, refreshWorkspace]);
 
   function resetMessages() {
     setFormError(null);
@@ -148,7 +166,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
       // (CR-029, resolves KI-034) — reloading keeps this screen's mismatch check
       // accurate against what the server actually did, not a locally-guessed copy
       // of its auto-fill logic.
-      await reload();
+      await reloadAll();
       setSuccessMessage(
         isReplace
           ? RIDE_ROUTE_TERMS.replaceSuccess
@@ -171,6 +189,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     try {
       await deleteRoute(rideId);
       setRoute(null);
+      void refreshWorkspace?.();
       setSuccessMessage(RIDE_ROUTE_TERMS.deleteSuccess);
     } catch (error) {
       handleUploadError(error);
@@ -189,7 +208,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
         distanceKm: route.distanceKm,
         elevationGainMeters: route.elevationGainMeters,
       });
-      await reload();
+      await reloadAll();
       setSuccessMessage(RIDE_ROUTE_TERMS.metricsSyncSuccess);
     } catch (error) {
       handleUploadError(error);
@@ -246,95 +265,167 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
     (rideDistanceKm !== route.distanceKm ||
       rideElevationGainMeters !== route.elevationGainMeters);
 
+  const details =
+    route && distance && elevation ? (
+      <div className="flex flex-col gap-3">
+        <h3 className="text-body font-semibold text-text">
+          {RIDE_ROUTE_TERMS.detailsTitle}
+        </h3>
+        <dl className="flex flex-col divide-y divide-border text-body-sm">
+          {(
+            [
+              [
+                RIDE_ROUTE_TERMS.distanceLabel,
+                `${distance.value} ${distance.unit}`,
+              ],
+              [
+                RIDE_ROUTE_TERMS.elevationGainLabel,
+                `${elevation.value} ${elevation.unit}`,
+              ],
+              [RIDE_ROUTE_TERMS.pointCountLabel, String(route.pointCount)],
+              [RIDE_ROUTE_TERMS.fileNameLabel, route.gpxFileName],
+            ] as const
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-baseline justify-between gap-4 py-2 first:pt-0"
+            >
+              <dt className="text-text-secondary">{label}</dt>
+              <dd className="text-right font-mono text-text tabular-nums wrap-anywhere">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {hasMetricsMismatch && (
+          <div
+            className={cn(
+              'flex flex-col gap-2 rounded-md px-4 py-3',
+              isDraft ? 'border border-warning/30 bg-warning/10' : 'bg-surface',
+            )}
+          >
+            <p
+              className={cn(
+                'text-body-sm',
+                isDraft ? 'text-warning' : 'font-medium text-text',
+              )}
+            >
+              {isDraft
+                ? RIDE_ROUTE_TERMS.metricsMismatch
+                : RIDE_ROUTE_TERMS.metricsMismatchLocked}
+            </p>
+            <p className="text-body-sm text-text-secondary">
+              {RIDE_ROUTE_TERMS.metricsMismatchRide}:{' '}
+              {formatDistanceParts(rideDistanceKm).value}{' '}
+              {formatDistanceParts(rideDistanceKm).unit} ·{' '}
+              {formatElevationParts(rideElevationGainMeters).value}{' '}
+              {formatElevationParts(rideElevationGainMeters).unit}
+              {' — '}
+              {RIDE_ROUTE_TERMS.metricsMismatchTrack}: {distance.value}{' '}
+              {distance.unit} · {elevation.value} {elevation.unit}
+            </p>
+            {isDraft && (
+              <Button
+                type="button"
+                variant="secondary"
+                isLoading={isPending}
+                onClick={handleSync}
+                className="self-start"
+              >
+                {RIDE_ROUTE_TERMS.metricsSyncAction}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    ) : null;
+
+  const stopsAndPoints = (
+    <>
+      <StopsSection
+        rideId={rideId}
+        stops={stops}
+        isDraft={isDraft}
+        onChange={reloadAll}
+      />
+
+      <RoutePointsSection
+        rideId={rideId}
+        routePoints={routePoints}
+        isDraft={isDraft}
+        onChange={reloadAll}
+      />
+    </>
+  );
+
+  if (!isDraft) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Notice
+          title={RIDE_ROUTE_TERMS.lockedTitle}
+          icon={<Lock className="size-5" />}
+        >
+          {RIDE_ROUTE_TERMS.lockedText}
+        </Notice>
+
+        {route ? (
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(15rem,0.8fr)]">
+            <Card className="overflow-hidden p-0">
+              <RouteTrackSketch rideId={rideId} />
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="flex min-w-0 flex-col">
+                  <p className="text-body font-semibold text-text">
+                    {RIDE_ROUTE_TERMS.sketchTitle}
+                  </p>
+                  <p className="text-body-sm text-text-secondary">
+                    {RIDE_ROUTE_TERMS.sketchCaption}
+                  </p>
+                </div>
+                <a
+                  href={routeDownloadUrl(rideId)}
+                  className={buttonClassName('secondary')}
+                >
+                  {RIDE_ROUTE_TERMS.downloadShort}
+                </a>
+              </div>
+            </Card>
+            <Card>{details}</Card>
+          </div>
+        ) : (
+          <Card className="flex flex-col gap-1">
+            <p className="text-body-sm font-medium text-text">
+              {RIDE_ROUTE_TERMS.emptyTitle}
+            </p>
+          </Card>
+        )}
+
+        {stopsAndPoints}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <Link
-        href={`/organizer/rides/${rideId}/edit`}
-        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-      >
-        {RIDE_ROUTE_TERMS.backToEdit}
-      </Link>
-
       {/* CR-114: building on 2GIS roads comes first — it's the path that
           can't produce a line through a river; GPX upload stays below as the
           alternative for an organizer who already has a recorded track. */}
-      {isDraft && (
-        <RouteBuilder
-          rideId={rideId}
-          hasRoute={route !== null}
-          start={start}
-          onBuilt={reload}
-        />
-      )}
+      <RouteBuilder
+        rideId={rideId}
+        hasRoute={route !== null}
+        start={start}
+        onBuilt={reloadAll}
+      />
 
       <Card className="flex flex-col gap-4">
-        {!isDraft && (
-          <p role="status" className="text-body-sm text-warning">
-            {RIDE_ROUTE_TERMS.notEditable}
-          </p>
-        )}
-
         {route ? (
           <>
-            <div className="flex flex-wrap gap-6">
-              {distance && (
-                <MetricTile
-                  label={RIDE_ROUTE_TERMS.distanceLabel}
-                  value={distance.value}
-                  unit={distance.unit}
-                />
-              )}
-              {elevation && (
-                <MetricTile
-                  label={RIDE_ROUTE_TERMS.elevationGainLabel}
-                  value={elevation.value}
-                  unit={elevation.unit}
-                />
-              )}
-              <MetricTile
-                label={RIDE_ROUTE_TERMS.pointCountLabel}
-                value={String(route.pointCount)}
-              />
-            </div>
-            <p className="text-body-sm text-text-secondary">
-              {RIDE_ROUTE_TERMS.fileNameLabel}: {route.gpxFileName}
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <a
-                href={routeDownloadUrl(rideId)}
-                className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-              >
-                {RIDE_ROUTE_TERMS.download}
-              </a>
-            </div>
-            {hasMetricsMismatch && (
-              <div className="flex flex-col gap-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
-                <p className="text-body-sm text-warning">
-                  {RIDE_ROUTE_TERMS.metricsMismatch}
-                </p>
-                <p className="text-body-sm text-text-secondary">
-                  {RIDE_ROUTE_TERMS.metricsMismatchRide}:{' '}
-                  {formatDistanceParts(rideDistanceKm).value}{' '}
-                  {formatDistanceParts(rideDistanceKm).unit} ·{' '}
-                  {formatElevationParts(rideElevationGainMeters).value}{' '}
-                  {formatElevationParts(rideElevationGainMeters).unit}
-                  {' — '}
-                  {RIDE_ROUTE_TERMS.metricsMismatchTrack}: {distance!.value}{' '}
-                  {distance!.unit} · {elevation!.value} {elevation!.unit}
-                </p>
-                {isDraft && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    isLoading={isPending}
-                    onClick={handleSync}
-                    className="self-start"
-                  >
-                    {RIDE_ROUTE_TERMS.metricsSyncAction}
-                  </Button>
-                )}
-              </div>
-            )}
+            {details}
+            <a
+              href={routeDownloadUrl(rideId)}
+              className="inline-flex min-h-11 items-center self-start text-body-sm font-medium text-primary hover:underline"
+            >
+              {RIDE_ROUTE_TERMS.download}
+            </a>
           </>
         ) : (
           <div className="flex flex-col gap-1">
@@ -347,22 +438,20 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
           </div>
         )}
 
-        {isDraft && (
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="route-gpx-file"
-              className="text-body-sm font-medium text-text"
-            >
-              {RIDE_ROUTE_TERMS.uploadLabel}
-            </label>
-            <FileInput
-              id="route-gpx-file"
-              ref={fileInputRef}
-              accept=".gpx,application/gpx+xml"
-              disabled={isPending}
-            />
-          </div>
-        )}
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="route-gpx-file"
+            className="text-body-sm font-medium text-text"
+          >
+            {RIDE_ROUTE_TERMS.uploadLabel}
+          </label>
+          <FileInput
+            id="route-gpx-file"
+            ref={fileInputRef}
+            accept=".gpx,application/gpx+xml"
+            disabled={isPending}
+          />
+        </div>
 
         {storageUnavailable && (
           <ErrorState
@@ -384,48 +473,34 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
           </p>
         )}
 
-        {isDraft && (
-          <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="button"
+            isLoading={isPending}
+            onClick={handleUpload}
+            className="self-start"
+          >
+            {isPending
+              ? RIDE_ROUTE_TERMS.uploadPending
+              : route
+                ? RIDE_ROUTE_TERMS.replace
+                : RIDE_ROUTE_TERMS.upload}
+          </Button>
+          {route && (
             <Button
               type="button"
+              variant="danger"
               isLoading={isPending}
-              onClick={handleUpload}
+              onClick={handleDelete}
               className="self-start"
             >
-              {isPending
-                ? RIDE_ROUTE_TERMS.uploadPending
-                : route
-                  ? RIDE_ROUTE_TERMS.replace
-                  : RIDE_ROUTE_TERMS.upload}
+              {RIDE_ROUTE_TERMS.delete}
             </Button>
-            {route && (
-              <Button
-                type="button"
-                variant="danger"
-                isLoading={isPending}
-                onClick={handleDelete}
-                className="self-start"
-              >
-                {RIDE_ROUTE_TERMS.delete}
-              </Button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </Card>
 
-      <StopsSection
-        rideId={rideId}
-        stops={stops}
-        isDraft={isDraft}
-        onChange={reload}
-      />
-
-      <RoutePointsSection
-        rideId={rideId}
-        routePoints={routePoints}
-        isDraft={isDraft}
-        onChange={reload}
-      />
+      {stopsAndPoints}
     </div>
   );
 }

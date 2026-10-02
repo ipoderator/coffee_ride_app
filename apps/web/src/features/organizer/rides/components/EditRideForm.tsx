@@ -1,9 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import {
-  EMPTY_RIDE_CONTACT,
   RideContactFields,
   rideContactFromResponse,
   rideContactToRequest,
@@ -15,25 +13,18 @@ import {
   BICYCLE_TYPE_TERMS,
   Button,
   Card,
-  ConfirmDialog,
   DIFFICULTY_LEVEL_TERMS,
-  ErrorState,
-  FINISH_CHECKIN_TERMS,
-  formatDistance,
-  formatParticipants,
-  formatPrice,
-  formatRideStartLine,
   FormField,
   Input,
   RIDE_EDIT_TERMS,
+  RIDE_WORKSPACE_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
-  Skeleton,
-  StatusBadge,
   Textarea,
-  RIDE_STATUS_TERMS,
 } from 'ui';
-import type { RideSectionLink } from '@/lib/cabinet/types';
-import { isRideOverdue } from '@/lib/rides/overdue';
+import {
+  useRideWorkspace,
+  type RideWorkspaceContextValue,
+} from '@/lib/cabinet/ride-workspace';
 import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import {
   utcIsoToZonedLocalInput,
@@ -41,27 +32,12 @@ import {
 } from '@/lib/datetime/zoned-time';
 import {
   ApiError,
-  cancelRide,
-  closeRegistration,
-  finishRide,
-  getRide,
-  openRegistration,
   publishRide,
-  setParticipantsVisibility,
-  setRideContact,
-  setRideContactRequestSchema,
-  startRide,
   updateRide,
   updateRideRequestSchema,
 } from '../api';
-
-const CANCELLABLE_STATUSES: ReadonlyArray<Ride['status']> = [
-  'published',
-  'registration_open',
-  'registration_closed',
-];
-
-type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
+import { RideOverview } from './RideOverview';
+import { RideReadinessList } from './RideReadinessList';
 
 interface FormState {
   title: string;
@@ -101,9 +77,6 @@ function toFormState(ride: Ride): FormState {
   };
 }
 
-/** Empty text field -> `null` (clear); non-empty -> the number. Not `undefined` in
- * either case — this form always submits its full current state, same convention as
- * `OrganizerProfileForm`, not a sparse diff. */
 /** CR-155: the requirements textarea holds one `RideRequirement` per line. */
 function toRequirementLines(text: string): string[] {
   return text
@@ -112,6 +85,9 @@ function toRequirementLines(text: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+/** Empty text field -> `null` (clear); non-empty -> the number. Not `undefined` in
+ * either case — this form always submits its full current state, same convention as
+ * `OrganizerProfileForm`, not a sparse diff. */
 function toNullableNumber(raw: string): number | null {
   const trimmed = raw.trim();
   return trimmed.length > 0 ? Number(trimmed) : null;
@@ -131,34 +107,40 @@ interface FieldErrors {
 }
 
 /**
- * `/organizer/rides/[id]/edit` (`docs/design.md` §8 "Edit draft", CR-018). Fills in
- * every field CR-017 deliberately left `null` at creation. Draft-only as a form — a
- * non-draft ride opens as «Управление заездом» (CR-184): status, the next lifecycle
- * action, a short summary, the sections, and only the settings the server still
- * accepts (participants visibility, contact) — never a locked copy of the form.
- * CR-016's ownership check resolves before this ever renders: a 404 here means
- * "not found or not yours", never revealed which. Renders the page's `h1` itself,
- * since its wording depends on the ride's status.
+ * `/organizer/rides/[id]/edit` — the ride workspace's «Обзор» tab (CR-187).
+ * Renders inside `RideWorkspace`, which owns the ride read, the title and the
+ * lifecycle steps. A draft (CR-018) is the full form under a «Перед
+ * публикацией» checklist; a published ride or later is `RideOverview` — never
+ * a locked copy of the form (CR-184). CR-016's ownership check resolves in the
+ * workspace before this renders.
  */
-export function EditRideForm({
-  rideId,
-  sections = [],
+export function EditRideForm() {
+  const workspace = useRideWorkspace();
+  if (!workspace) return null;
+  return workspace.data.ride.status === 'draft' ? (
+    <DraftRideForm workspace={workspace} />
+  ) : (
+    <RideOverview workspace={workspace} />
+  );
+}
+
+function DraftRideForm({
+  workspace,
 }: {
-  rideId: string;
-  /** KI-061: links to the ride's sub-pages, from `ORGANIZER_RIDE_SECTIONS`
-   * (already flag-filtered and sorted by the page). */
-  sections?: readonly RideSectionLink[];
+  workspace: RideWorkspaceContextValue;
 }) {
-  const [status, setStatus] = useState<LoadStatus>('loading');
-  const [ride, setRide] = useState<Ride | null>(null);
-  const [form, setForm] = useState<FormState | null>(null);
-  // Kept apart from `form`: the lifecycle actions below reset `form` from the
-  // `Ride` they get back, which carries no requirements.
-  const [requirementsText, setRequirementsText] = useState('');
-  // CR-165: kept apart from `form` for the same reason as `requirementsText` —
-  // the lifecycle actions reset `form` from a `Ride`, which deliberately carries
-  // no contact (it is private; see `packages/types/src/domain/ride.ts`).
-  const [contact, setContact] = useState<RideContactDraft>(EMPTY_RIDE_CONTACT);
+  const { data, sections, applyRide } = workspace;
+  const rideId = data.ride.id;
+  const headingId = useId();
+  const [form, setForm] = useState<FormState>(() => toFormState(data.ride));
+  const [requirementsText, setRequirementsText] = useState(() =>
+    data.requirements.join('\n'),
+  );
+  // CR-165: the contact is private and not part of `Ride`, so it is kept
+  // apart from `form`.
+  const [contact, setContact] = useState<RideContactDraft>(() =>
+    rideContactFromResponse(data.contact),
+  );
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -166,70 +148,10 @@ export function EditRideForm({
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishVerificationRequired, setPublishVerificationRequired] =
     useState(false);
-  const [isOpeningRegistration, setIsOpeningRegistration] = useState(false);
-  const [isClosingRegistration, setIsClosingRegistration] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const [isFinishing, setIsFinishing] = useState(false);
-  const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
-  const [isCheckingFinish, setIsCheckingFinish] = useState(false);
-  // CR-182: riders with no final status yet (`null` before the ride starts).
-  const [unresolved, setUnresolved] = useState<number | null>(null);
-  // CR-184: the management view's «Записано» line; `null` when not sent.
-  const [registrationsCount, setRegistrationsCount] = useState<number | null>(
-    null,
-  );
-  const [isSavingVisibility, setIsSavingVisibility] = useState(false);
-  // KI-081: the contact's own save path after publish — kept apart from
-  // `isPending` so the read-only form's disabled submit is not confused with it.
-  const [isSavingContact, setIsSavingContact] = useState(false);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setStatus('loading');
-
-    getRide(rideId)
-      .then((response) => {
-        if (cancelled) return;
-        // KI-069: `GET /v1/rides/:id` is also the public ride-detail endpoint
-        // (CR-023) — a non-owner viewing a published ride gets a 200, not a
-        // 404. Treat that the same as not-found here instead of rendering the
-        // edit form and lifecycle controls for a ride that isn't the
-        // caller's (every action was already rejected server-side, but the
-        // screen looked like it granted control).
-        if (!response.isOwner) {
-          setStatus('not-found');
-          return;
-        }
-        setRide(response.ride);
-        setForm(toFormState(response.ride));
-        setRequirementsText(response.requirements.join('\n'));
-        setContact(rideContactFromResponse(response.contact));
-        setUnresolved(response.attendanceSummary?.unresolved ?? null);
-        setRegistrationsCount(response.registrationsCount ?? null);
-        setStatus('ready');
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        if (
-          error instanceof ApiError &&
-          error.problem.code === 'ride_not_found'
-        ) {
-          setStatus('not-found');
-          return;
-        }
-        setStatus('error');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [rideId, loadAttempt]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isPending || !form) return;
+    if (isPending) return;
 
     if (!form.localStartsAt) {
       setFieldErrors({ startsAt: RIDE_EDIT_TERMS.startsAtRequired });
@@ -275,7 +197,8 @@ export function EditRideForm({
 
     try {
       const response = await updateRide(rideId, parsed.data);
-      setRide(response.ride);
+      // The workspace head shows the (possibly renamed) title.
+      applyRide(response.ride);
       setForm(toFormState(response.ride));
       setRequirementsText(response.requirements.join('\n'));
       setSuccessMessage(RIDE_EDIT_TERMS.saveSuccess);
@@ -299,6 +222,8 @@ export function EditRideForm({
     }
   }
 
+  /** CR-019: publishes what is saved. On success the workspace shows the
+   * result line and remounts this tab as the published overview. */
   async function handlePublish() {
     if (isPublishing) return;
 
@@ -309,9 +234,7 @@ export function EditRideForm({
 
     try {
       const response = await publishRide(rideId);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.publishSuccess);
+      applyRide(response.ride, RIDE_EDIT_TERMS.publishSuccess);
     } catch (error) {
       if (
         error instanceof ApiError &&
@@ -321,887 +244,375 @@ export function EditRideForm({
       } else {
         setFormError(RIDE_EDIT_TERMS.loadError);
       }
-    } finally {
       setIsPublishing(false);
     }
   }
 
-  /** CR-089 ("Open registration"): `published -> registration_open`. No dedicated
-   * error banner like `handlePublish`'s email-verification case — the one possible
-   * failure beyond the network (`ride_registration_not_openable`) can't actually
-   * happen from this button, since it only renders while `ride.status ===
-   * 'published'`. */
-  async function handleOpenRegistration() {
-    if (isOpeningRegistration) return;
-
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsOpeningRegistration(true);
-
-    try {
-      const response = await openRegistration(rideId);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.openRegistrationSuccess);
-    } catch {
-      setFormError(RIDE_EDIT_TERMS.loadError);
-    } finally {
-      setIsOpeningRegistration(false);
-    }
-  }
-
-  /** CR-020 ("Close registration"): `registration_open -> registration_closed`. */
-  async function handleCloseRegistration() {
-    if (isClosingRegistration) return;
-
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsClosingRegistration(true);
-
-    try {
-      const response = await closeRegistration(rideId);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.closeRegistrationSuccess);
-    } catch {
-      setFormError(RIDE_EDIT_TERMS.loadError);
-    } finally {
-      setIsClosingRegistration(false);
-    }
-  }
-
-  /**
-   * CR-021 ("Cancel ride"): the only lifecycle action with no forward continuation
-   * (`docs/product.md`'s Lifecycle has nothing after `cancelled`) and, per
-   * `docs/design.md`, the one status the calm palette deliberately breaks its own
-   * rule for — a native `confirm()` guard is a minimal, proportionate safeguard
-   * against a one-click irreversible action, not a new Dialog component
-   * (`.claude/context/current-task.md`).
-   */
-  async function handleCancel() {
-    if (isCancelling) return;
-    if (!window.confirm(RIDE_EDIT_TERMS.cancelConfirm)) return;
-
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsCancelling(true);
-
-    try {
-      const response = await cancelRide(rideId);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.cancelSuccess);
-    } catch {
-      setFormError(RIDE_EDIT_TERMS.loadError);
-    } finally {
-      setIsCancelling(false);
-    }
-  }
-
-  /** CR-090 ("Start ride"): `registration_closed -> started`. No confirmation guard,
-   * unlike `handleCancel` — this is a forward-only step with a further continuation
-   * (leads to `finish`), not the one dead-end action `docs/design.md` singles out. */
-  async function handleStart() {
-    if (isStarting) return;
-
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsStarting(true);
-
-    try {
-      const response = await startRide(rideId);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.startSuccess);
-    } catch {
-      setFormError(RIDE_EDIT_TERMS.loadError);
-      return;
-    } finally {
-      setIsStarting(false);
-    }
-    // `attendanceSummary` is null until the start, so the page's first read
-    // can't know who is undecided.
-    await readUnresolved();
-  }
-
-  /** CR-182's undecided count, re-read: riders claim and the organizer marks
-   * them while this page stays open. A failed read keeps the last known
-   * count; it only decides whether to ask before finishing. */
-  async function readUnresolved(): Promise<number | null> {
-    try {
-      const response = await getRide(rideId);
-      const count = response.attendanceSummary?.unresolved ?? null;
-      setUnresolved(count);
-      return count;
-    } catch {
-      return unresolved;
-    }
-  }
-
-  /** CR-185: ask first when riders are still undecided, with a fresh count. */
-  async function requestFinish() {
-    if (isFinishing || isCheckingFinish) return;
-    setIsCheckingFinish(true);
-    const count = await readUnresolved();
-    setIsCheckingFinish(false);
-    if (count) setFinishConfirmOpen(true);
-    else await handleFinish(count);
-  }
-
-  /** CR-022 ("Finish ride"): `started -> finished`, the last lifecycle transition. */
-  async function handleFinish(unresolvedCount: number | null) {
-    if (isFinishing) return;
-
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsFinishing(true);
-
-    try {
-      const response = await finishRide(rideId);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      // CR-182: a ride closed with undecided riders says so instead of reading
-      // as «everyone finished».
-      setSuccessMessage(
-        unresolvedCount
-          ? FINISH_CHECKIN_TERMS.finishedWithUnresolved(unresolvedCount)
-          : RIDE_EDIT_TERMS.finishSuccess,
-      );
-    } catch {
-      setFormError(RIDE_EDIT_TERMS.loadError);
-    } finally {
-      setIsFinishing(false);
-      setFinishConfirmOpen(false);
-    }
-  }
-
-  /** KI-065: a draft keeps the toggle in the form (saved with «Сохранить»);
-   * after publish it saves on its own, and the server refuses to re-show a
-   * list people joined while it was hidden. */
-  async function handleParticipantsVisibleChange(checked: boolean) {
-    if (!ride || !form) return;
-    if (ride.status === 'draft') {
-      setForm({ ...form, participantsVisible: checked });
-      return;
-    }
-    if (isSavingVisibility) return;
-
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsSavingVisibility(true);
-
-    try {
-      const response = await setParticipantsVisibility(rideId, checked);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.participantsVisibilitySaved);
-    } catch (error) {
-      setFormError(
-        error instanceof ApiError &&
-          error.problem.code === 'participants_visibility_locked'
-          ? RIDE_EDIT_TERMS.participantsVisibilityLocked
-          : RIDE_EDIT_TERMS.loadError,
-      );
-    } finally {
-      setIsSavingVisibility(false);
-    }
-  }
-
-  /**
-   * KI-081: the contact after publish. A draft still saves it with the whole
-   * form («Сохранить» → `PATCH`), so there is exactly one save path per state
-   * rather than two competing ones; once published, the form is read-only and
-   * this button is the contact's own `PUT /v1/rides/:id/contact`.
-   */
-  async function handleSaveContact() {
-    if (isSavingContact) return;
-
-    const payload = { contact: rideContactToRequest(contact) };
-    const parsed = setRideContactRequestSchema.safeParse(payload);
-    if (!parsed.success) {
-      const nextErrors: FieldErrors = {};
-      for (const issue of parsed.error.issues) {
-        // The schema reports the value's own failure at `contact.value`; the
-        // form shows it on the single visible input either way.
-        nextErrors.contact ??= issue.message;
-      }
-      setFieldErrors(nextErrors);
-      setFormError(null);
-      setSuccessMessage(null);
-      return;
-    }
-
-    setFieldErrors({});
-    setFormError(null);
-    setSuccessMessage(null);
-    setIsSavingContact(true);
-
-    try {
-      // The schema's parsed output, not the raw draft: the normalized value is
-      // what the draft path already sends (`updateRideRequestSchema` transforms
-      // it too), so both paths put the same canonical form on the wire.
-      const response = await setRideContact(rideId, parsed.data.contact);
-      setRide(response.ride);
-      setForm(toFormState(response.ride));
-      setSuccessMessage(RIDE_EDIT_TERMS.contactSaved);
-    } catch (error) {
-      // A 404 here means "not found or not yours" — never revealed which
-      // (`rides.service.ts`'s `setRideContact`). Either way the organizer sees
-      // one actionable message rather than a status code.
-      setFormError(
-        error instanceof ApiError
-          ? RIDE_EDIT_TERMS.contactSaveError
-          : RIDE_EDIT_TERMS.loadError,
-      );
-    } finally {
-      setIsSavingContact(false);
-    }
-  }
-
-  if (status === 'loading') {
-    return (
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
-  }
-
-  if (status === 'not-found') {
-    return (
-      <div className="flex flex-col gap-6">
-        <h1 className="text-h1 text-text">{RIDE_EDIT_TERMS.pageTitle}</h1>
-        <Card className="flex flex-col items-center gap-3 py-8 text-center">
-          <p className="text-body-sm font-medium text-text">
-            {RIDE_EDIT_TERMS.notFoundTitle}
-          </p>
-          <p className="max-w-sm text-body-sm text-text-secondary">
-            {RIDE_EDIT_TERMS.notFoundDescription}
-          </p>
-          <Link
-            href="/organizer/rides"
-            className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-          >
-            {RIDE_EDIT_TERMS.backToList}
-          </Link>
-        </Card>
-      </div>
-    );
-  }
-
-  if (status === 'error' || !ride || !form) {
-    return (
-      <div className="flex flex-col gap-6">
-        <h1 className="text-h1 text-text">{RIDE_EDIT_TERMS.pageTitle}</h1>
-        <ErrorState
-          message={RIDE_EDIT_TERMS.loadError}
-          onRetry={() => setLoadAttempt((n) => n + 1)}
-        />
-      </div>
-    );
-  }
-
-  const isDraft = ride.status === 'draft';
-  const statusTerm = RIDE_STATUS_TERMS[ride.status];
-
-  const sectionLinks = sections.map((section) => (
-    <Link
-      key={section.segment}
-      href={`/organizer/rides/${rideId}/${section.segment}`}
-      className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-    >
-      {section.label}
-    </Link>
-  ));
-
-  const visibilityField = (
-    <FormField
-      id="ride-participants-visible"
-      label={RIDE_EDIT_TERMS.participantsVisibleLabel}
-      hint={
-        isDraft
-          ? RIDE_EDIT_TERMS.participantsVisibleHint
-          : RIDE_EDIT_TERMS.participantsVisibleHintPublished
-      }
-    >
-      <input
-        type="checkbox"
-        checked={form.participantsVisible}
-        onChange={(event) =>
-          void handleParticipantsVisibleChange(event.target.checked)
-        }
-        disabled={isPending || isSavingVisibility}
-        className="size-5 rounded border-[1.5px] border-frame accent-primary disabled:cursor-not-allowed disabled:opacity-60"
-      />
-    </FormField>
-  );
-
-  const contactFields = (
-    <fieldset className="flex flex-col gap-4 border-0 p-0">
-      <legend className="text-body-sm font-semibold text-text">
-        {RIDE_EDIT_TERMS.contactLabel}
-      </legend>
-      {/* KI-081: the one field on this screen that stays editable after
-          publish. `PUT /v1/rides/:id/contact` accepts a change at any status
-          on purpose — a contact that goes stale (changed number, deleted
-          account) is exactly the case that must remain fixable — so a
-          published ride gets its own save button below, in the management
-          view's «Что можно изменить» card (CR-184). Same shape as KI-065's
-          visibility toggle: a dedicated request, not a loosened form rule. */}
-      <RideContactFields
-        idPrefix="ride-edit"
-        value={contact}
-        onChange={setContact}
-        disabled={isPending || isSavingContact}
-        error={fieldErrors.contact}
-        hint={
-          isDraft
-            ? RIDE_EDIT_TERMS.contactHint
-            : RIDE_EDIT_TERMS.contactHintPublished
-        }
-      />
-      {!isDraft && (
-        <Button
-          type="button"
-          variant="secondary"
-          isLoading={isSavingContact}
-          onClick={handleSaveContact}
-          className="self-start"
-        >
-          {isSavingContact
-            ? RIDE_EDIT_TERMS.contactSavePending
-            : RIDE_EDIT_TERMS.contactSave}
-        </Button>
-      )}
-    </fieldset>
-  );
-
-  const messages = (
-    <>
-      {/* CR-168 (KI-026): same dead-end fix as `OrganizerProfileForm`'s
-          banner — publish is blocked until the email is verified, and this is
-          the only place the organizer can act on that. */}
-      {publishVerificationRequired && (
-        <div className="flex flex-col gap-3">
-          <p role="alert" className="text-body-sm text-danger">
-            {RIDE_EDIT_TERMS.publishEmailVerificationRequired}
-          </p>
-          <ResendVerificationButton className="self-start" />
-        </div>
-      )}
-
-      {formError && !publishVerificationRequired && (
-        <p role="alert" className="text-body-sm text-danger">
-          {formError}
-        </p>
-      )}
-
-      {successMessage && !formError && !publishVerificationRequired && (
-        <p role="status" className="text-body-sm text-success">
-          {successMessage}
-        </p>
-      )}
-    </>
-  );
-
-  if (ride.status === 'draft') {
-    return (
-      <div className="flex flex-col gap-6">
-        <h1 className="text-h1 text-text">{RIDE_EDIT_TERMS.pageTitle}</h1>
-        <Card>
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-col gap-4"
-          >
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-              {sectionLinks}
-            </div>
-
-            <FormField
-              id="ride-title"
-              label={RIDE_EDIT_TERMS.titleLabel}
-              error={fieldErrors.title}
-            >
-              <Input
-                type="text"
-                value={form.title}
-                onChange={(event) =>
-                  setForm({ ...form, title: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-description"
-              label={RIDE_EDIT_TERMS.descriptionLabel}
-              hint={RIDE_EDIT_TERMS.descriptionHint}
-              error={fieldErrors.description}
-            >
-              <Textarea
-                value={form.description}
-                onChange={(event) =>
-                  setForm({ ...form, description: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-requirements"
-              label={RIDE_EDIT_TERMS.requirementsLabel}
-              hint={RIDE_EDIT_TERMS.requirementsHint}
-              error={fieldErrors.requirements}
-            >
-              <Textarea
-                value={requirementsText}
-                onChange={(event) => setRequirementsText(event.target.value)}
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-bicycle-type"
-              label={RIDE_EDIT_TERMS.bicycleTypeLabel}
-              error={fieldErrors.bicycleType}
-            >
-              <select
-                value={form.bicycleType}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    bicycleType: event.target.value as BicycleType,
-                  })
-                }
-                disabled={isPending}
-                className={selectClassName(Boolean(fieldErrors.bicycleType))}
-              >
-                {BICYCLE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {BICYCLE_TYPE_TERMS[type]}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField
-              id="ride-starts-at"
-              label={RIDE_EDIT_TERMS.startsAtLabel}
-              error={fieldErrors.startsAt ?? fieldErrors.startTimezone}
-            >
-              <Input
-                type="datetime-local"
-                value={form.localStartsAt}
-                onChange={(event) =>
-                  setForm({ ...form, localStartsAt: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-start-timezone"
-              label={RIDE_EDIT_TERMS.startTimezoneLabel}
-            >
-              <select
-                value={form.startTimezone}
-                onChange={(event) =>
-                  setForm({ ...form, startTimezone: event.target.value })
-                }
-                disabled={isPending}
-                className={selectClassName(false)}
-              >
-                {RUSSIAN_TIMEZONE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField
-              id="ride-start-lat"
-              label={RIDE_EDIT_TERMS.startLatLabel}
-              error={fieldErrors.startLat}
-            >
-              <Input
-                type="number"
-                min={-90}
-                max={90}
-                step="any"
-                value={form.startLat}
-                onChange={(event) =>
-                  setForm({ ...form, startLat: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-start-lng"
-              label={RIDE_EDIT_TERMS.startLngLabel}
-              error={fieldErrors.startLng}
-            >
-              <Input
-                type="number"
-                min={-180}
-                max={180}
-                step="any"
-                value={form.startLng}
-                onChange={(event) =>
-                  setForm({ ...form, startLng: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-participant-limit"
-              label={RIDE_EDIT_TERMS.participantLimitLabel}
-              error={fieldErrors.participantLimit}
-            >
-              <Input
-                type="number"
-                min={1}
-                value={form.participantLimit}
-                onChange={(event) =>
-                  setForm({ ...form, participantLimit: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-price-rub"
-              label={RIDE_EDIT_TERMS.priceRubLabel}
-              error={fieldErrors.priceRub}
-            >
-              <Input
-                type="number"
-                min={0}
-                value={form.priceRub}
-                onChange={(event) =>
-                  setForm({ ...form, priceRub: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-distance-km"
-              label={RIDE_EDIT_TERMS.distanceKmLabel}
-              error={fieldErrors.distanceKm}
-            >
-              <Input
-                type="number"
-                min={0}
-                step={0.1}
-                value={form.distanceKm}
-                onChange={(event) =>
-                  setForm({ ...form, distanceKm: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-elevation-gain"
-              label={RIDE_EDIT_TERMS.elevationGainMetersLabel}
-              error={fieldErrors.elevationGainMeters}
-            >
-              <Input
-                type="number"
-                min={0}
-                value={form.elevationGainMeters}
-                onChange={(event) =>
-                  setForm({ ...form, elevationGainMeters: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-pace-kmh"
-              label={RIDE_EDIT_TERMS.paceKmhLabel}
-              error={fieldErrors.paceKmh}
-            >
-              <Input
-                type="number"
-                min={0}
-                step={0.1}
-                value={form.paceKmh}
-                onChange={(event) =>
-                  setForm({ ...form, paceKmh: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-duration-minutes"
-              label={RIDE_EDIT_TERMS.durationMinutesLabel}
-              error={fieldErrors.durationMinutes}
-            >
-              <Input
-                type="number"
-                min={0}
-                value={form.durationMinutes}
-                onChange={(event) =>
-                  setForm({ ...form, durationMinutes: event.target.value })
-                }
-                disabled={isPending}
-              />
-            </FormField>
-
-            <FormField
-              id="ride-difficulty"
-              label={RIDE_EDIT_TERMS.difficultyLabel}
-              error={fieldErrors.difficulty}
-            >
-              <select
-                value={form.difficulty}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    difficulty:
-                      event.target.value === ''
-                        ? ''
-                        : (Number(event.target.value) as DifficultyLevel),
-                  })
-                }
-                disabled={isPending}
-                className={selectClassName(Boolean(fieldErrors.difficulty))}
-              >
-                <option value="">{RIDE_EDIT_TERMS.difficultyNotSet}</option>
-                {DIFFICULTY_LEVELS.map((level) => (
-                  <option key={level} value={level}>
-                    {DIFFICULTY_LEVEL_TERMS[level]}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            {visibilityField}
-
-            {contactFields}
-
-            {messages}
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="submit"
-                isLoading={isPending}
-                className="self-start"
-              >
-                {isPending ? RIDE_EDIT_TERMS.savePending : RIDE_EDIT_TERMS.save}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                isLoading={isPublishing}
-                onClick={handlePublish}
-                className="self-start"
-              >
-                {isPublishing
-                  ? RIDE_EDIT_TERMS.publishPending
-                  : RIDE_EDIT_TERMS.publish}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      </div>
-    );
-  }
-
-  // CR-184: a published (or later) ride is managed, not edited — the next
-  // lifecycle step first, then the few settings that stay editable.
-  const timeZone = ride.startTimezone;
-  const startsAt = new Date(ride.startsAt);
-  const nextActionId = `ride-${rideId}-next-action`;
-
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-h1 text-text">{RIDE_EDIT_TERMS.manageTitle}</h1>
-
-      {messages}
-
-      <Card className="flex flex-col gap-5">
-        <div className="flex flex-col items-start gap-2">
-          <StatusBadge label={statusTerm.label} tone={statusTerm.tone} />
-          <h2 className="text-h2 text-text">{ride.title}</h2>
+    <>
+      <section aria-labelledby={headingId} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 id={headingId} className="text-h2 text-text">
+            {RIDE_WORKSPACE_TERMS.overviewTitle.draft}
+          </h2>
+          <p className="max-w-2xl text-body-sm text-text-secondary">
+            {RIDE_WORKSPACE_TERMS.overviewDescription.draft}
+          </p>
         </div>
+        <RideReadinessList
+          rideId={rideId}
+          sections={sections}
+          data={data}
+          labelledBy={headingId}
+        />
+      </section>
 
-        <section
-          aria-labelledby={nextActionId}
-          className="flex flex-col items-start gap-3 rounded-lg border border-border bg-bg p-4"
+      <Card>
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          className="flex flex-col gap-4"
         >
-          <h3 id={nextActionId} className="text-h3 text-text">
-            {RIDE_EDIT_TERMS.nextActionTitle}
-          </h3>
-          {isRideOverdue(ride, new Date()) && (
-            <p
-              className="text-body-sm text-warning"
-              data-testid="overdue-start"
+          <h2 className="text-h3 text-text">{RIDE_EDIT_TERMS.pageTitle}</h2>
+
+          <FormField
+            id="ride-title"
+            label={RIDE_EDIT_TERMS.titleLabel}
+            error={fieldErrors.title}
+          >
+            <Input
+              type="text"
+              value={form.title}
+              onChange={(event) =>
+                setForm({ ...form, title: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-description"
+            label={RIDE_EDIT_TERMS.descriptionLabel}
+            hint={RIDE_EDIT_TERMS.descriptionHint}
+            error={fieldErrors.description}
+          >
+            <Textarea
+              value={form.description}
+              onChange={(event) =>
+                setForm({ ...form, description: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-requirements"
+            label={RIDE_EDIT_TERMS.requirementsLabel}
+            hint={RIDE_EDIT_TERMS.requirementsHint}
+            error={fieldErrors.requirements}
+          >
+            <Textarea
+              value={requirementsText}
+              onChange={(event) => setRequirementsText(event.target.value)}
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-bicycle-type"
+            label={RIDE_EDIT_TERMS.bicycleTypeLabel}
+            error={fieldErrors.bicycleType}
+          >
+            <select
+              value={form.bicycleType}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  bicycleType: event.target.value as BicycleType,
+                })
+              }
+              disabled={isPending}
+              className={selectClassName(Boolean(fieldErrors.bicycleType))}
             >
-              {RIDE_EDIT_TERMS.overdueStart(
-                formatRideStartLine(startsAt, { timeZone }),
-              )}
+              {BICYCLE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {BICYCLE_TYPE_TERMS[type]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField
+            id="ride-starts-at"
+            label={RIDE_EDIT_TERMS.startsAtLabel}
+            error={fieldErrors.startsAt ?? fieldErrors.startTimezone}
+          >
+            <Input
+              type="datetime-local"
+              value={form.localStartsAt}
+              onChange={(event) =>
+                setForm({ ...form, localStartsAt: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-start-timezone"
+            label={RIDE_EDIT_TERMS.startTimezoneLabel}
+          >
+            <select
+              value={form.startTimezone}
+              onChange={(event) =>
+                setForm({ ...form, startTimezone: event.target.value })
+              }
+              disabled={isPending}
+              className={selectClassName(false)}
+            >
+              {RUSSIAN_TIMEZONE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField
+            id="ride-start-lat"
+            label={RIDE_EDIT_TERMS.startLatLabel}
+            error={fieldErrors.startLat}
+          >
+            <Input
+              type="number"
+              min={-90}
+              max={90}
+              step="any"
+              value={form.startLat}
+              onChange={(event) =>
+                setForm({ ...form, startLat: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-start-lng"
+            label={RIDE_EDIT_TERMS.startLngLabel}
+            error={fieldErrors.startLng}
+          >
+            <Input
+              type="number"
+              min={-180}
+              max={180}
+              step="any"
+              value={form.startLng}
+              onChange={(event) =>
+                setForm({ ...form, startLng: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-participant-limit"
+            label={RIDE_EDIT_TERMS.participantLimitLabel}
+            error={fieldErrors.participantLimit}
+          >
+            <Input
+              type="number"
+              min={1}
+              value={form.participantLimit}
+              onChange={(event) =>
+                setForm({ ...form, participantLimit: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-price-rub"
+            label={RIDE_EDIT_TERMS.priceRubLabel}
+            error={fieldErrors.priceRub}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={form.priceRub}
+              onChange={(event) =>
+                setForm({ ...form, priceRub: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-distance-km"
+            label={RIDE_EDIT_TERMS.distanceKmLabel}
+            error={fieldErrors.distanceKm}
+          >
+            <Input
+              type="number"
+              min={0}
+              step={0.1}
+              value={form.distanceKm}
+              onChange={(event) =>
+                setForm({ ...form, distanceKm: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-elevation-gain"
+            label={RIDE_EDIT_TERMS.elevationGainMetersLabel}
+            error={fieldErrors.elevationGainMeters}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={form.elevationGainMeters}
+              onChange={(event) =>
+                setForm({ ...form, elevationGainMeters: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-pace-kmh"
+            label={RIDE_EDIT_TERMS.paceKmhLabel}
+            error={fieldErrors.paceKmh}
+          >
+            <Input
+              type="number"
+              min={0}
+              step={0.1}
+              value={form.paceKmh}
+              onChange={(event) =>
+                setForm({ ...form, paceKmh: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-duration-minutes"
+            label={RIDE_EDIT_TERMS.durationMinutesLabel}
+            error={fieldErrors.durationMinutes}
+          >
+            <Input
+              type="number"
+              min={0}
+              value={form.durationMinutes}
+              onChange={(event) =>
+                setForm({ ...form, durationMinutes: event.target.value })
+              }
+              disabled={isPending}
+            />
+          </FormField>
+
+          <FormField
+            id="ride-difficulty"
+            label={RIDE_EDIT_TERMS.difficultyLabel}
+            error={fieldErrors.difficulty}
+          >
+            <select
+              value={form.difficulty}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  difficulty:
+                    event.target.value === ''
+                      ? ''
+                      : (Number(event.target.value) as DifficultyLevel),
+                })
+              }
+              disabled={isPending}
+              className={selectClassName(Boolean(fieldErrors.difficulty))}
+            >
+              <option value="">{RIDE_EDIT_TERMS.difficultyNotSet}</option>
+              {DIFFICULTY_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {DIFFICULTY_LEVEL_TERMS[level]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField
+            id="ride-participants-visible"
+            label={RIDE_EDIT_TERMS.participantsVisibleLabel}
+            hint={RIDE_EDIT_TERMS.participantsVisibleHint}
+          >
+            <input
+              type="checkbox"
+              checked={form.participantsVisible}
+              onChange={(event) =>
+                setForm({ ...form, participantsVisible: event.target.checked })
+              }
+              disabled={isPending}
+              className="size-5 rounded border-[1.5px] border-frame accent-primary disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </FormField>
+
+          <fieldset className="flex flex-col gap-4 border-0 p-0">
+            <legend className="text-body-sm font-semibold text-text">
+              {RIDE_EDIT_TERMS.contactLabel}
+            </legend>
+            {/* A draft saves its contact with the whole form (`PATCH`);
+                once published, `RideOverview` has its own save (KI-081). */}
+            <RideContactFields
+              idPrefix="ride-edit"
+              value={contact}
+              onChange={setContact}
+              disabled={isPending}
+              error={fieldErrors.contact}
+              hint={RIDE_EDIT_TERMS.contactHint}
+            />
+          </fieldset>
+
+          {/* CR-168 (KI-026): publish is blocked until the email is
+              verified, and this is the only place the organizer can act on
+              that. */}
+          {publishVerificationRequired && (
+            <div className="flex flex-col gap-3">
+              <p role="alert" className="text-body-sm text-danger">
+                {RIDE_EDIT_TERMS.publishEmailVerificationRequired}
+              </p>
+              <ResendVerificationButton className="self-start" />
+            </div>
+          )}
+
+          {formError && !publishVerificationRequired && (
+            <p role="alert" className="text-body-sm text-danger">
+              {formError}
             </p>
           )}
-          <p className="text-body-sm text-text-secondary">
-            {RIDE_EDIT_TERMS.nextActionHint[ride.status]}
-          </p>
 
-          {ride.status === 'published' && (
+          {successMessage && !formError && !publishVerificationRequired && (
+            <p role="status" className="text-body-sm text-success">
+              {successMessage}
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" isLoading={isPending} className="self-start">
+              {isPending ? RIDE_EDIT_TERMS.savePending : RIDE_EDIT_TERMS.save}
+            </Button>
             <Button
               type="button"
-              isLoading={isOpeningRegistration}
-              onClick={handleOpenRegistration}
+              variant="secondary"
+              isLoading={isPublishing}
+              onClick={handlePublish}
+              className="self-start"
             >
-              {isOpeningRegistration
-                ? RIDE_EDIT_TERMS.openRegistrationPending
-                : RIDE_EDIT_TERMS.openRegistration}
+              {isPublishing
+                ? RIDE_EDIT_TERMS.publishPending
+                : RIDE_EDIT_TERMS.publish}
             </Button>
-          )}
-
-          {ride.status === 'registration_open' && (
-            <Button
-              type="button"
-              isLoading={isClosingRegistration}
-              onClick={handleCloseRegistration}
-            >
-              {isClosingRegistration
-                ? RIDE_EDIT_TERMS.closeRegistrationPending
-                : RIDE_EDIT_TERMS.closeRegistration}
-            </Button>
-          )}
-
-          {ride.status === 'registration_closed' && (
-            <Button type="button" isLoading={isStarting} onClick={handleStart}>
-              {isStarting
-                ? RIDE_EDIT_TERMS.startPending
-                : RIDE_EDIT_TERMS.start}
-            </Button>
-          )}
-
-          {ride.status === 'started' && (
-            <>
-              {unresolved ? (
-                <p
-                  className="text-body-sm text-warning"
-                  data-testid="unresolved-before-finish"
-                >
-                  {FINISH_CHECKIN_TERMS.unresolvedBeforeFinish(unresolved)}
-                </p>
-              ) : null}
-              <Button
-                type="button"
-                // Not loading while the count is re-read: a disabled button
-                // drops focus, and the dialog returns focus to its opener.
-                isLoading={isFinishing}
-                onClick={() => void requestFinish()}
-              >
-                {isFinishing
-                  ? RIDE_EDIT_TERMS.finishPending
-                  : RIDE_EDIT_TERMS.finish}
-              </Button>
-              <ConfirmDialog
-                open={finishConfirmOpen}
-                onClose={() => setFinishConfirmOpen(false)}
-                onConfirm={() => void handleFinish(unresolved)}
-                title={FINISH_CHECKIN_TERMS.finishConfirmTitle}
-                description={FINISH_CHECKIN_TERMS.finishConfirmUnresolved(
-                  unresolved ?? 0,
-                )}
-                confirmLabel={FINISH_CHECKIN_TERMS.finishConfirmAction}
-                cancelLabel={FINISH_CHECKIN_TERMS.finishConfirmCancel}
-                isConfirming={isFinishing}
-                confirmVariant="primary"
-              />
-            </>
-          )}
-        </section>
-
-        <section aria-label={RIDE_EDIT_TERMS.summaryTitle}>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-body-sm md:grid-cols-4">
-            <div className="col-span-2 flex flex-col gap-0.5 md:col-span-1">
-              <dt className="text-text-secondary">
-                {RIDE_EDIT_TERMS.summaryStart}
-              </dt>
-              <dd className="text-text">
-                {formatRideStartLine(startsAt, { timeZone })}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-text-secondary">
-                {RIDE_EDIT_TERMS.summaryDistance}
-              </dt>
-              <dd className="tabular-nums text-text">
-                {formatDistance(ride.distanceKm)}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-text-secondary">
-                {RIDE_EDIT_TERMS.summaryRegistered}
-              </dt>
-              <dd className="tabular-nums text-text">
-                {ride.participantLimit === null
-                  ? (registrationsCount ?? '—')
-                  : formatParticipants(
-                      registrationsCount,
-                      ride.participantLimit,
-                    )}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-text-secondary">
-                {RIDE_EDIT_TERMS.summaryPrice}
-              </dt>
-              <dd className="tabular-nums text-text">
-                {formatPrice(ride.priceRub)}
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        {sections.length > 0 && (
-          <nav aria-label={RIDE_EDIT_TERMS.sectionsTitle}>
-            <h3 className="text-body-sm font-semibold text-text">
-              {RIDE_EDIT_TERMS.sectionsTitle}
-            </h3>
-            <div className="flex flex-wrap gap-x-4">{sectionLinks}</div>
-          </nav>
-        )}
+          </div>
+        </form>
       </Card>
-
-      <Card className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-h3 text-text">{RIDE_EDIT_TERMS.settingsTitle}</h2>
-          <p className="text-body-sm text-text-secondary">
-            {RIDE_EDIT_TERMS.settingsHint}
-          </p>
-        </div>
-        {visibilityField}
-        {contactFields}
-      </Card>
-
-      {CANCELLABLE_STATUSES.includes(ride.status) && (
-        <Card className="flex flex-col items-start gap-3">
-          <h2 className="text-h3 text-text">{RIDE_EDIT_TERMS.dangerTitle}</h2>
-          <Button
-            type="button"
-            variant="danger"
-            isLoading={isCancelling}
-            onClick={handleCancel}
-          >
-            {isCancelling
-              ? RIDE_EDIT_TERMS.cancelPending
-              : RIDE_EDIT_TERMS.cancel}
-          </Button>
-        </Card>
-      )}
-    </div>
+    </>
   );
 }

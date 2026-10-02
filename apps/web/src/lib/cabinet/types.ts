@@ -60,6 +60,17 @@ export interface RideSectionLink {
   order: number;
   /** CR-055: same staged-rollout gate as `CabinetNavItem.flag`. */
   flag?: string;
+  /** CR-186: the row's icon tile on «Управление заездом» — a name, for the same
+   * Server→Client serialization reason as `CabinetNavItem.icon`. Optional: a
+   * descriptor without one renders a row with no tile. */
+  icon?: CabinetIconName;
+  /** CR-186: one line under the label saying what the sub-page holds. */
+  hint?: string;
+  /** CR-187: the section's task heading in the ride workspace («Маршрут
+   * заезда»); falls back to `label`. */
+  title?: string;
+  /** CR-187: one line under that heading on why the section exists. */
+  description?: string;
 }
 
 // CR-015: same registration-over-branching pattern as `CabinetNavItem`, for

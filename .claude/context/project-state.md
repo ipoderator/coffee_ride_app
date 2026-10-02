@@ -37,6 +37,23 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-187 (2026-10-02, committed together with CR-186): the ride workspace
+«Управление заездом» from the owner's UX review. `features/organizer/rides/components/
+RideWorkspace.tsx` frames every `/organizer/rides/[id]/*` page — status + overdue
+badge, mono start line, the title as `h1`, lifecycle actions in priority order (it owns
+the steps and the finish `ConfirmDialog`), six local tabs (`RideWorkspaceTabs.tsx`:
+underline from `lg`, a 3×2/6×1 grid below) and a section head (h2, purpose line,
+readiness chip). Context via `lib/cabinet/ride-workspace.ts` (`useRideWorkspace()`).
+Readiness is a registry: each section's `readiness.ts`, collected in
+`lib/cabinet/organizer-ride-readiness.ts`. «Обзор»: a draft = «Перед публикацией»
+checklist + form; otherwise `RideOverview.tsx` (checklist, facts, contact/visibility,
+cancel). Published sections show results with a lock `Notice` (new in `packages/ui`)
+instead of disabled forms — route as `RouteTrackSketch` + «Скачать GPX», a ride/track
+mismatch as a neutral reference line. CR-186's `RideSectionNav` and CR-185's
+`RideContextHeader` are gone (CR-186's `RideSectionLink.icon`/`.hint`,
+`CABINET_ICONS` additions and `AccountAddIcon` stay — the checklist rows use them).
+Frontend only — no API/schema change.
+
 CR-185 (2026-10-02, committed together with CR-184): the
 owner's UX handoff P1/P2. Dashboard: active work (live / «Требует решения» / upcoming)
 above the KPIs — the overview widget split into head + `OrganizerKpiWidget`, one shared
@@ -884,8 +901,9 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-184 + CR-185 are committed; KI-084 (screenshot baselines from CI's
-artifact) is the follow-up once CI has run.
+None — CR-186 + CR-187 are committed. KI-084 (screenshot baselines from CI's
+artifact) is still the follow-up once CI has run; CR-187 touches no visual-regression
+screen.
 
 ## Next
 
@@ -1282,4 +1300,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-10-02 (CR-185)
+2026-10-02 (CR-187)

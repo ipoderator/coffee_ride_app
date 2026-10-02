@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { RegistrationAttendance, RideStatus } from 'types';
 import {
@@ -9,6 +10,7 @@ import {
   EmptyState,
   ErrorState,
   FINISH_CHECKIN_TERMS,
+  Notice,
   PARTICIPANTS_GROUP_TERMS,
   PARTICIPANTS_TERMS,
   Skeleton,
@@ -27,6 +29,7 @@ import {
   type RideParticipantSummary,
 } from '../api';
 import { attendanceCounts, isAttendanceOpen } from '../attendance';
+import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
 import { riderProfileHref } from '@/lib/rides/rider-profile-href';
 import { buildGroupSections, formatGroupRef } from '../group-sections';
 
@@ -46,6 +49,10 @@ type LoadStatus = 'loading' | 'ready' | 'error';
  * one; a ride without groups keeps the flat list. The groups come from
  * `GET /v1/rides/:id` — if that one call fails, the participants still render,
  * grouped by what the items themselves reference.
+ *
+ * CR-187: before the start a notice says the finish marks come later (the
+ * spec: never mix the start-time controls into the registration phase).
+ * Inside the ride workspace, times are shown in the ride's own timezone.
  */
 export function ParticipantTable({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
@@ -55,6 +62,8 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
   const [attempt, setAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
+  // Without the workspace (tests, stories) the formatter's own default.
+  const timeZone = useRideWorkspace()?.data.ride.startTimezone;
 
   useEffect(() => {
     let cancelled = false;
@@ -137,119 +146,146 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
     });
   }
 
+  const notice =
+    rideStatus === 'draft' ? (
+      <Notice
+        title={PARTICIPANTS_TERMS.draftNoticeTitle}
+        icon={<Users className="size-5" />}
+      >
+        {PARTICIPANTS_TERMS.draftNoticeText}
+      </Notice>
+    ) : rideStatus !== null &&
+      rideStatus !== 'cancelled' &&
+      !isAttendanceOpen(rideStatus) ? (
+      <Notice
+        title={PARTICIPANTS_TERMS.beforeStartNoticeTitle}
+        icon={<Users className="size-5" />}
+      >
+        {PARTICIPANTS_TERMS.beforeStartNoticeText}
+      </Notice>
+    ) : null;
+
   return (
-    <Card className="flex flex-col gap-4">
-      <p className="text-body-sm font-medium text-text">
-        {PARTICIPANTS_TERMS.participantsSectionTitle}
-      </p>
+    <>
+      {status === 'ready' && notice}
+      <Card className="flex flex-col gap-4">
+        <h3 className="text-h3 text-text">
+          {PARTICIPANTS_TERMS.participantsSectionTitle}
+        </h3>
 
-      {status === 'loading' && (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
-      )}
+        {status === 'loading' && (
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        )}
 
-      {status === 'error' && (
-        <ErrorState
-          message={PARTICIPANTS_TERMS.loadError}
-          onRetry={() => setAttempt((n) => n + 1)}
-        />
-      )}
+        {status === 'error' && (
+          <ErrorState
+            message={PARTICIPANTS_TERMS.loadError}
+            onRetry={() => setAttempt((n) => n + 1)}
+          />
+        )}
 
-      {status === 'ready' && items.length > 0 && attendanceOpen && (
-        <div
-          className="flex flex-col gap-3 rounded-xl bg-surface p-3"
-          data-testid="attendance-panel"
-        >
-          <p className="text-body-sm text-text-secondary tabular-nums">
-            {FINISH_CHECKIN_TERMS.summary(
-              counts.confirmed,
-              counts.claimed,
-              counts.dnf,
-              counts.noShow,
-            )}
-          </p>
-          <Button
-            className="self-start"
-            isLoading={isSaving}
-            disabled={isSaving || counts.claimed === 0}
-            onClick={handleConfirmAll}
+        {status === 'ready' && items.length > 0 && attendanceOpen && (
+          <div
+            className="flex flex-col gap-3 rounded-xl bg-surface p-3"
+            data-testid="attendance-panel"
           >
-            {FINISH_CHECKIN_TERMS.confirmAll(counts.claimed)}
-          </Button>
-          {counts.claimed === 0 ? (
-            <p className="text-body-sm text-text-secondary">
-              {FINISH_CHECKIN_TERMS.confirmAllEmpty}
+            <p className="text-body-sm text-text-secondary tabular-nums">
+              {FINISH_CHECKIN_TERMS.summary(
+                counts.confirmed,
+                counts.claimed,
+                counts.dnf,
+                counts.noShow,
+              )}
             </p>
-          ) : null}
-        </div>
-      )}
+            <Button
+              className="self-start"
+              isLoading={isSaving}
+              disabled={isSaving || counts.claimed === 0}
+              onClick={handleConfirmAll}
+            >
+              {FINISH_CHECKIN_TERMS.confirmAll(counts.claimed)}
+            </Button>
+            {counts.claimed === 0 ? (
+              <p className="text-body-sm text-text-secondary">
+                {FINISH_CHECKIN_TERMS.confirmAllEmpty}
+              </p>
+            ) : null}
+          </div>
+        )}
 
-      {status === 'ready' && items.length === 0 && (
-        <EmptyState
-          title={PARTICIPANTS_TERMS.participantsEmptyTitle}
-          description={PARTICIPANTS_TERMS.participantsEmptyDescription}
-        />
-      )}
+        {status === 'ready' && items.length === 0 && (
+          <EmptyState
+            title={PARTICIPANTS_TERMS.participantsEmptyTitle}
+            description={PARTICIPANTS_TERMS.participantsEmptyDescription}
+          />
+        )}
 
-      {status === 'ready' && items.length > 0 && sections === null && (
-        <ul className="flex flex-col gap-3">
-          {items.map((item) => (
-            <ParticipantRow
-              key={item.id}
-              rideId={rideId}
-              item={item}
-              attendanceOpen={attendanceOpen}
-              disabled={isSaving}
-              onMark={handleMark}
-            />
-          ))}
-        </ul>
-      )}
+        {status === 'ready' && items.length > 0 && sections === null && (
+          <ul className="flex flex-col gap-3">
+            {items.map((item) => (
+              <ParticipantRow
+                key={item.id}
+                rideId={rideId}
+                item={item}
+                attendanceOpen={attendanceOpen}
+                disabled={isSaving}
+                onMark={handleMark}
+                timeZone={timeZone}
+              />
+            ))}
+          </ul>
+        )}
 
-      {status === 'ready' && items.length > 0 && sections !== null && (
-        <div className="flex flex-col gap-6">
-          {sections.map((section) => {
-            const headingId = `participants-group-${section.group?.id ?? 'none'}`;
-            return (
-              <section
-                key={section.group?.id ?? 'none'}
-                aria-labelledby={headingId}
-                className="flex flex-col gap-3"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b-[1.5px] border-frame pb-2">
-                  <h2 id={headingId} className="text-h3 text-text">
-                    {section.group
-                      ? formatGroupRef(section.group)
-                      : PARTICIPANTS_GROUP_TERMS.ungroupedHeading}
-                  </h2>
-                  <p className="text-body-sm tabular-nums text-text-secondary">
-                    {PARTICIPANTS_GROUP_TERMS.participantsCount(
-                      section.items.length,
-                    )}
-                  </p>
-                </div>
-                {section.items.length > 0 && (
-                  <ul className="flex flex-col gap-3">
-                    {section.items.map((item) => (
-                      <ParticipantRow
-                        key={item.id}
-                        rideId={rideId}
-                        item={item}
-                        attendanceOpen={attendanceOpen}
-                        disabled={isSaving}
-                        onMark={handleMark}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
-        </div>
-      )}
-    </Card>
+        {status === 'ready' && items.length > 0 && sections !== null && (
+          <div className="flex flex-col gap-6">
+            {sections.map((section) => {
+              const headingId = `participants-group-${section.group?.id ?? 'none'}`;
+              return (
+                <section
+                  key={section.group?.id ?? 'none'}
+                  aria-labelledby={headingId}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b-[1.5px] border-frame pb-2">
+                    <h4
+                      id={headingId}
+                      className="text-body font-semibold text-text"
+                    >
+                      {section.group
+                        ? formatGroupRef(section.group)
+                        : PARTICIPANTS_GROUP_TERMS.ungroupedHeading}
+                    </h4>
+                    <p className="text-body-sm tabular-nums text-text-secondary">
+                      {PARTICIPANTS_GROUP_TERMS.participantsCount(
+                        section.items.length,
+                      )}
+                    </p>
+                  </div>
+                  {section.items.length > 0 && (
+                    <ul className="flex flex-col gap-3">
+                      {section.items.map((item) => (
+                        <ParticipantRow
+                          key={item.id}
+                          rideId={rideId}
+                          item={item}
+                          attendanceOpen={attendanceOpen}
+                          disabled={isSaving}
+                          onMark={handleMark}
+                          timeZone={timeZone}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    </>
   );
 }
 
@@ -259,12 +295,14 @@ function ParticipantRow({
   attendanceOpen,
   disabled,
   onMark,
+  timeZone,
 }: {
   rideId: string;
   item: RideParticipantSummary;
   attendanceOpen: boolean;
   disabled: boolean;
   onMark: (id: string, attendance: RegistrationAttendance | null) => void;
+  timeZone?: string;
 }) {
   const joinedAt = new Date(item.createdAt);
   const name = item.displayName ?? PARTICIPANTS_TERMS.noNameFallback;
@@ -280,8 +318,8 @@ function ParticipantRow({
         </Link>
       </p>
       <p className="text-body-sm text-text-secondary">
-        {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt)}{' '}
-        {formatTime(joinedAt)}
+        {PARTICIPANTS_TERMS.joinedAtLabel}: {formatDate(joinedAt, { timeZone })}{' '}
+        {formatTime(joinedAt, { timeZone })}
       </p>
       {attendanceOpen ? (
         <div

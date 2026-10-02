@@ -81,7 +81,10 @@ function listResponse(items: RideGroupWithCount[]) {
 async function renderEditor(items: RideGroupWithCount[] = [SLOW, FAST]) {
   listRideGroupsMock.mockResolvedValue(listResponse(items));
   render(<GroupsEditor rideId="ride-1" />);
-  await screen.findByText(/участник при регистрации обязательно выбирает/);
+  // Loaded once the skeleton (`aria-busy`) is gone.
+  await waitFor(() =>
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull(),
+  );
 }
 
 function openAddForm() {
@@ -313,11 +316,13 @@ describe('GroupsEditor — server errors', () => {
     expect(await screen.findByText('Не больше 6 групп')).toBeInTheDocument();
   });
 
+  // CR-187: an occupied group has no delete button; this is the race where
+  // someone registered after the list loaded.
   it('maps group_has_registrations on delete', async () => {
     await renderEditor();
     deleteRideGroupMock.mockRejectedValue(problem('group_has_registrations'));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Удалить группу «Группа 1»' }),
+      screen.getByRole('button', { name: 'Удалить группу «Группа 2»' }),
     );
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(
@@ -397,10 +402,20 @@ describe('GroupsEditor — edit, delete, reorder', () => {
     expect(screen.queryByText('Группа 2')).not.toBeInTheDocument();
   });
 
+  it('offers no delete for a group with riders, and says why (CR-187)', async () => {
+    await renderEditor();
+    expect(
+      screen.queryByRole('button', { name: 'Удалить группу «Группа 1»' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Есть участники — удалить нельзя'),
+    ).toBeInTheDocument();
+  });
+
   it('cancelling the confirm deletes nothing', async () => {
     await renderEditor();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Удалить группу «Группа 1»' }),
+      screen.getByRole('button', { name: 'Удалить группу «Группа 2»' }),
     );
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));

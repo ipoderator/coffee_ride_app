@@ -8,11 +8,13 @@ import {
   type CreateRideResponse,
   type FinishRideResponse,
   type GetRideResponse,
+  type ListRideUpdatesResponse,
   type ListRidesResponse,
   type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
   type RideContactInput,
+  type RideUpdate,
   type SetParticipantsVisibilityResponse,
   type SetRideContactResponse,
   type StartRideResponse,
@@ -105,7 +107,20 @@ type EditableRide = Pick<
 > &
   // CR-182: optional here so ownership-only callers need not supply it.
   // CR-184: `registrationsCount` likewise, for the management view's summary.
-  Partial<Pick<GetRideResponse, 'attendanceSummary' | 'registrationsCount'>>;
+  // CR-187: the workspace's checklist reads the rest; the API always sends
+  // them, the workspace defaults any that are missing.
+  Partial<
+    Pick<
+      GetRideResponse,
+      | 'attendanceSummary'
+      | 'registrationsCount'
+      | 'route'
+      | 'stops'
+      | 'routePoints'
+      | 'groups'
+      | 'waitlistCount'
+    >
+  >;
 
 export async function getRide(id: string): Promise<EditableRide> {
   const response = await fetch(`${RIDES_ENDPOINT}/${id}`);
@@ -117,6 +132,20 @@ export async function getRide(id: string): Promise<EditableRide> {
   }
 
   return body as EditableRide;
+}
+
+/** CR-187: the newest sent update (`null` when none) — the workspace shows
+ * when the last message went out. Organizer-only, like the full history. */
+export async function getLatestRideUpdate(
+  rideId: string,
+): Promise<RideUpdate | null> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/updates?limit=1`);
+  const body = (await response.json()) as
+    ListRideUpdatesResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return (body as ListRideUpdatesResponse).items[0] ?? null;
 }
 
 export async function updateRide(

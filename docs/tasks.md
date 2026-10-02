@@ -1344,3 +1344,10 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       naming undecided riders, ride context on participants/updates, `/me` widget registry,
       featured card only for a ride with a route, «Карта недоступна» with «Повторить» when the
       basemap fails, no sideways scroll on the phone dashboard. See `docs/changelog.md`.
+- [x] CR-186 «Разделы» on the ride management view as icon rows (icon tile, name, one-line
+      hint, chevron) instead of a line of «Маршрут →» links. See `docs/changelog.md`.
+- [x] CR-187 Ride workspace «Управление заездом»: one frame for every
+      `/organizer/rides/[id]/*` page (head + actions in priority order, six local tabs,
+      section heads with a readiness chip), readiness checklist on «Обзор», published
+      sections as results with a lock `Notice` instead of disabled forms. Supersedes
+      CR-186's «Разделы» rows and CR-185's ride context header. See `docs/changelog.md`.

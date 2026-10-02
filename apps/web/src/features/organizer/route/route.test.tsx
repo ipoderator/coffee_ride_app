@@ -385,17 +385,18 @@ describe('RouteUploadForm', () => {
 
     render(<RouteUploadForm rideId="ride-1" />);
 
+    // CR-187: a lock notice and the result, not a disabled upload.
     expect(
-      await screen.findByText(
-        'Маршрут можно менять только у черновика заезда.',
-      ),
+      await screen.findByText('Маршрут закреплён после публикации'),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Заменить трек' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Скачать трек (GPX)' }),
-    ).toHaveAttribute('href', '/api/v1/rides/ride-1/route/download');
+    expect(screen.queryByLabelText('Файл GPX')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Скачать GPX' })).toHaveAttribute(
+      'href',
+      '/api/v1/rides/ride-1/route/download',
+    );
   });
 
   it('shows a mismatch note with a sync action when the ride and track figures diverge (CR-029)', async () => {
@@ -467,7 +468,7 @@ describe('RouteUploadForm', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows the mismatch note but hides the sync action for a non-draft ride (CR-029)', async () => {
+  it('shows the mismatch as a neutral reference without the sync action for a non-draft ride (CR-029, CR-187)', async () => {
     getRideRouteStateMock.mockResolvedValue({
       status: 'published',
       distanceKm: 99.9,
@@ -482,9 +483,14 @@ describe('RouteUploadForm', () => {
 
     expect(
       await screen.findByText(
-        'Дистанция или набор высоты заезда отличаются от данных трека.',
+        'Дистанция или набор высоты в карточке заезда отличаются от трека — для справки, после публикации они не меняются.',
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Дистанция или набор высоты заезда отличаются от данных трека.',
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Использовать данные трека' }),
     ).not.toBeInTheDocument();

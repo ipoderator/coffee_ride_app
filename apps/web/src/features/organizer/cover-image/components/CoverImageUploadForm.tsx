@@ -2,16 +2,19 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { ImageIcon, Lock } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
   Card,
   ErrorState,
   FileInput,
+  Notice,
   RIDE_COVER_TERMS,
   Skeleton,
 } from 'ui';
 import { apiAssetUrl } from '@/lib/api/asset-url';
+import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
 import {
   ApiError,
   deleteCoverImage,
@@ -27,6 +30,10 @@ type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
  * draft-only gate `RouteUploadForm` uses — download (`GET .../cover`, wired
  * directly into `<Image src>` below) stays available at any status, only
  * upload/replace/delete require `draft`.
+ *
+ * CR-187: a large preview of the real cover with the file rules beside it; a
+ * published ride gets a lock notice instead of controls. Inside the ride
+ * workspace, a change also refreshes the workspace's «Обложка» chip.
  */
 export function CoverImageUploadForm({ rideId }: { rideId: string }) {
   const [status, setStatus] = useState<LoadStatus>('loading');
@@ -38,6 +45,7 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
   const [isPending, setIsPending] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const refreshWorkspace = useRideWorkspace()?.refresh;
 
   const reload = useCallback(async () => {
     const state = await getRideCoverState(rideId);
@@ -125,6 +133,7 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
           ? RIDE_COVER_TERMS.replaceSuccess
           : RIDE_COVER_TERMS.uploadSuccess,
       );
+      void refreshWorkspace?.();
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (error) {
       handleUploadError(error);
@@ -143,6 +152,7 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
       await deleteCoverImage(rideId);
       setCoverImageUrl(null);
       setSuccessMessage(RIDE_COVER_TERMS.deleteSuccess);
+      void refreshWorkspace?.();
     } catch (error) {
       handleUploadError(error);
     } finally {
@@ -186,107 +196,144 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
 
   const isDraft = rideStatus === 'draft';
 
+  const preview = coverImageUrl ? (
+    <div className="relative aspect-[16/9] w-full overflow-hidden">
+      <Image
+        src={apiAssetUrl(coverImageUrl)}
+        alt={RIDE_COVER_TERMS.previewAlt}
+        fill
+        sizes="(min-width: 1024px) 60vw, 100vw"
+        className="object-cover"
+      />
+    </div>
+  ) : (
+    <div className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 bg-surface p-6 text-center">
+      <ImageIcon aria-hidden="true" className="size-8 text-text-muted" />
+      <p className="text-body-sm font-medium text-text">
+        {RIDE_COVER_TERMS.emptyTitle}
+      </p>
+      {isDraft && (
+        <p className="max-w-sm text-body-sm text-text-secondary">
+          {RIDE_COVER_TERMS.emptyDescription}
+        </p>
+      )}
+    </div>
+  );
+
+  const rules = (
+    <Card className="flex flex-col gap-3">
+      <h3 className="text-body font-semibold text-text">
+        {RIDE_COVER_TERMS.rulesTitle}
+      </h3>
+      <dl className="flex flex-col divide-y divide-border text-body-sm">
+        {(
+          [
+            [RIDE_COVER_TERMS.rulesFormat, RIDE_COVER_TERMS.rulesFormatValue],
+            [RIDE_COVER_TERMS.rulesSize, RIDE_COVER_TERMS.rulesSizeValue],
+            [RIDE_COVER_TERMS.rulesFit, RIDE_COVER_TERMS.rulesFitValue],
+          ] as const
+        ).map(([label, value]) => (
+          <div
+            key={label}
+            className="flex items-baseline justify-between gap-4 py-2 first:pt-0"
+          >
+            <dt className="text-text-secondary">{label}</dt>
+            <dd className="text-right text-text">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+
   return (
     <div className="flex flex-col gap-4">
-      <Link
-        href={`/organizer/rides/${rideId}/edit`}
-        className="inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-      >
-        {RIDE_COVER_TERMS.backToEdit}
-      </Link>
+      {!isDraft && (
+        <Notice
+          title={RIDE_COVER_TERMS.lockedTitle}
+          icon={<Lock className="size-5" />}
+        >
+          {RIDE_COVER_TERMS.lockedText}
+        </Notice>
+      )}
 
-      <Card className="flex flex-col gap-4">
-        {!isDraft && (
-          <p role="status" className="text-body-sm text-warning">
-            {RIDE_COVER_TERMS.notEditable}
-          </p>
-        )}
-
-        {coverImageUrl ? (
-          <div className="relative h-64 w-full overflow-hidden rounded-xl">
-            <Image
-              src={apiAssetUrl(coverImageUrl)}
-              alt=""
-              fill
-              className="object-cover"
-            />
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <p className="text-body-sm font-medium text-text">
-              {RIDE_COVER_TERMS.emptyTitle}
-            </p>
-            <p className="text-body-sm text-text-secondary">
-              {RIDE_COVER_TERMS.emptyDescription}
-            </p>
-          </div>
-        )}
-
-        {isDraft && (
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="cover-image-file"
-              className="text-body-sm font-medium text-text"
-            >
-              {RIDE_COVER_TERMS.uploadLabel}
-            </label>
-            <FileInput
-              id="cover-image-file"
-              ref={fileInputRef}
-              accept="image/jpeg,image/png,image/webp"
-              disabled={isPending}
-            />
-          </div>
-        )}
-
-        {storageUnavailable && (
-          <ErrorState
-            message={RIDE_COVER_TERMS.storageUnavailable}
-            tone="warning"
-            variant="inline"
-          />
-        )}
-
-        {formError && !storageUnavailable && (
-          <p role="alert" className="text-body-sm text-danger">
-            {formError}
-          </p>
-        )}
-
-        {successMessage && !formError && !storageUnavailable && (
-          <p role="status" className="text-body-sm text-success">
-            {successMessage}
-          </p>
-        )}
-
-        {isDraft && (
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              isLoading={isPending}
-              onClick={handleUpload}
-              className="self-start"
-            >
-              {isPending
-                ? RIDE_COVER_TERMS.uploadPending
-                : coverImageUrl
-                  ? RIDE_COVER_TERMS.replace
-                  : RIDE_COVER_TERMS.upload}
-            </Button>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(15rem,0.8fr)]">
+        <Card className="overflow-hidden p-0">
+          {preview}
+          <div className="flex flex-col gap-4 p-4">
             {coverImageUrl && (
-              <Button
-                type="button"
-                variant="danger"
-                isLoading={isPending}
-                onClick={handleDelete}
-                className="self-start"
-              >
-                {RIDE_COVER_TERMS.delete}
-              </Button>
+              <p className="text-body-sm text-text-secondary">
+                {RIDE_COVER_TERMS.previewCaption}
+              </p>
+            )}
+
+            {isDraft && (
+              <div className="flex flex-col gap-2">
+                <label
+                  htmlFor="cover-image-file"
+                  className="text-body-sm font-medium text-text"
+                >
+                  {RIDE_COVER_TERMS.uploadLabel}
+                </label>
+                <FileInput
+                  id="cover-image-file"
+                  ref={fileInputRef}
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={isPending}
+                />
+              </div>
+            )}
+
+            {storageUnavailable && (
+              <ErrorState
+                message={RIDE_COVER_TERMS.storageUnavailable}
+                tone="warning"
+                variant="inline"
+              />
+            )}
+
+            {formError && !storageUnavailable && (
+              <p role="alert" className="text-body-sm text-danger">
+                {formError}
+              </p>
+            )}
+
+            {successMessage && !formError && !storageUnavailable && (
+              <p role="status" className="text-body-sm text-success">
+                {successMessage}
+              </p>
+            )}
+
+            {isDraft && (
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  isLoading={isPending}
+                  onClick={handleUpload}
+                  className="self-start"
+                >
+                  {isPending
+                    ? RIDE_COVER_TERMS.uploadPending
+                    : coverImageUrl
+                      ? RIDE_COVER_TERMS.replace
+                      : RIDE_COVER_TERMS.upload}
+                </Button>
+                {coverImageUrl && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    isLoading={isPending}
+                    onClick={handleDelete}
+                    className="self-start"
+                  >
+                    {RIDE_COVER_TERMS.delete}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </Card>
+        </Card>
+        {rules}
+      </div>
     </div>
   );
 }

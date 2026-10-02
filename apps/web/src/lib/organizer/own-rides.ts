@@ -1,5 +1,4 @@
 import type {
-  GetRideResponse,
   ListRidesResponse,
   Paginated,
   ProblemDetails,
@@ -81,28 +80,6 @@ export async function listOwnRidesPage(): Promise<Ride[]> {
     `${RIDES_ENDPOINT}/mine?limit=${PAGE_LIMIT}`,
   );
   return page.items;
-}
-
-/**
- * CR-185: one of the caller's rides (`GET /v1/rides/:id`) — the ride context
- * header on its organizer sub-pages. Throws `ApiError` (`ride_not_found`),
- * also for someone else's published ride: `GET /v1/rides/:id` is the public
- * endpoint too and answers it with 200 (KI-069).
- */
-export async function fetchOwnRide(rideId: string): Promise<Ride> {
-  const url = `${RIDES_ENDPOINT}/${rideId}`;
-  const { ride, isOwner } = await getJson<GetRideResponse>(url);
-  if (!isOwner) {
-    throw new ApiError({
-      type: 'about:blank',
-      title: 'Not Found',
-      status: 404,
-      detail: 'Ride not found.',
-      instance: url,
-      code: 'ride_not_found',
-    });
-  }
-  return ride;
 }
 
 /**

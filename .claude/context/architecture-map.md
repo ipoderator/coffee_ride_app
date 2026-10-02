@@ -1035,6 +1035,27 @@ CR-185 (UX handoff, frontend + one additive maps-core option):
   tile-host probe via `packages/resilience`), wired in `render.ts`.
 - **packages/ui**: `Dialog` returns focus to its opener on close.
 
+CR-187 (ride workspace «Управление заездом», frontend only; supersedes CR-186's
+`RideSectionNav` and CR-185's `RideContextHeader`/`fetchOwnRide`, all removed):
+
+- **apps/web**: `features/organizer/rides/components/RideWorkspace.tsx` is the one
+  frame every `app/organizer/rides/[id]/*/page.tsx` renders its section inside — it
+  loads `GET /v1/rides/:id` + the latest update (`rides/api.ts`'s
+  `getLatestRideUpdate`), owns the lifecycle actions and the finish confirmation, and
+  renders `RideWorkspaceTabs.tsx` (Обзор + the `organizer-ride-sections.ts` registry)
+  and the section head. Children read the ride through `lib/cabinet/ride-workspace.ts`
+  (`useRideWorkspace()`, `null` outside the frame, so each section still works
+  standalone). `RideSectionLink` gained optional `title`/`description` (section head)
+  next to CR-186's `icon`/`hint`.
+- Readiness is a fourth organizer registry: each section module owns a
+  `readiness.ts` (`route`, `cover-image`, `groups`, `participants`, `updates`;
+  `groups/editable.ts` holds the shared «can groups change» rule), collected by segment
+  in `lib/cabinet/organizer-ride-readiness.ts`; `RideReadinessList.tsx` renders it on
+  «Обзор» (draft: inside `EditRideForm`; otherwise `RideOverview.tsx`) and the section
+  head shows the matching chip. `route/components/RouteTrackSketch.tsx` draws the stored
+  geometry provider-free (no maps-core import).
+- **packages/ui**: `Notice` (a quiet «why this screen behaves so» callout).
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the

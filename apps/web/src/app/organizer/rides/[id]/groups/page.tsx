@@ -1,14 +1,15 @@
-import Link from 'next/link';
-import { BACK_LINK_TERMS, ORGANIZER_GROUPS_TERMS, RIDE_WIZARD_TERMS } from 'ui';
-import { BackLink } from '@/components/site/BackLink';
+import { RIDE_WIZARD_TERMS } from 'ui';
 import { RideWizardFrame } from '@/features/organizer/rides/components/RideWizardFrame';
+import { RideWorkspace } from '@/features/organizer/rides/components/RideWorkspace';
 import { isWizardMode } from '@/features/organizer/rides/wizard-steps';
 import { GroupsEditor } from '@/features/organizer/groups/components/GroupsEditor';
+import { filterEnabled } from '@/lib/cabinet/feature-flags';
+import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 
-// `/organizer/rides/[id]/groups` (CR-120, ADR-022 pace groups). Inherits
-// `CabinetShell`'s auth gate from `app/organizer/layout.tsx`; ownership is
-// enforced server-side by `GET`/`POST`/`PATCH`/`DELETE /v1/rides/:id/groups`,
-// not here — same pattern as `.../participants/page.tsx`.
+// `/organizer/rides/[id]/groups` (CR-120, ADR-022 pace groups; the ride
+// workspace's «Группы» tab since CR-187). Inherits `CabinetShell`'s auth gate
+// from `app/organizer/layout.tsx`; ownership is enforced server-side by
+// `GET`/`POST`/`PATCH`/`DELETE /v1/rides/:id/groups`, not here.
 //
 // Next.js 15: `params` is a `Promise` for a dynamic route page, not a plain object.
 export default async function RideGroupsPage({
@@ -20,29 +21,20 @@ export default async function RideGroupsPage({
 }) {
   const { id } = await params;
   const { wizard } = await searchParams;
+  const wizardMode = isWizardMode(wizard);
   const content = (
-    <div className="flex flex-col gap-6">
-      <BackLink
-        href="/organizer/rides"
-        label={BACK_LINK_TERMS.toOrganizerRides}
-      />
-      <div className="flex flex-col gap-2">
-        <h1 className="text-h1 text-text">
-          {ORGANIZER_GROUPS_TERMS.pageTitle}
-        </h1>
-        <Link
-          href={`/organizer/rides/${id}/edit`}
-          className="self-start inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
-        >
-          {ORGANIZER_GROUPS_TERMS.backToEdit}
-        </Link>
-      </div>
+    <RideWorkspace
+      rideId={id}
+      current="groups"
+      sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}
+      variant={wizardMode ? 'wizard' : 'full'}
+    >
       <GroupsEditor rideId={id} />
-    </div>
+    </RideWorkspace>
   );
   // CR-156: opened from the new-ride wizard → the same screen inside its
   // step frame, with back/next links.
-  if (!isWizardMode(wizard)) return content;
+  if (!wizardMode) return content;
   return (
     <RideWizardFrame
       current="groups"

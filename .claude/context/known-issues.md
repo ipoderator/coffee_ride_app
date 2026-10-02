@@ -478,6 +478,25 @@ with CR-138's procedure: repo copied into the container (not bind-mounted), the
 container on the compose network, CI's env with an empty MapGL key,
 `--update-snapshots`, then a verify run without it.
 
+### KI-085 — CR-187 ride workspace leftovers: a second ride read per tab, English field errors, sidebar highlight
+
+Status: open. Discovered: 2026-10-02 (CR-187).
+Problem: (1) every `/organizer/rides/[id]/*` tab reads `GET /v1/rides/:id` twice — once
+in `RideWorkspace`, once in the section's own loader (`getRideRouteState`,
+`GroupsEditor`, …), which still run standalone. (2) `EditRideForm` shows Zod issue
+messages verbatim — both its client-side `updateRideRequestSchema` check and the API's
+`validation_error` `errors[]` — and `packages/types/src/api/rides.ts` writes them in
+English (an emptied title → «Title cannot be empty.»; pre-existing, not CR-187's).
+(3) On the participants tab the organizer sidebar highlights «Участники», not
+«Заезды» (CR-150's nav rule, unchanged).
+Impact: low — one extra small request per tab; an English line under a draft-form field
+whenever the input breaks the shared schema; a nav highlight.
+Workaround: none needed.
+Next action: (1) let sections take the ride from `useRideWorkspace()` when present and
+skip their own read; (2) map Zod issue codes to `RIDE_EDIT_TERMS` field messages (or
+give `packages/types` schemas Russian messages); (3) owner decision on which sidebar
+item a ride's sub-page lights.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

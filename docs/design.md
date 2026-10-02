@@ -628,10 +628,12 @@ Organizer cabinet:
 | `/organizer/updates`                 | → nearest ride's updates (CR-131)             |
 | `/organizer/rides`                   | My rides, grouped by status                   |
 | `/organizer/rides/new`               | Create ride — wizard step 1 (CR-156)          |
-| `/organizer/rides/[id]/edit`         | Edit draft; ride management once published    |
-| `/organizer/rides/[id]/route`        | Route, GPX upload, stops, route points        |
-| `/organizer/rides/[id]/participants` | Participants + waitlist                       |
-| `/organizer/rides/[id]/updates`      | Ride updates composer                         |
+| `/organizer/rides/[id]/edit`         | Ride workspace «Обзор»: draft form / overview |
+| `/organizer/rides/[id]/route`        | «Маршрут»: track, GPX, stops, route points    |
+| `/organizer/rides/[id]/cover`        | «Обложка»: preview, upload in a draft         |
+| `/organizer/rides/[id]/groups`       | «Группы»: pace groups (ADR-022)               |
+| `/organizer/rides/[id]/participants` | «Участники»: registered + waitlist            |
+| `/organizer/rides/[id]/updates`      | «Обновления»: composer, preview, history      |
 | `/organizer/profile`                 | Organizer profile                             |
 
 Navigation is one global header on every route (CR-108) — wordmark, the public
@@ -691,9 +693,47 @@ then the ADR-009 registry — Заезды, Участники, Обновлен
 ride's page; an empty state when there is none), Профиль организатора. The registered viewer's block on `/rides/[id]`
 opens with a days/hours/minutes countdown to the start («До старта»).
 
-A ride's participants and updates pages (`/organizer/rides/[id]/participants`,
-`/updates`) open with `RideContextHeader` (CR-185): title, start, status, a «Требует
-решения» badge when the start passed unstarted, and «Управление заездом →».
+**Ride workspace (CR-187, the UX review's «Управление» tab).** Every
+`/organizer/rides/[id]/*` page is one frame, `RideWorkspace`: the back link; the
+status badge (plus «Требует решения» when the start passed unstarted) and the start
+line in mono; the full title as the page's `h1` (Unbounded, wraps, never truncated)
+with «Управление заездом» («Подготовка заезда» for a draft) under it; then the
+actions in priority order — registration open: «Участники · N» (primary), «Написать
+участникам», «Закрыть регистрацию» (neutral outline: closing is not cancelling);
+published: «Открыть регистрацию» first; closed: «Начать заезд» first; started:
+«Участники · N», «Написать», «Завершить заезд» (asks first when riders are
+undecided, CR-185); finished/cancelled: no lifecycle step at all. On a phone the
+buttons grow to share rows. Under the head, six local tabs — «Обзор» plus the
+ADR-009 ride-section registry — as route links with `aria-current`: an underlined row
+from `lg`, a bordered 3×2 grid below (6×1 from `md`), so they never look like the
+cabinet's own horizontally scrolling section strip. Each section opens with a task
+heading (`h2`), one line on why it exists and a concrete status chip («Трек
+загружен», «2 из 6», «5 записались», «Не отмечено: 2», «Последнее: 2 октября»).
+
+- **Обзор**: a draft is «Перед публикацией» + its checklist + the full form; a
+  published ride is «Перед стартом» (or «Заезд идёт» / «После заезда» / «Заезд
+  отменён»): a checklist with one row per section — icon tile tinted by state, a
+  concrete title («Маршрут готов», «Без обложки», «2 группы по темпу»), one line of
+  specifics, and a link only where a step is doable («Посмотреть — Маршрут» for a
+  screen reader) — then «Данные заезда» (fixed facts) beside «Связь с участниками»
+  (contact, list visibility, «Следующий шаг»), then the red cancel card. States come
+  from each section's own `readiness.ts`, collected by segment.
+- **Маршрут / Обложка** after publish: a lock `Notice` saying why, then the result —
+  the track as a provider-free sketch of the stored geometry (start/finish named in a
+  legend) with «Скачать GPX» and the track facts; the cover as a 16:9 preview with
+  the file rules. No disabled upload fields; stops/points without «добавьте» copy.
+  A ride/track distance mismatch is a neutral reference line there, not the
+  draft's yellow note with «Использовать данные трека» — neither side can change.
+- **Группы**: an occupied group shows «Есть участники — удалить нельзя» instead of a
+  delete button; the rules are one muted line; finished/cancelled → lock notice.
+- **Участники**: «Записались» and «Лист ожидания» cards; before the start a notice
+  that finish marks come after it; registration times in the ride's timezone.
+- **Обновления**: recipients under the field, a live «Так увидят участники»
+  preview beside it, Russian validation next to the field, history with date and
+  time; a draft gets a notice instead of the composer (nobody can receive it).
+
+Wizard mode (`?wizard=1`, CR-156) renders the same frame without the back link and
+tabs — the wizard's step list is the navigation there.
 
 The participant home (`/me`, CR-185) renders its own registry
 (`lib/cabinet/participant-widgets.ts`): «Ближайшие заезды» (up to three upcoming
@@ -720,7 +760,7 @@ URL with no history behind it. A cabinet sidebar section itself (`/organizer/rid
 **`packages/ui` (shared, both cabinets — must stay generic):**
 `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`,
 `FormField`, `Card`, `Badge`, `Tabs`, `Dialog`, `ConfirmDialog`, `Sheet`, `Toast`,
-`Skeleton`, `EmptyState`, `ErrorState`, `Avatar`, `AvatarStack` (ADR-024, new — overlapping
+`Skeleton`, `EmptyState`, `ErrorState`, `Notice` (CR-187 — why a screen behaves as it does, in place of a disabled control), `Avatar`, `AvatarStack` (ADR-024, new — overlapping
 avatars + `+N` overflow), `Pagination`, `MetricTile`, `MetricRow`, `StatusBadge`,
 `DifficultyScale`, `Wordmark`, `NavMenu`, `SegmentedControl` (CR-151 — native radios in a
 `fieldset`, a sliding thumb; `tall` two-line and `cover` dark-window variants),

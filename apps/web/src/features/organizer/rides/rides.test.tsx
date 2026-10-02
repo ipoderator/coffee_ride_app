@@ -9,11 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ride } from 'types';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
-import { EditRideForm } from './components/EditRideForm';
+import { EditRideForm as EditRideTab } from './components/EditRideForm';
+import { RideWorkspace } from './components/RideWorkspace';
 import { RideWizardFrame } from './components/RideWizardFrame';
 import { RideWizardSteps } from './components/RideWizardSteps';
 import { isWizardMode, wizardStepHref } from './wizard-steps';
 import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
+import type { RideSectionLink } from '@/lib/cabinet/types';
 import {
   ApiError,
   cancelRide,
@@ -53,6 +55,8 @@ vi.mock('./api', async () => {
     setParticipantsVisibility: vi.fn(),
     setRideContact: vi.fn(),
     uploadRideGpx: vi.fn(),
+    // CR-187: the workspace's «последнее обновление» line.
+    getLatestRideUpdate: vi.fn().mockResolvedValue(null),
   };
 });
 
@@ -503,6 +507,22 @@ describe('RidesList', () => {
   });
 });
 
+/** CR-187: the overview tab renders inside the ride workspace, which owns the
+ * ride read and the lifecycle steps — the page's composition. */
+function EditRideForm({
+  rideId,
+  sections = [],
+}: {
+  rideId: string;
+  sections?: readonly RideSectionLink[];
+}) {
+  return (
+    <RideWorkspace rideId={rideId} current="edit" sections={sections}>
+      <EditRideTab />
+    </RideWorkspace>
+  );
+}
+
 describe('EditRideForm', () => {
   beforeEach(() => {
     getRideMock.mockReset();
@@ -569,7 +589,8 @@ describe('EditRideForm', () => {
     expect(screen.getByDisplayValue('2027-05-01T08:00')).toBeInTheDocument();
   });
 
-  it('links to every registered ride sub-page, in registry order (CR-120, KI-061)', async () => {
+  // CR-187: the six local tabs — «Обзор» plus the registry, in its order.
+  it('shows «Обзор» and every registered ride sub-page as tabs (CR-187, KI-061)', async () => {
     getRideMock.mockResolvedValue({
       ride: baseRide,
       isOwner: true,
@@ -578,20 +599,67 @@ describe('EditRideForm', () => {
 
     render(<EditRideForm rideId="ride-1" sections={ORGANIZER_RIDE_SECTIONS} />);
 
-    expect(
-      await screen.findByRole('link', { name: 'Группы →' }),
-    ).toHaveAttribute('href', '/organizer/rides/ride-1/groups');
-    const hrefs = screen
+    const tabs = await screen.findByRole('navigation', {
+      name: 'Разделы заезда',
+    });
+    expect(within(tabs).getByRole('link', { name: 'Обзор' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    const hrefs = within(tabs)
       .getAllByRole('link')
-      .map((link) => link.getAttribute('href'))
-      .filter((href) => href?.startsWith('/organizer/rides/ride-1/'));
+      .map((link) => link.getAttribute('href'));
     expect(hrefs).toEqual([
+      '/organizer/rides/ride-1/edit',
       '/organizer/rides/ride-1/route',
       '/organizer/rides/ride-1/cover',
       '/organizer/rides/ride-1/groups',
       '/organizer/rides/ride-1/participants',
       '/organizer/rides/ride-1/updates',
     ]);
+  });
+
+  // CR-187: «Перед стартом» says each section's concrete state, and links
+  // only where there is a doable step.
+  it('lists each section with its concrete state on the overview (CR-187)', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'registration_open', participantLimit: 15 },
+      isOwner: true,
+      requirements: [],
+      registrationsCount: 5,
+      waitlistCount: 0,
+      groups: [
+        {
+          id: 'g1',
+          name: 'Лайт',
+          paceKmh: 18,
+          description: null,
+          position: 0,
+          registrationsCount: 2,
+        },
+      ],
+    });
+
+    render(<EditRideForm rideId="ride-1" sections={ORGANIZER_RIDE_SECTIONS} />);
+
+    const list = await screen.findByRole('list', { name: 'Перед стартом' });
+    expect(within(list).getByText('Без трека')).toBeInTheDocument();
+    expect(within(list).getByText('Без обложки')).toBeInTheDocument();
+    expect(within(list).getByText('1 группа по темпу')).toBeInTheDocument();
+    expect(
+      within(list).getByText('5 участников записались'),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByText('Свободно 10 из 15 · лист ожидания: 0'),
+    ).toBeInTheDocument();
+    expect(within(list).getByText('Обновлений пока нет')).toBeInTheDocument();
+    // No cover and none can be added after publish: no link on that row.
+    expect(
+      within(list).queryByRole('link', { name: 'Посмотреть — Обложка' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(list).getByRole('link', { name: 'Настроить — Группы' }),
+    ).toHaveAttribute('href', '/organizer/rides/ride-1/groups');
   });
 
   it('saves changes and shows a success message', async () => {
@@ -696,23 +764,20 @@ describe('EditRideForm', () => {
     render(
       <EditRideForm
         rideId="ride-1"
-        sections={[
-          { segment: 'participants', label: 'Участники →', order: 40 },
-        ]}
+        sections={[{ segment: 'participants', label: 'Участники', order: 40 }]}
       />,
     );
 
+    // CR-187: the title is the page heading, «Управление заездом» its label.
     expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: 'Управление заездом',
-      }),
+      await screen.findByRole('heading', { level: 1, name: baseRide.title }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Управление заездом')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Перед стартом' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: baseRide.title }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Ближайшее действие' }),
+      screen.getByRole('heading', { name: 'Следующий шаг' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -728,10 +793,16 @@ describe('EditRideForm', () => {
       next.compareDocumentPosition(contactSave) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByText('7 из 20')).toBeInTheDocument();
+    expect(
+      screen.getByText('7 из 20 занято · лист ожидания: 0'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Участники · 7' })).toHaveAttribute(
+      'href',
+      '/organizer/rides/ride-1/participants',
+    );
     expect(screen.getByText('42,0 км')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Участники →' }).getAttribute('href'),
+      screen.getByRole('link', { name: 'Участники' }).getAttribute('href'),
     ).toBe('/organizer/rides/ride-1/participants');
     expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
     expect(
@@ -740,7 +811,7 @@ describe('EditRideForm', () => {
     expect(screen.queryByTestId('overdue-start')).not.toBeInTheDocument();
   });
 
-  it('keeps the draft title «Редактирование заезда»', async () => {
+  it('keeps the draft form under «Редактирование заезда»', async () => {
     getRideMock.mockResolvedValue({
       ride: baseRide,
       isOwner: true,
@@ -751,10 +822,11 @@ describe('EditRideForm', () => {
 
     expect(
       await screen.findByRole('heading', {
-        level: 1,
+        level: 2,
         name: 'Редактирование заезда',
       }),
     ).toBeInTheDocument();
+    expect(screen.getByText('Подготовка заезда')).toBeInTheDocument();
     expect(screen.getByLabelText('Название')).toBeEnabled();
   });
 
@@ -826,7 +898,10 @@ describe('EditRideForm', () => {
     expect(publishRideMock).toHaveBeenCalledWith('ride-1');
     // The screen flips to the management view immediately once published.
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Управление заездом' }),
+      screen.getByRole('heading', { level: 2, name: 'Перед стартом' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Открыть регистрацию' }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
   });
@@ -867,7 +942,7 @@ describe('EditRideForm', () => {
 
     render(<EditRideForm rideId="ride-1" />);
 
-    await screen.findByRole('heading', { name: 'Управление заездом' });
+    await screen.findByText('Управление заездом');
     expect(
       screen.queryByRole('button', { name: 'Опубликовать' }),
     ).not.toBeInTheDocument();
@@ -1278,11 +1353,18 @@ describe('EditRideForm', () => {
   });
 
   it('starts a registration_closed ride and shows a success message', async () => {
-    getRideMock.mockResolvedValue({
-      isOwner: true,
-      requirements: [],
-      ride: { ...baseRide, status: 'registration_closed' },
-    });
+    // The workspace re-reads the ride after the start (CR-182's counts).
+    getRideMock
+      .mockResolvedValueOnce({
+        isOwner: true,
+        requirements: [],
+        ride: { ...baseRide, status: 'registration_closed' },
+      })
+      .mockResolvedValue({
+        isOwner: true,
+        requirements: [],
+        ride: { ...baseRide, status: 'started' },
+      });
     startRideMock.mockResolvedValue({
       ride: { ...baseRide, status: 'started' },
     });
@@ -1479,5 +1561,135 @@ describe('EditRideForm', () => {
     expect(
       screen.queryByRole('button', { name: 'Завершить заезд' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('RideWorkspace (CR-187)', () => {
+  beforeEach(() => {
+    getRideMock.mockReset();
+  });
+
+  it('puts the actions in priority order while registration is open', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      registrationsCount: 5,
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+
+    render(
+      <RideWorkspace rideId="ride-1" current="edit" sections={[]}>
+        <p>Раздел</p>
+      </RideWorkspace>,
+    );
+
+    const group = await screen.findByRole('group', {
+      name: 'Действия с заездом',
+    });
+    expect(
+      Array.from(group.querySelectorAll('a, button')).map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(['Участники · 5', 'Написать участникам', 'Закрыть регистрацию']);
+    expect(
+      screen.getByRole('link', { name: 'Написать участникам' }),
+    ).toHaveAttribute('href', '/organizer/rides/ride-1/updates');
+  });
+
+  it('offers no lifecycle step on a finished ride', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'finished' },
+    });
+
+    render(
+      <RideWorkspace rideId="ride-1" current="edit" sections={[]}>
+        <p>Раздел</p>
+      </RideWorkspace>,
+    );
+
+    const group = await screen.findByRole('group', {
+      name: 'Действия с заездом',
+    });
+    expect(within(group).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('heads a section with its task, purpose and concrete state', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(
+      <RideWorkspace
+        rideId="ride-1"
+        current="route"
+        sections={ORGANIZER_RIDE_SECTIONS}
+      >
+        <p>Раздел</p>
+      </RideWorkspace>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Маршрут заезда' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Нет трека')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Маршрут' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByText('Раздел')).toBeInTheDocument();
+  });
+
+  it('drops the back link and tabs inside the new-ride wizard', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: baseRide,
+    });
+
+    render(
+      <RideWorkspace
+        rideId="ride-1"
+        current="route"
+        sections={ORGANIZER_RIDE_SECTIONS}
+        variant="wizard"
+      >
+        <p>Раздел</p>
+      </RideWorkspace>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: baseRide.title }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('navigation', { name: 'Разделы заезда' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'К моим заездам' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a retryable error and no section when the ride fails to load', async () => {
+    getRideMock
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue({ isOwner: true, requirements: [], ride: baseRide });
+
+    render(
+      <RideWorkspace rideId="ride-1" current="edit" sections={[]}>
+        <p>Раздел</p>
+      </RideWorkspace>,
+    );
+
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить заезд. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Раздел')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Повторить/ }));
+    expect(await screen.findByText('Раздел')).toBeInTheDocument();
   });
 });

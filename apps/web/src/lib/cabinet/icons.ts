@@ -3,11 +3,21 @@ import {
   Bike,
   CircleUser,
   House,
+  ImageIcon,
+  Route,
   Send,
   Ticket,
   Users,
-  type LucideIcon,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { AccountAddIcon } from './AccountAddIcon';
+
+/** What a cabinet icon must accept: every renderer passes only these two
+ * props, so a `lucide-react` icon and a project SVG component both fit. */
+type CabinetIcon = ComponentType<{
+  className?: string;
+  'aria-hidden'?: boolean | 'true' | 'false';
+}>;
 
 // CR-106: the resolvable side of `CabinetNavItem.icon` (see that field's own
 // doc comment for why a name, not the `lucide-react` component, crosses the
@@ -22,6 +32,11 @@ export const CABINET_ICONS = {
   House,
   Users,
   Send,
-} satisfies Record<string, LucideIcon>;
+  // CR-186: the ride management view's «Разделы» rows (Маршрут, Обложка,
+  // Группы — the last one from line-md, not lucide; see `AccountAddIcon`).
+  Route,
+  ImageIcon,
+  AccountAdd: AccountAddIcon,
+} satisfies Record<string, CabinetIcon>;
 
 export type CabinetIconName = keyof typeof CABINET_ICONS;
