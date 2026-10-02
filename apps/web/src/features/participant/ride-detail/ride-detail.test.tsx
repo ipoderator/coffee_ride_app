@@ -957,7 +957,7 @@ describe('RideDetailView', () => {
       cancelledAt: null,
     };
 
-    it('shows no reviews section before the ride is finished', async () => {
+    it('explains that ride reviews come after the ride is finished, without fetching', async () => {
       getRideDetailMock.mockResolvedValue(
         baseDetailResponse({ ride: { ...baseRide, status: 'started' } }),
       );
@@ -965,7 +965,11 @@ describe('RideDetailView', () => {
       render(<RideDetailView rideId="ride-1" />);
 
       await screen.findByText(baseRide.title);
-      expect(screen.queryByText('Отзывы')).not.toBeInTheDocument();
+      expect(screen.getByText('Отзывы')).toBeInTheDocument();
+      expect(
+        screen.getByText(/появятся после его завершения/),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Оставить отзыв')).not.toBeInTheDocument();
       expect(getRideReviewsMock).not.toHaveBeenCalled();
     });
 
@@ -1054,6 +1058,27 @@ describe('RideDetailView', () => {
       const organizerLine = screen.getByText(/★/);
       expect(organizerLine.textContent).toContain('4,5');
       expect(organizerLine.textContent).toContain('3 отзыва');
+    });
+
+    it('links the organizer rating to the reviews section', async () => {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          organizer: {
+            id: 'org-1',
+            name: 'Гравийный клуб',
+            avatarUrl: null,
+            rating: 4.5,
+            reviewCount: 3,
+          },
+        }),
+      );
+
+      const { container } = render(<RideDetailView rideId="ride-1" />);
+
+      await screen.findByText(baseRide.title);
+      const link = screen.getByRole('link', { name: /3 отзыва/ });
+      expect(link).toHaveAttribute('href', '#reviews');
+      expect(container.querySelector('#reviews')).not.toBeNull();
     });
   });
   describe('organizer journal (CR-173)', () => {

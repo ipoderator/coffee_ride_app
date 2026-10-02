@@ -1308,6 +1308,8 @@ export const REVIEWS_TERMS = {
   submitSuccess: 'Спасибо за отзыв!',
   submitError: 'Не удалось отправить отзыв. Попробуйте ещё раз.',
   alreadyReviewed: 'Вы уже оставили отзыв об этом заезде.',
+  notFinished:
+    'Отзывы об этом заезде появятся после его завершения. Рейтинг организатора выше — по его прошлым заездам.',
 } as const;
 
 export const NOTIFICATIONS_TERMS = {

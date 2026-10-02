@@ -108,10 +108,12 @@ const ACTION_ROW_CLASSNAME =
  */
 function ReviewsSection({
   rideId,
+  finished,
   canReview,
   onSubmitted,
 }: {
   rideId: string;
+  finished: boolean;
   canReview: boolean;
   onSubmitted: (review: Review) => void;
 }) {
@@ -131,14 +133,19 @@ function ReviewsSection({
   }
 
   useEffect(() => {
-    loadReviews();
+    if (finished) loadReviews();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rideId]);
+  }, [rideId, finished]);
 
   return (
-    <section className="flex flex-col gap-4">
+    <section id="reviews" className="flex scroll-mt-20 flex-col gap-4">
       <h2 className={SECTION_TITLE_CLASSNAME}>{REVIEWS_TERMS.sectionTitle}</h2>
-      {canReview && (
+      {!finished && (
+        <p className="text-body-sm text-text-secondary">
+          {REVIEWS_TERMS.notFinished}
+        </p>
+      )}
+      {finished && canReview && (
         <ReviewForm
           rideId={rideId}
           onSubmitted={(review) => {
@@ -147,7 +154,9 @@ function ReviewsSection({
           }}
         />
       )}
-      <ReviewList status={status} reviews={reviews} onRetry={loadReviews} />
+      {finished && (
+        <ReviewList status={status} reviews={reviews} onRetry={loadReviews} />
+      )}
     </section>
   );
 }
@@ -624,7 +633,10 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             </span>{' '}
             <span className="font-semibold text-text">{organizer.name}</span>
             {organizer.reviewCount > 0 ? (
-              <span className="text-text-secondary">
+              <a
+                href="#reviews"
+                className="rounded-sm text-text-secondary underline-offset-4 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
                 {' · '}
                 <Star
                   className="inline size-3.5 fill-elevation stroke-none align-[-2px]"
@@ -633,7 +645,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                 {formatRating(organizer.rating, organizer.reviewCount)}
                 {' · '}
                 {RIDE_DETAIL_TERMS.ratingReviewsCount(organizer.reviewCount)}
-              </span>
+              </a>
             ) : null}
           </p>
         </div>
@@ -857,13 +869,12 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             />
           )}
 
-          {ride.status === 'finished' && (
-            <ReviewsSection
-              rideId={rideId}
-              canReview={viewerRegistration !== null && viewerReview === null}
-              onSubmitted={setViewerReview}
-            />
-          )}
+          <ReviewsSection
+            rideId={rideId}
+            finished={ride.status === 'finished'}
+            canReview={viewerRegistration !== null && viewerReview === null}
+            onSubmitted={setViewerReview}
+          />
 
           {bar ? (
             // Room for the phone bar at the very end of the page.

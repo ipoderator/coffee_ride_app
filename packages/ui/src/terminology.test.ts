@@ -3,6 +3,7 @@ import {
   BICYCLE_TYPE_TERMS,
   DIFFICULTY_LEVEL_TERMS,
   METRIC_TERMS,
+  ORGANIZER_JOURNAL_TERMS,
   ORGANIZER_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_SERVICE_TERMS,
@@ -214,6 +215,29 @@ describe('CR-132 organizer frame terms', () => {
     );
     expect(ORGANIZER_OVERVIEW_TERMS.waitlistForRide('Рассветный')).toBe(
       'на «Рассветный»',
+    );
+  });
+});
+
+describe('ORGANIZER_JOURNAL_TERMS (CR-173)', () => {
+  it('writes counts as words with the right Russian plural', () => {
+    expect(ORGANIZER_JOURNAL_TERMS.finished(1)).toBe('Провёл 1 заезд');
+    expect(ORGANIZER_JOURNAL_TERMS.finished(3)).toBe('Провёл 3 заезда');
+    expect(ORGANIZER_JOURNAL_TERMS.finished(12)).toBe('Провёл 12 заездов');
+    expect(ORGANIZER_JOURNAL_TERMS.cancelled(1)).toBe('Отменён 1 заезд');
+    expect(ORGANIZER_JOURNAL_TERMS.cancelled(2)).toBe('Отменено 2 заезда');
+  });
+
+  it('shows the completion percentage beside the counts it summarises', () => {
+    expect(ORGANIZER_JOURNAL_TERMS.completion(9, 10, 90)).toBe(
+      'Состоялись 9 из 10 · 90 %',
+    );
+  });
+
+  it('phrases the typical pace and distance', () => {
+    expect(ORGANIZER_JOURNAL_TERMS.typicalPace('24 км/ч')).toBe('темп 24 км/ч');
+    expect(ORGANIZER_JOURNAL_TERMS.typicalDistance('60 км')).toBe(
+      'дистанция около 60 км',
     );
   });
 });

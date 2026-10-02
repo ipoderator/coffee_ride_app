@@ -492,6 +492,12 @@ describe('ride contact formatters (CR-165)', () => {
     ).toBe('@coffee_ride');
   });
 
+  it('shows an email as-is', () => {
+    expect(formatRideContactValue({ type: 'email', value: 'a@b.ru' })).toBe(
+      'a@b.ru',
+    );
+  });
+
   it('leaves an unexpected phone shape alone rather than mangling it', () => {
     // The API always stores `+7XXXXXXXXXX`; this is the defensive branch.
     expect(formatRideContactValue({ type: 'phone', value: '+1555' })).toBe(

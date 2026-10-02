@@ -198,4 +198,26 @@ describe('Organizer journal (CR-173)', () => {
     });
     await app.close();
   });
+
+  it('breaks a tie between bicycle types alphabetically and leaves "any" out', async () => {
+    const app = await buildApp(testEnv);
+    const cookie = await registerOrganizer(app);
+    const viewed = await createRide(app, cookie, 'road');
+    await setRide(app, viewed, 'published', null, null);
+    for (const type of ['road', 'mtb', 'gravel', 'any'] as const) {
+      await setRide(
+        app,
+        await createRide(app, cookie, type),
+        'finished',
+        null,
+        null,
+      );
+    }
+
+    expect((await journalOf(app, viewed)).bicycleTypes).toEqual([
+      'gravel',
+      'mtb',
+    ]);
+    await app.close();
+  });
 });

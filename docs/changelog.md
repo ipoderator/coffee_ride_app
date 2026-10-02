@@ -2942,3 +2942,17 @@ inside it. Both views take an optional `panelProps`. No visual change.
 Validation: `DiscoveryTabs.test.tsx` +3 (roving tabindex + panel wiring, arrows with
 focus following and wrap, Home/End and ignored keys); `apps/web` 647 passed;
 typecheck and eslint clean. No screen-reader pass done.
+
+## 2026-10-02 — CR-178 — organizer rating links to the reviews section
+
+Summary: on `/rides/[id]` the «★ 4,7 · 3 отзыва» line under the title is now an `#reviews` anchor. The «Отзывы» section is rendered for every ride; before the ride is `finished` it shows a note (`REVIEWS_TERMS.notFinished`) instead of fetching the list, since ride reviews exist only after the finish while the header figure aggregates the organizer's past rides.
+Files: `apps/web/src/features/participant/ride-detail/components/RideDetailView.tsx`, `ride-detail.test.tsx`, `packages/ui/src/terminology.ts`.
+Decisions: none (option 1 of the owner's choice; a public organizer page / `GET /v1/organizers/:id/reviews` stays out of scope, `docs/api.md`).
+Follow-up: the header count and the section's list can differ (organizer total vs this ride) — a public organizer reviews page would remove that.
+
+## 2026-10-02 — CR-179 — restore the coverage gate after CR-174..CR-177
+
+Summary: CI on `46af87b` failed only at «Coverage gate» (`packages/ui` lines/statements/functions, `apps/api/src/modules/rides/` branches). Added tests for the untested CR-165/CR-173 code: `formatRideContactValue` email case, every `ORGANIZER_JOURNAL_TERMS` formatter, and the journal's bicycle-type tie-break / `any` exclusion. Baseline untouched.
+Files: `packages/ui/src/format.test.ts`, `packages/ui/src/terminology.test.ts`, `apps/api/src/modules/rides/organizer-journal.routes.test.ts`.
+Decisions: none.
+Follow-up: `organizer-journal.ts` `row?.finished ?? 0` fallbacks are unreachable (an aggregate always returns a row); raise the baseline after a CI-like full run.
