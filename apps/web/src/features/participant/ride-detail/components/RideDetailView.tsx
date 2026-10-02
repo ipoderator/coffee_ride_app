@@ -635,7 +635,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             {organizer.reviewCount > 0 ? (
               <a
                 href="#reviews"
-                className="rounded-sm text-text-secondary underline-offset-4 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className="rounded-sm text-text-secondary underline decoration-1 underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 {' · '}
                 <Star

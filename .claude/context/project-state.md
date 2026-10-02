@@ -850,6 +850,8 @@ and committed.
 
 ## Next
 
+Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
+
 1. **`coverage-baseline.json` refresh** — `pnpm test:coverage && pnpm coverage:baseline`
    in the CI environment (Postgres/Redis/S3 up, the live-test flags set, no
    `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`, see `.claude/rules/testing.md` → Coverage);
