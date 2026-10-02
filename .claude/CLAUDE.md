@@ -1,5 +1,22 @@
 # Coffee Ride — Claude Code Harness v3
 
+## Language
+
+Always reply to the user in Russian — answers, summaries, the end-of-run report
+sections, handoffs, questions and error explanations included. Code, identifiers,
+commit messages and repository docs stay in English.
+
+## Visual baselines
+
+Regenerate `toHaveScreenshot` baselines with Docker, as x86_64
+(`--platform linux/amd64`, the command in `.claude/rules/testing.md` → "Visual
+regression"). The amd64 image pull has stalled on this network before, so run the pull
+in the background and stop it after ~10 minutes without progress — do not retry it in a
+loop. Fallback: push, let the `ci` job fail on the screenshots, `gh run download <run>
+-n playwright-report`, check each `*-diff.png` shows only the intended change or
+anti-aliasing, then commit the matching `*-actual.png` files. If baselines are still
+pending at the end of a run, say so under "Found".
+
 ## Mission
 
 Coffee Ride is a Russian platform for discovering, organizing, and participating in group cycling rides.
