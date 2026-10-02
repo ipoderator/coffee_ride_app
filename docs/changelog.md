@@ -2830,3 +2830,115 @@ Validation: `apps/web` unit 539 (camera tests rewritten for fit/pan/cached
 line/hover/reduced motion); `packages/maps-2gis` 65 (animated fit, jump,
 single-point, resize re-fit immediate); typecheck + lint green; coverage holds,
 baseline regenerated.
+
+## 2026-10-01 — CR-173 — «Журнал организатора» on the ride page
+
+Summary: the trust layer gets plain facts about the organizer's past rides, shown
+as a quiet ledger (no stars, badges or verdict colours) under «Журнал организатора»
+on `/rides/[id]`. What already existed: average rating + review count (CR-043,
+inline beside the organizer name — left as is). What is new: rides held, share
+completed, typical pace/distance, usual bike types.
+
+API (additive): `organizer.journal` on `GET /v1/rides/:id` only (one aggregate pair
+per request; the list does not carry it) — `finishedCount`, `cancelledCount`,
+`completionPercent`, `typicalPaceKmh`, `typicalDistanceKm`, `bicycleTypes`
+(`modules/rides/organizer-journal.ts`). Only `finished`/`cancelled` rides count;
+pace/distance are medians over finished rides, bike types the top two excluding
+`any`. Honesty rules: `completionPercent` stays `null` until 3 rides are closed
+(`ORGANIZER_JOURNAL_MIN_CLOSED_RIDES`) — the UI then names the cancellation in
+words instead; no finished rides reads «Завершённых заездов пока нет», never a 0 %.
+No schema/migration change.
+
+Web: `OrganizerJournal` (ride-detail feature) + `ORGANIZER_JOURNAL_TERMS`
+(`packages/ui`); story `Rides/OrganizerJournal` (3 states, axe-clean).
+
+Validation: `apps/api` rides+reviews 257 passed (new `organizer-journal.routes.test.ts`
+covers empty / mixed finished+cancelled+draft / thin sample; one strict `organizer`
+equality in `rides.routes.test.ts` gained `journal`); `ride-detail` 87; Storybook
+story 3; typecheck + eslint clean for types/ui/web/api. Coverage baseline not
+regenerated this run.
+
+Known limits / next: the organizer's own cabinet profile does not show the journal
+yet; the discovery list carries only rating (no journal) by design (cost).
+
+## 2026-10-02 — CR-174 — «Показать ещё» on the discovery map list
+
+Defect (reported by the owner, confirmed): `DiscoveryList` — the map tab's list and
+the source of its pins — read only `response.items` of `GET /v1/rides`, ignoring
+`nextCursor`/`total`, so with more than one page (default 20) the rest of the rides
+were unreachable from the map view. `RideGrid` (the grid tab) already paginated.
+
+Fix: `DiscoveryList` now keeps `nextCursor`/`total`, renders the same
+«Показать ещё N заездов» button under the rows (error: `loadMoreError`, loaded rows
+kept), and appends the next page with the first page's exact query (`queryRef`);
+a generation counter drops a late page for filters the user has since changed.
+Every loaded ride is pinned on the map. No API/contract change.
+
+Validation: `discovery.test.tsx` +3 (append with cursor and button gone at the end,
+all loaded rides pinned, next-page failure keeps rows and shows the error);
+`apps/web` discovery 98 passed; typecheck + eslint clean for the folder.
+
+## 2026-10-02 — CR-175 — Discovery filters survive the «Заезды / Карта» switch
+
+Defect (reported by the owner, confirmed): `DiscoveryTabs` mounts only the active
+view, and each of `RideGrid` / `DiscoveryList` kept the filter chips in its own
+`useState`, so every tab switch reset them to «none».
+
+Fix: the chips now live in `DiscoveryTabs` and are passed down (`filters` /
+`onFiltersChange`; a view rendered alone still falls back to its own state —
+`lib/use-discovery-filters.ts`). They also mirror into the URL like `view` does
+(`?type=&week=1&pace=&difficulty=&free=1`, `history.replaceState`), so a choice
+survives a reload and a shared link; unknown/out-of-range values are dropped on read
+(`filtersFromSearchParams`). No API change.
+
+Validation: `DiscoveryTabs.test.tsx` +2 (filters kept across both switches, in the
+URL and in the next fetch; restore from URL ignoring a malformed `pace`),
+`discovery-filters.test.ts` +2 (round trip, bad values); `apps/web` suite, typecheck
+and eslint for the folder clean.
+
+Known limit: URL changes made elsewhere (back/forward) do not re-sync the chips —
+`replaceState` adds no history entries, so back leaves the page entirely.
+
+## 2026-10-02 — CR-176 — A real first paint on `/`
+
+Finding (owner, confirmed): the prerendered `/` had `<main>` with an empty Suspense
+fallback (`fallback={null}`), so the server HTML carried no content and the page was
+blank until `DiscoveryTabs` hydrated and `RideGrid` fetched.
+
+Change: the fallback is now `DiscoveryPageSkeleton` — the real page title and
+description (static text, so first paint has content and no layout jump), plus quiet
+`Skeleton` blocks for the view switch, the filter chips and the cards, laid out like
+`RideGrid`'s own header and loading state. `RideGrid`'s loading cards moved to the
+same file (`DiscoveryGridSkeleton`) so the two cannot drift. Skeletons keep the
+existing `motion-safe` pulse. Verified in the dev server's HTML: `<main>` now holds
+the `h1` and placeholders. No API change.
+
+Not done (a separate decision): server-side prefetch of the first page. `/` is
+statically rendered and its filters come from the URL, so prefetching would make the
+route dynamic (or need an ISR/cache layer plus a server-side API base URL) — a real
+cost/caching trade-off. The skeleton fixes the blank first paint; prefetch would
+additionally remove the post-hydration fetch wait.
+
+Validation: `DiscoveryPageSkeleton.test.tsx` (+1); `apps/web` 644 passed; typecheck
+and eslint clean. Not eyeballed in a browser; a `?view=map` visit briefly shows the
+grid-shaped skeleton before the map layout (the view is unknown until hydration).
+
+## 2026-10-02 — CR-177 — Keyboard-operable «Список / Карта» tabs
+
+Finding (owner, confirmed): the switch was marked `role="tablist"` but had no
+arrow-key handling, no roving tabindex and no `tabpanel`. A second, worse effect:
+the switch is rendered inside whichever view is mounted, so a tab change destroys
+and recreates it and a keyboard user's focus dropped to `<body>`.
+
+Change (`DiscoveryTabs`): WAI-ARIA tabs with automatic activation — ←/→ (and ↑/↓)
+move and select, wrapping; Home/End jump to the ends; only the selected tab is in
+the Tab order; each tab has an `id`, the selected one `aria-controls` the panel;
+focus is restored to the new tab after the view swaps. The tab panel
+(`role="tabpanel"`, `aria-labelledby` = the active tab) is the results region of
+the active view (`RideGrid`'s cards / `DiscoveryList`'s rows) — the switch sits in
+the view's header, so the panel cannot wrap it; the map pane beside the list is not
+inside it. Both views take an optional `panelProps`. No visual change.
+
+Validation: `DiscoveryTabs.test.tsx` +3 (roving tabindex + panel wiring, arrows with
+focus following and wrap, Home/End and ignored keys); `apps/web` 647 passed;
+typecheck and eslint clean. No screen-reader pass done.

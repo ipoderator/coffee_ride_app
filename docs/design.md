@@ -563,6 +563,16 @@ A discrete 1–5 scale rendered as filled/empty segments **plus** a word
 not color-only. Filled = solid `frame` ink; empty = hollow 1px `border-input` outline
 (CR-128), never a `border`-hairline fill — that is ~1.5:1 on paper and disappears.
 
+### Organizer journal (CR-173)
+
+«Журнал организатора» on the ride page is a ledger, not a scoreboard: a hairline-ruled
+`dl` of plain sentences (`Провёл 11 заездов`, `Состоялись 11 из 12 · 92 %`, `Обычно:
+темп 26 км/ч, дистанция около 80 км`), `text-body-sm`, tabular numerals. No stars,
+badges, progress bars or tone colours. A figure resting on too little is left out —
+the percentage appears from 3 closed rides, otherwise a cancellation is named in
+words; no finished rides says so plainly. Rating stays inline beside the organizer
+name (CR-043).
+
 ---
 
 ## 7. Number and unit formatting (Russian locale)

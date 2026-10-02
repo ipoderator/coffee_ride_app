@@ -1312,3 +1312,17 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       additive `MapFitOptions.durationMs`) instead of only panning to its start,
       so CR-171's draw-in and notes stay in view; a ride without a route still
       pans to its start. See `docs/changelog.md`.
+- [x] CR-173 «Журнал организатора» on the ride page: rides held, share
+      completed (withheld under 3 closed rides), typical pace/distance, usual bike
+      types — additive `organizer.journal` on `GET /v1/rides/:id`, quiet ledger UI.
+      See `docs/changelog.md`.
+- [x] CR-174 Discovery map list paginates: «Показать ещё» + cursor in
+      `DiscoveryList` (was first page only, rest unreachable from the map).
+      See `docs/changelog.md`.
+- [x] CR-175 Discovery filters survive the «Заезды / Карта» switch: state lifted
+      into `DiscoveryTabs` and mirrored into the URL. See `docs/changelog.md`.
+- [x] CR-176 `/` first paint: Suspense fallback is a real-title page skeleton
+      instead of `null` (server prefetch of the list left as an open decision).
+      See `docs/changelog.md`.
+- [x] CR-177 «Список / Карта» tabs: arrow/Home/End keys, roving tabindex, tabpanel,
+      focus kept across the view swap. See `docs/changelog.md`.

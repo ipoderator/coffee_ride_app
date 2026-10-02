@@ -1,23 +1,29 @@
 'use client';
 
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import type { PublicRideListItem } from 'types';
 import {
-  Button,
-  EmptyState,
-  ErrorState,
-  RIDE_DISCOVERY_TERMS,
-  Skeleton,
-} from 'ui';
+  type HTMLAttributes,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import type { PublicRideListItem } from 'types';
+import { Button, EmptyState, ErrorState, RIDE_DISCOVERY_TERMS } from 'ui';
 import { type ListPublicRidesParams, listPublicRides } from '../api';
 import {
   NO_DISCOVERY_FILTERS,
   filtersToQuery,
   hasActiveFilters,
 } from '../lib/discovery-filters';
+import {
+  useDiscoveryFilters,
+  type DiscoveryFiltersControl,
+} from '../lib/use-discovery-filters';
 import { pickFeaturedRide } from '../lib/ride-metrics';
 import { ContoursIllustration } from './ContoursIllustration';
 import { DiscoveryFilters } from './DiscoveryFilters';
+import { DiscoveryGridSkeleton } from './DiscoveryPageSkeleton';
 import { FeaturedRideCard } from './FeaturedRideCard';
 import { RideGridCard } from './RideGridCard';
 
@@ -25,19 +31,6 @@ type LoadStatus = 'loading' | 'ready' | 'error';
 
 const GRID_CLASSNAME =
   'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5';
-
-function LoadingCards() {
-  return (
-    <div aria-hidden="true" className="grid gap-5 md:gap-7">
-      <Skeleton className="h-150 rounded-3xl md:h-95" />
-      <div className={GRID_CLASSNAME}>
-        {[0, 1, 2].map((index) => (
-          <Skeleton key={index} className="h-108 rounded-3xl" />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /**
  * ADR-024's «Список» tab, laid out to the owner's mockup in CR-153: page
@@ -47,14 +40,26 @@ function LoadingCards() {
  * `DiscoveryList` (the «Карта» tab) but keeps its own fetch — each tab only
  * pays for the data its own view needs.
  */
-export function RideGrid({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
+export function RideGrid({
+  viewSwitch,
+  filters: controlledFilters,
+  onFiltersChange,
+  panelProps,
+}: {
+  viewSwitch?: ReactNode;
+  /** The tab panel's `id`/`role`/`aria-labelledby`, from `DiscoveryTabs`. */
+  panelProps?: HTMLAttributes<HTMLDivElement>;
+} & DiscoveryFiltersControl = {}) {
   const headingId = useId();
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rides, setRides] = useState<PublicRideListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [featuredId, setFeaturedId] = useState<string | null>(null);
-  const [filters, setFilters] = useState(NO_DISCOVERY_FILTERS);
+  const [filters, setFilters] = useDiscoveryFilters({
+    filters: controlledFilters,
+    onFiltersChange,
+  });
   const [attempt, setAttempt] = useState(0);
   const [moreStatus, setMoreStatus] = useState<'idle' | 'loading' | 'error'>(
     'idle',
@@ -116,7 +121,7 @@ export function RideGrid({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
 
   let body: ReactNode;
   if (status === 'loading') {
-    body = <LoadingCards />;
+    body = <DiscoveryGridSkeleton />;
   } else if (status === 'error') {
     body = (
       <ErrorState
@@ -231,7 +236,9 @@ export function RideGrid({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
         </p>
       </div>
 
-      <div aria-busy={status === 'loading'}>{body}</div>
+      <div aria-busy={status === 'loading'} {...panelProps}>
+        {body}
+      </div>
     </div>
   );
 }

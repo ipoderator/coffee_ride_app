@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   NO_DISCOVERY_FILTERS,
+  applyFiltersToSearchParams,
   endOfWeek,
+  filtersFromSearchParams,
   filtersToQuery,
   hasActiveFilters,
+  type DiscoveryFilters,
 } from './discovery-filters';
 
 describe('discovery filters (CR-153)', () => {
@@ -50,5 +53,34 @@ describe('discovery filters (CR-153)', () => {
     expect(
       filtersToQuery({ ...NO_DISCOVERY_FILTERS, pace: 'from30' }).paceMax,
     ).toBeUndefined();
+  });
+});
+
+describe('filters ⇄ URL', () => {
+  it('round-trips every chip and writes nothing for an inactive one', () => {
+    const filters: DiscoveryFilters = {
+      bicycleType: 'mtb',
+      thisWeek: true,
+      pace: 'from25to30',
+      difficulty: 4,
+      free: true,
+    };
+    const params = new URLSearchParams('view=map');
+    applyFiltersToSearchParams(params, filters);
+    expect(params.toString()).toBe(
+      'view=map&type=mtb&week=1&pace=from25to30&difficulty=4&free=1',
+    );
+    expect(filtersFromSearchParams(params)).toEqual(filters);
+
+    applyFiltersToSearchParams(params, NO_DISCOVERY_FILTERS);
+    expect(params.toString()).toBe('view=map');
+  });
+
+  it('drops unknown or out-of-range values instead of trusting them', () => {
+    expect(
+      filtersFromSearchParams(
+        new URLSearchParams('type=bmx&pace=fast&difficulty=9&week=yes&free=0'),
+      ),
+    ).toEqual(NO_DISCOVERY_FILTERS);
   });
 });

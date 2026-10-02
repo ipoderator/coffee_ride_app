@@ -139,4 +139,118 @@ describe('DiscoveryTabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Список' }));
     expect(window.location.search).toBe('');
   });
+
+  it('keeps the chosen filters when switching Список ⇄ Карта, and in the URL', async () => {
+    render(<DiscoveryTabs />);
+    await screen.findByText('Тестовый заезд на выходные');
+
+    fireEvent.click(screen.getByRole('button', { name: /Эта неделя/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Бесплатные/ }));
+    expect(window.location.search).toBe('?week=1&free=1');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Карта' }));
+    await screen.findByTestId('discovery-map-panel');
+
+    // the map list was fetched with the same filters, not a fresh empty set
+    await waitFor(() =>
+      expect(listPublicRidesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ free: true, startsTo: expect.any(String) }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: /Эта неделя/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Список' }));
+    await screen.findByText('Тестовый заезд на выходные');
+    expect(screen.getByRole('button', { name: /Бесплатные/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(window.location.search).toBe('?week=1&free=1');
+  });
+
+  it('restores filters from the URL on load and ignores malformed values', async () => {
+    search = 'type=gravel&difficulty=3&free=1&pace=bogus';
+    render(<DiscoveryTabs />);
+    await screen.findByText('Тестовый заезд на выходные');
+
+    expect(listPublicRidesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bicycleType: 'gravel',
+        difficulty: 3,
+        free: true,
+      }),
+    );
+    // the malformed `pace` was dropped, not turned into a range
+    const query = listPublicRidesMock.mock.calls[0]![0]!;
+    expect(query).not.toHaveProperty('paceMin');
+    expect(query).not.toHaveProperty('paceMax');
+  });
+
+  describe('keyboard and ARIA (WAI-ARIA tabs)', () => {
+    it('puts only the selected tab in the Tab order and links it to a labelled tabpanel', async () => {
+      render(<DiscoveryTabs />);
+      await screen.findByText('Тестовый заезд на выходные');
+
+      const list = screen.getByRole('tab', { name: 'Список' });
+      const map = screen.getByRole('tab', { name: 'Карта' });
+      expect(list).toHaveAttribute('tabindex', '0');
+      expect(map).toHaveAttribute('tabindex', '-1');
+
+      const panel = screen.getByRole('tabpanel');
+      expect(list).toHaveAttribute('aria-controls', panel.id);
+      expect(map).not.toHaveAttribute('aria-controls');
+      expect(panel).toHaveAttribute('aria-labelledby', list.id);
+      expect(panel).toContainElement(
+        screen.getByText('Тестовый заезд на выходные'),
+      );
+    });
+
+    it('moves and selects with the arrow keys, keeping focus on the new tab', async () => {
+      render(<DiscoveryTabs />);
+      await screen.findByText('Тестовый заезд на выходные');
+
+      screen.getByRole('tab', { name: 'Список' }).focus();
+      fireEvent.keyDown(screen.getByRole('tab', { name: 'Список' }), {
+        key: 'ArrowRight',
+      });
+
+      await screen.findByTestId('discovery-map-panel');
+      const map = screen.getByRole('tab', { name: 'Карта' });
+      expect(map).toHaveAttribute('aria-selected', 'true');
+      // the switch was rebuilt inside the map view — focus must follow
+      expect(map).toHaveFocus();
+      expect(screen.getByRole('tabpanel')).toHaveAttribute(
+        'aria-labelledby',
+        map.id,
+      );
+      expect(window.location.search).toBe('?view=map');
+
+      // wraps around, and Left goes back
+      fireEvent.keyDown(map, { key: 'ArrowRight' });
+      await screen.findByText('Тестовый заезд на выходные');
+      expect(screen.getByRole('tab', { name: 'Список' })).toHaveFocus();
+    });
+
+    it('jumps with Home and End and ignores other keys', async () => {
+      search = 'view=map';
+      render(<DiscoveryTabs />);
+      await screen.findByTestId('discovery-map-panel');
+
+      const map = screen.getByRole('tab', { name: 'Карта' });
+      fireEvent.keyDown(map, { key: 'a' });
+      expect(map).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.keyDown(map, { key: 'Home' });
+      await screen.findByText('Тестовый заезд на выходные');
+      const list = screen.getByRole('tab', { name: 'Список' });
+      expect(list).toHaveFocus();
+
+      fireEvent.keyDown(list, { key: 'End' });
+      await screen.findByTestId('discovery-map-panel');
+      expect(screen.getByRole('tab', { name: 'Карта' })).toHaveFocus();
+    });
+  });
 });

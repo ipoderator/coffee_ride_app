@@ -37,6 +37,13 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-173 (2026-10-01, committed): «Журнал организатора» on
+`/rides/[id]` — additive `organizer.journal` on `GET /v1/rides/:id` (finished/
+cancelled counts, completion % withheld under 3 closed rides, median pace/distance,
+top bike types; `modules/rides/organizer-journal.ts`), rendered by
+`OrganizerJournal` as a quiet ledger. No schema change. Next: show it in the
+organizer's own cabinet profile if wanted; regenerate coverage baseline.
+
 CR-172 (2026-10-01, this session, owner's call after CR-171): selecting a ride on
 `/` frames its whole route (eased `fitBounds`, new optional
 `MapFitOptions.durationMs`), not just a pan to the start; a ride without a route

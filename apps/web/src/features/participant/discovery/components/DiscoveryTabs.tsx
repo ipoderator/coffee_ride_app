@@ -2,12 +2,27 @@
 
 import { List, Map as MapIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type KeyboardEvent,
+} from 'react';
 import { RIDE_DISCOVERY_TERMS } from 'ui';
+import {
+  applyFiltersToSearchParams,
+  filtersFromSearchParams,
+  type DiscoveryFilters,
+} from '../lib/discovery-filters';
 import { DiscoveryList } from './DiscoveryList';
 import { RideGrid } from './RideGrid';
 
 type DiscoveryTab = 'grid' | 'map';
+
+const TABS: DiscoveryTab[] = ['grid', 'map'];
+const tabId = (tab: DiscoveryTab) => `discovery-tab-${tab}`;
+const PANEL_ID = 'discovery-tabpanel';
 
 function tabClassName(isActive: boolean): string {
   return [
@@ -42,6 +57,60 @@ export function DiscoveryTabs() {
     setTab(urlTab);
   }, [urlTab]);
 
+  // The chips live here, above both views (only the active one is mounted), and
+  // mirror into the URL like `view` does — a choice survives the tab switch, a
+  // reload and a shared link. Read once at mount; later writes are ours.
+  const [filters, setFilters] = useState<DiscoveryFilters>(() =>
+    filtersFromSearchParams(searchParams),
+  );
+
+  function changeFilters(next: DiscoveryFilters) {
+    setFilters(next);
+    const url = new URL(window.location.href);
+    applyFiltersToSearchParams(url.searchParams, next);
+    window.history.replaceState(window.history.state, '', url);
+  }
+
+  // The switch is rendered inside whichever view is mounted, so it is
+  // destroyed and recreated on every change — a keyboard user's focus would
+  // fall to <body>. Remember that the change came from the keyboard and put
+  // focus back on the new tab once the new view is in place.
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    if (!restoreFocus.current) return;
+    restoreFocus.current = false;
+    document.getElementById(tabId(tab))?.focus();
+  }, [tab]);
+
+  // WAI-ARIA tabs, automatic activation: arrows move between tabs and select
+  // (wrapping), Home/End jump to the ends; only the selected tab is in the
+  // Tab order (roving tabindex).
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const index = TABS.indexOf(tab);
+    let nextIndex: number;
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        nextIndex = (index + 1) % TABS.length;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        nextIndex = (index - 1 + TABS.length) % TABS.length;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = TABS.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    restoreFocus.current = true;
+    selectTab(TABS[nextIndex]!);
+  }
+
   function selectTab(next: DiscoveryTab) {
     setTab(next);
     const url = new URL(window.location.href);
@@ -62,7 +131,11 @@ export function DiscoveryTabs() {
       <button
         type="button"
         role="tab"
+        id={tabId('grid')}
         aria-selected={tab === 'grid'}
+        aria-controls={tab === 'grid' ? PANEL_ID : undefined}
+        tabIndex={tab === 'grid' ? 0 : -1}
+        onKeyDown={onTabKeyDown}
         className={tabClassName(tab === 'grid')}
         onClick={() => selectTab('grid')}
       >
@@ -72,7 +145,11 @@ export function DiscoveryTabs() {
       <button
         type="button"
         role="tab"
+        id={tabId('map')}
         aria-selected={tab === 'map'}
+        aria-controls={tab === 'map' ? PANEL_ID : undefined}
+        tabIndex={tab === 'map' ? 0 : -1}
+        onKeyDown={onTabKeyDown}
         className={tabClassName(tab === 'map')}
         onClick={() => selectTab('map')}
       >
@@ -82,9 +159,27 @@ export function DiscoveryTabs() {
     </div>
   );
 
+  // The results region of the active view is the tab's panel (the switch itself
+  // sits in the view's header, outside it).
+  const panelProps: HTMLAttributes<HTMLDivElement> = {
+    id: PANEL_ID,
+    role: 'tabpanel',
+    'aria-labelledby': tabId(tab),
+  };
+
   return tab === 'grid' ? (
-    <RideGrid viewSwitch={viewSwitch} />
+    <RideGrid
+      viewSwitch={viewSwitch}
+      filters={filters}
+      onFiltersChange={changeFilters}
+      panelProps={panelProps}
+    />
   ) : (
-    <DiscoveryList viewSwitch={viewSwitch} />
+    <DiscoveryList
+      viewSwitch={viewSwitch}
+      filters={filters}
+      onFiltersChange={changeFilters}
+      panelProps={panelProps}
+    />
   );
 }

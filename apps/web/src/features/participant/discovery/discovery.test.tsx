@@ -137,6 +137,94 @@ describe('DiscoveryList', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
+  describe('pagination', () => {
+    const ride = (n: number): PublicRideListItem => ({
+      ...baseRide,
+      id: `ride-${n}`,
+      title: `Заезд ${n}`,
+      startLat: 55.7 + n / 100,
+      startLng: 37.5,
+    });
+
+    it('offers «Показать ещё», appends the next page with the same query and cursor, and hides the button at the end', async () => {
+      listPublicRidesMock
+        .mockResolvedValueOnce({
+          items: [ride(1), ride(2)],
+          nextCursor: 'cursor-1',
+          total: 3,
+        })
+        .mockResolvedValueOnce({
+          items: [ride(3)],
+          nextCursor: null,
+          total: 3,
+        });
+
+      render(<DiscoveryList />);
+
+      await screen.findByRole('link', { name: 'Заезд 1' });
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Показать ещё 1 заезд' }),
+      );
+
+      expect(
+        await screen.findByRole('link', { name: 'Заезд 3' }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Заезд 1' })).toBeInTheDocument();
+      expect(listPublicRidesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cursor: 'cursor-1' }),
+      );
+      expect(
+        screen.queryByRole('button', { name: /Показать ещё/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('puts every loaded ride on the map, not only the first page', async () => {
+      renderState.available = true;
+      listPublicRidesMock
+        .mockResolvedValueOnce({
+          items: [ride(1)],
+          nextCursor: 'cursor-1',
+          total: 2,
+        })
+        .mockResolvedValueOnce({
+          items: [ride(2)],
+          nextCursor: null,
+          total: 2,
+        });
+
+      render(<DiscoveryList />);
+
+      await screen.findByRole('link', { name: 'Заезд 1' });
+      fireEvent.click(screen.getByRole('button', { name: /Показать ещё/ }));
+      await screen.findByRole('link', { name: 'Заезд 2' });
+
+      await waitFor(() => {
+        const ids = lastMarkers().map((marker) => marker.id);
+        expect(ids).toEqual(expect.arrayContaining(['ride-1', 'ride-2']));
+      });
+    });
+
+    it('keeps the loaded rides and shows an error when the next page fails', async () => {
+      listPublicRidesMock
+        .mockResolvedValueOnce({
+          items: [ride(1)],
+          nextCursor: 'cursor-1',
+          total: 2,
+        })
+        .mockRejectedValueOnce(new Error('network error'));
+
+      render(<DiscoveryList />);
+
+      await screen.findByRole('link', { name: 'Заезд 1' });
+      fireEvent.click(screen.getByRole('button', { name: /Показать ещё/ }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Не удалось загрузить ещё заезды',
+      );
+      expect(screen.getByRole('link', { name: 'Заезд 1' })).toBeInTheDocument();
+    });
+  });
+
   it('renders a legend row: start line, title link, start, metrics and chips', async () => {
     listPublicRidesMock.mockResolvedValue({
       items: [

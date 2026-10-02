@@ -1,4 +1,9 @@
-import type { BicycleType, DifficultyLevel } from 'types';
+import {
+  BICYCLE_TYPES,
+  DIFFICULTY_LEVELS,
+  type BicycleType,
+  type DifficultyLevel,
+} from 'types';
 import { RIDE_DISCOVERY_TERMS } from 'ui';
 import type { ListPublicRidesParams } from '../api';
 
@@ -64,4 +69,43 @@ export function filtersToQuery(
     difficulty: filters.difficulty,
     free: filters.free ? true : undefined,
   };
+}
+
+/**
+ * The chips as URL params (`?type=gravel&week=1&pace=from20to25&difficulty=3&free=1`),
+ * so a choice survives the «Заезды / Карта» switch, a reload and a shared link.
+ * An inactive chip writes nothing; unknown or malformed values are dropped on
+ * read rather than trusted.
+ */
+export function filtersFromSearchParams(
+  params: URLSearchParams,
+): DiscoveryFilters {
+  const type = params.get('type');
+  const pace = params.get('pace');
+  const difficulty = Number(params.get('difficulty'));
+  return {
+    bicycleType: BICYCLE_TYPES.find((value) => value === type),
+    thisWeek: params.get('week') === '1',
+    pace: PACE_BUCKETS.find((value) => value === pace),
+    difficulty: DIFFICULTY_LEVELS.find((value) => value === difficulty),
+    free: params.get('free') === '1',
+  };
+}
+
+/** Writes the chips into `params` (clearing the inactive ones); other params stay. */
+export function applyFiltersToSearchParams(
+  params: URLSearchParams,
+  filters: DiscoveryFilters,
+): void {
+  const entries: [string, string | undefined][] = [
+    ['type', filters.bicycleType],
+    ['week', filters.thisWeek ? '1' : undefined],
+    ['pace', filters.pace],
+    ['difficulty', filters.difficulty?.toString()],
+    ['free', filters.free ? '1' : undefined],
+  ];
+  for (const [key, value] of entries) {
+    if (value === undefined) params.delete(key);
+    else params.set(key, value);
+  }
 }

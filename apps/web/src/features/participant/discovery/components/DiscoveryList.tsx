@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type HTMLAttributes,
   type ReactNode,
 } from 'react';
 import { Maximize2, Minimize2, X } from 'lucide-react';
@@ -21,12 +22,16 @@ import {
   Skeleton,
 } from 'ui';
 import { prefersReducedMotion } from '@/lib/motion/reduced-motion';
-import { listPublicRides } from '../api';
+import { type ListPublicRidesParams, listPublicRides } from '../api';
 import {
   NO_DISCOVERY_FILTERS,
   filtersToQuery,
   hasActiveFilters,
 } from '../lib/discovery-filters';
+import {
+  useDiscoveryFilters,
+  type DiscoveryFiltersControl,
+} from '../lib/use-discovery-filters';
 import { ContoursIllustration } from './ContoursIllustration';
 import { DiscoveryMap } from './DiscoveryMap';
 import { DiscoveryFilters } from './DiscoveryFilters';
@@ -100,10 +105,32 @@ function LoadingRows() {
  * a copy of it over the map strip on a phone, where scrolling the list would
  * push the map off-screen.
  */
-export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
+export function DiscoveryList({
+  viewSwitch,
+  filters: controlledFilters,
+  onFiltersChange,
+  panelProps,
+}: {
+  viewSwitch?: ReactNode;
+  /** The tab panel's `id`/`role`/`aria-labelledby`, from `DiscoveryTabs`. */
+  panelProps?: HTMLAttributes<HTMLDivElement>;
+} & DiscoveryFiltersControl = {}) {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [rides, setRides] = useState<PublicRideListItem[]>([]);
-  const [filters, setFilters] = useState(NO_DISCOVERY_FILTERS);
+  const [total, setTotal] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [moreStatus, setMoreStatus] = useState<'idle' | 'loading' | 'error'>(
+    'idle',
+  );
+  // The first page's exact query, so every «Показать ещё» page continues the
+  // same list (same scheme as `RideGrid`); the generation drops a late
+  // next-page response that belongs to filters the user has since changed.
+  const queryRef = useRef<ListPublicRidesParams>({});
+  const generationRef = useRef(0);
+  const [filters, setFilters] = useDiscoveryFilters({
+    filters: controlledFilters,
+    onFiltersChange,
+  });
   const [attempt, setAttempt] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -126,12 +153,18 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
 
   useEffect(() => {
     let cancelled = false;
+    generationRef.current += 1;
+    const query = filtersToQuery(filters);
+    queryRef.current = query;
     setStatus('loading');
+    setMoreStatus('idle');
 
-    listPublicRides(filtersToQuery(filters))
+    listPublicRides(query)
       .then((response) => {
         if (cancelled) return;
         setRides(response.items);
+        setTotal(response.total);
+        setNextCursor(response.nextCursor);
         // A row that was hovered may be gone after a filter change, and its
         // `mouseleave` will never fire — don't let it pin the map's highlight.
         setHoveredId(null);
@@ -146,6 +179,24 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
       cancelled = true;
     };
   }, [filters, attempt]);
+
+  function loadMore() {
+    if (!nextCursor || moreStatus === 'loading') return;
+    const generation = generationRef.current;
+    setMoreStatus('loading');
+    listPublicRides({ ...queryRef.current, cursor: nextCursor })
+      .then((response) => {
+        if (generation !== generationRef.current) return;
+        setRides((current) => [...current, ...response.items]);
+        setTotal(response.total);
+        setNextCursor(response.nextCursor);
+        setMoreStatus('idle');
+      })
+      .catch(() => {
+        if (generation !== generationRef.current) return;
+        setMoreStatus('error');
+      });
+  }
 
   // The desktop grid is "viewport height minus whatever sits above it" (the
   // global header). Measured rather than hard-coded so a header change can't
@@ -212,23 +263,45 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
       />
     );
   } else {
+    const remaining = Math.max(0, total - rides.length);
     listPanel = (
-      <ul aria-label={RIDE_DISCOVERY_ROW_TERMS.listLabel}>
-        {rides.map((ride) => (
-          <RideLegendRow
-            key={ride.id}
-            ride={ride}
-            active={ride.id === activeId}
-            onHoverChange={setHoveredId}
-            onFocus={setSelectedId}
-            rowRef={(element) => {
-              if (element) rowRefs.current.set(ride.id, element);
-              else rowRefs.current.delete(ride.id);
-            }}
-            className="lg:scroll-mt-32"
-          />
-        ))}
-      </ul>
+      <>
+        <ul aria-label={RIDE_DISCOVERY_ROW_TERMS.listLabel}>
+          {rides.map((ride) => (
+            <RideLegendRow
+              key={ride.id}
+              ride={ride}
+              active={ride.id === activeId}
+              onHoverChange={setHoveredId}
+              onFocus={setSelectedId}
+              rowRef={(element) => {
+                if (element) rowRefs.current.set(ride.id, element);
+                else rowRefs.current.delete(ride.id);
+              }}
+              className="lg:scroll-mt-32"
+            />
+          ))}
+        </ul>
+        {nextCursor ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-5 lg:px-6">
+            {moreStatus === 'error' ? (
+              <p role="alert" className="text-body-sm text-danger">
+                {RIDE_DISCOVERY_TERMS.loadMoreError}
+              </p>
+            ) : null}
+            <Button
+              variant="secondary"
+              isLoading={moreStatus === 'loading'}
+              onClick={loadMore}
+              className="w-full"
+            >
+              {remaining > 0
+                ? RIDE_DISCOVERY_TERMS.showMore(remaining)
+                : RIDE_DISCOVERY_TERMS.showMoreFallback}
+            </Button>
+          </div>
+        ) : null}
+      </>
     );
   }
 
@@ -270,7 +343,9 @@ export function DiscoveryList({ viewSwitch }: { viewSwitch?: ReactNode } = {}) {
             className="w-full lg:-mx-6 lg:flex-nowrap lg:overflow-x-auto lg:px-6 lg:[mask-image:linear-gradient(90deg,black_85%,transparent)]"
           />
         </div>
-        <div aria-busy={status === 'loading'}>{listPanel}</div>
+        <div aria-busy={status === 'loading'} {...panelProps}>
+          {listPanel}
+        </div>
       </section>
 
       <div

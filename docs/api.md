@@ -907,6 +907,13 @@ reasoning the `## Organizers` section above already established) and on
 `rating` is `null` with `reviewCount: 0` for an organizer with no reviews yet — never
 a real `0` (`docs/design.md` §6).
 
+CR-173 («Журнал организатора»): `GET /v1/rides/:id` only additionally embeds
+`organizer.journal` — `{ finishedCount, cancelledCount, completionPercent | null,
+typicalPaceKmh | null, typicalDistanceKm | null, bicycleTypes[] }`, derived from the
+organizer's `finished`/`cancelled` rides. `completionPercent` is `null` below 3
+closed rides; pace/distance are medians; `bicycleTypes` is the top two, never `any`.
+Not on the `GET /v1/rides` list.
+
 ## Health
 
 GET `/health` — reports DB/Redis/S3 status; must not fail hard if one dependency is
