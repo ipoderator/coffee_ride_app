@@ -29,12 +29,18 @@ every non-trivial task, read **targeted slices**, not whole files (see "Token ec
    (compact; whole is fine when the task spans areas).
 5. `.claude/context/known-issues.md` — headers only (`grep -n '^### KI-'`), then the
    entries relevant to the task.
-6. `.claude/context/do-not-break.md` — grep it for the area being changed.
-7. Relevant `docs/*` sections (grep the heading, read that section), current source
+6. `.claude/rules/do-not-break.md` — loads automatically (whole) once a code/infra file
+   is opened; while planning, read it explicitly.
+7. History of the area being changed: grep the touched files/module/feature in
+   `docs/changelog.md` and `docs/changelog-archive/` (e.g.
+   `grep -n "route-storage\|RouteUploadForm" docs/changelog.md docs/changelog-archive/*.md | cut -c1-160`)
+   and read the matching entries (`sed -n` on their line ranges) — the last 3 entries don't cover older decisions.
+8. Relevant `docs/*` sections (grep the heading, read that section), current source
    code, `git status` and relevant recent commits.
 
 Archives (`docs/changelog-archive/`, `docs/tasks-archive.md`,
-`.claude/context/*-archive.md`) are for grep by id only — never read whole.
+`.claude/context/*-archive.md`) are for grep (by id, file or module) — never read
+whole.
 
 ## Fixed stack
 
@@ -148,7 +154,7 @@ Every agent pays for what it reads; the context files are shared by every sessio
   read/edited. If a task concerns an area before touching its files (planning an auth
   change, an external call), read the rule explicitly: `security.md`, `resilience.md`,
   `extensibility.md`, `maps.md`, `testing.md`, `database.md`, `backend.md`,
-  `frontend.md`. `architecture.md` and `git.md` always load.
+  `frontend.md`, `do-not-break.md`. `architecture.md` and `git.md` always load.
 - Don't spawn subagents unless asked; prefer one targeted search over broad sweeps.
 
 ## Self-correction protocol

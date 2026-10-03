@@ -8,7 +8,7 @@ Read:
 - product requirements;
 - relevant architecture/rules (read the path-scoped `.claude/rules/*` for the touched
   areas explicitly);
-- `.claude/context/do-not-break.md` (grep for the touched areas);
+- `.claude/rules/do-not-break.md` (whole — check the diff against every invariant);
 - git diff.
 
 Check:

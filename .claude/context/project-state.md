@@ -2,7 +2,7 @@
 
 A **snapshot** of where the project is now — overwritten, never appended to. Hard cap
 ~150 lines / ~12 KB (CR-202/203): history goes to `docs/changelog.md`, invariants to
-`.claude/context/do-not-break.md`; the long pre-CR-203 version is
+`.claude/rules/do-not-break.md`; the long pre-CR-203 version is
 `.claude/context/project-state-archive.md` (grep only, never read whole).
 
 ## Phase
@@ -27,6 +27,8 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 None active. Latest work, all committed and pushed to `main` (details in
 `docs/changelog.md`):
 
+- CR-204 — `do-not-break.md` became a path-scoped rule (loads whole); area history
+  via changelog grep in the read protocol.
 - CR-203 — this file cut to a snapshot; `do-not-break.md` split out.
 - CR-202 — token economy: targeted reads, compact context files, path-scoped rules.
 - CR-201 — eight more project skills + skill routing in `.claude/CLAUDE.md`.
@@ -92,8 +94,9 @@ decisions; KI-021/026/038/042 long-standing narrow items.
 
 ## Do not break
 
-`.claude/context/do-not-break.md` — grep it for the area being changed.
+`.claude/rules/do-not-break.md` — a path-scoped rule, loads whole with any code/infra
+file (CR-204).
 
 ## Last updated
 
-2026-10-03 (CR-203)
+2026-10-03 (CR-204)

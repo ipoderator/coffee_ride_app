@@ -19,10 +19,6 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
-- [x] CR-196 QA `fe0b4c2`: `pnpm --filter db db:migrate` from a checkout under a
-      Cyrillic path — the migrations folder via `fileURLToPath`, not a percent-encoded
-      `URL.pathname`; regression test from a non-ASCII copy of `packages/db`. See
-      `docs/changelog.md`.
 - [x] CR-197 QA `fe0b4c2`: `next` survives register → verify email → «Перейти ко
       входу» → sign in (validated on every hop; external/unsafe targets dropped);
       full-journey e2e. KI-089: the emailed link still has no `next`. See
@@ -45,3 +41,5 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-203 `project-state.md` cut to a ~100-line snapshot; old text verbatim in
       `project-state-archive.md`, invariants in `do-not-break.md`. See
       `docs/changelog.md`.
+- [x] CR-204 `do-not-break.md` as a path-scoped rule loaded whole; area history via
+      changelog grep in the read protocol. See `docs/changelog.md`.
