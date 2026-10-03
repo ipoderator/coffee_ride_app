@@ -37,6 +37,21 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
+CR-189..CR-194 (2026-10-03, branch `fix/qa-13653ed`, not pushed): the owner's QA report
+for `13653ed`, all nine items. CR-189 — the ride workspace frame follows every finish
+mark without a reload; e2e can run on isolated ports (`E2E_WEB_PORT`/`E2E_API_PORT`).
+CR-190 — reschedule a published ride before its start (`POST /v1/rides/:id/reschedule`,
+reason + confirmation, `RideUpdate` audit row, migration `0025` — dev DB now
+`0000`–`0025`, ADR-029; ticket/card/`/me`/`.ics` `SEQUENCE`; registrants and waitlist
+notified in-app; registrations stay, anyone may cancel as before). CR-191 —
+`seed:demo` confirms finishes before reviews and re-runs cleanly; `pnpm lint` works
+after a clean install. CR-192 — publishing without a route asks first (route stays
+optional); a ride update reports `recipientsCount`; the overview hint lists what stays
+editable; the wizard ends at publish. CR-193 — «Предстоящие» status-first (cancelled/
+finished go to «История», `started` stays), catalog `?phase=active|archive` with a
+collapsed «Завершённые и отменённые» section, seats only while registration is open.
+CR-194 — Russian validation errors everywhere + a source guard test.
+
 CR-188 (2026-10-02, committed): KI-085's follow-ups. Each ride-workspace tab
 reads `GET /v1/rides/:id` once — sections take the ride from `useRideWorkspace()` and
 re-read through its `refresh()` (standalone they still read themselves). Field errors
@@ -913,17 +928,17 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-188 is committed. Its CI run should go green: the coverage gate (web/ui
-raised with tests) and e2e (KI-084's replaced baselines) were the two red steps on
-`main`.
+None — CR-189..CR-194 are committed on `fix/qa-13653ed`, not yet pushed/merged to `main`.
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
-1. **Push CR-188 and confirm CI** — then close KI-084 (archive it). `apps/api`,
-   `maps-2gis` and `resilience` baselines were not re-measured in CR-188 (unchanged
-   code; CI had them at/above their floors).
+1. **Push `fix/qa-13653ed` and confirm CI** — screenshot baselines (KI-084) are the
+   open risk; then merge to `main`. Owner-flagged P3 leftovers from the QA report not
+   in scope: one confirmation pattern for ride cancellation (still `window.confirm`),
+   one date control in the wizard, `#`/`№` for queue positions.
+   CR-190 follow-ups: no e2e journey for the reschedule, no email (in-app only).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
    style id from their 2GIS account; then an additive `theme` option on
    `MapRenderOptions` mapped inside `packages/maps-2gis`.
@@ -1312,4 +1327,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-10-02 (CR-188)
+2026-10-03 (CR-189..CR-194)

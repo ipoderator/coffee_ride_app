@@ -1356,6 +1356,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       2×3 ride tabs on narrow phones; red `main` CI fixed (coverage raised with tests,
       KI-084 baselines from CI's artifact, the `route-points-stops` flake). See
       `docs/changelog.md`.
+- [x] CR-189 QA `13653ed` item 1: the ride workspace frame («Не подтверждено», results,
+      readiness) follows every finish mark without a reload; e2e can run on isolated
+      ports (`E2E_WEB_PORT`/`E2E_API_PORT`). See `docs/changelog.md`.
 - [x] CR-190 Reschedule a published ride before its start (QA `13653ed` item 2): owner-only
       `POST /v1/rides/:id/reschedule` with a required reason and a confirmation, recorded as a
       `RideUpdate` (migration `0025`, ADR-029); card, ticket, `/me`, cabinet and `.ics`

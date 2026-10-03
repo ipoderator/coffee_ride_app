@@ -1,4 +1,4 @@
-# Current task — CR-189..CR-194: QA report for 13653ed (2026-10-02) — IN PROGRESS
+# Current task — CR-189..CR-194: QA report for 13653ed (2026-10-02) — DONE (committed on `fix/qa-13653ed`, not pushed)
 
 Source: the owner's QA report `QA_13653ed_2026-10-02.md` (checked against HEAD
 `7d67990`, which is newer than the report — every item is re-checked before fixing).
@@ -39,4 +39,20 @@ and `e2e/helpers/{api-fixtures,ui}.ts` — verified `critical-journeys.spec.ts` 
 - [x] CR-192 (c42c973, rebased on CR-190/191; changelog + tasks written with it)
 - [x] CR-193 (b6e28db, merged a3af58d; changelog + tasks written with it)
 - [x] CR-194 (26191a0, merged a4fa669; changelog + tasks written with it)
-- [ ] merge, full validation, docs/context
+- [x] merge, full validation, docs/context (CR-189 changelog entry, project-state,
+      architecture-map, KI-083 archived, coverage baseline raised + `packages/db` added)
+
+## Validation (merged branch)
+
+- `pnpm install --frozen-lockfile`; `turbo lint typecheck --force` 17/17 (`NODE_PATH` unset).
+- `pnpm test:coverage` on `coffee_ride_test_final` + live Redis/S3: api 600, web 748,
+  ui 246, maps-2gis 72 (+6 skipped), resilience 15, db 11 — all passed;
+  `coverage:check` holds (ui had dropped under its floor — `archiveShow` test added).
+- Storybook 175/175 (axe). E2E on 3199/4199: 44 passed; 12 = missing `-darwin`
+  screenshot baselines only (by design; files deleted).
+
+## Open
+
+- Linux screenshot baselines (KI-084): Docker amd64 pull or CI artifact after push.
+- QA P3 not in scope: ride cancellation still `window.confirm`; two date controls in
+  the wizard; `#`/`№` for queue positions.

@@ -4,10 +4,10 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 92.57,
-        "statements": 91.55,
-        "functions": 96.21,
-        "branches": 81.29
+        "lines": 92.68,
+        "statements": 91.69,
+        "functions": 96.31,
+        "branches": 81.59
       },
       "scopes": {
         "src/modules/auth/": {
@@ -17,16 +17,16 @@
           "branches": 80.64
         },
         "src/modules/registrations/": {
-          "lines": 93.83,
-          "statements": 93.69,
+          "lines": 93.85,
+          "statements": 93.71,
           "functions": 95.34,
-          "branches": 85.26
+          "branches": 85.78
         },
         "src/modules/rides/": {
-          "lines": 94.21,
-          "statements": 92.76,
-          "functions": 99.46,
-          "branches": 84.48
+          "lines": 94.34,
+          "statements": 92.94,
+          "functions": 99.48,
+          "branches": 84.8
         },
         "src/modules/organizers/": {
           "lines": 83.21,
@@ -41,10 +41,10 @@
           "branches": 64.51
         },
         "src/modules/notifications/": {
-          "lines": 87.3,
-          "statements": 86.59,
-          "functions": 98.07,
-          "branches": 67.27
+          "lines": 88.2,
+          "statements": 87.67,
+          "functions": 98.3,
+          "branches": 71.79
         },
         "src/modules/reviews/": {
           "lines": 86.07,
@@ -68,18 +68,18 @@
     },
     "apps/web": {
       "total": {
-        "lines": 78.99,
-        "statements": 77.48,
-        "functions": 77.09,
-        "branches": 77.51
+        "lines": 81.05,
+        "statements": 79.32,
+        "functions": 77.92,
+        "branches": 79.8
       }
     },
     "packages/ui": {
       "total": {
         "lines": 100,
-        "statements": 99.56,
+        "statements": 99.57,
         "functions": 100,
-        "branches": 93.32
+        "branches": 93.49
       }
     },
     "packages/maps-2gis": {
@@ -96,6 +96,14 @@
         "statements": 100,
         "functions": 100,
         "branches": 92.59
+      }
+    },
+    "packages/db": {
+      "total": {
+        "lines": 97.43,
+        "statements": 97.67,
+        "functions": 100,
+        "branches": 96.87
       }
     }
   }

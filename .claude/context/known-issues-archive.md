@@ -2324,3 +2324,18 @@ wording for shape rules (`rideFieldShapeError`, `RIDE_CONTACT_VALUE_ERRORS`, the
 phone); a server `validation_error` entry shows that wording or «Проверьте это поле.» —
 eleven forms, not just the draft form. `packages/types` keeps its English messages for
 the API. (3) moved to KI-086, still an owner decision.
+
+### KI-083 — `/me`'s «Ближайшие заезды» omits a ride the participant is on right now
+
+Status: open. Discovered: 2026-10-02 (CR-185).
+Problem: `UpcomingRegistrationsWidget` reads `GET /v1/registrations/mine?when=upcoming`
+(`startsAt >= now`). Once a ride's start time passes, it leaves the widget — even
+while it is `started` and the rider could still «Отметить финиш» from the ticket.
+Impact: low — the ride stays reachable from `/me/rides` («Прошедшие») and the ride
+page; only the home shortcut is missing during the ride.
+Workaround: `/me/rides`.
+Next action: product decision — show `started` rides first on `/me` (needs either a
+`when=current` filter or a status-aware query in the API), then add it there.
+Resolution (2026-10-03, CR-193): `GET /v1/registrations/mine?when=upcoming` is
+status-first — a `started` ride stays «upcoming» until the organizer finishes it,
+so `/me` shows it during the ride. See `docs/changelog.md` CR-193.

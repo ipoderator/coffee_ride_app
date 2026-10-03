@@ -449,18 +449,6 @@ Next action: if 2GIS ever exposes a load/error signal for blocked tiles, drop th
 probe for it; otherwise keep the contract check. `apps/web` sends no CSP today; a
 future `connect-src` must allow the probe host, or every map shows the notice.
 
-### KI-083 — `/me`'s «Ближайшие заезды» omits a ride the participant is on right now
-
-Status: open. Discovered: 2026-10-02 (CR-185).
-Problem: `UpcomingRegistrationsWidget` reads `GET /v1/registrations/mine?when=upcoming`
-(`startsAt >= now`). Once a ride's start time passes, it leaves the widget — even
-while it is `started` and the rider could still «Отметить финиш» from the ticket.
-Impact: low — the ride stays reachable from `/me/rides` («Прошедшие») and the ride
-page; only the home shortcut is missing during the ride.
-Workaround: `/me/rides`.
-Next action: product decision — show `started` rides first on `/me` (needs either a
-`when=current` filter or a status-aware query in the API), then add it there.
-
 ### KI-084 — CR-185's visual baselines are not regenerated; CI's screenshot specs will fail
 
 Status: open. Discovered: 2026-10-02 (CR-185).

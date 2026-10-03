@@ -1066,6 +1066,31 @@ field-errors.ts`). `apps/web/src/test-support/ride-workspace.tsx` — a test-onl
   workspace context (`TestRideWorkspace`), excluded from coverage like every
   `src/test-support/**`.
 
+CR-189..CR-194 (owner QA report `13653ed`):
+
+- **apps/web e2e**: `playwright.config.ts` takes `E2E_WEB_PORT`/`E2E_API_PORT`
+  (+ `DATABASE_URL`) to start its own api/web off :3000/:4000 against a disposable DB;
+  `e2e/helpers/{api-fixtures,ui}.ts` follow `E2E_WEB_PORT`. Unset = old ports (CI).
+- CR-189: `ParticipantTable` calls `useRideWorkspace()?.refresh()` after every
+  attendance save, so the frame's `attendanceSummary` (chip, readiness, finish note)
+  is always the server's.
+- CR-190 (ADR-029): `POST /v1/rides/:id/reschedule` in `modules/rides/rides.{routes,
+service}.ts`; the move is a `RideUpdate` row with `reschedule_from/to`
+  (migration `0025`), fanned out as the `ride_rescheduled` notification job. Web:
+  `features/organizer/rides/components/RescheduleRideCard.tsx` on «Обзор».
+- CR-191: `packages/db` has a Vitest `test` script (`seed-demo-finish.ts` + test);
+  `apps/web/eslint.config.mjs` resolves `eslint-config-next`'s plugins from its own
+  location; `pnpm-workspace.yaml` `packageExtensions` adds its `next` peer.
+- CR-192: `PublishWithoutRouteDialog.tsx` inside `EditRideForm` (the only publish
+  point); `POST /v1/rides/:id/updates` returns `recipientsCount`.
+- CR-193: `GET /v1/rides?phase=active|archive`; `GET /v1/registrations/mine?when=` is
+  status-first. Discovery's list fetching is one hook,
+  `features/participant/discovery/lib/use-public-rides.ts` + `ShowMoreRides`, used by
+  `RideGrid`/`DiscoveryList` and `ArchivedRidesSection`.
+- CR-194: `apps/web/src/lib/forms/russian-errors-guard.test.ts` is a source-level guard
+  (no Zod/problem/`error.message` text in the UI, `noValidate` forms, no native
+  `required`/`pattern`).
+
 ## Integration boundaries
 
 - Maps: isolated behind `packages/maps-core`'s interface; `packages/maps-2gis` is the

@@ -36,6 +36,12 @@ describe('RIDE_DISCOVERY_TERMS list page (CR-153)', () => {
     expect(RIDE_DISCOVERY_TERMS.seatsTakenShort(4, 10)).toBe('4 из 10');
     expect(RIDE_DISCOVERY_TERMS.waitlistQueued(2)).toBe('2 в очереди');
   });
+
+  it('counts the archive section with Russian plurals (CR-193)', () => {
+    expect(RIDE_DISCOVERY_TERMS.archiveShow(1)).toBe('Показать 1 заезд');
+    expect(RIDE_DISCOVERY_TERMS.archiveShow(3)).toBe('Показать 3 заезда');
+    expect(RIDE_DISCOVERY_TERMS.archiveShow(11)).toBe('Показать 11 заездов');
+  });
 });
 
 // CR-118: its own file so concurrent CR-119/CR-120 edits to
