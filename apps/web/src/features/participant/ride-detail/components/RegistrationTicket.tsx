@@ -24,6 +24,7 @@ import {
   RIDE_DETAIL_REGISTRATION_TERMS,
   RIDE_DETAIL_TERMS,
   RIDE_PAGE_TERMS,
+  RIDE_RESCHEDULE_TERMS,
   RIDE_TICKET_TERMS,
   StatusBadge,
   useToast,
@@ -466,6 +467,9 @@ export interface RegistrationTicketProps {
   startPointLabel: string | null;
   /** The page's actions under the card's content (GPX, calendar, share). */
   footer: ReactNode;
+  /** CR-190: the start this ride had before its latest move (a formatted
+   * start line), shown quietly under a registered/queued viewer's date. */
+  rescheduledFrom?: string | null;
   onChange: (registration: Registration | null) => void;
   onWaitlistChange: (waitlistEntry: WaitlistEntry | null) => void;
 }
@@ -502,6 +506,7 @@ export function RegistrationTicket({
   priceRub,
   startPointLabel,
   footer,
+  rescheduledFrom = null,
   onChange,
   onWaitlistChange,
 }: RegistrationTicketProps) {
@@ -717,6 +722,16 @@ export function RegistrationTicket({
     );
   }
 
+  // CR-190: quiet, beside the dates it explains — no badge, no motion.
+  const rescheduledNote = rescheduledFrom ? (
+    <p
+      className="text-body-sm text-text-secondary tabular-nums"
+      data-testid="ticket-rescheduled"
+    >
+      {RIDE_RESCHEDULE_TERMS.ticketMoved(rescheduledFrom)}
+    </p>
+  ) : null;
+
   // ---- registered -----------------------------------------------------------
   if (state === 'registered' && viewerRegistration) {
     const viewerGroup =
@@ -760,6 +775,7 @@ export function RegistrationTicket({
             <b className="font-semibold text-text tabular-nums">{timeLabel}</b>
           </Cell>
         </div>
+        {rescheduledFrom ? rescheduledNote : null}
         {viewerGroup && pace && !isChangingGroup ? (
           <Cell
             label={RIDE_TICKET_TERMS.yourGroupLabel}
@@ -885,6 +901,7 @@ export function RegistrationTicket({
           ) : null}
           <Hint>{RIDE_TICKET_TERMS.waitlistedHint}</Hint>
         </div>
+        {rescheduledFrom ? rescheduledNote : null}
         {waitlistGroup ? (
           <Cell label={RIDE_TICKET_TERMS.yourGroupLabel}>
             <b className="font-semibold text-text">

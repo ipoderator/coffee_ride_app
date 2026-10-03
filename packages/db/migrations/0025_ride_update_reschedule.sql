@@ -1,0 +1,4 @@
+ALTER TABLE "ride_updates" ADD COLUMN "previous_starts_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "ride_updates" ADD COLUMN "new_starts_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "ride_updates" ADD CONSTRAINT "ride_updates_reschedule_both_or_neither" CHECK (("ride_updates"."previous_starts_at" is null) = ("ride_updates"."new_starts_at" is null));--> statement-breakpoint
+ALTER TABLE "ride_updates" ADD CONSTRAINT "ride_updates_reschedule_moves_start" CHECK ("ride_updates"."previous_starts_at" is null or "ride_updates"."previous_starts_at" <> "ride_updates"."new_starts_at");

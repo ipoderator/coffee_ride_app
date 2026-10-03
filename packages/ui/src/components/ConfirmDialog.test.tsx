@@ -17,6 +17,27 @@ describe('ConfirmDialog', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('renders optional details between the description and the buttons (CR-190)', () => {
+    render(
+      <ConfirmDialog
+        open
+        onClose={() => {}}
+        onConfirm={() => {}}
+        title="Перенести заезд?"
+        description="Новое время сразу появится в билетах."
+        confirmLabel="Перенести"
+        cancelLabel="Вернуться к форме"
+      >
+        <p>Было: сб 4 октября</p>
+      </ConfirmDialog>,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Было: сб 4 октября');
+    expect(dialog).toHaveAccessibleDescription(
+      'Новое время сразу появится в билетах.',
+    );
+  });
+
   it('calls onConfirm when the confirm button is clicked', () => {
     const onConfirm = vi.fn();
     render(

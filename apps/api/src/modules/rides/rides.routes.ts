@@ -8,6 +8,7 @@ import {
   createStopRequestSchema,
   listPublicRidesQuerySchema,
   listRidesQuerySchema,
+  rescheduleRideRequestSchema,
   setParticipantsVisibilityRequestSchema,
   setRideContactRequestSchema,
   updateRideRequestSchema,
@@ -18,6 +19,7 @@ import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import { registrationResponseSchema } from '../registrations/registration-response.schema.js';
 import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-response.schema.js';
 import { reviewResponseSchema } from '../reviews/review-response.schema.js';
+import { rideUpdateResponseSchema } from '../notifications/notification-response.schema.js';
 import {
   coverImageResponseSchema,
   rideContactResponseSchema,
@@ -56,6 +58,7 @@ import {
   publishRide,
   replaceCoverImage,
   replaceRoute,
+  rescheduleRide,
   startRide,
   updateRideDraft,
   updateRoutePoint,
@@ -183,6 +186,21 @@ const rideDetailResponseSchema = z.object({
   viewerWaitlistPosition: z.number().nullable(),
   // CR-155: additive — see `GetRideResponse.requirements`.
   requirements: z.array(z.string()),
+  // CR-190: additive — see `GetRideResponse.rescheduleCount`/`lastReschedule`.
+  rescheduleCount: z.number(),
+  lastReschedule: z
+    .object({
+      previousStartsAt: z.string(),
+      startsAt: z.string(),
+      reason: z.string(),
+      rescheduledAt: z.string(),
+    })
+    .nullable(),
+});
+// CR-190: `POST /:id/reschedule` — the moved ride plus the update that records it.
+const rescheduleRideResponseSchema = z.object({
+  ride: rideResponseSchema,
+  rideUpdate: rideUpdateResponseSchema,
 });
 // CR-155: `PATCH /:id` — `{ ride }` plus the ride's requirements after the update.
 const updateRideResponseSchema = rideResponseWrapper.extend({
@@ -451,6 +469,35 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.params.id,
       );
       return reply.status(200).send({ ride });
+    },
+  );
+
+  // CR-190 (ADR-029 draft): move a published ride's start before it starts.
+  // Owner-only, enforced in the service (404 either way). 409 `ride_is_draft`
+  // (a draft's start is edited with `PATCH`) / `ride_not_reschedulable`
+  // (started/finished/cancelled); 422 `reschedule_start_in_past` /
+  // `reschedule_start_unchanged`. Registrants and the waitlist are notified after
+  // the commit, never inside it.
+  app.post(
+    '/:id/reschedule',
+    {
+      schema: {
+        params: rideIdParamsSchema,
+        body: rescheduleRideRequestSchema,
+        response: { 200: rescheduleRideResponseSchema },
+      },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const result = await rescheduleRide(
+        app.db,
+        app.log,
+        app.notificationQueue,
+        request.user!.id,
+        request.params.id,
+        request.body,
+      );
+      return reply.status(200).send(result);
     },
   );
 

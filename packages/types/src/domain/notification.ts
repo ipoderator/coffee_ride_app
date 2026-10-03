@@ -30,4 +30,18 @@ export interface Notification {
   message: string | null;
   createdAt: string;
   readAt: string | null;
+  /**
+   * CR-190: additive. Present (with `type === 'ride_update'`) when the update
+   * this notification carries is a reschedule — the old and new start plus the
+   * ride's `startTimezone` to read both in. `message` is then the organizer's
+   * reason. `null` for every other notification.
+   */
+  reschedule: NotificationReschedule | null;
+}
+
+/** CR-190: what a reschedule notification needs to say «было → стало». */
+export interface NotificationReschedule {
+  previousStartsAt: string;
+  startsAt: string;
+  startTimezone: string;
 }

@@ -176,6 +176,13 @@
       "when": 1790933345924,
       "tag": "0024_attendance_dnf",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790972512980,
+      "tag": "0025_ride_update_reschedule",
+      "breakpoints": true
     }
   ]
 }

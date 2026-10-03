@@ -8,8 +8,10 @@ import {
   EmptyState,
   ErrorState,
   NOTIFICATIONS_TERMS,
+  RIDE_RESCHEDULE_TERMS,
   Skeleton,
   formatDate,
+  formatRideStartLine,
   formatTime,
 } from 'ui';
 import { listMyNotifications, markNotificationRead } from '../api';
@@ -21,6 +23,34 @@ const TYPE_LABEL: Record<Notification['type'], string> = {
   ride_update: NOTIFICATIONS_TERMS.rideUpdateLabel,
   ride_cancelled: NOTIFICATIONS_TERMS.rideCancelledLabel,
 };
+
+/** CR-190: «было / стало», both read in the ride's own timezone. */
+function RescheduleLines({
+  reschedule,
+}: {
+  reschedule: NonNullable<Notification['reschedule']>;
+}) {
+  const timeZone = reschedule.startTimezone;
+  return (
+    <div
+      className="flex flex-col gap-0.5 font-mono text-body-sm tabular-nums"
+      data-testid="notification-reschedule"
+    >
+      <p className="text-text-secondary">
+        {RIDE_RESCHEDULE_TERMS.notificationWas(
+          formatRideStartLine(new Date(reschedule.previousStartsAt), {
+            timeZone,
+          }),
+        )}
+      </p>
+      <p className="font-semibold text-text">
+        {RIDE_RESCHEDULE_TERMS.notificationNow(
+          formatRideStartLine(new Date(reschedule.startsAt), { timeZone }),
+        )}
+      </p>
+    </div>
+  );
+}
 
 /**
  * `/me/notifications` (CR-041, `docs/design.md` §8). One page, newest first — no
@@ -116,7 +146,9 @@ export function NotificationList() {
             >
               <div className="flex items-center gap-2">
                 <p className="text-body-sm font-medium text-text">
-                  {TYPE_LABEL[item.type]}
+                  {item.reschedule
+                    ? RIDE_RESCHEDULE_TERMS.notificationLabel
+                    : TYPE_LABEL[item.type]}
                 </p>
                 {isUnread && (
                   <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-on-primary">
@@ -127,8 +159,15 @@ export function NotificationList() {
               <p className="text-body-sm text-text-secondary">
                 {item.ride.title}
               </p>
+              {item.reschedule && (
+                <RescheduleLines reschedule={item.reschedule} />
+              )}
               {item.message && (
-                <p className="text-body text-text">{item.message}</p>
+                <p className="text-body text-text">
+                  {item.reschedule
+                    ? RIDE_RESCHEDULE_TERMS.reasonLine(item.message)
+                    : item.message}
+                </p>
               )}
               <p className="text-body-sm text-text-muted">
                 {formatDate(createdAt)} {formatTime(createdAt)}

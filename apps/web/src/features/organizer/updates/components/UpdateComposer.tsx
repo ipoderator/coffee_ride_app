@@ -1,6 +1,7 @@
 'use client';
 
 import { Send } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createRideUpdateRequestSchema, type RideUpdate } from 'types';
 import {
@@ -11,10 +12,12 @@ import {
   ErrorState,
   FormField,
   Notice,
+  RIDE_RESCHEDULE_TERMS,
   RIDE_UPDATES_TERMS,
   Skeleton,
   Textarea,
   formatDate,
+  formatRideStartLine,
   formatTime,
 } from 'ui';
 import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
@@ -27,6 +30,13 @@ import {
 type LoadStatus = 'loading' | 'ready' | 'error';
 
 const MESSAGE_MAX_LENGTH = 2000;
+
+/** CR-190: the statuses a ride can still be rescheduled in. */
+const CAN_RESCHEDULE: ReadonlySet<string> = new Set([
+  'published',
+  'registration_open',
+  'registration_closed',
+]);
 
 /** The shared schema's messages are English; the form speaks Russian. `null`
  * when the text breaks neither known rule (only the server knows why). */
@@ -186,6 +196,23 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
                   ? RIDE_UPDATES_TERMS.sendPending
                   : RIDE_UPDATES_TERMS.send}
               </Button>
+
+              {/* CR-190: a message never moves the start — point to the
+                  action that does, while it is still possible. */}
+              {ride && CAN_RESCHEDULE.has(ride.status) && (
+                <p
+                  className="text-body-sm text-text-secondary"
+                  data-testid="reschedule-hint"
+                >
+                  {RIDE_UPDATES_TERMS.rescheduleHint}{' '}
+                  <Link
+                    href={`/organizer/rides/${rideId}/edit`}
+                    className="font-medium text-primary underline decoration-1 underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    {RIDE_UPDATES_TERMS.rescheduleHintLink}
+                  </Link>
+                </p>
+              )}
             </form>
           </Card>
 
@@ -247,8 +274,29 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
                   key={item.id}
                   className="flex flex-col gap-1 border-b border-border pb-3 last:border-none last:pb-0"
                 >
+                  {item.reschedule && (
+                    <div data-testid="update-reschedule">
+                      <p className="text-body-sm font-semibold text-text">
+                        {RIDE_RESCHEDULE_TERMS.historyLabel}
+                      </p>
+                      <p className="font-mono text-body-sm text-text-secondary tabular-nums">
+                        {RIDE_RESCHEDULE_TERMS.historyLine(
+                          formatRideStartLine(
+                            new Date(item.reschedule.previousStartsAt),
+                            { timeZone },
+                          ),
+                          formatRideStartLine(
+                            new Date(item.reschedule.startsAt),
+                            { timeZone },
+                          ),
+                        )}
+                      </p>
+                    </div>
+                  )}
                   <p className="whitespace-pre-line text-body text-text wrap-anywhere">
-                    {item.message}
+                    {item.reschedule
+                      ? RIDE_RESCHEDULE_TERMS.reasonLine(item.message)
+                      : item.message}
                   </p>
                   <p className="font-mono text-body-sm text-text-secondary tabular-nums">
                     {formatDate(createdAt, { timeZone })}{' '}

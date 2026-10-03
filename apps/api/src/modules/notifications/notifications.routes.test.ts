@@ -148,7 +148,7 @@ describe('Communication (CR-038/039/040/041)', () => {
         method: 'POST',
         url: `/v1/rides/${randomUUID()}/updates`,
         headers: { origin: WEB_ORIGIN },
-        payload: { message: 'Старт перенесён на 9:00.' },
+        payload: { message: 'Встречаемся у южного входа в парк.' },
       });
 
       expect(response.statusCode).toBe(401);
@@ -164,7 +164,7 @@ describe('Communication (CR-038/039/040/041)', () => {
         url: `/v1/rides/${randomUUID()}/updates`,
         headers: { origin: WEB_ORIGIN },
         cookies: { session: rawToken },
-        payload: { message: 'Старт перенесён на 9:00.' },
+        payload: { message: 'Встречаемся у южного входа в парк.' },
       });
 
       expect(response.statusCode).toBe(404);
@@ -182,7 +182,7 @@ describe('Communication (CR-038/039/040/041)', () => {
         url: `/v1/rides/${rideId}/updates`,
         headers: { origin: WEB_ORIGIN },
         cookies: { session: strangerToken },
-        payload: { message: 'Старт перенесён на 9:00.' },
+        payload: { message: 'Встречаемся у южного входа в парк.' },
       });
 
       expect(response.statusCode).toBe(404);
@@ -217,13 +217,13 @@ describe('Communication (CR-038/039/040/041)', () => {
         url: `/v1/rides/${rideId}/updates`,
         headers: { origin: WEB_ORIGIN },
         cookies: { session: organizerToken },
-        payload: { message: 'Старт перенесён на 9:00.' },
+        payload: { message: 'Встречаемся у южного входа в парк.' },
       });
 
       expect(response.statusCode).toBe(201);
       const rideUpdate = response.json().rideUpdate;
       expect(rideUpdate.rideId).toBe(rideId);
-      expect(rideUpdate.message).toBe('Старт перенесён на 9:00.');
+      expect(rideUpdate.message).toBe('Встречаемся у южного входа в парк.');
 
       const inbox = await app.inject({
         method: 'GET',
@@ -237,7 +237,9 @@ describe('Communication (CR-038/039/040/041)', () => {
       );
       expect(updateNotification).toBeDefined();
       expect(updateNotification.ride.id).toBe(rideId);
-      expect(updateNotification.message).toBe('Старт перенесён на 9:00.');
+      expect(updateNotification.message).toBe(
+        'Встречаемся у южного входа в парк.',
+      );
       expect(updateNotification.readAt).toBeNull();
       await app.close();
     });

@@ -94,6 +94,7 @@ export const RegistrationOpen: Story = {
         rideId: RIDE_ID,
         message: 'Встречаемся у северного входа в парк в 07:45.',
         createdAt: '2099-09-30T15:40:00.000Z',
+        reschedule: null,
       },
     ],
   }),

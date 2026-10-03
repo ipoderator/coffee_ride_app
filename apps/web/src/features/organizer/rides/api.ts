@@ -1,5 +1,6 @@
 import {
   createRideRequestSchema,
+  rescheduleRideRequestSchema,
   setRideContactRequestSchema,
   updateRideRequestSchema,
   type CancelRideResponse,
@@ -13,6 +14,8 @@ import {
   type OpenRegistrationResponse,
   type ProblemDetails,
   type PublishRideResponse,
+  type RescheduleRideRequest,
+  type RescheduleRideResponse,
   type RideContactInput,
   type RideUpdate,
   type SetParticipantsVisibilityResponse,
@@ -25,6 +28,7 @@ import { ApiError } from '@/lib/api/errors';
 
 export {
   createRideRequestSchema,
+  rescheduleRideRequestSchema,
   setRideContactRequestSchema,
   updateRideRequestSchema,
   ApiError,
@@ -38,6 +42,8 @@ export type {
   ListRidesResponse,
   OpenRegistrationResponse,
   PublishRideResponse,
+  RescheduleRideRequest,
+  RescheduleRideResponse,
   StartRideResponse,
   UpdateRideRequest,
   UpdateRideResponse,
@@ -114,6 +120,7 @@ type EditableRide = Pick<
       GetRideResponse,
       | 'attendanceSummary'
       | 'registrationsCount'
+      | 'lastReschedule'
       | 'route'
       | 'stops'
       | 'routePoints'
@@ -301,6 +308,33 @@ export async function cancelRide(id: string): Promise<CancelRideResponse> {
   }
 
   return body as CancelRideResponse;
+}
+
+/**
+ * CR-190 (ADR-029 draft): moves a published ride's start before it starts.
+ * Throws `ApiError` on any non-2xx response — the expected ones are 409
+ * `ride_not_reschedulable` (started/finished/cancelled meanwhile), 422
+ * `reschedule_start_in_past`/`reschedule_start_unchanged` and 400
+ * `validation_error`.
+ */
+export async function rescheduleRide(
+  id: string,
+  payload: RescheduleRideRequest,
+): Promise<RescheduleRideResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${id}/reschedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const body = (await response.json()) as
+    RescheduleRideResponse | ProblemDetails;
+
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+
+  return body as RescheduleRideResponse;
 }
 
 /**

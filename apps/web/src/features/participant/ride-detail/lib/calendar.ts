@@ -11,6 +11,12 @@ export interface CalendarEvent {
   location: string | null;
   url: string;
   description: string | null;
+  /**
+   * CR-190: RFC 5545 `SEQUENCE` — the ride's reschedule count. With the same
+   * `UID`, a calendar that already holds the event replaces it with the
+   * higher-sequence copy instead of adding a second one. Defaults to 0.
+   */
+  sequence?: number;
 }
 
 function utcStamp(date: Date): string {
@@ -60,6 +66,7 @@ export function buildIcs(event: CalendarEvent, now = new Date()): string {
     'BEGIN:VEVENT',
     `UID:${event.uid}`,
     `DTSTAMP:${utcStamp(now)}`,
+    `SEQUENCE:${event.sequence ?? 0}`,
     `DTSTART:${utcStamp(event.startsAt)}`,
     ...(event.durationMinutes !== null
       ? [

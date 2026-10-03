@@ -1356,3 +1356,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       2×3 ride tabs on narrow phones; red `main` CI fixed (coverage raised with tests,
       KI-084 baselines from CI's artifact, the `route-points-stops` flake). See
       `docs/changelog.md`.
+- [x] CR-190 Reschedule a published ride before its start (QA `13653ed` item 2): owner-only
+      `POST /v1/rides/:id/reschedule` with a required reason and a confirmation, recorded as a
+      `RideUpdate` (migration `0025`, ADR-029); card, ticket, `/me`, cabinet and `.ics`
+      (`SEQUENCE`) show the new time; registrants and the waitlist are notified.
+      See `docs/changelog.md`.

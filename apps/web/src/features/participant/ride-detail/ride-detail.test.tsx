@@ -162,6 +162,8 @@ function baseDetailResponse(
     viewerStartNumber: null,
     viewerWaitlistPosition: null,
     requirements: [],
+    rescheduleCount: 0,
+    lastReschedule: null,
     ...overrides,
   };
 }

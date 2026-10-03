@@ -419,6 +419,29 @@ ride_not_finishable` for any other status. `200` → `{ ride }` with
 `status: 'finished'` — the terminal, non-cancelled end of the lifecycle. No
 request body.
 
+POST `/v1/rides/:id/reschedule` — **implemented (CR-190, ADR-029)**. Moves a
+published ride's start before it has started. Same 401/404-ownership rule as every
+other transition, no `emailVerified` gate. Body: `{ startsAt, reason }` —
+`startsAt` an ISO 8601 instant (the client converts the organizer's wall time in
+the ride's unchanged `startTimezone`), `reason` 1–500 chars after trim (`400
+validation_error` otherwise). `409 ride_is_draft` for a draft (its start is edited
+with `PATCH`), `409 ride_not_reschedulable` for `started`/`finished`/`cancelled`;
+`422 reschedule_start_in_past` unless the new start is later than now, `422
+reschedule_start_unchanged` for the current start. An overdue ride (start passed,
+status not yet `started`) can be moved. One transaction under the `rides` row lock:
+`startsAt`/`updatedAt`/`updatedBy` plus a `RideUpdate` with `reschedule:
+{ previousStartsAt, startsAt }` and the reason as `message` — the audit trail.
+Status, registrations, groups and the waitlist are kept. `200` → `{ ride,
+rideUpdate }`. After the commit, one `ride_update` notification (carrying
+`reschedule`) per active registrant **and** per `waiting` waitlist entry, via the
+`ride_rescheduled` job; a failed fan-out never undoes the move.
+
+`GET /v1/rides/:id` (CR-190, additive): `rescheduleCount` (the calendar file's
+`SEQUENCE`) and `lastReschedule: { previousStartsAt, startsAt, reason,
+rescheduledAt } | null` — public like the ride itself. `RideUpdate` and
+`Notification` gained an additive `reschedule` field (`null` for an ordinary
+update; a notification's also carries the ride's `startTimezone`).
+
 ### Pace groups (CR-117, ADR-022)
 
 A ride can have up to 6 pace groups (`RideGroup`: `id`/`rideId`/`name`/`paceKmh`/
@@ -917,6 +940,9 @@ email/push in this ticket):
   notification per currently-active registrant.
 - `POST /v1/rides/:id/cancel` (CR-021) fans out one `ride_cancelled` notification
   per registrant who was actively registered at cancellation time.
+- `POST /v1/rides/:id/reschedule` (CR-190) fans out one `ride_update`
+  notification with `reschedule` set per active registrant and per waiting
+  waitlist entry.
 
 Every producer inserts directly into the `notifications` table in the same
 request, after its own critical transaction commits — not a Redis queue. See

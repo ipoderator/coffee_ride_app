@@ -817,7 +817,7 @@ export const RIDE_EDIT_TERMS = {
   },
   // Never changed automatically: the organizer decides what happens next.
   overdueStart: (when: string) =>
-    `Время старта прошло (${when}), а заезд не начат. Статус сам не изменится — начните заезд или отмените его.`,
+    `Время старта прошло (${when}), а заезд не начат. Статус сам не изменится — начните заезд, перенесите или отмените его.`,
   dangerTitle: 'Отмена заезда',
 } as const;
 
@@ -871,8 +871,10 @@ export const RIDE_WORKSPACE_TERMS = {
     `${count} из ${limit} занято · лист ожидания: ${waitlist}`,
   factPlacesUnlimited: (count: number, waitlist: number): string =>
     `${count} записано, без ограничения · лист ожидания: ${waitlist}`,
+  // CR-190: the start moves only through «Перенести заезд» (with a reason and a
+  // notification), never by editing the field.
   factsHint:
-    'После публикации основные условия зафиксированы — участники записывались именно на них. Меняются только способ связи и видимость списка.',
+    'После публикации основные условия зафиксированы — участники записывались именно на них. Меняются только способ связи, видимость списка и — через перенос — дата старта.',
   contactTitle: 'Связь с участниками',
   nextStepTitle: 'Следующий шаг',
   // A checklist row's link name: «Посмотреть» alone is ambiguous in a links list.
@@ -1567,7 +1569,13 @@ export const PARTICIPANT_HOME_TERMS = {
 export const RIDE_UPDATES_TERMS = {
   pageTitle: 'Обновления заезда',
   messageLabel: 'Сообщение участникам',
-  messagePlaceholder: 'Например: старт перенесён на 9:00.',
+  // CR-190: never an example of moving the start — a text message does not
+  // change the ride's time, tickets or calendar (that is «Перенести заезд»).
+  messagePlaceholder:
+    'Например: встречаемся у южного входа в парк, возьмите дождевик.',
+  rescheduleHint:
+    'Сообщение не меняет время заезда. Если старт переносится, воспользуйтесь переносом — время обновится в карточке, билетах и календаре участников.',
+  rescheduleHintLink: 'Перенести заезд',
   send: 'Отправить',
   sendPending: 'Отправка…',
   sendSuccess: 'Обновление отправлено участникам.',
@@ -2184,3 +2192,91 @@ export const RIDE_CONTACT_VALUE_ERRORS: Record<RideContactType, string> = {
 };
 
 // ----------------------------- end KI-085 -----------------------------------
+
+// ---------------------------------------------------------------------------
+// CR-190 (ADR-029 draft): moving a published ride's start before it starts —
+// the organizer's form and confirmation, and how riders see the move.
+// ---------------------------------------------------------------------------
+
+function rescheduleRecipients(registered: number, waiting: number): string {
+  const parts: string[] = [];
+  if (registered > 0) {
+    parts.push(
+      `${registered} ${pluralRu(registered, 'записавшийся участник', 'записавшихся участника', 'записавшихся участников')}`,
+    );
+  }
+  if (waiting > 0) {
+    parts.push(
+      `${waiting} ${pluralRu(waiting, 'человек', 'человека', 'человек')} из листа ожидания`,
+    );
+  }
+  return parts.join(' и ');
+}
+
+export const RIDE_RESCHEDULE_TERMS = {
+  // Organizer: the overview card.
+  cardTitle: 'Дата и время старта',
+  cardDescription:
+    'Если заезд переносится, укажите новое время и причину. Записавшиеся и лист ожидания получат уведомление, а карточка, билеты и файл для календаря покажут новое время.',
+  open: 'Перенести заезд',
+  currentLabel: 'Сейчас',
+  previousLabel: 'Перенесён, было',
+  // Form.
+  formTitle: 'Перенос заезда',
+  newDateLabel: 'Новая дата',
+  newTimeLabel: 'Новое время старта',
+  timeZoneNote: (zone: string): string =>
+    `Время по часовому поясу старта — ${zone}.`,
+  reasonLabel: 'Причина переноса',
+  reasonHint:
+    'Её прочитают участники в уведомлении и все — на странице заезда. До 500 символов.',
+  reasonPlaceholder: 'Например: обещают грозу, переносим на воскресенье.',
+  summaryTitle: 'Что изменится',
+  summaryWas: 'Было',
+  summaryWillBe: 'Станет',
+  summaryPending: 'Выберите новую дату и время.',
+  recipientsTitle: 'Кто получит уведомление',
+  recipients: (registered: number, waiting: number): string =>
+    registered + waiting === 0
+      ? 'Сейчас никто не записан и лист ожидания пуст — уведомление никому не придёт.'
+      : `${rescheduleRecipients(registered, waiting)}.`,
+  keepsRegistrations:
+    'Записи и места в листе ожидания сохранятся. Кому новое время не подходит, отменит запись сам — освободившееся место перейдёт следующему в листе ожидания.',
+  continue: 'Продолжить',
+  close: 'Не переносить',
+  // Validation (the shared schema's messages are English).
+  dateRequired: 'Выберите новую дату.',
+  timeRequired: 'Укажите новое время старта.',
+  inPast: 'Это время уже прошло — выберите время позже текущего.',
+  unchanged: 'Это текущее время старта — выберите другое.',
+  reasonRequired: 'Напишите причину переноса.',
+  reasonTooLong: 'Не длиннее 500 символов.',
+  // Confirmation.
+  confirmTitle: 'Перенести заезд?',
+  confirmDescription:
+    'Новое время сразу появится в карточке, билетах и календаре участников. Вернуть прежнее можно только новым переносом.',
+  confirmAction: 'Перенести',
+  confirmBack: 'Вернуться к форме',
+  success: (when: string): string =>
+    `Заезд перенесён на ${when}. Участники получат уведомление.`,
+  // Server refusals.
+  notReschedulable:
+    'Заезд уже начался, завершён или отменён — перенести его нельзя.',
+  error: 'Не удалось перенести заезд. Попробуйте ещё раз.',
+  // Riders: the ride page and the ticket.
+  movedNote: (previous: string): string =>
+    `Заезд перенесён. Раньше старт был ${previous}.`,
+  reasonLine: (reason: string): string => `Причина: ${reason}`,
+  ticketMoved: (previous: string): string => `Перенесён, было ${previous}`,
+  // Inbox.
+  notificationLabel: 'Заезд перенесён',
+  notificationWas: (previous: string): string => `Было: ${previous}`,
+  notificationNow: (next: string): string => `Стало: ${next}`,
+  // The organizer's update history and the overview's updates row.
+  historyLabel: 'Перенос заезда',
+  historyLine: (previous: string, next: string): string =>
+    `Было: ${previous}. Стало: ${next}.`,
+  readinessExcerpt: (reason: string): string => `Перенос: ${reason}`,
+} as const;
+
+// ----------------------------- end CR-190 -----------------------------------
