@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 140" width="1200" height="140" role="img" aria-label="Велосипед едет по дороге">
+  <defs><clipPath id="frame"><rect width="1200" height="140" rx="20"/></clipPath></defs>
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="140" fill="#111315"/>
+    <line x1="0" y1="115" x2="1200" y2="115" stroke="#2E2A33" stroke-width="2"/>
+    <line x1="0" y1="126" x2="1200" y2="126" stroke="#A9A1AF" stroke-width="2" stroke-dasharray="18 22">
+      <animate attributeName="stroke-dashoffset" values="0;40" dur=".6s" repeatCount="indefinite"/>
+    </line>
+    <text x="600" y="42" text-anchor="middle" font-family="'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="22" font-weight="700" fill="#F3F1F5">Увидимся на старте<tspan fill="#B8A0C1"> ·</tspan> кофе за нами</text>
+    <g transform="translate(0 96)">
+      <g><g transform="translate(0 0)"><circle r="17" fill="none" stroke="#F3F1F5" stroke-width="3"/><g stroke="#A9A1AF" stroke-width="1.5"><path d="M-17 0H17M0 -17V17M-12 -12L12 12M-12 12L12 -12"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".9s" repeatCount="indefinite"/></g></g><g transform="translate(58 0)"><circle r="17" fill="none" stroke="#F3F1F5" stroke-width="3"/><g stroke="#A9A1AF" stroke-width="1.5"><path d="M-17 0H17M0 -17V17M-12 -12L12 12M-12 12L12 -12"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".9s" repeatCount="indefinite"/></g></g><path d="M0 0L20 -26H48L58 0M20 -26L30 0H0M30 0L48 -26M16 -32H26M46 -32L50 -36H56" fill="none" stroke="#B8A0C1" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="30" cy="0" r="3" fill="#F3F1F5"/></g>
+      <animateTransform attributeName="transform" type="translate" values="-90 96;1260 96" dur="9s" repeatCount="indefinite"/>
+    </g>
+  </g>
+</svg>
