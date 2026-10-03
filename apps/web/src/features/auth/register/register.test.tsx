@@ -291,4 +291,42 @@ describe('RegisterForm', () => {
       '/login?next=%2Frides%2Fride-1',
     );
   });
+
+  // CR-197 (QA `fe0b4c2`): the dev verification link dropped `next`, so the
+  // verified page's «Перейти ко входу» landed on `/me` instead of the ride.
+  it.each([
+    ['/rides/ride-1', '/verify-email?token=tok-1&next=%2Frides%2Fride-1'],
+    ['https://evil.example/rides', '/verify-email?token=tok-1'],
+    ['//evil.example', '/verify-email?token=tok-1'],
+  ])(
+    'carries only a safe `next` (%s) into the verification link',
+    async (next, expected) => {
+      registerAccountMock.mockResolvedValue({
+        user: {
+          id: '1',
+          email: 'rider@example.com',
+          emailVerified: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          displayName: null,
+          firstName: null,
+          lastName: null,
+          phone: null,
+          bio: null,
+          avatarUrl: null,
+          profileVisibility: 'co_participants',
+          distanceWeekKm: null,
+          distanceMonthKm: null,
+          distanceYearKm: null,
+        },
+        verificationUrl: '/v1/auth/verify-email?token=tok-1',
+      });
+
+      render(<RegisterForm next={next} />);
+      fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+      expect(
+        await screen.findByRole('link', { name: expected }),
+      ).toHaveAttribute('href', expected);
+    },
+  );
 });

@@ -494,6 +494,23 @@ Next action: regenerate this one baseline (Docker amd64 per `.claude/rules/testi
 or a CI run with that test's tolerance tightened once to get its actual — then restore
 the tolerance). The `mobile` baseline hides the button below `lg` anyway.
 
+### KI-089 — The emailed verification link doesn't carry the return target (`next`)
+
+Status: open. Discovered: 2026-10-03 (CR-197).
+Problem: CR-197 carries `next` from `/register?next=` through the register screen's
+dev-only verification link and `/verify-email?next=` to «Перейти ко входу». The real
+email link is built by the API (`apps/api/src/modules/auth/auth.routes.ts`,
+`${WEB_ORIGIN}/verify-email?token=…`) from a register request that has no `next`, so a
+visitor who registers from a ride and verifies from the email still lands on `/me`
+after signing in (the register screen's own «Войти» link does keep `next`).
+Impact: medium for the conversion path «ride → register → email → sign in»; no
+security impact.
+Workaround: the «Войти» link on the register success screen keeps the ride.
+Next action: owner decision — an optional `next` on `POST /v1/auth/register`
+(additive contract change), validated server-side with the same rules as
+`apps/web/src/lib/auth/next-path.ts` (that validator would move to `packages/types`)
+and appended to the emailed link; or keep it web-only.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

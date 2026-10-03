@@ -14,8 +14,9 @@ const MAX_NEXT_LENGTH = 512;
 // rejected.
 const PARSE_BASE = 'http://next-path.invalid';
 
-// Returning to a sign-in page after signing in would loop.
-const AUTH_PAGES = ['/login', '/register'];
+// Returning to a sign-in page after signing in would loop; `/verify-email`
+// (CR-197) would re-submit an already-used token.
+const AUTH_PAGES = ['/login', '/register', '/verify-email'];
 
 /** Where a successful sign-in lands when there is no usable `next`. */
 export const DEFAULT_AFTER_LOGIN = '/me';
@@ -34,7 +35,8 @@ function hasUnsafeCharacter(value: string): boolean {
 /**
  * `raw` as a normalized same-origin path (`/rides/abc?x=1#y`), or `null` when
  * it is missing, not a string, absolute, protocol-relative, overlong,
- * contains control characters/backslashes, or points at `/login`/`/register`.
+ * contains control characters/backslashes, or points at `/login`/`/register`/
+ * `/verify-email`.
  */
 export function safeNextPath(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
@@ -62,7 +64,9 @@ export function safeNextPath(raw: unknown): string | null {
 
 function withNext(page: string, next: string | null | undefined): string {
   const safe = safeNextPath(next);
-  return safe ? `${page}?next=${encodeURIComponent(safe)}` : page;
+  if (!safe) return page;
+  const separator = page.includes('?') ? '&' : '?';
+  return `${page}${separator}next=${encodeURIComponent(safe)}`;
 }
 
 /** `/login`, carrying `next` when it is a safe return target. */
@@ -73,4 +77,13 @@ export function loginHref(next?: string | null): string {
 /** `/register`, carrying `next` when it is a safe return target. */
 export function registerHref(next?: string | null): string {
   return withNext('/register', next);
+}
+
+/**
+ * CR-197: `/verify-email?token=…`, carrying `next` when it is a safe return
+ * target — registering doesn't sign in, so the return target rides through
+ * email verification on to `/login`.
+ */
+export function verifyEmailHref(token: string, next?: string | null): string {
+  return withNext(`/verify-email?token=${encodeURIComponent(token)}`, next);
 }

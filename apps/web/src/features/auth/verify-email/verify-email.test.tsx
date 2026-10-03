@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import VerifyEmailPage from '@/app/verify-email/page';
 import { VerifyEmailStatus } from './components/VerifyEmailStatus';
 import { ApiError, verifyEmail } from './api';
 
@@ -9,6 +10,23 @@ vi.mock('./api', async () => {
 });
 
 const verifyEmailMock = vi.mocked(verifyEmail);
+
+const verifiedUser = {
+  id: '1',
+  email: 'rider@example.com',
+  emailVerified: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  displayName: null,
+  firstName: null,
+  lastName: null,
+  phone: null,
+  bio: null,
+  avatarUrl: null,
+  profileVisibility: 'co_participants' as const,
+  distanceWeekKm: null,
+  distanceMonthKm: null,
+  distanceYearKm: null,
+};
 
 describe('VerifyEmailStatus', () => {
   beforeEach(() => {
@@ -69,5 +87,39 @@ describe('VerifyEmailStatus', () => {
         screen.getByText(/Ссылка недействительна или уже была использована/),
       ).toBeInTheDocument(),
     );
+  });
+
+  // CR-197 (QA `fe0b4c2`): «Перейти ко входу» went to a bare `/login`, so a
+  // visitor who registered from a ride landed on `/me` after signing in.
+  describe('the return target (`?next=`)', () => {
+    async function renderPage(next: string | string[] | undefined) {
+      verifyEmailMock.mockResolvedValue({ user: verifiedUser });
+      render(
+        await VerifyEmailPage({
+          searchParams: Promise.resolve({ token: 'abc123', next }),
+        }),
+      );
+      return screen.findByRole('link', { name: 'Перейти ко входу' });
+    }
+
+    it('carries a safe internal path to the login link', async () => {
+      expect(await renderPage('/rides/ride-1')).toHaveAttribute(
+        'href',
+        '/login?next=%2Frides%2Fride-1',
+      );
+    });
+
+    it.each([
+      ['an absolute URL', 'https://evil.example/rides'],
+      ['a protocol-relative URL', '//evil.example'],
+      ['a backslash URL', '/\\evil.example'],
+      ['javascript:', 'javascript:alert(1)'],
+      ['an auth page', '/login'],
+      ['the verify page itself', '/verify-email?token=other'],
+      ['a repeated parameter', ['/rides/a', '/rides/b']],
+      ['nothing', undefined],
+    ])('drops %s', async (_label, next) => {
+      expect(await renderPage(next)).toHaveAttribute('href', '/login');
+    });
   });
 });

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
-import { loginHref } from '@/lib/auth/next-path';
+import { loginHref, verifyEmailHref } from '@/lib/auth/next-path';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
 import {
   fieldErrorMessage,
@@ -20,13 +20,17 @@ interface FieldErrors {
  * (`/v1/auth/verify-email?token=...`, a POST-only route — see
  * `auth.routes.ts`), not something a browser can navigate to. Extracts just
  * the token and points at the real `/verify-email` web page (CR-099) instead
- * of rendering the API path as if it were a clickable link.
+ * of rendering the API path as if it were a clickable link. CR-197: `next`
+ * goes along, so the verified page's «Перейти ко входу» still returns there.
  */
-function toVerifyEmailWebPath(verificationUrl: string): string | null {
+function toVerifyEmailWebPath(
+  verificationUrl: string,
+  next: string | null,
+): string | null {
   const token = new URL(verificationUrl, 'http://localhost').searchParams.get(
     'token',
   );
-  return token ? `/verify-email?token=${encodeURIComponent(token)}` : null;
+  return token ? verifyEmailHref(token, next) : null;
 }
 
 /**
@@ -37,7 +41,8 @@ function toVerifyEmailWebPath(verificationUrl: string): string | null {
  * success set — there is no "empty"/"degraded" state for a create-account form.
  *
  * CR-141: registering doesn't sign in, so `next` (a return target, e.g. the
- * ride that sent the visitor here) is only handed on to `/login`.
+ * ride that sent the visitor here) is only handed on to `/login` — directly,
+ * and through `/verify-email` (CR-197).
  */
 export function RegisterForm({ next = null }: { next?: string | null } = {}) {
   const [email, setEmail] = useState('');
@@ -50,7 +55,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
 
   if (succeeded) {
     const verifyEmailPath = verificationUrl
-      ? toVerifyEmailWebPath(verificationUrl)
+      ? toVerifyEmailWebPath(verificationUrl, next)
       : null;
 
     return (

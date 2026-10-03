@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Card, ErrorState, Skeleton, VERIFY_EMAIL_TERMS } from 'ui';
 import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
+import { loginHref } from '@/lib/auth/next-path';
 import { ApiError, verifyEmail } from '../api';
 
 type Status = 'verifying' | 'success' | 'missing-token' | 'error';
@@ -19,8 +20,17 @@ const TOKEN_ERROR_CODES = new Set([
  * way to complete verification was a direct `POST` via curl/API client).
  * Reads `?token=` (passed down from the page's Server Component) and calls
  * `POST /v1/auth/verify-email` once on mount.
+ *
+ * CR-197: `next` (validated by the page, again by `loginHref`) is the return
+ * target the visitor registered from; «Перейти ко входу» carries it on.
  */
-export function VerifyEmailStatus({ token }: { token: string | null }) {
+export function VerifyEmailStatus({
+  token,
+  next = null,
+}: {
+  token: string | null;
+  next?: string | null;
+}) {
   const [status, setStatus] = useState<Status>(
     token ? 'verifying' : 'missing-token',
   );
@@ -85,7 +95,7 @@ export function VerifyEmailStatus({ token }: { token: string | null }) {
         {VERIFY_EMAIL_TERMS.successBody}
       </p>
       <Link
-        href="/login"
+        href={loginHref(next)}
         className="mt-4 inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
       >
         {VERIFY_EMAIL_TERMS.loginLink}
