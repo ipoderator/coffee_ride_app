@@ -160,3 +160,12 @@ Files: the six forms under `apps/web/src/features/{participant,organizer}/…` a
 Validation: web unit 772/772; ui 246/246; web+ui typecheck/lint clean; Storybook 196/196 with axe; e2e upload/route specs 10/10 locally; CI run 37147345143: the actual only drops the expand button over the notice, 57 other e2e passed.
 Decisions: none.
 Follow-up: none — the amd64 Playwright image still stalls here (2 of 7 layers).
+
+## 2026-10-03 — CR-203 — `project-state.md` back to a snapshot
+
+Summary: CR-202's held follow-up, done once CR-200 was committed. `project-state.md` went from 94 KB (its "Current task" alone 42 KB of CR history) to a ~100-line snapshot: phase, latest CRs, area one-liners, Next, key ADRs, open KIs. The old file moved verbatim to `.claude/context/project-state-archive.md`; the "Do not break" invariants moved verbatim to `.claude/context/do-not-break.md`, which the read protocol, `/review` and `close-task` now point to.
+Contract: none (harness/docs only).
+Files: `.claude/context/{project-state,project-state-archive,do-not-break}.md`, `.claude/CLAUDE.md`, `.claude/commands/review.md`, `.claude/skills/close-task/SKILL.md`, `docs/tasks.md`, `docs/tasks-archive.md`.
+Validation: Prettier clean; CLAUDE.md's targeted-read `sed` still matches the new headings.
+Decisions: none.
+Follow-up: none.

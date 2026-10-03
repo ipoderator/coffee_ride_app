@@ -29,7 +29,7 @@ every non-trivial task, read **targeted slices**, not whole files (see "Token ec
    (compact; whole is fine when the task spans areas).
 5. `.claude/context/known-issues.md` — headers only (`grep -n '^### KI-'`), then the
    entries relevant to the task.
-6. `project-state.md` → "Do not break" — grep it for the area being changed.
+6. `.claude/context/do-not-break.md` — grep it for the area being changed.
 7. Relevant `docs/*` sections (grep the heading, read that section), current source
    code, `git status` and relevant recent commits.
 

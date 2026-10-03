@@ -36,7 +36,8 @@ discovered issues), `git status` + `git diff --stat`, the last 3 entries of
    `.claude/context/project-state-archive.md`).
 5. **`known-issue` skill** for every KI discovered or resolved (resolved ones move to
    the archive now, not later).
-6. **Only when relevant:** `.claude/context/architecture-map.md` (structure changed),
+6. **Only when relevant:** `.claude/context/do-not-break.md` (a new non-obvious
+   invariant — an API retry semantic, a security posture, a build rule), `.claude/context/architecture-map.md` (structure changed),
    `docs/decisions.md` via the `adr` skill (an architectural decision was made),
    `docs/api.md` (endpoint contract changed), `docs/design.md` (tokens/terms rules).
 7. **`current-task.md`** — set "Final result"; keep it until the next task replaces it.

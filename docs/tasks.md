@@ -19,10 +19,6 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
-- [x] CR-195 QA `13653ed` P3: ride cancellation confirmed in `ConfirmDialog` instead of
-      `window.confirm`; the wizard's step 4 enters the start with step 1's `DatePicker` +
-      time field; the queue place reads «№ N в очереди», not «#N». KI-087 tracks the
-      remaining `window.confirm` deletes. See `docs/changelog.md`.
 - [x] CR-196 QA `fe0b4c2`: `pnpm --filter db db:migrate` from a checkout under a
       Cyrillic path — the migrations folder via `fileURLToPath`, not a percent-encoded
       `URL.pathname`; regression test from a non-ASCII copy of `packages/db`. See
@@ -46,3 +42,6 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-200 KI-087: avatar/cover/GPX/stop/route-point deletes ask in `ConfirmDialog`,
       not `window.confirm`; KI-082's misfiled status corrected; KI-088's baseline
       captured from CI (temporary draft PR) — done 2026-10-03. See `docs/changelog.md`.
+- [x] CR-203 `project-state.md` cut to a ~100-line snapshot; old text verbatim in
+      `project-state-archive.md`, invariants in `do-not-break.md`. See
+      `docs/changelog.md`.
