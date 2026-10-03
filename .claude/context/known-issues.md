@@ -491,6 +491,22 @@ Workaround: none needed.
 Next action: owner decision — keep CR-150's rule, or light «Заезды» on every ride tab
 (drop the two `activeOn` entries; `CabinetSidebar.test.tsx` pins the current rule).
 
+### KI-087 — Deleting a file or a route point still asks through the browser's `window.confirm`
+
+Status: open. Discovered: 2026-10-03 (CR-195).
+Problem: CR-195 moved «Отменить заезд» to `ConfirmDialog`; six other destructive
+confirmations still use the native, unstyled `window.confirm`: avatar delete (both
+`profile/components/AvatarUploadForm.tsx`), ride cover delete
+(`cover-image/components/CoverImageUploadForm.tsx`), GPX route delete
+(`route/components/RouteUploadForm.tsx`), route point and stop delete
+(`route/components/{RoutePointsSection,StopsSection}.tsx`).
+Impact: low — they work and are reversible by re-uploading/re-adding, but look foreign
+next to the app's own dialogs.
+Workaround: none needed.
+Next action: same change as CR-195's `RideOverview` (a `ConfirmDialog` with a
+`*ConfirmTitle`/`*ConfirmDescription` pair per action, tests and stories without
+`vi.spyOn(window, 'confirm')`).
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

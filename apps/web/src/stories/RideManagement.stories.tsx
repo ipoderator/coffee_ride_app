@@ -157,6 +157,27 @@ export const RegistrationOpen: Story = {
   },
 };
 
+/** CR-195: «Отменить заезд» asks in the app's own dialog (not the browser's
+ * confirm); left open so the story's a11y check runs on it. */
+export const CancelConfirm: Story = {
+  beforeEach: stubWorkspace({ ride: { status: 'registration_open' } }),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', { name: RIDE_EDIT_TERMS.cancel }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByRole(
+      'dialog',
+      { name: RIDE_EDIT_TERMS.cancelConfirmTitle },
+    );
+    await expect(dialog).toHaveTextContent(
+      RIDE_EDIT_TERMS.cancelConfirmDescription,
+    );
+    await expect(
+      within(dialog).getByRole('button', { name: RIDE_EDIT_TERMS.cancelKeep }),
+    ).toBeEnabled();
+  },
+};
+
 /** No route, no cover, no groups, nobody registered — honest empty rows. */
 export const NothingYet: Story = {
   beforeEach: stubWorkspace({ ride: { participantLimit: null } }),

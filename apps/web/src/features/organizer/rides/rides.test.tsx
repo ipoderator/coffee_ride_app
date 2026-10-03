@@ -652,7 +652,9 @@ describe('EditRideForm', () => {
 
     expect(await screen.findByDisplayValue(baseRide.title)).toBeInTheDocument();
     // startsAt is 05:00 UTC; the ride's own zone is Europe/Moscow (UTC+3).
-    expect(screen.getByDisplayValue('2027-05-01T08:00')).toBeInTheDocument();
+    // CR-195: date and time apart, as on step 1.
+    expect(screen.getByLabelText('Дата')).toHaveTextContent('2027');
+    expect(screen.getByLabelText('Время старта')).toHaveValue('08:00');
   });
 
   // CR-187: the six local tabs — «Обзор» plus the registry, in its order.
@@ -1073,6 +1075,44 @@ describe('EditRideForm', () => {
 
     expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // CR-195: the wizard's step 4 enters the start like step 1 — the calendar
+  // «Дата» and a separate «Время старта», never a native datetime-local.
+  it('edits the start with the same date and time controls as step 1', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+    });
+    updateRideMock.mockResolvedValue({ ride: baseRide, requirements: [] });
+
+    const { container } = render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+
+    expect(container.querySelector('input[type="datetime-local"]')).toBeNull();
+    expect(screen.getByLabelText('Дата')).toBeInTheDocument();
+    const time = screen.getByLabelText('Время старта');
+    expect(time).toHaveValue('08:00');
+
+    fireEvent.change(time, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(
+      await screen.findByText('Укажите время старта.'),
+    ).toBeInTheDocument();
+    expect(updateRideMock).not.toHaveBeenCalled();
+
+    fireEvent.change(time, { target: { value: '09:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() =>
+      expect(updateRideMock).toHaveBeenCalledWith(
+        'ride-1',
+        expect.objectContaining({
+          startsAt: '2027-05-01T06:30:00.000Z',
+          startTimezone: 'Europe/Moscow',
+        }),
+      ),
+    );
   });
 
   it('shows the generic Russian line for a code it does not know (CR-194)', async () => {
@@ -1666,20 +1706,32 @@ describe('EditRideForm', () => {
     ).not.toBeInTheDocument();
   });
 
+  // CR-195: the app's own dialog, never the browser's `window.confirm`.
   it('does nothing if the cancel confirmation is dismissed', async () => {
     getRideMock.mockResolvedValue({
       isOwner: true,
       requirements: [],
       ride: { ...baseRide, status: 'published' },
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const nativeConfirm = vi.spyOn(window, 'confirm');
 
     render(<EditRideForm rideId="ride-1" />);
     await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Отменить заезд' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Отменить заезд?',
+    });
+    expect(dialog).toHaveTextContent('Это действие необратимо');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Не отменять' }),
+    );
 
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
     expect(cancelRideMock).not.toHaveBeenCalled();
+    expect(nativeConfirm).not.toHaveBeenCalled();
   });
 
   it('cancels a published ride after confirmation and shows a success message', async () => {
@@ -1691,14 +1743,19 @@ describe('EditRideForm', () => {
     cancelRideMock.mockResolvedValue({
       ride: { ...baseRide, status: 'cancelled' },
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<EditRideForm rideId="ride-1" />);
     await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Отменить заезд' }));
+    expect(cancelRideMock).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Отменить заезд' }),
+    );
 
     expect(await screen.findByText('Заезд отменён.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(cancelRideMock).toHaveBeenCalledWith('ride-1');
     expect(
       screen.queryByRole('button', { name: 'Отменить заезд' }),

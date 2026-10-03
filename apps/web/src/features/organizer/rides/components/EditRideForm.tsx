@@ -14,9 +14,11 @@ import {
   BICYCLE_TYPE_TERMS,
   Button,
   Card,
+  DatePicker,
   DIFFICULTY_LEVEL_TERMS,
   FormField,
   Input,
+  RIDE_CREATE_TERMS,
   RIDE_EDIT_TERMS,
   RIDE_WORKSPACE_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
@@ -33,6 +35,7 @@ import {
   serverFieldErrorMessage,
 } from '@/lib/forms/field-errors';
 import {
+  todayLocalYmd,
   utcIsoToZonedLocalInput,
   zonedTimeToUtcIso,
 } from '@/lib/datetime/zoned-time';
@@ -52,7 +55,10 @@ interface FormState {
   title: string;
   description: string;
   bicycleType: BicycleType;
-  localStartsAt: string;
+  // CR-195: date and time apart, the same controls as the wizard's step 1
+  // (`CreateRideForm`) — one way to enter a start in the whole wizard.
+  startDate: string;
+  startTime: string;
   startTimezone: string;
   participantLimit: string;
   priceRub: string;
@@ -67,11 +73,13 @@ interface FormState {
 }
 
 function toFormState(ride: Ride): FormState {
+  const local = utcIsoToZonedLocalInput(ride.startsAt, ride.startTimezone);
   return {
     title: ride.title,
     description: ride.description ?? '',
     bicycleType: ride.bicycleType,
-    localStartsAt: utcIsoToZonedLocalInput(ride.startsAt, ride.startTimezone),
+    startDate: local.slice(0, 10),
+    startTime: local.slice(11, 16),
     startTimezone: ride.startTimezone,
     participantLimit: ride.participantLimit?.toString() ?? '',
     priceRub: ride.priceRub?.toString() ?? '',
@@ -165,13 +173,22 @@ function DraftRideForm({
   const [publishVerificationRequired, setPublishVerificationRequired] =
     useState(false);
   const [publishWithoutRouteOpen, setPublishWithoutRouteOpen] = useState(false);
+  // CR-157 (same as step 1): no picking a start day that has already passed.
+  const [todayLocal] = useState(todayLocalYmd);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isPending) return;
 
-    if (!form.localStartsAt) {
-      setFieldErrors({ startsAt: RIDE_EDIT_TERMS.startsAtRequired });
+    if (!form.startDate || !form.startTime) {
+      setFieldErrors({
+        startDate: form.startDate
+          ? undefined
+          : RIDE_CREATE_TERMS.startDateRequired,
+        startTime: form.startTime
+          ? undefined
+          : RIDE_CREATE_TERMS.startTimeRequired,
+      });
       return;
     }
 
@@ -179,7 +196,10 @@ function DraftRideForm({
       title: form.title.trim(),
       description: form.description.trim() ? form.description.trim() : null,
       bicycleType: form.bicycleType,
-      startsAt: zonedTimeToUtcIso(form.localStartsAt, form.startTimezone),
+      startsAt: zonedTimeToUtcIso(
+        `${form.startDate}T${form.startTime}`,
+        form.startTimezone,
+      ),
       startTimezone: form.startTimezone,
       participantLimit: toNullableNumber(form.participantLimit),
       priceRub: toNullableNumber(form.priceRub),
@@ -389,24 +409,42 @@ function DraftRideForm({
             </select>
           </FormField>
 
-          <FormField
-            id="ride-starts-at"
-            label={RIDE_EDIT_TERMS.startsAtLabel}
-            error={fieldErrors.startsAt ?? fieldErrors.startTimezone}
-          >
-            <Input
-              type="datetime-local"
-              value={form.localStartsAt}
-              onChange={(event) =>
-                setForm({ ...form, localStartsAt: event.target.value })
-              }
-              disabled={isPending}
-            />
-          </FormField>
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField
+              id="ride-start-date"
+              label={RIDE_CREATE_TERMS.startDateLabel}
+              // A schema/server `startsAt` issue is about the start as a
+              // whole; it shows under the date, its first half.
+              error={fieldErrors.startDate ?? fieldErrors.startsAt}
+            >
+              <DatePicker
+                value={form.startDate}
+                onChange={(startDate) => setForm({ ...form, startDate })}
+                min={todayLocal}
+                disabled={isPending}
+              />
+            </FormField>
+
+            <FormField
+              id="ride-start-time"
+              label={RIDE_CREATE_TERMS.startTimeLabel}
+              error={fieldErrors.startTime}
+            >
+              <Input
+                type="time"
+                value={form.startTime}
+                onChange={(event) =>
+                  setForm({ ...form, startTime: event.target.value })
+                }
+                disabled={isPending}
+              />
+            </FormField>
+          </div>
 
           <FormField
             id="ride-start-timezone"
             label={RIDE_EDIT_TERMS.startTimezoneLabel}
+            error={fieldErrors.startTimezone}
           >
             <select
               value={form.startTimezone}
@@ -414,7 +452,7 @@ function DraftRideForm({
                 setForm({ ...form, startTimezone: event.target.value })
               }
               disabled={isPending}
-              className={selectClassName(false)}
+              className={selectClassName(Boolean(fieldErrors.startTimezone))}
             >
               {RUSSIAN_TIMEZONE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

@@ -691,7 +691,10 @@ describe('RideDetailView', () => {
         '[data-testid="ride-ticket"]',
       ) as HTMLElement;
       // CR-151: the viewer's own place in the queue.
-      expect(within(ticket).getByText('2')).toBeInTheDocument();
+      const place = within(ticket).getByText('2').closest('p') as HTMLElement;
+      // CR-195: the same «№» as a start-list place, never «#».
+      expect(place).toHaveTextContent('№2в очереди');
+      expect(within(ticket).queryByText('#')).not.toBeInTheDocument();
       expect(
         within(ticket).getByRole('button', {
           name: 'Покинуть список ожидания',

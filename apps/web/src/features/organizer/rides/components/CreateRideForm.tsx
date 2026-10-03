@@ -31,6 +31,7 @@ import {
   formatTime,
 } from 'ui';
 import {
+  todayLocalYmd,
   utcIsoToZonedLocalInput,
   zonedTimeToUtcIso,
 } from '@/lib/datetime/zoned-time';
@@ -163,10 +164,7 @@ export function CreateRideForm({
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const isPending = pendingIntent !== null;
   // CR-157: no picking a start day that has already passed (browser-local).
-  const [todayLocal] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  });
+  const [todayLocal] = useState(todayLocalYmd);
 
   const loadDraft = useCallback(async (id: string) => {
     setLoadState('loading');

@@ -6,6 +6,7 @@ import {
   BICYCLE_TYPE_TERMS,
   Button,
   Card,
+  ConfirmDialog,
   formatDistance,
   formatElevation,
   formatGroupPace,
@@ -85,6 +86,7 @@ export function RideOverview({
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   /** KI-081: the contact's own `PUT /v1/rides/:id/contact`, any status. */
   async function handleSaveContact() {
@@ -156,17 +158,19 @@ export function RideOverview({
     }
   }
 
-  /** CR-021: the one dead end, so a native confirm first (`docs/design.md`
-   * §1's destructive exception). */
+  /** CR-021: the one dead end, so it is confirmed first — CR-195: in the
+   * app's own `ConfirmDialog` (as a participant's cancellation is), not the
+   * browser's `window.confirm`. */
   async function handleCancel() {
     if (isCancelling) return;
-    if (!window.confirm(RIDE_EDIT_TERMS.cancelConfirm)) return;
     setCancelError(null);
     setIsCancelling(true);
     try {
       const response = await cancelRide(rideId);
+      setCancelConfirmOpen(false);
       applyRide(response.ride, RIDE_EDIT_TERMS.cancelSuccess);
     } catch {
+      setCancelConfirmOpen(false);
       setCancelError(RIDE_EDIT_TERMS.loadError);
       setIsCancelling(false);
     }
@@ -364,12 +368,24 @@ export function RideOverview({
             type="button"
             variant="danger"
             isLoading={isCancelling}
-            onClick={handleCancel}
+            onClick={() => setCancelConfirmOpen(true)}
           >
             {isCancelling
               ? RIDE_EDIT_TERMS.cancelPending
               : RIDE_EDIT_TERMS.cancel}
           </Button>
+          <ConfirmDialog
+            open={cancelConfirmOpen}
+            onClose={() => {
+              if (!isCancelling) setCancelConfirmOpen(false);
+            }}
+            onConfirm={() => void handleCancel()}
+            isConfirming={isCancelling}
+            title={RIDE_EDIT_TERMS.cancelConfirmTitle}
+            description={RIDE_EDIT_TERMS.cancelConfirmDescription}
+            confirmLabel={RIDE_EDIT_TERMS.cancel}
+            cancelLabel={RIDE_EDIT_TERMS.cancelKeep}
+          />
         </Card>
       )}
     </>

@@ -708,8 +708,6 @@ export const RIDE_EDIT_TERMS = {
   requirementsHint:
     'По одному пункту в строке, до 10 пунктов по 120 символов: шлем, велосипед, опыт, что взять с собой.',
   bicycleTypeLabel: 'Тип велосипеда',
-  startsAtLabel: 'Дата и время старта',
-  startsAtRequired: 'Укажите дату и время старта.',
   startTimezoneLabel: 'Часовой пояс старта',
   participantLimitLabel: 'Лимит участников',
   priceRubLabel: 'Стоимость участия, ₽',
@@ -801,8 +799,11 @@ export const RIDE_EDIT_TERMS = {
   cancel: 'Отменить заезд',
   cancelPending: 'Отмена…',
   cancelSuccess: 'Заезд отменён.',
-  cancelConfirm:
-    'Отменить заезд? Это действие необратимо, участники увидят статус «Отменён».',
+  // CR-195: `ConfirmDialog` (was `window.confirm`'s one line).
+  cancelConfirmTitle: 'Отменить заезд?',
+  cancelConfirmDescription:
+    'Это действие необратимо: участники увидят статус «Отменён» и получат уведомление.',
+  cancelKeep: 'Не отменять',
   // CR-090 ("Start ride") / CR-022 ("Finish ride").
   start: 'Начать заезд',
   startPending: 'Запуск…',
@@ -2014,8 +2015,10 @@ export const RIDE_POSTER_TERMS = {
 /** The registration «ticket» and its phone bar (CR-151). */
 export const RIDE_TICKET_TERMS = {
   title: 'Регистрация',
+  // CR-195: one sign for a place, in the start list and in the queue alike
+  // (was «#» for the queue) — the caption says which list it is.
   numberSign: '№',
-  queueSign: '#',
+  queueCaption: 'в очереди',
   startListLabel: 'Стартовый лист',
   // «из 24 мест», «из 21 места» — genitive after «из».
   youWillBe: (place: number, limit: number | null) =>

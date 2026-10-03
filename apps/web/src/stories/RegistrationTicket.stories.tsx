@@ -83,6 +83,33 @@ export const Registered: Story = {
   },
 };
 
+/** CR-195: the viewer's place in the queue — «№ 2 в очереди», the same sign
+ * as a start-list place (was «#»). */
+export const Waitlisted: Story = {
+  args: {
+    state: 'waitlisted',
+    registrationsCount: 20,
+    waitlistCount: 3,
+    viewerWaitlistEntry: {
+      id: 'waitlist-entry-1',
+      rideId: 'ride-1',
+      userId: 'user-1',
+      status: 'waiting',
+      groupId: null,
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+      cancelledAt: null,
+      promotedAt: null,
+    },
+    viewerWaitlistPosition: 2,
+  },
+  play: async ({ canvas }) => {
+    const place = canvas.getByText('2').closest('p');
+    await expect(place).toHaveTextContent('№2в очереди');
+    await expect(canvas.queryByText('#')).toBeNull();
+  },
+};
+
 /** CR-190: the ride was moved — the previous start, quietly, under the dates. */
 export const RegisteredRescheduled: Story = {
   args: {

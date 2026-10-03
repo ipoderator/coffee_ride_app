@@ -170,7 +170,7 @@ function Hint({ children }: { children: ReactNode }) {
 }
 
 /** A big figure with a small caption on its baseline — «13 из 20 участников»,
- * «№ 7», «# 3». */
+ * «№ 7», «№ 3 в очереди». */
 function Figure({
   sign,
   value,
@@ -894,8 +894,9 @@ export function RegistrationTicket({
         <div className="flex flex-col gap-1.5">
           {viewerWaitlistPosition !== null ? (
             <Figure
-              sign={RIDE_TICKET_TERMS.queueSign}
+              sign={RIDE_TICKET_TERMS.numberSign}
               value={viewerWaitlistPosition}
+              caption={RIDE_TICKET_TERMS.queueCaption}
               className="text-info"
             />
           ) : null}

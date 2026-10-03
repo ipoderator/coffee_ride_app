@@ -1384,3 +1384,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       on `/me`); the catalog's collapsed «Завершённые и отменённые» section
       (`GET /v1/rides?phase=`), no «Осталось N мест» unless registration is open. See
       `docs/changelog.md`.
+- [x] CR-195 QA `13653ed` P3: ride cancellation confirmed in `ConfirmDialog` instead of
+      `window.confirm`; the wizard's step 4 enters the start with step 1's `DatePicker` +
+      time field; the queue place reads «№ N в очереди», not «#N». KI-087 tracks the
+      remaining `window.confirm` deletes. See `docs/changelog.md`.

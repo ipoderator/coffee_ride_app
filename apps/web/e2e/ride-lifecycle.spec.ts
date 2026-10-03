@@ -237,12 +237,17 @@ test('organizer cancels a ride with registration open', async ({ page }) => {
   await page.goto(`/organizer/rides/${rideId}/edit`);
   const cancel = page.getByRole('button', { name: RIDE_EDIT_TERMS.cancel });
 
-  // Declining the native confirm() leaves the ride as it was.
-  page.once('dialog', (dialog) => {
-    expect(dialog.message()).toBe(RIDE_EDIT_TERMS.cancelConfirm);
-    void dialog.dismiss();
-  });
+  // CR-195: the app's own dialog, not a native confirm(). Declining it
+  // leaves the ride as it was.
   await cancel.click();
+  const dialog = page.getByRole('dialog', {
+    name: RIDE_EDIT_TERMS.cancelConfirmTitle,
+  });
+  await expect(dialog).toContainText(RIDE_EDIT_TERMS.cancelConfirmDescription);
+  await dialog
+    .getByRole('button', { name: RIDE_EDIT_TERMS.cancelKeep })
+    .click();
+  await expect(dialog).toBeHidden();
   await expect(
     page.getByText(RIDE_EDIT_TERMS.cancelSuccess, { exact: true }),
   ).toHaveCount(0);
@@ -250,8 +255,8 @@ test('organizer cancels a ride with registration open', async ({ page }) => {
     page.getByRole('button', { name: RIDE_EDIT_TERMS.closeRegistration }),
   ).toBeVisible();
 
-  page.once('dialog', (dialog) => void dialog.accept());
   await cancel.click();
+  await dialog.getByRole('button', { name: RIDE_EDIT_TERMS.cancel }).click();
   await expect(
     page.getByText(RIDE_EDIT_TERMS.cancelSuccess, { exact: true }),
   ).toBeVisible();

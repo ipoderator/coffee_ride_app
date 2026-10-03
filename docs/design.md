@@ -530,7 +530,8 @@ phone 390), top to bottom:
   seat limit of their own); full-width «Записаться»; the note; then hairline action
   rows «Скачать GPX» (with a route) / «Добавить в календарь» (upcoming rides — an
   RFC 5545 `.ics` built in the browser) / «Поделиться». A registered viewer keeps
-  «№ N» + countdown and the date/start cells; a queued one «#N».
+  «№ N» + countdown and the date/start cells; a queued one «№ N в очереди» (CR-195:
+  one sign for a place in either list, the caption names the list — never «#»).
 - Main column, in order: «Маршрут по точкам» (km mark in mono 12px — «20 км»,
   «69,5 км»; hollow `brand` rings on a dashed `border-input` rail; a dangerous
   section gets a `warning` ring and a ⚠ before its subtitle, text in `warning`) →
@@ -769,7 +770,9 @@ avatars + `+N` overflow), `Pagination`, `MetricTile`, `MetricRow`, `StatusBadge`
 `DatePicker` (CR-157 — see below).
 
 `DatePicker` (CR-157) replaces the native `<input type="date">` wherever a
-calendar day is picked (today: the new-ride wizard's «Дата»). The trigger shows
+calendar day is picked (the new-ride wizard's «Дата» on step 1 and, since CR-195,
+the draft form on step 4 / «Обзор» — date and «Время старта» apart in both, never
+a native `datetime-local`; CR-190's «Перенести заезд» uses the same pair). The trigger shows
 `formatCalendarDate` («Чт, 1 октября 2026»); the calendar is Monday-first with
 48px day cells, quick picks «Сегодня / Завтра / Сб / Вс» (group rides are mostly
 weekend mornings), `min` to disable past days, today ringed (not colour alone —
