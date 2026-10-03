@@ -53,6 +53,6 @@ and `e2e/helpers/{api-fixtures,ui}.ts` — verified `critical-journeys.spec.ts` 
 
 ## Open
 
-- Linux screenshot baselines (KI-084): Docker amd64 pull or CI artifact after push.
-- QA P3: done in CR-195 (25c4d11, local on `main`, not pushed); KI-087 — the other
+- Linux screenshot baselines: none needed — CI 37112228653 green; KI-084 archived.
+- QA P3: done in CR-195 (25c4d11, pushed); KI-087 — the other
   `window.confirm` deletes.

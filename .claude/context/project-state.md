@@ -934,15 +934,14 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-189..CR-194 are pushed to `main`; CR-195 is one local commit on top, not
-pushed yet. CI pending (KI-084 baselines).
+None — CR-189..CR-195 are pushed to `main`; CI run 37112228653 green (screenshots
+included), KI-084 closed.
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
-1. **Confirm CI on `main`** — screenshot baselines (KI-084) are the
-   open risk (CI-artifact path). The QA report's P3 leftovers are done (CR-195);
+1. The QA report's P3 leftovers are done (CR-195);
    KI-087 (the remaining `window.confirm` deletes) is the natural follow-up.
    CR-190 follow-ups: no e2e journey for the reschedule, no email (in-app only).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
