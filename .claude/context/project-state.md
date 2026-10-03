@@ -52,7 +52,21 @@ finished go to «История», `started` stays), catalog `?phase=active|arch
 collapsed «Завершённые и отменённые» section, seats only while registration is open.
 CR-194 — Russian validation errors everywhere + a source guard test.
 
-CR-195 (2026-10-03, committed locally on `main`, not pushed): the QA report's P3
+CR-198 (2026-10-03, committed on `main`): QA `fe0b4c2` P3 — in «Перенести заезд» a
+new date immediately re-judges the time error that depends on the date+time pair
+(`RescheduleRideCard`'s `pairError`).
+
+CR-197 (2026-10-03, committed on `main`): QA `fe0b4c2` — a visitor who registers
+from a ride returns to it: `next` rides from `/register` through the verification link
+and `/verify-email` to «Перейти ко входу» (`verifyEmailHref`, `safeNextPath` on every
+hop). KI-089: the emailed verification link (built by the API) still has no `next`.
+
+CR-196 (2026-10-03, committed on `main`): QA `fe0b4c2` — `pnpm --filter db
+db:migrate` works from a checkout under a non-ASCII (Cyrillic) path; the migrations
+folder is resolved with `fileURLToPath` (`packages/db/src/migrations-folder.ts`), with
+a regression test that copies `packages/db` under `…/КофеРайд/…`.
+
+CR-195 (2026-10-03, pushed): the QA report's P3
 leftovers — ride cancellation confirmed in `ConfirmDialog` (no `window.confirm`), the
 draft form (wizard step 4 / «Обзор») enters the start with step 1's `DatePicker` +
 time field, the ticket's queue place reads «№ N в очереди». KI-087: six destructive
@@ -934,14 +948,16 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-189..CR-195 are pushed to `main`; CI run 37112228653 green (screenshots
-included), KI-084 closed.
+None — CR-196..CR-198 (QA `fe0b4c2`) are committed and pushed to `main`; CI for them
+not yet checked. CR-189..CR-195: CI run 37112228653 green.
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
-1. The QA report's P3 leftovers are done (CR-195);
+1. **KI-089** — owner decision: carry `next` into the emailed verification link
+   (optional `next` on `POST /v1/auth/register`) or keep CR-197 web-only.
+   The QA report's P3 leftovers are done (CR-195);
    KI-087 (the remaining `window.confirm` deletes) is the natural follow-up.
    CR-190 follow-ups: no e2e journey for the reschedule, no email (in-app only).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL

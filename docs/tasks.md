@@ -1388,3 +1388,14 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `window.confirm`; the wizard's step 4 enters the start with step 1's `DatePicker` +
       time field; the queue place reads «№ N в очереди», not «#N». KI-087 tracks the
       remaining `window.confirm` deletes. See `docs/changelog.md`.
+- [x] CR-196 QA `fe0b4c2`: `pnpm --filter db db:migrate` from a checkout under a
+      Cyrillic path — the migrations folder via `fileURLToPath`, not a percent-encoded
+      `URL.pathname`; regression test from a non-ASCII copy of `packages/db`. See
+      `docs/changelog.md`.
+- [x] CR-197 QA `fe0b4c2`: `next` survives register → verify email → «Перейти ко
+      входу» → sign in (validated on every hop; external/unsafe targets dropped);
+      full-journey e2e. KI-089: the emailed link still has no `next`. See
+      `docs/changelog.md`.
+- [x] CR-198 QA `fe0b4c2` P3: in «Перенести заезд» a new date re-judges the
+      pair-dependent time error («текущее время»/«уже прошло») at once instead of on the
+      next «Продолжить». See `docs/changelog.md`.
