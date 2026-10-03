@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RideUpdate } from 'types';
+import type { Ride, RideUpdate } from 'types';
+import {
+  RideWorkspaceContext,
+  type RideWorkspaceContextValue,
+} from '@/lib/cabinet/ride-workspace';
 import { UpdateComposer } from './components/UpdateComposer';
 import { ApiError, createRideUpdate, getRideUpdates } from './api';
 
@@ -23,6 +27,53 @@ const existingUpdate: RideUpdate = {
   createdAt: '2027-01-02T00:00:00.000Z',
   reschedule: null,
 };
+
+const workspaceRide: Ride = {
+  id: 'ride-1',
+  organizerId: 'org-1',
+  title: 'Утро на Лосином острове',
+  description: null,
+  coverImageUrl: null,
+  bicycleType: 'gravel',
+  startsAt: '2099-10-01T05:00:00.000Z',
+  startTimezone: 'Europe/Moscow',
+  startLat: null,
+  startLng: null,
+  participantLimit: null,
+  priceRub: null,
+  distanceKm: null,
+  elevationGainMeters: null,
+  paceKmh: null,
+  durationMinutes: null,
+  difficulty: null,
+  participantsVisible: true,
+  status: 'registration_open',
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  updatedBy: 'user-1',
+};
+
+function workspaceValue(registrationsCount: number): RideWorkspaceContextValue {
+  return {
+    data: {
+      ride: workspaceRide,
+      route: null,
+      stops: [],
+      routePoints: [],
+      groups: [],
+      registrationsCount,
+      waitlistCount: 0,
+      attendanceSummary: null,
+      requirements: [],
+      contact: undefined,
+      latestUpdate: null,
+      lastReschedule: null,
+    },
+    sections: [],
+    refresh: async () => {},
+    applyRide: () => {},
+  };
+}
 
 describe('UpdateComposer', () => {
   beforeEach(() => {
@@ -78,7 +129,10 @@ describe('UpdateComposer', () => {
     getRideUpdatesMock
       .mockResolvedValueOnce({ items: [], nextCursor: null })
       .mockResolvedValueOnce({ items: [existingUpdate], nextCursor: null });
-    createRideUpdateMock.mockResolvedValue({ rideUpdate: existingUpdate });
+    createRideUpdateMock.mockResolvedValue({
+      rideUpdate: existingUpdate,
+      recipientsCount: 3,
+    });
 
     render(<UpdateComposer rideId="ride-1" />);
     await screen.findByText('Обновлений пока нет');
@@ -88,7 +142,9 @@ describe('UpdateComposer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
     expect(
-      await screen.findByText('Обновление отправлено участникам.'),
+      await screen.findByText(
+        'Обновление отправлено: получат 3 записавшихся участника.',
+      ),
     ).toBeInTheDocument();
     expect(createRideUpdateMock).toHaveBeenCalledWith(
       'ride-1',
@@ -96,6 +152,93 @@ describe('UpdateComposer', () => {
     );
     await waitFor(() => expect(textarea).toHaveValue(''));
     expect(getRideUpdatesMock).toHaveBeenCalledTimes(2);
+  });
+
+  // CR-192: «отправлено участникам» was shown even with nobody registered.
+  it('says nobody receives the update when no one is registered, and still records it', async () => {
+    getRideUpdatesMock
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+      .mockResolvedValueOnce({ items: [existingUpdate], nextCursor: null });
+    createRideUpdateMock.mockResolvedValue({
+      rideUpdate: existingUpdate,
+      recipientsCount: 0,
+    });
+
+    render(<UpdateComposer rideId="ride-1" />);
+    await screen.findByText('Обновлений пока нет');
+
+    fireEvent.change(screen.getByLabelText('Сообщение участникам'), {
+      target: { value: 'Первое сообщение.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+
+    expect(
+      await screen.findByText('Обновление опубликовано; получателей пока нет.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/отправлено участникам/)).not.toBeInTheDocument();
+    // The update is a published record: the history reloads and lists it.
+    expect(await screen.findByText('Первое сообщение.')).toBeInTheDocument();
+    expect(getRideUpdatesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [1, 'Обновление отправлено: получит 1 записавшийся участник.'],
+    [2, 'Обновление отправлено: получат 2 записавшихся участника.'],
+    [5, 'Обновление отправлено: получат 5 записавшихся участников.'],
+  ])('reports %i recipient(s) with the right plural', async (count, text) => {
+    getRideUpdatesMock.mockResolvedValue({ items: [], nextCursor: null });
+    createRideUpdateMock.mockResolvedValue({
+      rideUpdate: existingUpdate,
+      recipientsCount: count,
+    });
+
+    render(<UpdateComposer rideId="ride-1" />);
+    await screen.findByText('Обновлений пока нет');
+
+    fireEvent.change(screen.getByLabelText('Сообщение участникам'), {
+      target: { value: 'Сообщение.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it('claims no recipients when the response carries no count and none is known', async () => {
+    getRideUpdatesMock.mockResolvedValue({ items: [], nextCursor: null });
+    createRideUpdateMock.mockResolvedValue({ rideUpdate: existingUpdate });
+
+    render(<UpdateComposer rideId="ride-1" />);
+    await screen.findByText('Обновлений пока нет');
+
+    fireEvent.change(screen.getByLabelText('Сообщение участникам'), {
+      target: { value: 'Сообщение.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+
+    expect(
+      await screen.findByText('Обновление опубликовано.'),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the workspace's registrations count when the response has none", async () => {
+    getRideUpdatesMock.mockResolvedValue({ items: [], nextCursor: null });
+    createRideUpdateMock.mockResolvedValue({ rideUpdate: existingUpdate });
+
+    render(
+      <RideWorkspaceContext.Provider value={workspaceValue(0)}>
+        <UpdateComposer rideId="ride-1" />
+      </RideWorkspaceContext.Provider>,
+    );
+    await screen.findByText('Обновлений пока нет');
+
+    fireEvent.change(screen.getByLabelText('Сообщение участникам'), {
+      target: { value: 'Сообщение.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+
+    expect(
+      await screen.findByText('Обновление опубликовано; получателей пока нет.'),
+    ).toBeInTheDocument();
   });
 
   it('shows a server-side field validation error returned after the client-side check passes', async () => {

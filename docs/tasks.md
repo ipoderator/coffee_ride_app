@@ -1366,3 +1366,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `403 finish_not_confirmed`; re-runs after an interrupted run stay duplicate-free.
       Item 4: `pnpm lint` no longer depends on pnpm's private hoist (`eslint-config-next`
       plugins/`next` peer). See `docs/changelog.md`.
+- [x] CR-192 QA `13653ed` items 5, 6, 9: publishing a draft without a route asks first
+      (the route stays optional but can't be added after publishing); a ride update
+      reports its real recipients (`recipientsCount`, «получателей пока нет»); the
+      overview hint lists what stays editable (groups, contact, visibility, reschedule);
+      publishing from the wizard leaves it for the ordinary workspace. See
+      `docs/changelog.md`.

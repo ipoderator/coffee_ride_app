@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
 import {
   RideContactFields,
@@ -20,6 +21,7 @@ import {
   RIDE_WORKSPACE_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
   Textarea,
+  useToast,
 } from 'ui';
 import {
   useRideWorkspace,
@@ -41,6 +43,8 @@ import {
   updateRideRequestSchema,
 } from '../api';
 import { rideFieldShapeError } from '../field-errors';
+import { wizardStepHref } from '../wizard-steps';
+import { PublishWithoutRouteDialog } from './PublishWithoutRouteDialog';
 import { RideOverview } from './RideOverview';
 import { RideReadinessList } from './RideReadinessList';
 
@@ -118,12 +122,15 @@ interface FieldErrors {
  * публикацией» checklist; a published ride or later is `RideOverview` — never
  * a locked copy of the form (CR-184). CR-016's ownership check resolves in the
  * workspace before this renders.
+ *
+ * `wizard` (CR-192): opened as the new-ride wizard's last step, so publishing
+ * leaves the wizard for the ordinary workspace.
  */
-export function EditRideForm() {
+export function EditRideForm({ wizard = false }: { wizard?: boolean }) {
   const workspace = useRideWorkspace();
   if (!workspace) return null;
   return workspace.data.ride.status === 'draft' ? (
-    <DraftRideForm workspace={workspace} />
+    <DraftRideForm workspace={workspace} wizard={wizard} />
   ) : (
     <RideOverview workspace={workspace} />
   );
@@ -131,11 +138,15 @@ export function EditRideForm() {
 
 function DraftRideForm({
   workspace,
+  wizard,
 }: {
   workspace: RideWorkspaceContextValue;
+  wizard: boolean;
 }) {
   const { data, sections, applyRide } = workspace;
   const rideId = data.ride.id;
+  const router = useRouter();
+  const { showToast } = useToast();
   const headingId = useId();
   const [form, setForm] = useState<FormState>(() => toFormState(data.ride));
   const [requirementsText, setRequirementsText] = useState(() =>
@@ -153,6 +164,7 @@ function DraftRideForm({
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishVerificationRequired, setPublishVerificationRequired] =
     useState(false);
+  const [publishWithoutRouteOpen, setPublishWithoutRouteOpen] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -235,8 +247,21 @@ function DraftRideForm({
     }
   }
 
+  /** CR-192: a ride without a route is allowed, but the route can never be
+   * added after publishing — ask first. With a route: straight through. */
+  function requestPublish() {
+    if (isPublishing) return;
+    if (data.route === null) {
+      setPublishWithoutRouteOpen(true);
+      return;
+    }
+    void handlePublish();
+  }
+
   /** CR-019: publishes what is saved. On success the workspace shows the
-   * result line and remounts this tab as the published overview. */
+   * result line and remounts this tab as the published overview. CR-192: from
+   * the wizard it leaves for the ordinary workspace instead — the creation
+   * steps are done — with a toast, which survives the navigation. */
   async function handlePublish() {
     if (isPublishing) return;
 
@@ -247,8 +272,17 @@ function DraftRideForm({
 
     try {
       const response = await publishRide(rideId);
+      if (wizard) {
+        showToast(RIDE_EDIT_TERMS.publishSuccess);
+        // `isPublishing` stays on: the form shows «Публикация…» until the new
+        // page replaces it, so no second publish can start.
+        router.replace(`/organizer/rides/${encodeURIComponent(rideId)}/edit`);
+        return;
+      }
+      setPublishWithoutRouteOpen(false);
       applyRide(response.ride, RIDE_EDIT_TERMS.publishSuccess);
     } catch (error) {
+      setPublishWithoutRouteOpen(false);
       if (
         error instanceof ApiError &&
         error.problem.code === 'email_verification_required'
@@ -616,7 +650,7 @@ function DraftRideForm({
               type="button"
               variant="secondary"
               isLoading={isPublishing}
-              onClick={handlePublish}
+              onClick={requestPublish}
               className="self-start"
             >
               {isPublishing
@@ -626,6 +660,20 @@ function DraftRideForm({
           </div>
         </form>
       </Card>
+
+      <PublishWithoutRouteDialog
+        open={publishWithoutRouteOpen}
+        onClose={() => {
+          if (!isPublishing) setPublishWithoutRouteOpen(false);
+        }}
+        onConfirm={() => void handlePublish()}
+        isConfirming={isPublishing}
+        routeHref={
+          wizard
+            ? wizardStepHref('route', rideId)
+            : `/organizer/rides/${encodeURIComponent(rideId)}/route`
+        }
+      />
     </>
   );
 }

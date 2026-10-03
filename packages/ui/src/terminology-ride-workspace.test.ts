@@ -93,6 +93,30 @@ describe('RIDE_UPDATES_TERMS.recipients', () => {
   });
 });
 
+describe('RIDE_UPDATES_TERMS.sendSuccess (CR-192)', () => {
+  it('reports the real result, never «участникам» for nobody', () => {
+    expect(RIDE_UPDATES_TERMS.sendSuccess(0)).toBe(
+      'Обновление опубликовано; получателей пока нет.',
+    );
+    expect(RIDE_UPDATES_TERMS.sendSuccess(1)).toBe(
+      'Обновление отправлено: получит 1 записавшийся участник.',
+    );
+    expect(RIDE_UPDATES_TERMS.sendSuccess(3)).toBe(
+      'Обновление отправлено: получат 3 записавшихся участника.',
+    );
+    expect(RIDE_UPDATES_TERMS.sendSuccess(11)).toBe(
+      'Обновление отправлено: получат 11 записавшихся участников.',
+    );
+    expect(RIDE_UPDATES_TERMS.sendSuccess(21)).toBe(
+      'Обновление отправлено: получит 21 записавшийся участник.',
+    );
+  });
+
+  it('claims no recipients when the count is unknown', () => {
+    expect(RIDE_UPDATES_TERMS.sendSuccess()).toBe('Обновление опубликовано.');
+  });
+});
+
 describe('VALIDATION_TERMS numeric bounds (KI-085)', () => {
   it('groups thousands and keeps the sign', () => {
     expect(VALIDATION_TERMS.atLeast(-90)).toBe('Не меньше -90.');

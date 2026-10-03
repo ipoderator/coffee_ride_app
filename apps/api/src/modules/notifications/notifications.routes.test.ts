@@ -224,6 +224,8 @@ describe('Communication (CR-038/039/040/041)', () => {
       const rideUpdate = response.json().rideUpdate;
       expect(rideUpdate.rideId).toBe(rideId);
       expect(rideUpdate.message).toBe('Встречаемся у южного входа в парк.');
+      // CR-192: the response says how many people the update is addressed to.
+      expect(response.json().recipientsCount).toBe(1);
 
       const inbox = await app.inject({
         method: 'GET',
@@ -257,6 +259,35 @@ describe('Communication (CR-038/039/040/041)', () => {
       });
 
       expect(response.statusCode).toBe(201);
+      // CR-192: the update is still published (and listed), but nobody gets it.
+      expect(response.json().recipientsCount).toBe(0);
+      expect(response.json().rideUpdate.message).toBe('Погода испортилась.');
+      await app.close();
+    });
+
+    it('counts only active registrants as recipients (not cancelled ones)', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId } = await createOrganizerRide(app);
+      await registerParticipant(app, rideId);
+      await registerParticipant(app, rideId);
+      const leaver = await registerParticipant(app, rideId);
+      await app.inject({
+        method: 'DELETE',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: leaver.rawToken },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/updates`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: organizerToken },
+        payload: { message: 'Собираемся у входа.' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().recipientsCount).toBe(2);
       await app.close();
     });
   });

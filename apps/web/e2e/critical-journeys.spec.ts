@@ -6,7 +6,9 @@ import {
   RIDE_CREATE_TERMS,
   RIDE_EDIT_TERMS,
   RIDE_ROUTE_TERMS,
+  RIDE_UPDATES_TERMS,
   RIDE_WIZARD_TERMS,
+  RIDE_WORKSPACE_TERMS,
 } from 'ui';
 import {
   createOrganizerProfile,
@@ -100,7 +102,27 @@ test('organizer creates and publishes a ride', async ({ page }) => {
   ).toBeVisible();
 
   await page.getByRole('button', { name: RIDE_EDIT_TERMS.publish }).click();
+  // CR-192: no route was added, which cannot be done after publishing — the
+  // organizer is asked first, and the way back is the wizard's route step.
+  const dialog = page.getByRole('dialog');
+  await expect(
+    dialog.getByRole('link', { name: RIDE_EDIT_TERMS.publishNoRouteAddRoute }),
+  ).toHaveAttribute('href', /\/route\?wizard=1$/);
+  await dialog
+    .getByRole('button', { name: RIDE_EDIT_TERMS.publishNoRouteConfirm })
+    .click();
+
+  // CR-192: published → out of the wizard, into the ordinary six-tab
+  // workspace (not «шаг 4 из 4»), with the success notice.
+  await expect(page).toHaveURL(/\/organizer\/rides\/[^/?]+\/edit$/);
   await expect(page.getByText(RIDE_EDIT_TERMS.publishSuccess)).toBeVisible();
+  const tabs = page.getByRole('navigation', {
+    name: RIDE_WORKSPACE_TERMS.tabsLabel,
+  });
+  await expect(tabs.getByRole('link')).toHaveCount(6);
+  await expect(page.getByText(RIDE_WIZARD_TERMS.stepCounter(4, 4))).toHaveCount(
+    0,
+  );
 
   await page
     .getByRole('button', { name: RIDE_EDIT_TERMS.openRegistration })
@@ -108,6 +130,15 @@ test('organizer creates and publishes a ride', async ({ page }) => {
   await expect(
     page.getByText(RIDE_EDIT_TERMS.openRegistrationSuccess),
   ).toBeVisible();
+
+  // CR-192: nobody is registered, so the update says nobody receives it
+  // instead of «отправлено участникам».
+  await tabs.getByRole('link', { name: RIDE_EDIT_TERMS.updatesLink }).click();
+  await page
+    .getByLabel(RIDE_UPDATES_TERMS.messageLabel)
+    .fill('Пока никто не записан.');
+  await page.getByRole('button', { name: RIDE_UPDATES_TERMS.send }).click();
+  await expect(page.getByText(RIDE_UPDATES_TERMS.sendSuccess(0))).toBeVisible();
 });
 
 test('organizer views registered participants', async ({ page }) => {

@@ -20,6 +20,10 @@ export type CreateRideUpdateRequest = z.infer<
 
 export interface CreateRideUpdateResponse {
   rideUpdate: RideUpdate;
+  // CR-192: additive. How many active registrants the update is addressed to
+  // when it is sent (`0` = nobody is registered yet, so nobody will see it).
+  // The API always sends it; optional here so older mocks/clients still type.
+  recipientsCount?: number;
 }
 
 // `GET /v1/rides/:id/updates` (organizer-only, `.claude/context/current-task.md`) —

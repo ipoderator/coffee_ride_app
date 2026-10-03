@@ -743,7 +743,7 @@ export const RIDE_EDIT_TERMS = {
   // button rather than on change, because it is a validated pair of fields and
   // not a single checkbox like the visibility toggle above.
   contactHintPublished:
-    'Способ связи можно исправить в любой момент, даже после публикации. Остальные поля заезда уже нельзя менять.',
+    'Способ связи можно исправить в любой момент, даже после публикации.',
   contactSave: 'Сохранить способ связи',
   contactSavePending: 'Сохранение…',
   contactSaveError: 'Не удалось сохранить способ связи. Попробуйте ещё раз.',
@@ -783,6 +783,13 @@ export const RIDE_EDIT_TERMS = {
   // `ResendVerificationButton` now renders beside this text.
   publishEmailVerificationRequired:
     'Подтвердите email, чтобы опубликовать заезд.',
+  // CR-192: a ride may go out without a track, but the route is draft-only
+  // (`docs/api.md`), so the organizer is told before the irreversible step.
+  publishNoRouteTitle: 'Опубликовать без маршрута?',
+  publishNoRouteDescription:
+    'После публикации маршрут добавить уже нельзя — у заезда не будет трека на карте. Сейчас его ещё можно загрузить из GPX или построить по карте.',
+  publishNoRouteConfirm: 'Опубликовать без маршрута',
+  publishNoRouteAddRoute: 'Добавить маршрут',
   // CR-089 ("Open registration") / CR-020 ("Close registration").
   openRegistration: 'Открыть регистрацию',
   openRegistrationPending: 'Открытие регистрации…',
@@ -874,7 +881,10 @@ export const RIDE_WORKSPACE_TERMS = {
   // CR-190: the start moves only through «Перенести заезд» (with a reason and a
   // notification), never by editing the field.
   factsHint:
-    'После публикации основные условия зафиксированы — участники записывались именно на них. Меняются только способ связи, видимость списка и — через перенос — дата старта.',
+    'После публикации условия зафиксированы — участники записывались именно на них. Менять можно группы по темпу (до 6, удалить — только группу без участников), способ связи, видимость списка и — через перенос, до старта — дату и время старта.',
+  // CR-192: a finished or cancelled ride also closes its groups.
+  factsHintClosed:
+    'Заезд закрыт: условия и группы больше не меняются. Способ связи и видимость списка доступны по-прежнему.',
   contactTitle: 'Связь с участниками',
   nextStepTitle: 'Следующий шаг',
   // A checklist row's link name: «Посмотреть» alone is ambiguous in a links list.
@@ -1578,7 +1588,14 @@ export const RIDE_UPDATES_TERMS = {
   rescheduleHintLink: 'Перенести заезд',
   send: 'Отправить',
   sendPending: 'Отправка…',
-  sendSuccess: 'Обновление отправлено участникам.',
+  // CR-192: the result as the server reports it — never «участникам» when
+  // nobody was registered. `recipients` undefined = the count is unknown.
+  sendSuccess: (recipients?: number): string =>
+    recipients === undefined
+      ? 'Обновление опубликовано.'
+      : recipients === 0
+        ? 'Обновление опубликовано; получателей пока нет.'
+        : `Обновление отправлено: получ${recipients % 10 === 1 && recipients % 100 !== 11 ? 'ит' : 'ат'} ${recipients} ${pluralRu(recipients, 'записавшийся участник', 'записавшихся участника', 'записавшихся участников')}.`,
   historyTitle: 'История обновлений',
   historyLoadError:
     'Не удалось загрузить историю обновлений. Попробуйте ещё раз.',

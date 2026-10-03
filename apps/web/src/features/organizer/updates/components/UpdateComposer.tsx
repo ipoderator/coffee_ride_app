@@ -112,9 +112,15 @@ export function UpdateComposer({ rideId }: { rideId: string }) {
 
     setIsSending(true);
     try {
-      await createRideUpdate(rideId, parsed.data.message);
+      const response = await createRideUpdate(rideId, parsed.data.message);
       setMessage('');
-      setSuccessMessage(RIDE_UPDATES_TERMS.sendSuccess);
+      // CR-192: the server's own recipient count; the workspace's is the
+      // fallback for a response that predates the field.
+      setSuccessMessage(
+        RIDE_UPDATES_TERMS.sendSuccess(
+          response.recipientsCount ?? workspace?.data.registrationsCount,
+        ),
+      );
       loadHistory();
       void workspace?.refresh();
     } catch (err) {
