@@ -6,7 +6,9 @@ Read:
 
 - current task;
 - product requirements;
-- relevant architecture/rules;
+- relevant architecture/rules (read the path-scoped `.claude/rules/*` for the touched
+  areas explicitly);
+- `project-state.md` → "Do not break" (grep for the touched areas);
 - git diff.
 
 Check:

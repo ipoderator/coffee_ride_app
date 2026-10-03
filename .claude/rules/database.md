@@ -1,3 +1,10 @@
+---
+paths:
+  - 'packages/db/**'
+  - 'apps/api/src/modules/**/*.service.ts'
+  - 'docs/database.md'
+---
+
 # Database Rules
 
 PostgreSQL + Drizzle.

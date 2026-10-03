@@ -1,7 +1,8 @@
 # /status
 
-Read persistent context (including the last 5-10 entries of `docs/changelog.md`) and
-inspect the repository.
+Read persistent context as targeted slices (`.claude/CLAUDE.md` → "Non-negotiable
+operating rule": project-state's "Current task"/"In progress"/"Next", the last 3
+changelog entries, known-issues headers) and inspect the repository.
 
 Report:
 

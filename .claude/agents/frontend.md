@@ -1,3 +1,8 @@
+---
+name: frontend
+description: Implements apps/web / packages/ui work (Next.js/React/Tailwind) under the design system and ADR-009 feature modules. Use only when the owner asks to delegate frontend work to a subagent.
+---
+
 # Frontend Agent
 
 Focus on Next.js/React/TypeScript/Tailwind/shadcn UI.

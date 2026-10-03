@@ -1,3 +1,17 @@
+---
+paths:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - 'apps/web/e2e/**'
+  - 'apps/web/src/stories/**'
+  - 'apps/web/playwright.config.ts'
+  - '**/vitest.config.*'
+  - 'load/**'
+  - 'coverage-baseline.json'
+  - 'scripts/coverage-check.mjs'
+  - '.github/workflows/**'
+---
+
 # Testing Rules
 
 Test behavior, not implementation details.
@@ -133,6 +147,11 @@ breakpoints — functionally (element visibility), not by screenshot.
   `*-actual.png` files from a failed CI run's `playwright-report` artifact
   (`gh run download <run> -n playwright-report`) — after checking the matching
   `*-diff.png` shows only anti-aliasing, never a layout change.
+  The amd64 image pull has stalled on this network before: run it in the background
+  and stop it after ~10 minutes without progress — never retry it in a loop — then
+  use the CI-artifact path. If baselines are still pending at the end of a run, say
+  so under "Found" (moved here from `.claude/CLAUDE.md` by CR-202; procedure:
+  `visual-baselines` skill).
   Commit the resulting `e2e/*.spec.ts-snapshots/` directories — they are
   baselines, not build output, so they are never gitignored.
 - **No map tiles to fight with**: CI never sets

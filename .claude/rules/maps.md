@@ -1,3 +1,13 @@
+---
+paths:
+  - 'packages/maps-core/**'
+  - 'packages/maps-2gis/**'
+  - 'apps/web/src/lib/maps/**'
+  - 'apps/api/src/plugins/maps.ts'
+  - 'apps/web/src/**/*Map*.tsx'
+  - 'docs/maps.md'
+---
+
 # Maps Rules
 
 Primary provider: 2GIS (MapGL JS API + Geocoder API + Directions/Routing API).

@@ -2,9 +2,12 @@
 
 Planning only. Do not modify application code.
 
-1. Read persistent context.
+1. Read persistent context (targeted slices — `.claude/CLAUDE.md` → "Non-negotiable
+   operating rule").
 2. Inspect repository and recent changes.
-3. Read relevant product/architecture docs.
+3. Read the relevant sections of product/architecture docs and the `.claude/rules/*`
+   files for the areas the plan touches (path-scoped rules are not loaded yet while
+   planning).
 4. Identify current behavior and gaps.
 5. Produce:
    - goal;

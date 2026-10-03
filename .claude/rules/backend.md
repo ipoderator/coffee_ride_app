@@ -1,3 +1,10 @@
+---
+paths:
+  - 'apps/api/**'
+  - 'packages/types/src/api/**'
+  - 'docs/api.md'
+---
+
 # Backend Rules
 
 Fastify + TypeScript + REST/OpenAPI.

@@ -1,3 +1,15 @@
+---
+paths:
+  - 'apps/web/src/features/**'
+  - 'apps/web/src/lib/cabinet/**'
+  - 'apps/web/src/components/cabinet/**'
+  - 'apps/web/src/app/me/**'
+  - 'apps/web/src/app/organizer/**'
+  - 'packages/ui/**'
+  - 'packages/types/**'
+  - 'docs/api.md'
+---
+
 # Extensibility Rules — Organizer & Participant Cabinets
 
 See `docs/decisions.md` → ADR-009. Both cabinets will keep growing after MVP. These rules

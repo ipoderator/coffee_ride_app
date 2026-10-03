@@ -1,3 +1,18 @@
+---
+paths:
+  - 'packages/resilience/**'
+  - 'packages/maps-2gis/**'
+  - 'apps/api/src/plugins/**'
+  - 'apps/api/src/lib/**'
+  - 'apps/api/src/modules/notifications/**'
+  - 'apps/api/src/modules/registrations/**'
+  - 'apps/api/src/modules/rides/route-storage.ts'
+  - 'apps/api/src/routes/health.ts'
+  - 'apps/api/src/redis.ts'
+  - 'apps/api/src/s3.ts'
+  - 'apps/api/src/degraded-dependencies.test.ts'
+---
+
 # Resilience Rules
 
 See `docs/decisions.md` → ADR-008. The architecture is a modular monolith, not

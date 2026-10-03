@@ -1,3 +1,8 @@
+---
+name: backend
+description: Implements apps/api work (Fastify/Zod/Drizzle) under the project rules — layering, server-side authz, transactions. Use only when the owner asks to delegate backend work to a subagent.
+---
+
 # Backend Agent
 
 Focus on Fastify/TypeScript/Zod/PostgreSQL/Drizzle.

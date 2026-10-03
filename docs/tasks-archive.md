@@ -1,0 +1,1416 @@
+# Task Archive
+
+Completed backlog sections, moved verbatim from `docs/tasks.md` by CR-202
+(2026-10-03) — every item here is checked off. `docs/tasks.md` keeps only open work
+and the most recent completions. Grep by CR id; don't read whole.
+
+---
+
+# MVP Backlog
+
+## Pre-foundation hardening
+
+Decisions and config that are cheap now and a breaking change once code exists — done
+2026-09-11 before CR-001, see `docs/changelog.md`.
+
+- [x] CR-067 Node 24 LTS, exact `packageManager` version, CI token permissions, root lint
+      actually running in CI
+- [x] CR-068 Declare environment in `turbo.json` (Turborepo 2 strict env mode)
+- [x] CR-069 API contract: `/v1` prefix, cursor pagination, RFC 9457 errors — ADR-011
+- [x] CR-070 `timestamptz` everywhere + ride-local IANA timezone — ADR-012
+- [x] CR-071 Split 2GIS keys: public MapGL vs server-side Geocoder/Directions
+- [x] CR-072 Bind local infrastructure ports to `127.0.0.1`
+- [x] CR-087 Run Prettier over the whole repository as one isolated commit — done
+      2026-09-12, formatting-only, see `docs/changelog.md`.
+- [x] CR-073 Zod environment validation at API startup; refuse to boot in production on
+      placeholder/missing values — done 2026-09-12 inside CR-003
+      (`apps/api/src/env.ts`).
+
+## Foundation
+
+- [x] CR-001 Initialize pnpm/Turborepo monorepo — done 2026-09-12: `pnpm-lock.yaml`
+      generated, `tsconfig.base.json` added, root scripts and turbo tasks verified
+      against zero packages. See `docs/changelog.md`.
+- [x] CR-002 Configure Next.js web — done 2026-09-12: `apps/web` scaffolded
+      (Next.js 15, Tailwind v4, shadcn/ui foundation), turbo lint/typecheck/build
+      verified. See `docs/changelog.md`.
+- [x] CR-003 Configure Fastify API — done 2026-09-12: `apps/api` scaffolded
+      (Fastify 5, ESM, Zod validation via `@fastify/type-provider-zod`, RFC 9457
+      error envelope, OpenAPI at `/docs`, `/health` stub, `/v1` prefix wired).
+      Includes CR-073. See `docs/changelog.md`.
+- [x] CR-004 Configure PostgreSQL + Drizzle — done 2026-09-12: `packages/db`
+      scaffolded (Drizzle + drizzle-kit + `postgres` driver), zero domain
+      tables by design (first table lands with CR-011). See
+      `docs/changelog.md`.
+- [x] CR-005 Configure Redis — done 2026-09-12: `ioredis` client factory added
+      to `apps/api` (`src/redis.ts`), no consumer yet (ADR-004: only when
+      justified — CR-050/CR-058). Live connection not verified this session
+      (KI-014). See `docs/changelog.md`.
+- [x] CR-006 Configure MinIO/S3 adapter — done 2026-09-12: `@aws-sdk/client-s3`
+      client factory added to `apps/api` (`src/s3.ts`), no consumer yet
+      (CR-027/CR-086 wire it in). Live connection not verified this session
+      (KI-015). See `docs/changelog.md`.
+- [x] CR-007 Configure shared packages — done 2026-09-12: `packages/config`
+      (shared Node-library tsconfig fragment + ESLint factory, closes KI-013
+      forward), `packages/types` (RFC 9457 `ProblemDetails` + ADR-011
+      `Paginated<T>`, wired into `apps/api`'s error handler as a real
+      consumer), `packages/ui` (empty scaffold, content starts CR-063),
+      `packages/maps-core` (full `MapProvider` interface per ADR-010, pure
+      types), `packages/maps-2gis` (adapter calling 2GIS's Geocoder/Routing
+      REST APIs directly, no SDK dependency; not wired into any route yet).
+      See `docs/changelog.md`.
+- [x] CR-008 Configure Vitest/Playwright — done 2026-09-12: Vitest wired for
+      `apps/api` (real tests against `buildApp()` via `.inject()`: `/health`,
+      404 RFC 9457 envelope, Zod validation → 400, thrown errors → 500/403),
+      `packages/maps-2gis` (11 unit tests against `create2GisMapProvider`
+      with `fetch` mocked — parsing, fallbacks, non-2xx/timeout/malformed-
+      JSON normalization into `MapProviderError`), and `apps/web` (jsdom +
+      React Testing Library smoke test on the placeholder home page).
+      Playwright wired for `apps/web` e2e (one smoke spec, live-verified
+      against a real `next dev` server). Shared
+      `packages/config/vitest/node-library.js` fragment for the two
+      plain-Node consumers. Fixed a real tsconfig `extends`-chain bug surfaced by Vite 8's oxc transform
+      (KI-018, resolved same session) along the way. Not wired into CI
+      (KI-007 stays open — CR-080's job). See `docs/changelog.md`.
+- [x] CR-009 Configure Docker Compose — done 2026-09-13: fixed two real bugs in the
+      compose file that predated this CR (KI-004 MinIO healthcheck used `curl`, which
+      the image doesn't ship — switched to `mc ready local`; KI-005 `minio/minio:latest`
+      unpinned — pinned to `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z`, also
+      switching registries since MinIO's own docs now point at quay.io only), added a
+      missing Redis healthcheck, and added `pnpm infra:up`/`infra:down` root scripts.
+      Docker's daemon is still unreachable in this environment (KI-019, same standing
+      constraint as KI-014/KI-015) — validated via `docker compose config` only, not a
+      live boot. See `docs/changelog.md`.
+- [x] CR-010 Configure CI + Git hooks — done 2026-09-13: fixed the one real bug
+      already tracked against this area (KI-012 — lint-staged's pre-commit ESLint
+      step ran with CWD at the repo root, so staged `apps/*`/`packages/*` files were
+      never actually ESLint-checked at commit time, only Prettier-formatted). Root
+      `package.json`'s `lint-staged` config now has one glob entry per workspace
+      member, each running `pnpm --filter <name> exec eslint --fix` so the package's
+      own `eslint.config.mjs` resolves correctly. Verified live: staged a real
+      unused-variable violation in `apps/web`, confirmed it went undetected under the
+      old config and correctly caught under the new one. CI (`ci.yml`) reviewed and
+      left unchanged — its remaining gaps (MinIO/migrations/Playwright, KI-007) are
+      explicitly CR-080's scope, not this task's. See `docs/changelog.md`.
+
+## Design foundations
+
+Must land before the first user-facing screen (CR-011's register form) — see
+`docs/design.md`. Retrofitting tokens, formatters and states after the screens exist is a
+rewrite, not a polish pass.
+
+- [x] CR-063 Design tokens in `packages/ui` (light + dark palette, typography, spacing,
+      radius) exposed via the Tailwind theme; lint rule rejecting raw hex colors in
+      `apps/web` — done 2026-09-13: `packages/ui/src/tokens.css`, Golos Text/IBM Plex
+      Mono wired via `next/font/google` in `apps/web`'s layout. See `docs/changelog.md`.
+- [x] CR-064 Russian formatters (distance/elevation/pace/duration/date/time/price/
+      participants) and the UI terminology mapping (status, bicycle type, services) as
+      one shared, unit-tested module — done 2026-09-13:
+      `packages/ui/src/{format,terminology}.ts`. See `docs/changelog.md`.
+- [x] CR-065 Metric presentation components: `MetricTile`, `MetricRow`, `StatusBadge`,
+      `DifficultyScale` — done 2026-09-13: `packages/ui/src/components/`. See
+      `docs/changelog.md`.
+- [x] CR-066 Shared state primitives: `Skeleton`, `EmptyState`, `ErrorState` + the
+      degraded-state pattern used by CR-052 — done 2026-09-13:
+      `packages/ui/src/components/`. See `docs/changelog.md`.
+
+## Auth
+
+- [x] CR-011 User registration — done 2026-09-13: `users`/`email_verification_tokens`
+      tables (`packages/db`), `POST /v1/auth/register` + `POST /v1/auth/verify-email`
+      (`apps/api/src/modules/auth`), `/register` screen (`apps/web`). See
+      `docs/changelog.md`.
+- [x] CR-012 Login/logout/session — done 2026-09-13: `sessions` table
+      (`packages/db`), `POST /v1/auth/login` + `POST /v1/auth/logout` +
+      `GET /v1/auth/me` (`apps/api/src/modules/auth`), database-backed
+      sessions per ADR-013 (opaque cookie, SHA-256 hash at rest, rolling
+      30-day expiry), and ADR-013's Origin/Referer CSRF check on every unsafe
+      `/v1` method (`apps/api/src/plugins/csrf.ts`). See `docs/changelog.md`.
+- [x] CR-013 Profile — done 2026-09-14: `displayName`/`phone`/`bio` nullable
+      columns on `users` (`packages/db`), `PATCH /v1/users/me`
+      (`apps/api/src/modules/users`, `GET /v1/auth/me` already returns the
+      full profile — no separate GET), `/login` + `/me` + `/me/profile`
+      screens (`apps/web`), first real ADR-009 participant cabinet nav
+      registry. Avatar/photo upload deferred (KI-023, needs CR-086's S3
+      pipeline). See `docs/changelog.md`.
+
+## Organizer
+
+- [x] CR-014 Organizer profile — done 2026-09-14: `organizer_profiles` table
+      (`packages/db`, one per `User`, ADR-006), `POST`/`GET`/`PATCH` under
+      `/v1/organizers/me` (`apps/api/src/modules/organizers`, creation gated
+      on `emailVerified`), `/organizer/profile` screen (`apps/web`,
+      create-or-edit in one form), first real ADR-009 organizer cabinet nav
+      registry (`CabinetShell` generalized to serve both cabinets). See
+      `docs/changelog.md`.
+- [x] CR-015 Organizer dashboard — done 2026-09-14: `/organizer` renders a real
+      ADR-009 widget registry (`lib/cabinet/organizer-widgets.ts`,
+      `DashboardWidget` descriptor) instead of the CR-014 stub; one widget so
+      far, `OrganizerProfileWidget` (organizer-profile summary, reuses
+      `GET /v1/organizers/me`). See `docs/changelog.md`.
+- [x] CR-016 Organizer authorization — done 2026-09-14, alongside CR-018: the
+      first real ownership check on an _existing_ ride (`GET`/`PATCH /v1/
+rides/:id` 404 `ride_not_found` for a ride that doesn't exist or isn't
+      the caller's — deliberately the same response either way). See
+      `docs/changelog.md`.
+
+## Rides
+
+- [x] CR-017 Create ride — done 2026-09-14: first `Ride` table (`packages/db`,
+      owned by `OrganizerProfile`, ADR-006), `POST /v1/rides`
+      (`apps/api/src/modules/rides`, requires an `OrganizerProfile`, creates a
+      minimal `draft` — only `title`/`bicycleType`/`startsAt`/`startTimezone`,
+      everything else `null` until CR-018), `/organizer/rides/new` screen
+      (`apps/web`). Moved `RideStatus`/`BicycleType`/`DifficultyLevel` from
+      `packages/ui` to `packages/types` (architecture fix — `apps/api` can't
+      depend on `packages/ui`). See `docs/changelog.md`.
+- [x] CR-088 Organizer rides list (new ticket, added this session — see
+      `.claude/context/known-issues.md` KI-024) — done 2026-09-14:
+      `GET /v1/rides/mine`, the API's first cursor-paginated collection
+      endpoint (ADR-011, `apps/api/src/lib/cursor.ts`); `/organizer/rides`
+      screen grouping the caller's own rides by status. See
+      `docs/changelog.md`.
+- [x] CR-018 Edit draft — done 2026-09-14, together with CR-016: `GET`/
+      `PATCH /v1/rides/:id` (draft-only, 409 `ride_not_editable` once
+      published), `/organizer/rides/[id]/edit` filling in every field CR-017
+      left `null`. No migration needed — CR-017's schema already had every
+      column. See `docs/changelog.md`.
+- [x] CR-019 Publish ride — done 2026-09-14: `POST /v1/rides/:id/publish`
+      (`draft -> published` only — `docs/product.md`'s further lifecycle
+      states have no ticket yet, see `.claude/context/known-issues.md`
+      KI-025), gated on `emailVerified` per `.claude/rules/security.md`
+      (closes CR-059's remaining scope). `/organizer/rides/[id]/edit` gained
+      a "Опубликовать" button next to Save. See `docs/changelog.md`.
+- [x] CR-089 Open registration (new ticket, added this session — see
+      `.claude/context/known-issues.md` KI-025) — done 2026-09-14: a new
+      publish endpoint takes a ride from `published` to `registration_open`,
+      resolving KI-025 (no ticket previously transitioned a ride into that
+      state at all).
+- [x] CR-020 Close registration — done 2026-09-14, together with CR-089: a
+      matching endpoint takes a ride from `registration_open` to
+      `registration_closed`. Neither transition gates on `emailVerified` —
+      only `publish` is named by `.claude/rules/security.md`.
+      `/organizer/rides/[id]/edit` gained the matching "Открыть
+      регистрацию"/"Закрыть регистрацию" buttons.
+- [x] CR-021 Cancel ride — done 2026-09-15: `POST /v1/rides/:id/cancel`
+      (`published`/`registration_open`/`registration_closed → cancelled`,
+      `docs/product.md`'s Lifecycle). Same ownership rule as every other
+      transition (404 `ride_not_found` either way); one new 409 code,
+      `ride_not_cancellable`, covering every other status. New `Button`
+      `danger` variant; `/organizer/rides/[id]/edit` gained a red "Отменить
+      заезд" button guarded by a native `window.confirm()`.
+- [x] CR-090 Start ride (new ticket, added this session — see
+      `.claude/context/known-issues.md` KI-027) — done 2026-09-15: a new
+      endpoint takes a ride from `registration_closed` to `started`,
+      resolving KI-027 (no ticket previously transitioned a ride into that
+      state at all — same shape of gap as KI-024/KI-025).
+- [x] CR-022 Finish ride — done 2026-09-15, together with CR-090: a new
+      `POST /:id/finish` endpoint (`started → finished`, the last lifecycle
+      transition). Same ownership rule as every other transition; neither
+      new endpoint gates on `emailVerified`. `/organizer/rides/[id]/edit`
+      gained "Начать заезд"/"Завершить заезд" buttons, no confirmation
+      guard (unlike `cancel` — both are forward-only steps).
+- [x] CR-023 Ride detail — done 2026-09-15: `GET /v1/rides/:id` (CR-016/
+      CR-018) extended from owner-only to serve any viewer — visible to
+      anyone once it's left `draft`, `404 ride_not_found` either way for a
+      non-existent ride or a `draft` ride viewed by a non-owner. Response
+      gained an additive `organizer: { id, name }` field instead of a
+      separate public organizer-read endpoint. New public `/rides/[id]`
+      screen (`apps/web`, no `CabinetShell`) showing the `Ride` fields that
+      exist today; route/stops/services/requirements/registration action
+      have no data model yet (CR-027..036, see
+      `.claude/context/known-issues.md` KI-028).
+- [x] CR-024 Ride list — done 2026-09-15: `GET /v1/rides` (public discovery,
+      no auth), `apps/web`'s `/` (replaces the CR-002 bootstrap placeholder).
+      See `docs/changelog.md`.
+- [x] CR-025 Filters — done 2026-09-15: `?bicycleType=` on `GET /v1/rides`
+      (the one filter dimension this ticket ships), plus the "upcoming
+      only" default + `startsAt asc` sort resolving KI-029. See
+      `docs/changelog.md`.
+- [x] CR-026 Map discovery — done 2026-09-15: `GET /v1/rides` gained an
+      optional map-viewport (bbox) filter (`?bboxNorth=&bboxSouth=&bboxEast=
+&bboxWest=`, ADR-014), `rides` gained nullable `startLat`/`startLng`
+      (`PATCH /v1/rides/:id`, manual entry — KI-016 blocks geocode-by-
+      address), and `/` gained a List/Map toggle. No live 2GIS credential
+      exists in this environment, so the map view is a real, live-verified
+      degraded state (`ErrorState`, `.claude/rules/resilience.md`) rather
+      than an unverifiable live MapGL render — KI-031. See
+      `docs/changelog.md`.
+
+## Route
+
+- [x] CR-027 GPX upload — done 2026-09-15: `routes` table (`packages/db`,
+      `rideId` unique FK → `rides`), `POST`/`PATCH`/`DELETE
+/v1/rides/:id/route` (draft-only, multipart, ADR-015's size/streaming
+      decision) + `GET /v1/rides/:id/route/download` (new, fulfilling
+      `docs/product.md`'s "downloadable track" promise). No live MinIO in
+      this environment (KI-015) — S3 code path unit-tested with the client
+      mocked, not live-verified. See `docs/changelog.md`.
+- [x] CR-028 Route rendering — done 2026-09-15: `GET /v1/rides/:id/route/geometry`
+      (resolves KI-035, same viewer-visibility rule as ride detail/download), a
+      hand-built inline-SVG elevation profile chart on `/rides/[id]`
+      (`docs/design.md` §6), and a degraded route-map placeholder (KI-031 widened —
+      no live 2GIS MapGL credential, same constraint CR-026 hit). See
+      `docs/changelog.md`.
+- [x] CR-029 Route metadata — done 2026-09-15: resolves KI-034. The first GPX
+      upload now auto-fills whichever of `Ride.distanceKm`/`elevationGainMeters`
+      is still `null` from the parsed track, in the same DB transaction as the
+      route insert — never overwrites an organizer-entered value, and a replace
+      upload never touches `Ride`'s fields. The organizer's route screen shows a
+      reconciliation note with a "Использовать данные трека" action (reuses the
+      existing ride-update endpoint, no new endpoint) when the two have
+      genuinely diverged. See `docs/changelog.md`.
+- [x] CR-030 Stops — done 2026-09-15: sixth domain table
+      (`name`/`description`/`lat`/`lng`/`durationMinutes`/server-assigned
+      `position`), new create/edit/delete stop endpoints, draft-only same as
+      GPX upload, plus an additive `stops` array on the ride detail response.
+      Organizer manages stops on the existing route screen; participants see
+      them as a numbered list on the ride detail page. See
+      `docs/changelog.md`.
+- [x] CR-031 Route points — done 2026-09-15: seventh domain table (`type`/`label`/
+      `description`/`lat`/`lng`, no `position` — a typed map pin, not an ordered
+      itinerary entry, unlike `Stop`), new create/edit/delete endpoints, draft-only
+      same as stops/GPX upload, plus an additive `routePoints` array on the ride
+      detail response. Organizer manages route points on the existing route screen;
+      no participant-facing list yet (route points are map markers, and the map
+      itself is a documented degraded placeholder pending a live 2GIS credential,
+      KI-031/KI-036). See `docs/changelog.md`.
+
+## Registration
+
+- [x] CR-032 Register — done 2026-09-15: eighth domain table (`registrations`:
+      `rideId`/`userId`/`status`/`cancelledAt`, `.claude/rules/database.md`), new
+      `apps/api/src/modules/registrations/` capability module,
+      `POST /v1/rides/:id/register` (`registration_open`-only, `404 ride_not_found`
+      same resource-enumeration-safe rule as ride detail), plus additive
+      `registrationsCount`/`viewerRegistration` fields on `GET /v1/rides/:id`.
+      Organizer's `RegistrationButton` on `/rides/[id]`. See `docs/changelog.md`.
+- [x] CR-033 Cancel registration — done 2026-09-15, together with CR-032:
+      `DELETE /v1/rides/:id/register`, `404 registration_not_found`, no status
+      gate beyond "an active registration exists" (not invented — nothing in
+      `docs/product.md`/`docs/database.md` restricts it further). Keeps the row
+      (`status: 'cancelled'` + `cancelledAt`) rather than deleting it.
+- [x] CR-034 Capacity enforcement — delivered as part of CR-032, not deferred:
+      `.claude/CLAUDE.md`/`.claude/rules/database.md` require registration to
+      atomically protect capacity from the start (same "invariant from day one"
+      precedent as CR-057/CR-062). A `SELECT ... FOR UPDATE` on the `rides` row
+      inside `createRegistration`'s transaction serializes concurrent attempts;
+      `409 ride_full` once active registrations reach `participantLimit`.
+- [x] CR-035 Duplicate protection — delivered as part of CR-032, same reasoning as
+      CR-034: the same row lock serializes the duplicate check
+      (`409 registration_already_exists`), backed by a DB-level partial unique
+      index (`registrations_ride_id_user_id_active_unique`) as the invariant
+      backstop.
+- [x] CR-036 Waitlist — done 2026-09-15: ninth domain table (`waitlist_entries`:
+      `rideId`/`userId`/`status` `waiting`/`promoted`/`cancelled`/`cancelledAt`/
+      `promotedAt`, queue order is `createdAt` ascending, no `position` column), new
+      `POST`/`DELETE /v1/rides/:id/waitlist` in the existing `registrations` module,
+      plus an additive `viewerWaitlistEntry` field on `GET /v1/rides/:id`. Joining
+      requires the ride to actually be full (`409 ride_not_full` otherwise — register
+      instead). `DELETE /v1/rides/:id/register` (cancellation) now auto-promotes the
+      oldest waiting entry into a fresh active registration, inside the same
+      transaction/row lock as the cancellation. `RegistrationButton` gained a third
+      state (join/leave waitlist). See `docs/changelog.md`.
+- [x] CR-037 Organizer participant list — done 2026-09-15: two new organizer-only,
+      paginated collection endpoints — `GET /v1/rides/:id/participants` (active
+      registrations, `createdAt asc`) and `GET /v1/rides/:id/waitlist` (adds `GET` to
+      the existing `POST`/`DELETE` path, `waiting` entries only, FIFO order). Own
+      minimal response shape (`RideParticipantSummary`: `id`/`userId`/`displayName`/
+      `createdAt`) — deliberately no phone/email
+      (`.claude/rules/security.md`). New `/organizer/rides/[id]/participants` screen
+      (`ParticipantTable`/`WaitlistTable`, `docs/design.md` §9's named components),
+      linked from `EditRideForm`. Found and fixed a real pre-existing cursor-pagination
+      bug along the way (`date_trunc` fix, see `docs/changelog.md`). See
+      `docs/changelog.md`.
+- [x] CR-091 "My registrations" (`/me/rides`, `docs/design.md`'s screen inventory)
+      — done 2026-09-16: `GET /v1/registrations/mine?when=upcoming|past`, the
+      caller's own active registrations joined with each ride's public+organizer
+      summary, two independently cursor-paginated tabs. `/me/rides` (`MyRidesView`,
+      Upcoming/Past tabs), new participant nav entry. Read-only — cancellation
+      stays on `/rides/[id]`. See `docs/changelog.md`.
+
+## Communication
+
+- [x] CR-038 Registration confirmation — a `registration_confirmed` notification
+      is created for the registrant on `POST /v1/rides/:id/register` and on a
+      waitlist auto-promotion inside `DELETE /v1/rides/:id/register`, after each
+      one's own transaction commits.
+- [x] CR-039 Ride updates — `RideUpdate` table + `POST`/`GET /v1/rides/:id/updates`
+      (organizer-only), fanning out a `ride_update` notification to every
+      currently-active registrant. `/organizer/rides/[id]/updates` (compose +
+      history).
+- [x] CR-040 Cancellation notification — `POST /v1/rides/:id/cancel` fans out a
+      `ride_cancelled` notification to everyone actively registered at
+      cancellation time.
+- [x] CR-041 In-app notifications — `Notification` table,
+      `GET /v1/notifications/mine` + `POST /v1/notifications/:id/read`, `/me/
+notifications` (third participant cabinet nav entry). ADR-007 (Pending):
+      in-app only, no email/push. Delivery is a same-request DB insert after the
+      triggering transaction, not a Redis queue — see KI-040/CR-050.
+
+## Post-ride
+
+- [x] CR-042 Review — done 2026-09-16: new `reviews` capability module/table
+      (`id`/`rideId`/`userId`/`rating` 1-5/`comment`/`createdAt`, plain unique
+      index on `(rideId, userId)` — no edit/delete, create + list only, same
+      precedent as `RideUpdate`). `POST /v1/rides/:id/reviews` — eligibility is
+      an _active_ registration on a `finished` ride (`403 not_a_participant`/
+      `409 ride_not_finished`), `409 review_already_exists` on a duplicate.
+      `GET /v1/rides/:id/reviews` — public, paginated. `ReviewForm`/`ReviewList`
+      (`docs/design.md` §9) on `/rides/[id]`, gated on the new additive
+      `viewerReview`/`viewerRegistration` fields on `GetRideResponse`. See
+      `docs/changelog.md`.
+- [x] CR-043 Organizer rating summary — done 2026-09-16, bundled with CR-042:
+      `avg(rating)`/`count(*)` across every review on any of an organizer's
+      rides, computed via a join (no denormalized column). Exposed as additive
+      `rating`/`reviewCount` on `RideOrganizerSummary` (`GET /v1/rides`,
+      `GET /v1/rides/:id` — batched, not N+1, on the paginated discovery/
+      my-registrations endpoints) and on `GET`/`POST`/`PATCH
+/v1/organizers/me` (shown on `/organizer/profile`). No new endpoint —
+      same "no standalone organizer endpoint" precedent CR-023 established.
+      See `docs/changelog.md`.
+
+## Quality
+
+These three are **verification passes over screens already built to `docs/design.md`**,
+not the point where responsive/a11y/state work starts. A screen that ships without them
+is not done (`docs/definition-of-done.md`).
+
+- [x] CR-044 Responsive UI — done 2026-09-16: audited all 16 screens against
+      `docs/design.md` §11 (3 parallel Explore-agent passes, see
+      `.claude/context/current-task.md`/`docs/changelog.md`). Fixed 5 real gaps:
+      `CabinetShell` (bottom nav base, side nav `md`+), `RideDetailView`
+      (two-column at `md`), `DiscoveryList`/`DiscoveryViewToggle` (combined
+      list+map split view at `lg`), `MetricRow` (distinct `sm` two-column step),
+      root `layout.tsx` (shared max-width-1200px-centered container at `xl`).
+      Everything else already compliant.
+- [x] CR-045 Accessibility — done 2026-09-16: audited against `docs/design.md`
+      §12 (WCAG 2.1 AA). One real gap: no `<main>` landmark on any of the 12
+      cabinet pages — fixed once in `CabinetShell`. Everything else (focus
+      rings, label/`aria-describedby` linking, no color-alone conveyance,
+      reduced-motion, one `<h1>` per page) already compliant. Map keyboard
+      operability recorded as "re-verify once a live map ships" (KI-031), not
+      a fixable gap today.
+- [x] CR-046 Error/loading/empty states — done 2026-09-16: audited against
+      `docs/design.md` §10. Systemic gap: 12 of 14 `ErrorState` call sites
+      rendered `message` only, no `onRetry` (§10 point 3 requires a retry
+      affordance). Added `onRetry` to all 11 remaining sites (2 already had
+      it); normalized `UpdateComposer`'s raw `problem.detail` submit error to
+      the shared `AUTH_TERMS.genericError` term. Skeletons/empty
+      states/forms/CR-052 degraded states already compliant everywhere.
+- [x] CR-047 Security review — done 2026-09-16: walked every item in
+      `.claude/rules/security.md` against the whole app, not just auth. No new
+      gaps beyond what KI-022 already tracked (now widened there to cover
+      every endpoint, not just `/v1/auth/*`) — no `@fastify/helmet` (HIGH,
+      CR-061's exact scope) and in-memory single-instance rate limiting
+      (MEDIUM/LOW, CR-058's exact scope). Documented in
+      `.claude/context/known-issues.md`, not implemented here, per the
+      scope decision (avoid mixing into a separately tracked ticket).
+- [x] CR-048 Performance review — done 2026-09-16: verified compliant
+      (batched organizer rating aggregate, explicit indexes on FK/filter
+      columns, cursor pagination everywhere). One LOW fix applied: `RideCard`/
+      `RideDetailView`'s cover image `<img>` → `next/image` (currently inert,
+      `coverImageUrl` is always `null` until CR-086's S3 pipeline — cheap to
+      fix now so the branch is already optimized once it exists).
+
+## Resilience
+
+- [x] CR-049 Timeout/retry/circuit-breaker utilities for external integrations
+      (2GIS Maps, S3) — done 2026-09-16: new `packages/resilience` package
+      (ADR-016) — `callWithResilience` (timeout + bounded retry with jittered
+      backoff, driven by an `AbortSignal`) and `CircuitBreaker`
+      (closed/open/half-open). `packages/maps-2gis`'s `fetchJson` and
+      `apps/api`'s `route-storage.ts` (S3) both now retry once and share one
+      breaker per integration instead of their previous
+      timeout-only/hand-rolled-retry code; both still normalize into their
+      existing domain error (`MapProviderError`/`RouteStorageError`), no
+      caller-visible contract change. See `docs/changelog.md`.
+- [x] CR-050 Async notification delivery via Redis queue (decoupled from registration
+      transaction) — done 2026-09-16: new `apps/api/src/modules/notifications/queue.ts`
+      (`bullmq` producer/worker, in-process, `app.notificationQueue` nullable). Every
+      producer falls back to the pre-CR-050 direct synchronous insert when
+      `REDIS_URL` isn't configured (KI-014, still unverified live in this environment).
+      Enqueue and graceful-shutdown calls are bounded by a hand-rolled timeout, not
+      `callWithResilience` (BullMQ's `add()` doesn't honor an `AbortSignal` to race
+      against) — live-verified against a genuinely unreachable Redis. See
+      `docs/changelog.md`.
+- [x] CR-051 Health check endpoint (`apps/api`) reporting DB/Redis/S3 status — done
+      2026-09-16: `GET /health` now runs a real, bounded check per dependency
+      (`ok`/`error`/`not_configured`) and always returns `200`. See
+      `docs/changelog.md`.
+- [x] CR-052 Frontend degraded-state handling (maps/uploads unavailable) — done
+      2026-09-17: both `docs/design.md` §10 cases were already real,
+      opportunistically built during CR-026/027/028 (map placeholder,
+      `route_storage_unavailable` inline notice) — this ticket closed the gap
+      by adding the missing `replaceRoute` (PATCH) degraded-path test
+      (symmetric with the already-tested `uploadRoute` one) and recording an
+      explicit decision that CR-052 closes on reactive per-call handling, not
+      a proactive `/health`-polling global banner (no design.md spec for one).
+      See `docs/changelog.md`.
+
+## Extensibility foundations
+
+- [x] CR-053 Split `packages/maps-core` (interface) + `packages/maps-2gis` (adapter) — ADR-010
+      — done 2026-09-17: verified as already satisfied by CR-007 (2026-09-12),
+      before ADR-010/this ticket existed as separate backlog items. No code
+      changed: confirmed `packages/maps-core` is vendor-free (types/interface
+      only), `packages/maps-2gis` is the only package with 2GIS-specific
+      logic, dependency direction is correct (`maps-2gis` → `maps-core`, never
+      reversed), and a repo-wide grep found no 2GIS SDK import leaking outside
+      `packages/maps-2gis`. See `docs/changelog.md`.
+- [x] CR-054 Feature registry for dashboard nav/widgets (organizer + participant cabinets) — ADR-009
+      — done 2026-09-17: the registry mechanism itself (generic render-from-list,
+      no per-feature branching) already existed for nav in both cabinets
+      (CR-013/014) and for widgets in the one cabinet `docs/design.md` §8
+      actually specs a widget grid for (`/organizer`, CR-015) — `/me` has no
+      widget-grid requirement in the design spec, so no participant widget
+      registry was invented. Closed the two real gaps: zero test coverage of
+      the mechanism (added `CabinetShell.test.tsx`, `cabinet-registries.
+test.ts`, `app/organizer/page.test.tsx`), and two inline comments that
+      misattributed CR-055's flag-utility scope to this ticket (fixed to
+      point at CR-055 instead). See `docs/changelog.md`.
+- [x] CR-055 Feature flag utility for staged cabinet feature rollout — ADR-009
+      — done 2026-09-17: `apps/web/src/lib/cabinet/feature-flags.ts`
+      (`isFeatureEnabled`/`filterEnabled`, server-only `FEATURE_<NAME>` env
+      vars). `CabinetNavItem`/`DashboardWidget` gained an optional `flag`
+      field; both cabinet layouts and `/organizer`'s widget page now filter
+      through it before rendering (no current registry entry sets one — all
+      shipped features are stable). `.claude/rules/extensibility.md` records
+      the concrete naming convention. See `docs/changelog.md`.
+- [x] CR-056 Document/lint rule preventing direct 2GIS SDK imports outside `packages/maps-2gis`
+      — done 2026-09-17: a `no-restricted-imports` rule (`group: ['*2gis*']`)
+      added to every workspace member's ESLint config (via `packages/config`'s
+      `nodeLibraryConfig()` for its four consumers, hand-added to the five
+      configs that don't use it); `packages/maps-2gis` opts out
+      (`allowMapsSdkImports: true`). No such SDK package is installed
+      anywhere yet — preventative, proven to actually fire with a temporary
+      violating import (then reverted). `.claude/rules/maps.md` records the
+      enforcement. See `docs/changelog.md`.
+
+## Security foundations
+
+- [x] CR-057 Password hashing (Argon2id/bcrypt) + minimum password policy — delivered
+      as part of CR-011 (Argon2id via the `argon2` package, 12+ char minimum).
+- [x] CR-058 Auth rate limiting (login/register/forgot-password, per IP + per account) —
+      done 2026-09-19: Docker/a live Redis happened to be up this session
+      (KI-014's connection-level gap had just closed), so this ticket was
+      picked up instead of waiting further. Global `@fastify/rate-limit`
+      registration (`apps/api/src/app.ts`) now uses a Redis-backed
+      `RedisStore` (shared across instances) when `REDIS_URL` is configured,
+      `skipOnError: true` so a degraded Redis fails open rather than
+      blocking a critical journey; falls back to the plugin's in-memory
+      store otherwise, unchanged. New independent per-account tier
+      (`apps/api/src/lib/account-rate-limit.ts`, atomic `MULTI INCR +
+PEXPIRE ... NX EXEC`) on `/register`/`/login`/`/forgot-password`,
+      keyed by normalized email, also fail-open. Live-verified against the
+      real Redis this session (including stopping it mid-session to confirm
+      login still replies `401` in ~1.3s, not hung) — resolves KI-022. See
+      `docs/changelog.md`.
+- [x] CR-059 Email verification flow (gates organizer publish action) — CR-011 shipped
+      the token issue/verify mechanism itself (`POST /v1/auth/verify-email`); the
+      remaining scope — gating organizer publish on `emailVerified` — closed 2026-09-14
+      by CR-019 (`publishRide`'s `email_verification_required` 403). No verify-email
+      web screen exists yet (`docs/design.md` §8 lists `/verify-email` under "Auth
+      flows"), a pre-existing gap this ticket doesn't close — see
+      `.claude/context/known-issues.md`.
+- [x] CR-060 Password reset flow (single-use, time-limited tokens, no account enumeration)
+      — done 2026-09-17: seventh domain table (`password_reset_tokens`, same
+      shape as `email_verification_tokens`), `POST /v1/auth/forgot-password`
+      (always `204`, no body, identical for a real vs. unknown email — no dev
+      token exposure at all, unlike `register`'s `verificationUrl`) and
+      `POST /v1/auth/reset-password` (`200 { user }`; invalidates every other
+      outstanding token for that user and revokes every session). Live-verified
+      end to end against a real Postgres + running `apps/api`: enumeration-safe
+      response, session revocation, old-password rejection, new-password login.
+      See `docs/changelog.md`.
+- [x] CR-061 Security headers (`@fastify/helmet`-equivalent) — the CSRF half of this
+      ticket's original scope (Origin/Referer check for cookie sessions) was
+      implemented by CR-012 (`apps/api/src/plugins/csrf.ts`, ADR-013); this ticket is
+      now headers-only — done 2026-09-17: `@fastify/helmet` registered globally
+      (`apps/api/src/plugins/security-headers.ts`), applying CSP/
+      X-Content-Type-Options/X-Frame-Options/Referrer-Policy to `/health`, `/docs`,
+      and every `/v1` route alike. Custom CSP removes `upgrade-insecure-requests`
+      (would break `/docs` over local `http://`) and tightens `frame-ancestors`/
+      `X-Frame-Options` to `'none'`/`DENY`. Live-verified `/docs` (Swagger UI)
+      still renders and works via a headless-browser check — zero console errors,
+      zero failed requests, full operations list visible. See `docs/changelog.md`.
+- [x] CR-062 Session store decision — database-backed sessions + single-origin `/api`,
+      decided 2026-09-11 in ADR-013; implemented by CR-012
+
+## Deployment
+
+Deliberately deferred until there is something to deploy (see `docs/changelog.md`,
+2026-09-11). These are not "nice to have" — nothing ships to a server without them.
+
+- [x] CR-074 `Dockerfile` for `apps/web` and `apps/api` + `.dockerignore` (multi-stage,
+      non-root user, Next.js standalone output) — done 2026-09-17. See
+      `docs/changelog.md`.
+- [x] CR-075 Production manifest: reverse proxy serving the web app and `/api` on one
+      origin (ADR-013), TLS, resource limits, restart policy — done 2026-09-17
+      (ADR-018). See `docs/changelog.md`.
+- [x] CR-076 Migrations as an explicit deploy step — safe when several API instances start
+      at once (never on application boot) — done 2026-09-17. See `docs/changelog.md`.
+- [x] CR-077 Redis hardening: password, AOF persistence (the notification queue lives
+      there — CR-050), healthcheck — done 2026-09-18. See `docs/changelog.md`.
+- [x] CR-078 PostgreSQL backups + a restore actually verified, not just scheduled
+      — done 2026-09-19: `packages/db/scripts/{backup.sh,restore.sh}` (plain
+      `pg_dump --format=custom`/`pg_restore --clean --if-exists`, both driven
+      entirely by `DATABASE_URL`, same portability as `migrate.ts` — no
+      hosting assumption, consistent with ADR-018 leaving Postgres hosting
+      undecided), `pnpm --filter db db:backup`/`db:restore`, documented in
+      `docs/database.md` (new "Backups" section, incl. a cron scheduling
+      example). Restore live-verified against this environment's real local
+      Postgres: a marker row inserted into the real `coffee_ride_dev`
+      database, backed up, restored into a scratch database, all 14 tables'
+      row counts (and the marker row's exact content) matched, then the
+      marker row/scratch database/test backup file were all cleaned up. See
+      `docs/changelog.md`.
+- [x] CR-079 Structured logging (pino + request id) and error reporting; background job
+      failures must be visible (`.claude/rules/resilience.md`) — done 2026-09-17.
+      See `docs/changelog.md`.
+- [x] CR-080 CI gaps: MinIO service, migration step, Playwright e2e job —
+      done 2026-09-19: the migration-step complaint was already stale
+      (real since CR-011, KI-007's text just never corrected). Added a
+      `minio` service to `ci.yml` (same pinned tag as `docker-compose.yml`) + a bucket-creation step + `S3_*`/`AUTH_SECRET`/`WEB_ORIGIN`/
+      `RUN_LIVE_S3_TESTS` env, a Playwright browser install step, and an
+      `E2E tests` step. New `apps/api/.../route-storage.live.test.ts`
+      exercises a real (unmocked) S3 round trip, gated on
+      `RUN_LIVE_S3_TESTS=1` (KI-015). `playwright.config.ts`'s `webServer`
+      is now a two-entry array (`apps/api` then `apps/web`) since `/` has
+      called the real API since CR-024; `e2e/home.spec.ts` rewritten off
+      CR-002's removed placeholder copy onto the real discovery page.
+      Live-verified locally: `pnpm test:e2e` passes end to end against a
+      freshly started `apps/api`/`apps/web`; the live S3 test skips cleanly
+      without the flag and genuinely attempts (and fails, no local MinIO)
+      with it forced on. See `docs/changelog.md`.
+- [x] CR-081 Full production environment variable set in `.env.example` + deployment
+      documentation — done 2026-09-19: `.env.example` was already complete
+      (cross-checked against every var `docker-compose.prod.yml` consumes —
+      nothing to add). New `docs/deployment.md`: prerequisites, `.env`
+      setup, first-boot migrate-then-serve order, verification, redeploy/
+      rollback, a pointer to `docs/database.md`'s Backups section. Also
+      resolved KI-046 for real (`apps/api/src/env.ts`'s `REDIS_URL`/
+      `S3_ENDPOINT` now normalize an empty string to "not configured" the
+      same way `ERROR_REPORTING_WEBHOOK_URL` already did), with new test
+      coverage in `apps/api/src/env.test.ts`. See `docs/changelog.md`.
+- [x] CR-082 Pin `minio/minio` to a release tag; review base image versions —
+      done 2026-09-19: MinIO pinning was already done (CR-009). The real
+      finding while reviewing base image versions: `.github/dependabot.yml`'s
+      one `docker` entry (`directory: '/'`) never actually scanned anything
+      — `docker`/`docker-compose` are separate Dependabot ecosystems (no
+      `docker-compose` entry existed at all), and `docker` only scans the
+      exact directory given, which had no Dockerfile at repo root (all three
+      live nested). Fixed: one `docker` entry per real Dockerfile
+      (`apps/web`, `apps/api`, `packages/db`) plus a new `docker-compose`
+      entry covering both compose files. Base image tags themselves
+      (`node:24-alpine`/`postgres:17-alpine`/`redis:8-alpine`/
+      `caddy:2-alpine`) are left as intentional floating major/minor
+      versions — Dependabot, now actually wired to reach every one, is the
+      ongoing review mechanism. See `docs/changelog.md`.
+
+## Contract & model follow-ups
+
+Found during the 2026-09-11 audit, cheaper before the related feature is built.
+
+- [x] CR-083 Idempotency for `POST /v1/rides/:id/register` (network retry must not create
+      a second registration; the DB constraint is the backstop, not the design) —
+      done 2026-09-19: the DB-level protection (row lock + unique index,
+      CR-034/035) was already correct and untouched; the actual gap was
+      client-facing — a retry of an already-successful register/waitlist-join
+      call got back `409 registration_already_exists`/
+      `409 waitlist_entry_already_exists` instead of the existing resource.
+      `createRegistration`/`joinWaitlist` (`apps/api/src/modules/
+registrations/registrations.service.ts`) now return `{ resource, created }`;
+      the route layer replies `200` with the existing row on a replay instead
+      of `201`/an error, with no duplicate row and no duplicate
+      `registration_confirmed` notification. `joinWaitlist`'s _other_ "already"
+      check (an active registration blocking a waitlist join — a genuine
+      conflict, not a retry) is unchanged, still `409`. `apps/web` needed no
+      changes — its clients already branch on `response.ok`, not the exact
+      status code, so this also fixes a real latent UX bug
+      (`RegistrationButton` showing a spurious error on a lost-response
+      retry) for free. See `docs/changelog.md`.
+- [x] CR-084 Decide the geo query approach for map discovery (bbox/radius): PostGIS vs
+      built-in types + index strategy — needed by CR-026 — decided together
+      with CR-026 (ADR-014, 2026-09-15): plain lat/lng columns + a bbox range
+      query, not PostGIS. See `docs/decisions.md`.
+- [x] CR-085 GPX parsing must not block the event loop: size limit, streaming or worker —
+      needed by CR-027 — decided together with CR-027 (ADR-015, 2026-09-15): 10 MB
+      upload cap + streaming SAX parse, no worker thread. See `docs/decisions.md`.
+- [x] CR-086 Cover image pipeline: size/type limits, resizing, how files are served
+      (direct S3 vs proxy) — needed by CR-017. Implemented in an earlier
+      session (uncommitted); validated and committed 2026-09-20. ADR-019:
+      JPEG/PNG/WebP verified by decoding with `sharp` (never trusts client
+      `Content-Type`), 8 MB upload cap, resize to 1920×1920 max
+      (`fit: 'inside'`, EXIF-rotated then stripped), served via an API proxy
+      (`GET /v1/rides/:id/cover`), never a direct S3 URL. `rides.cover_image_url`
+      (never populated) renamed to `cover_image_key` + new
+      `cover_image_content_type`/`cover_image_size_bytes` columns.
+      `POST`/`PATCH`/`DELETE`/`GET /v1/rides/:id/cover`, same auth/ownership/
+      draft-only gate as `.../route`. `/organizer/rides/[id]/cover` screen,
+      linked from `EditRideForm`; `RideCard`/`RideDetailView`'s existing
+      `next/image` branches (CR-048) go live. Scope: `Ride` only — `User`/
+      `OrganizerProfile` avatars stay open (KI-023), reusing the same
+      validate/resize/storage modules when built.
+      This session's validation: `pnpm --filter api/web typecheck/lint`
+      clean; `pnpm --filter api test` 345 passed/1 skipped (incl. 27/27 new
+      cover-image tests); `pnpm --filter web test` 185 passed;
+      `pnpm turbo run build` clean (new `/organizer/rides/[id]/cover` route
+      compiles). Live-verified against the real running MinIO — not just
+      mocked-S3 unit tests: registered a user, created a draft ride,
+      uploaded a 400×300 JPEG (`201`, ride's `coverImageUrl` field became
+      real), downloaded it back byte-correct as owner (`200`, decodes as a
+      real 400×300 JPEG), confirmed `404` for an unauthenticated viewer of
+      the still-draft ride (same visibility rule as route download, not a
+      bug), replaced it with a 3000×2000 image and confirmed the resize
+      bound (downloaded back as exactly 1920×1280), deleted it and confirmed
+      both the `204`/`coverImageUrl: null` and a subsequent `404`. Test data
+      cleaned up from the real dev database afterward. Also finished
+      `docs/api.md`/`docs/database.md`, which the implementing session had
+      left describing the old deferred state — see `docs/changelog.md`.
+- [x] CR-092 Real critical-journey Playwright specs — done 2026-09-19: new
+      `apps/web/e2e/helpers/api-fixtures.ts` (register/verify/login/organizer
+      profile/publish-ride/register-for-ride, all via direct API calls) and
+      `apps/web/e2e/critical-journeys.spec.ts` — the three journeys
+      `.claude/rules/testing.md` names, `test.describe.serial` in one file
+      (keeps the shared `/v1/auth/{register,login}` 5/min/IP rate limit,
+      KI-014, from tripping across the group — exactly 5 register + 5 login
+      calls total). Each spec seeds only its preconditions via API and drives
+      the actual journey through real UI interactions (fill forms, click
+      buttons, assert rendered state) — not scripted through the API
+      end-to-end. Live-verified locally, twice, via `pnpm test:e2e`: 4/4
+      passing. See `docs/changelog.md`.
+- [x] CR-093 Connect a live 2GIS Geocoder/Directions key, resolve KI-016 — done
+      2026-09-19: user supplied a real 2GIS key; confirmed with them it's the
+      server-side Geocoder/Directions product (not the separate public MapGL
+      key, CR-071) and added it to local `.env` only. Live-verified
+      `packages/maps-2gis` against the real API: `geocode`/`reverseGeocode`
+      field-name guesses were correct; `getRoute`'s geometry guess was wrong
+      (real polyline is WKT `LINESTRING` strings under
+      `maneuvers[].outcoming_path.geometry[]`, not a flat `{lat, lon}` array)
+      and was silently falling back to the raw waypoints — fixed in
+      `packages/maps-2gis/src/route.ts` and re-verified live. No consumer
+      wired in yet (still zero callers of `create2GisMapProvider`) — that's
+      KI-032/CR-028/CR-084 follow-up. See `docs/changelog.md`.
+- [x] CR-094 Wire `SIGTERM`/`SIGINT` in `apps/api/src/server.ts` to actually
+      call `app.close()` — done 2026-09-19: new `apps/api/src/lib/
+graceful-shutdown.ts` (`registerGracefulShutdown`), dependency-injected
+      (signals source + exit function) for unit testing without real OS
+      signals — 5 tests cover clean shutdown, a rejecting `app.close()`, a
+      10s hard-fallback force-exit, and a second signal mid-shutdown forcing
+      an immediate exit. Resolves KI-048. See `docs/changelog.md`.
+- [x] CR-095 Give `apps/api`'s test suite its own disposable database
+      (`TEST_DATABASE_URL` or `.env.test`), separate from `.env`'s
+      `DATABASE_URL` — found 2026-09-20 (KI-049): running the suite locally
+      with `.env` sourced wiped the real native dev database's accumulated
+      manual-QA data (`DELETE FROM rides`/`users` in `beforeEach`/`afterAll`,
+      cascading), since nothing distinguishes a real `DATABASE_URL` from a
+      disposable one today. Done 2026-09-20: new
+      `apps/api/src/test-support/test-database-url.ts` (`getTestDatabaseUrl`)
+      — all 13 `apps/api` test files that touch a real Postgres now read
+      `TEST_DATABASE_URL`, never `DATABASE_URL`, so sourcing `.env` can no
+      longer feed the suite a real database at all. Second, independent
+      guard: even a correctly-set `TEST_DATABASE_URL` is refused unless its
+      database name looks disposable (contains "test", or is exactly
+      "coffee_ride") — live-verified this refuses `coffee_ride_dev` by name.
+      `.env.example`/`.env`/`ci.yml` all set `TEST_DATABASE_URL` (CI: same
+      disposable per-run Postgres service it already used); `.env`'s value
+      uses `127.0.0.1` explicitly rather than `localhost`, since this
+      machine's native Postgres (`DATABASE_URL`) and Docker's Postgres
+      (`TEST_DATABASE_URL`) both listen on port 5432 on different address
+      families and `localhost`'s resolution order was part of how this
+      incident could happen unnoticed. Live-verified end to end: sourced
+      `.env`, ran the full `apps/api` suite (345 tests, all passing) against
+      the now-migrated Docker Compose `coffee_ride` database, and confirmed
+      `coffee_ride_dev`'s row count was unchanged before/after.
+      Also addressed the backup half of the same incident (KI-049 found no
+      backup existed to restore from): took an immediate real backup of
+      `coffee_ride_dev` (`packages/db/backups/`, gitignored); added a
+      `backup` service to `docker-compose.prod.yml` that runs
+      `packages/db/scripts/backup.sh` automatically on `docker compose up`
+      (no `migrate`-style profile — a backup is read-only against the
+      database, so it's safe to always run) and repeats on
+      `BACKUP_INTERVAL_SECONDS` (default daily), replacing the previous
+      "documented cron one-liner nobody ever installed" state; validated
+      with `docker compose -f docker-compose.prod.yml config` (caught and
+      fixed a real bug along the way — an unescaped `$BACKUP_INTERVAL_SECONDS`
+      inside the service's shell command was being interpolated by Compose
+      itself at config-render time instead of passed through to the
+      container's shell; fixed with `$$`). `docs/database.md`'s Backups
+      section rewritten to describe the new automatic schedule instead of
+      the old manual cron instructions. See `docs/changelog.md`.
+- [x] CR-097 Avatar upload for `User`/`OrganizerProfile` — resolves KI-023's
+      remainder (CR-086 already closed the `Ride` third). Done 2026-09-20:
+      relocated CR-086's `cover-image.ts`/`cover-image-storage.ts` out of
+      `modules/rides/` into generic `apps/api/src/lib/image-processing.ts`/
+      `image-storage.ts` (module-boundary reasons —
+      `.claude/rules/resilience.md`), added `avatar_key`/
+      `avatar_content_type`/`avatar_size_bytes` to `users` and
+      `organizer_profiles` (migration `0016_avatar_columns.sql`), and added
+      `POST`/`PATCH`/`DELETE`/`GET /v1/users/me/avatar` (fully "me"-scoped)
+      plus `POST`/`PATCH`/`DELETE /v1/organizers/me/avatar` and a public
+      `GET /v1/organizers/:id/avatar`. `RideOrganizerSummary`/
+      `OrganizerProfile`/`User` gained an additive `avatarUrl` field.
+      `packages/ui` gained a real `Avatar` component (named in design.md §9
+      since CR-063, never built) and `AVATAR_TERMS`; upload UI wired into
+      `/me/profile` and `/organizer/profile`. `pnpm turbo build`/`lint`/
+      `typecheck` clean across all 9 packages; `pnpm --filter api test` 369
+      passed/1 skipped (24 new avatar tests); `pnpm --filter ui test` 94
+      passed (4 new); `pnpm --filter web test` 198 passed (13 new). Found
+      but did not fix (logged as KI-050, out of this ticket's scope):
+      `turbo.json`'s `test` task doesn't pass through `TEST_DATABASE_URL`.
+      See `docs/changelog.md`.
+- [x] CR-098 Live 2GIS MapGL rendering on the discovery map, resolve KI-031 —
+      done 2026-09-20: user supplied a real public MapGL key (confirmed it's
+      the same project key as `MAPS_2GIS_API_KEY`, valid for both products in
+      this 2GIS project) as `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`. Added the
+      render-layer types (`MapRenderer`/`MapHandle`/`MapMarkerInput`/
+      `MapRenderOptions`) to `packages/maps-core` (ADR-020) — previously just
+      a deferred comment — and implemented them in `packages/maps-2gis/src/
+render.ts` against the real `@2gis/mapgl` SDK (new dependency, browser-
+      only, dynamically imported). New composition point `apps/web/src/lib/
+maps/create-map-renderer.ts`, the one file allowed to import
+      `maps-2gis` directly (scoped `eslint.config.mjs` override, CR-056).
+      New `DiscoveryMap` client component replaces `RideMapPlaceholder` on
+      `/`, plotting each published ride's `startLat`/`startLng` as a marker;
+      falls back to the existing degraded `ErrorState` notice if no key is
+      configured or the render fails. Scope deliberately limited to the
+      discovery map — the route-detail map (`RouteMapPlaceholder`,
+      `RoutePoint`/`Stop`/polyline rendering) stays KI-036's open follow-up.
+      Live-verified in a real headless browser: real 2GIS key
+      validation/style/vector-tile requests all `200`, three real marker SVG
+      elements at three distinct positions matching three seeded published
+      rides, zero console errors. Found and fixed one unrelated pre-existing
+      gap along the way (not this ticket's scope): the native dev
+      `DATABASE_URL` database had never had migration `0016_avatar_columns.sql`
+      (CR-097) applied, so `GET /v1/rides` 500'd — ran `pnpm --filter db
+db:migrate` against it, resolved (logged as KI-051). See
+      `docs/changelog.md`.
+- [x] CR-099 Fix findings from a user-run QA pass against a live browser —
+      done 2026-09-20: dark theme now activates (`prefers-color-scheme`,
+      no toggle — KI-052, resolved); new `SiteHeader` on `/`/`/register`/
+      `/login` plus cross-links in `RegisterForm`/`LoginForm` (KI-053,
+      resolved); real `/verify-email`, `/forgot-password`, `/reset-password`
+      screens built (KI-026/KI-042 narrowed — screens now exist and are
+      live-verified end to end, production usability still blocked on
+      ADR-007's pending email delivery); `RegisterForm`'s dev-only
+      verification link now points at the real web page instead of the
+      raw, POST-only API path; new `apps/web/src/app/organizer/rides/[id]/
+loading.tsx` gives that segment's five leaves an immediate loading
+      boundary (KI-054, resolved). Two reported findings investigated and
+      found not to be bugs, no code change: the 2GIS map's flat visual
+      background in a headless sandbox browser (real key/tiles/markers
+      confirmed via network/DOM — same conclusion as CR-098's own finding);
+      the duplicate `GET /v1/organizers/me` request (React 18 Strict Mode's
+      intentional dev-only double-invoke of `useEffect`, universal to this
+      codebase's fetch pattern, absent in production builds). `pnpm --filter
+ui typecheck`/`pnpm --filter web typecheck,lint,build` clean; `pnpm
+--filter web test` 208/208 passing (10 new). Live-verified in a real
+      browser against the real running stack. See `docs/changelog.md`.
+- [x] CR-100 Real email delivery via Unisender Go (ADR-007: Pending →
+      Accepted) — done 2026-09-20: closes the remaining blocker KI-026/
+      KI-042 both named. New `apps/api/src/lib/email/{email-provider,
+unisender-provider}.ts` adapter (no new workspace package — single
+      consumer, same shape as `route-storage.ts`'s S3 wrapper), wrapped in
+      `callWithResilience` (timeout + circuit breaker, deliberately no
+      retry — email send isn't idempotency-safe). Reuses CR-050's existing
+      `notifications` BullMQ queue (two new job types,
+      `verification_email`/`password_reset_email`) rather than a parallel
+      mechanism. `POST /v1/auth/register`/`POST /v1/auth/forgot-password`
+      now send real email alongside their unchanged existing behavior
+      (dev-only `verificationUrl` field; identical `204` regardless of
+      account existence). New env vars (`UNISENDER_API_KEY`,
+      `UNISENDER_API_URL`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`), all
+      optional — unset means `app.emailProvider` is `null` and every
+      producer no-ops, same degraded-mode shape as `app.s3`/2GIS. User
+      supplied a real Unisender Go API key (stored in local `.env` only,
+      never committed/logged). `pnpm --filter api typecheck/lint/test/build`
+      all clean (374 passing, 5 new); live-verified register/forgot-password
+      boot and respond correctly against the real running stack with the
+      new plugin registered. Not fully resolved (KI-026/KI-042 stay
+      narrowed, new KI-055): no `EMAIL_FROM_ADDRESS` configured yet (no
+      verified sender in the user's Unisender Go account), and this sandbox
+      can't resolve `unisender.ru` at all (DNS `SERVFAIL`, confirmed not a
+      blanket `.ru` block) — a real send has never been exercised live, only
+      against mocked `fetch` matching the real Unisender Go request/response
+      shape (verified against the `django-anymail` backend source, not
+      guessed). See `docs/changelog.md`.
+- [x] CR-101 Route-detail map rendering (resolves KI-036) — done 2026-09-20:
+      `/rides/[id]`'s route map replaces the always-shown
+      `RouteMapPlaceholder` with a real 2GIS MapGL render, reusing the same
+      `MapRenderer`/`MapHandle` interface `DiscoveryMap` proved out (CR-098),
+      extended additively (no new ADR) — `MapMarkerInput` gains optional
+      `color`/`label`, `MapHandle` gains `setPolyline`. `RoutePoint`/`Stop`
+      render as small colored `HtmlMarker` dots (2GIS SDK, `packages/
+maps-2gis`) with a one-glyph text label per type — colors resolved from
+      `packages/ui` design tokens at call time (`getCssColorVar`, never a
+      raw hex literal per `docs/design.md` §14), labels satisfy "don't rely
+      on color alone" (`.claude/rules/frontend.md`); a text legend under the
+      map repeats both. `Route.geometry` renders as a polyline in the same
+      color as the design system's primary accent. Found and fixed a real,
+      pre-existing bug while live-verifying: React Strict Mode's dev-only
+      double-`useEffect`-invoke could construct two `mapglAPI.Map` instances
+      on the same container before either's async SDK load resolved, and the
+      stale instance's later `destroy()` call cleared the container's DOM
+      out from under the surviving one — same latent exposure in
+      `DiscoveryMap` since CR-098, just not previously hit. Fixed once, in
+      the shared adapter (`packages/maps-2gis/src/render.ts`'s new
+      per-container generation guard), benefiting both callers. `pnpm
+--filter maps-2gis test` 11/11; `pnpm --filter web typecheck/lint/test/
+build` all clean (208/208, no new tests — same no-unit-test-for-the-SDK-
+      boundary precedent as `DiscoveryMap`). Live-verified end to end
+      against a real seeded ride (GPX route, 4 typed route points, 1 stop,
+      published): real style/tile/font/icon requests all `200`, a real
+      `<canvas>` present in the map container across 3/3 fresh loads after
+      the fix (0/3 before it), legend renders correctly. The map's own
+      pixels don't paint in this sandbox's headless/software-WebGL browser —
+      same documented conclusion as CR-098/CR-099's identical finding, not a
+      regression. See `docs/changelog.md`.
+- [x] CR-102 Fix a dead-space layout bug found via `/impeccable critique` —
+      done 2026-09-21: `RideDetailView`'s two-column grid used to render
+      unconditionally, leaving the whole right column blank for a ride with
+      neither a route nor stops (both optional) — confirmed live during the
+      critique's browser-evidence pass. Fixed by collapsing to one column
+      when there's nothing for the right column to hold. A second
+      candidate "bug" the same critique flagged (metric tiles omitted
+      instead of em-dashed when `null`) turned out to be CR-023's own
+      deliberate decision, not a defect — left unchanged. See
+      `docs/changelog.md`.
+- [x] CR-103 `Dialog`/`ConfirmDialog`/`Toast` primitives, wired into
+      `RegistrationButton` — the `/impeccable critique apps/web` P0, done
+      2026-09-21: `packages/ui` gained three new components
+      (`Dialog`/`ConfirmDialog`/`Toast`'s `ToastProvider`/`useToast`),
+      hand-vendored against existing tokens (`--shadow-overlay`, `bg-text/50`
+      backdrop — no new tokens), resolving `docs/design.md` §9's `Dialog`/
+      `Toast` half of KI-020. `RegistrationButton.tsx`: cancelling a
+      registration or leaving the waitlist now opens a `ConfirmDialog`
+      instead of firing on the first click; all four state-changing actions
+      (register/cancel/join-waitlist/leave-waitlist) show a success `Toast`.
+      `useToast()` fails soft (no-op) with no `ToastProvider` ancestor, so
+      the many existing tests that render a feature component directly
+      needed no changes. `ToastProvider` mounted once in `apps/web/src/app/
+layout.tsx`. See `docs/changelog.md`.
+- [x] CR-104 `RideSummaryWidget` for the organizer dashboard — the
+      `/impeccable critique apps/web` P1 ("no ride/registration/waitlist
+      counts anywhere in the organizer cabinet"), done 2026-09-21: new
+      `GET /v1/rides/mine/summary` (`apps/api`, `rides` module) — ride
+      counts by status (total/draft/registration_open) plus active-
+      registration/waitlist counts across every ride the caller organizes,
+      via three small indexed queries run in parallel rather than one
+      multi-join query (join fan-out would double/triple-count rows across
+      `registrations`/`waitlistEntries`), same "batched, not N+1" precedent
+      as `reviews.service.ts`'s `getOrganizerRatingSummary`. New
+      `RideSummaryWidget` (`apps/web`, `features/organizer/rides`) renders
+      it with `MetricTile`/`MetricRow`, registered into `ORGANIZER_WIDGETS`
+      (ADR-009) at order 20, right after the existing profile widget. Zero
+      rides renders as a normal all-zero ready state, not a special empty
+      state — `/organizer/rides` already owns the "create your first ride"
+      empty state. See `docs/changelog.md`.
+- [x] CR-105 Sticky mobile registration CTA — the `/impeccable critique
+apps/web` P1 ("registration CTA is the hardest element to reach on
+      `/rides/[id]`, no sticky/mobile placement"), done 2026-09-21: below
+      `md`, `RegistrationButton` repositions into a fixed bottom bar instead
+      of rendering 7 content blocks down; `md`+ is unchanged (in normal
+      flow). Behind `FEATURE_STICKY_REGISTRATION_CTA` per
+      `.claude/rules/extensibility.md`/CR-055. See `docs/changelog.md`.
+- [x] CR-106 Icons in the cabinet nav / site header — the `/impeccable
+critique apps/web` P2 ("`lucide-react` installed, unused; cabinet
+      nav/site header/mobile bottom tab bar all plain text"), done
+      2026-09-21: `CabinetNavItem` gained an optional icon (a name resolved
+      against a small lookup map in `CabinetShell.tsx`, not the
+      `lucide-react` component itself — passing the component directly
+      through a Server→Client Component prop 500'd, a real bug caught and
+      fixed live before shipping). `SiteHeader.tsx` got icons directly
+      (it's a Server Component, no such indirection needed). See
+      `docs/changelog.md`.
+- [x] CR-107 "Quiet Instrument" visual direction (item 6, the last of the
+      `/impeccable critique apps/web` backlog) — done 2026-09-22:
+      `--scrim`/`--glass-bg`/`--glass-border` tokens; `packages/ui`'s
+      `Wordmark` component ("coffee.ride", two Golos Text weights, resolves
+      `docs/design.md` §15's placeholder); glass title/status panel over a
+      ride's cover photo (`RideCard`/`RideDetailView`, behind
+      `FEATURE_COVER_GLASS_PANEL`) and on the CR-105 sticky bar; bolder
+      route-line weight via an additive `MapPolylineInput.width`/`opacity`.
+      See `docs/changelog.md`.
+- [x] CR-111 Map key never reached `apps/web` (+ bigger discovery map) —
+      done 2026-09-22: Next only auto-loads `.env` from its own project
+      directory, so the repo-root `.env`'s `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`
+      never reached the browser bundle and both maps sat in their degraded
+      state permanently. `next.config.ts` now loads it the same explicit way
+      `apps/api/src/server.ts` does. Discovery map also made full-column-height
+      and sticky at `lg`. See `docs/changelog.md`.
+- [x] CR-108 One global header (replaces the public bar and both cabinet side
+      navs) — done 2026-09-22: persistent Strava-style header on every route,
+      with a dropdown per cabinet rendered from the ADR-009 registries, an
+      account menu with sign-out, and a mobile disclosure panel below `md`.
+      Added `packages/ui`'s `NavMenu` primitive and a shared `SessionProvider`;
+      `CabinetShell` narrowed to the session gate. See `docs/changelog.md`.
+- [x] CR-110 Light/dark/system theme switch — done 2026-09-22: three-state
+      control in the header, stored per browser and applied pre-hydration so
+      there is no flash of the wrong theme. See `docs/changelog.md`.
+- [x] CR-109 Back links on nested screens — done 2026-09-22: `BackLink` on all
+      twelve nested screens, each with an explicit parent `href` rather than
+      `router.back()`. See `docs/changelog.md`.
+- [x] CR-112 Ride detail redesign + route map framing — done 2026-09-23:
+      `/rides/[id]` reworked into a split summary panel (identity | headline
+      metrics + supporting facts + registration) and a map panel (map, stops
+      rail, elevation profile). Map now fits the whole route/pins
+      (`MapHandle.fitBounds`), re-fits on container resize, draws a casing
+      under the line, and pins the ride's start point. See `docs/changelog.md`.
+- [x] CR-113 Upload forms' invisible file picker + organizer save feedback —
+      done 2026-09-23: `packages/ui` `FileInput` (native picker styled as a
+      button) in all four upload forms; `OrganizerProfileForm` clears its
+      stale "saved" line on edit and toasts every save. See `docs/changelog.md`.
+- [x] CR-114 Route builder on 2GIS roads — implemented 2026-09-23
+      (`POST /v1/rides/:id/route/build` + `RouteBuilder` on the organizer route
+      page; adapter no longer falls back to straight lines). Live-verified
+      2026-09-28 in CR-147 via the GitHub contract workflow (KI-056's VPN
+      blocks it locally). See `docs/changelog.md`.
+- [x] CR-115 «Топокарта» visual foundation (ADR-021) — done 2026-09-23: the UI
+      as a printed orienteering-map sheet — white paper, black ink, one plum
+      overprint for the route and the primary action only, meaning inks
+      (`contour`, `info`, `success`, `warning`), graphite dark theme; Sofia Sans
+      Condensed display face (`<html lang="ru">` now load-bearing), 4px radius,
+      no card shadows, outline `danger` + additive `danger-filled`; «coffee◦ride»
+      wordmark and ring favicon. CR-107's glass layer and
+      `FEATURE_COVER_GLASS_PANEL` removed. See `docs/changelog.md`.
+- [x] CR-116 Discovery list fields — done 2026-09-23: `GET /v1/rides` items are
+      now `PublicRideListItem` (additive): `registrationsCount`, `startLabel`,
+      `routePreview` (≤ 40 points, SQL sampling + Douglas–Peucker, batched per
+      page) and `groups`. See `docs/changelog.md`.
+- [x] CR-117 Pace groups — backend (ADR-022) — done 2026-09-23: new `RideGroup`
+      entity, migration `0017_ride_groups` (composite FK keeps a registration's
+      group on the same ride), owner-only group CRUD (max 6), `groupId` on
+      register/waitlist join (`group_required` inside the locked transaction,
+      capacity stays ride-level), `PATCH /v1/rides/:id/register` to change
+      group, groups on ride detail and participant lists, signed-in-only
+      `GET /v1/rides/:id/riders` (display name + group). See `docs/changelog.md`.
+- [x] CR-118 Discovery rebuilt map-first — done 2026-09-23: map is the page
+      (desktop map + 440px list column, phone map strip over the list, the list/
+      map toggle removed); legend rows with a route glyph, local date, start
+      place, pace range and small chips replace ride cards; markers now follow
+      filter changes; start-time ring pins, row hover draws the route, pin click
+      selects the row. Additive maps-core marker fields. See `docs/changelog.md`.
+- [x] CR-119 Ride detail map-first + group choice + rider list — done
+      2026-09-23: sticky map on desktop, group picker (registration blocked
+      until a group is chosen), «Вы зарегистрированы» with «Сменить группу»,
+      «Участники» grouped by group for signed-in viewers, «Условные знаки»
+      legend, «Скачать GPX». Sticky mobile registration bar is now default —
+      `FEATURE_STICKY_REGISTRATION_CTA` removed. See `docs/changelog.md`.
+- [x] CR-120 Organizer pace groups — done 2026-09-23: «Группы по темпу» page
+      (`/organizer/rides/[id]/groups` — add, edit, delete with confirm,
+      reorder), participants page grouped by group with counts, waitlist shows
+      the chosen group; RouteBuilder's last waypoint no longer uses danger red.
+      See `docs/changelog.md`.
+- [x] CR-121 New wordmark «кофе•райд» — done 2026-09-23: elevation-profile
+      mark + Golos 800 «кофе•райд», ~20% larger, favicon = the mark. See
+      `docs/changelog.md`.
+- [x] CR-122 Header bar in one type style — done 2026-09-23: every top-level
+      header item (links + dropdown triggers) is Golos 600 16px via one shared
+      `NAV_BAR_ITEM_CLASSNAME`; «Заезды» icon Home → Route. See
+      `docs/changelog.md`.
+- [x] CR-123 Discovery map fullscreen toggle — done 2026-09-24: list column
+      widened to ~528px, desktop-only fullscreen button over the map
+      (`fixed inset-0`, list hidden, body scroll locked). See
+      `docs/changelog.md`.
+- [x] CR-124 Brand purple locked to #9033A1 — done 2026-09-24: unified
+      `primary`/`route`/map inks (were two drifted purples) to the owner's
+      sampled value; recomputed contrast ratios still AA. See
+      `docs/changelog.md`.
+- [x] CR-125 Participant first/last name + participants-visibility toggle —
+      done 2026-09-24: `users.firstName`/`lastName`, `rides.
+participantsVisible` (default true, draft-only edit); riders list shows
+      real name, `403 riders_hidden` when off. See `docs/changelog.md`,
+      KI-065.
+- [x] CR-126 Rider profile: privacy tiers, garage, self-reported distance
+      stats, recent rides — done 2026-09-24: `profileVisibility` (closed/
+      co_participants/open, default co_participants), new `Bike` entity
+      ("garage"), `GET /v1/rides/:id/riders/:registrationId/profile`+`.../
+avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
+:id`. Riders list links to the new card. See `docs/changelog.md`,
+      ADR-023, KI-059 (resolved).
+- [x] CR-127 Visible sign-out in every cabinet — done 2026-09-24: account
+      bar («Вы вошли как …» + «Выйти» → `/login`) atop every `/me/*` and
+      `/organizer/*` screen; shared `useLogout` hook with error state. See
+      `docs/changelog.md`.
+- [x] CR-128 Light-theme visibility of data graphics — done 2026-09-24:
+      elevation profile (gradient fill, 2px non-scaling stroke, ground line)
+      and difficulty scale (hollow empty segments) legible in both themes.
+      See `docs/changelog.md`.
+- [x] CR-129 Auto-create the MinIO bucket in local infra — done 2026-09-24:
+      one-shot `minio-init` compose service (`mc mb --ignore-existing`).
+      See `docs/changelog.md`, KI-015.
+- [x] CR-130 «Ночной старт» visual direction (ADR-024, replaces ADR-021) —
+      done 2026-09-26. Phase 1 (foundation): new brand roles
+      (`primary`/`brand`/`primary-fill`), `contour`→`elevation` rename, dark
+      theme by default, Unbounded + Sofia Sans Extra Condensed, pill/large
+      radii, `RouteCover`/`AvatarStack`. Phase 2 (screens): discovery
+      «Заезды/Карта» tabs (URL-synced `?view=map`) + `RouteCover` grid;
+      ride-detail capacity fill-bar, `GroupPicker` restyle, start countdown;
+      organizer desktop sidebar, per-cell KPIs, «Новые записи» feed and
+      «Записи по дням» chart (existing endpoints only, KI-066); mobile bottom
+      tab bar. See `docs/changelog.md`, ADR-024.
+- [x] CR-131 Organizer dashboard brought to the «Ночной старт» mockup
+      (screen 4) — done 2026-09-26: greeting head + «Отправить обновление»,
+      mockup KPI cells (Ближайший/Записано/Лист ожидания/Рейтинг), sidebar
+      «Обзор» + «Участники»/«Обновления» (nearest ride), calendar-week chart
+      with the peak day highlighted. Frontend only. See `docs/changelog.md`.
+- [x] CR-132 Organizer cabinet frame per the «Ночной старт» mockup
+      (screen 4) — done 2026-09-26: own organizer header (wordmark,
+      «+ Создать заезд», avatar account menu) instead of the shared header +
+      account bar on `/organizer/*`; full-height sidebar column (pill row
+      below `lg`); «Участники» badge (new registrations in 24 h on the nearest
+      ride); larger KPI numerals, nearest-ride waitlist, «Анна К. · группа 1»
+      rows, bars-only week chart. Frontend only. See `docs/changelog.md`.
+- [x] CR-133 CR-132 follow-ups — done 2026-09-26: `home.spec.ts` covers
+      grid + map views (KI-067); in-flight read de-dup on `/organizer`
+      (KI-066 duplication); `AUTH_RATE_LIMIT_MAX` test/dev override for e2e
+      (rejected in production); no back link on organizer sidebar sections;
+      tab bar + hamburger coexist (owner decision). See `docs/changelog.md`.
+- [x] CR-134 CI/production-build P0 — done 2026-09-26: `turbo.json` passes
+      `TEST_DATABASE_URL` (+ `RUN_LIVE_S3_TESTS`) to `test` (KI-050); `web`'s
+      `API_INTERNAL_URL` is a required Docker build arg (images proxied to
+      `localhost:4000`); production Docker smoke test `pnpm smoke:docker` /
+      CI job `docker-smoke`. See `docs/changelog.md`.
+- [x] CR-135 Expanded critical E2E journeys (P1) — done 2026-09-26: seven
+      Playwright specs — waitlist promotion on cancel, pace-group choice/
+      change and `group_required`, full ride lifecycle + cancel, access
+      control (non-owner participant/organizer), password reset via UI,
+      profile visibility tiers, ride update/cancel notifications + mark read.
+      Test/dev-only `RATE_LIMIT_MAX`. See `docs/changelog.md`, KI-069.
+- [x] CR-136 Test coverage control (P1) — done 2026-09-26: Vitest v8
+      coverage in all five Vitest packages (`pnpm test:coverage`);
+      committed `coverage-baseline.json` (package totals + every `apps/api`
+      module) checked by `scripts/coverage-check.mjs`; CI runs tests with
+      coverage, uploads the `coverage` artifact, writes the table to the job
+      summary and fails on a drop (PRs also against the base branch's
+      baseline; `coverage-decrease-approved` label to override). No fixed
+      80% gate. See `docs/changelog.md`, `.claude/rules/testing.md`, KI-070.
+- [x] CR-137 Files and external integrations (P2) — done 2026-09-26: live
+      MinIO GPX/cover round trip over HTTP; S3/Redis-down scenarios
+      (`/health` + 503 codes + critical journey timing); Redis producer now
+      fails fast (an outage stalled every request 5–12 s); 2GIS adapter
+      rejects unexpected response shapes as `MapProviderError` (was a raw
+      `TypeError` → 500) and reports real timeouts as such; live Redis queue
+      test; opt-in 2GIS contract test + protected `maps-contract.yml`. See
+      `docs/changelog.md`, KI-071.
+- [x] CR-138 Visual and adaptive checks (P2) — done 2026-09-27: GPX upload/
+      replace/delete + its real/degraded error states; avatar (organizer +
+      participant) and ride-cover upload/replace/delete + degraded state;
+      route points/stops add/edit/delete; discovery filters, empty
+      (unfiltered/filtered) and API-error states via `page.route`; organizer
+      cabinet sidebar/tabs (`lg`) and participant hamburger/`BottomTabBar`
+      (`md`) breakpoints; light/dark/system theme; pixel-diff baselines
+      (`toHaveScreenshot`) for discovery grid/map, a ride card, ride detail +
+      inline registration, and the organizer dashboard, across a new
+      `mobile` (Pixel 5) Playwright project. See `docs/changelog.md`,
+      `.claude/rules/testing.md`.
+- [x] CR-139 Load testing (P3) — done 2026-09-27: `load/` — a k6 suite,
+      deliberately not part of the Vitest/Playwright CI gate
+      (`.claude/rules/testing.md`), manual (`pnpm load:test`) or nightly
+      (`.github/workflows/load-test.yml`, `workflow_dispatch` + nightly cron).
+      Six scenarios: `last-slot-registration.js`/`waitlist-promotion-race.js`
+      assert exact-count/FIFO invariants via k6 thresholds (capacity never
+      exceeded, every freed slot promotes exactly one entry, no duplicates);
+      `rate-limiting.js` confirms the real 5/min-per-IP auth and 100/min
+      global limits actually reject beyond threshold; `bulk-ride-list.js` and
+      `api-latency.js` check pagination correctness and p95/p99 latency under
+      concurrent reads; `gpx-large-route.js` uploads a near-10 MB/many-point
+      GPX within a bound, confirms an over-limit file is rejected fast, and
+      confirms the streaming parser doesn't stall concurrent `/health` calls
+      (ADR-015). Two target configs needed (`load/README.md`): the
+      rate-limiting scenario needs the real default limits, every other
+      scenario needs `AUTH_RATE_LIMIT_MAX`/`RATE_LIMIT_MAX` raised (same
+      test/dev-only override `playwright.config.ts`'s e2e webServer already
+      uses) so setup/bulk operations don't trip the same limiter for the
+      wrong reason — the CI workflow runs these as two separate jobs, each
+      with its own `apps/api` instance. Live-verified all six scenarios
+      against two real local `apps/api` instances on a disposable scratch
+      database (not `coffee_ride_dev`): last-slot race (3 capacity/3 extra —
+      exactly 3 succeeded, exactly 3 got `ride_full`), waitlist race (3
+      capacity/5 waiting — exactly the oldest 3 promoted FIFO, 2 left
+      waiting, ride re-filled to capacity), rate limiting (exactly 5/5
+      login 401/429, exactly 100/10 global 200/429), bulk list, GPX
+      upload/oversized-rejection/health-during-upload, and API latency all
+      passed their thresholds. See `docs/changelog.md`.
+- [x] CR-140 Local/CI S3: SeaweedFS replaces MinIO (ADR-025, KI-068) —
+      done 2026-09-27: `ghcr.io/chrislusf/seaweedfs:4.47` in `ci.yml`,
+      `load-test.yml` and `docker-compose.yml` (`s3`/`s3-init`, new `s3_data`
+      volume, same `S3_*` env and host port 9000); dev objects migrated; live
+      S3 suites green locally; GitHub `ci` gets past service start again (run
+      `36322844930`). Follow-up: web Vitest pinned to `Europe/Moscow`. See
+      `docs/changelog.md`.
+- [x] CR-141 Return to the ride after sign-in (KI-064, critique P0) — done
+      2026-09-27: validated `?next=` on `/login`/`/register`
+      (`lib/auth/next-path.ts`, open-redirect protection); ride «Зарегистрироваться»
+      401 and riders/rider-profile sign-in links pass the ride path; register
+      success card links to `/login` keeping it. See `docs/changelog.md`.
+- [x] CR-142 Notification fallback while Redis is down (KI-071) — done
+      2026-09-27: a job the queue provably never accepted
+      (`NotificationQueueUnavailableError`) is delivered directly — in-app
+      notifications and the verification email; the password-reset email stays
+      queued-only (timing oracle). See `docs/changelog.md`.
+- [x] CR-143 Edit-screen ownership check (KI-069) + MapGL-key test isolation
+      (KI-070) — done 2026-09-27: `GetRideResponse.isOwner` (additive) lets
+      `EditRideForm` show not-found for a ride the caller doesn't own instead
+      of the form/lifecycle buttons; `ride-detail.test.tsx` now stubs the
+      MapGL key itself. See `docs/changelog.md`.
+- [x] CR-144 Discovery grid card redesign («B2») — done 2026-09-27: the
+      route cover carries only the track + status chip; date, a two-line
+      title, three labelled metric columns («—» for a missing one), seats with
+      a fill bar and bike/difficulty/price chips sit on a theme-aware panel
+      below. A full open ride reads «Список ожидания» instead of a green
+      «Регистрация открыта». See `docs/changelog.md` and `docs/design.md` §6.
+- [x] CR-145 Known-issues sweep — done 2026-09-28: KI-072 (Dependabot dev
+      group minor/patch only), KI-062 (0.5 km/h pace step in the shared
+      schema — API now rejects off-step paces), KI-061 (ride sub-page link
+      registry), KI-058 (`routes.preview` computed at write time, migration
+      `0020_route_preview`), KI-073 (screenshot `threshold: 0.02`), KI-044
+      (`TRUST_PROXY_HOPS` + private-hop trust, smoke-checked). KI-045 narrowed
+      (Caddyfile validated); KI-074 recorded (Google Fonts at build time). See
+      `docs/changelog.md`.
+- [x] CR-146 Self-host the web fonts (KI-074) — `next/font/local` instead of
+      `next/font/google`, so `next build` needs no network. Done 2026-09-28,
+      see `docs/changelog.md`.
+- [x] CR-147 First live 2GIS contract run — done 2026-09-28: `maps-2gis-contract`
+      environment + secret, run on GitHub's runners. Fixed: routing altitudes
+      are centimetres, Catalog `meta.code` errors, HTTP 200
+      `ROUTE_DOES_NOT_EXISTS` → `no_route`. KI-075 (demo key, 50 km limit)
+      recorded. See `docs/changelog.md`.
+- [x] CR-148 Demo data seed — `pnpm seed:demo` (`packages/db/src/seed-demo.ts`):
+      3 organizers, 8 riders, 9 rides in every state, via the HTTP API. Full
+      run (routes via the app's 2GIS route builder) completed 2026-09-29 once
+      2GIS became reachable from the dev machine (KI-056 update). Found and
+      fixed a real adapter bug along the way (CR-160): every point was sent
+      as `type: 'stop'`, but 2GIS only routes through the first/last `stop`
+      and silently drops a `stop` in the middle — a closed loop (shared
+      start/end point) collapsed to a near-zero-length route instead of
+      touring every waypoint. See `docs/changelog.md`.
+- [x] CR-149 Organizer cabinet → rider profile card: participant names in
+      `/organizer`'s «Новые записи» and a ride's participant table link to the
+      rider's card, back link returns to the cabinet; the ride's organizer is
+      no longer blocked by `riders_hidden` (ADR-023 amendment). See
+      `docs/changelog.md`.
+- [x] CR-150 Organizer sidebar highlight: «Участники»/«Обновления» stay lit on
+      the ride sub-pages they redirect to, instead of «Заезды»
+      (`CabinetNavItem.activeOn`). See `docs/changelog.md`.
+- [x] CR-151 «Постер заезда v2» — `/rides/[id]` rebuilt to the owner's mockup:
+      dark hero (track ⇄ 2GIS map, numbers band), a registration «ticket» with
+      every registration state, «Маршрут по точкам», elevation profile linked to
+      the cover, «Кто едет». API: additive `waitlistCount`/`viewerStartNumber`/
+      `viewerWaitlistPosition` on `GET /v1/rides/:id`. See `docs/changelog.md`.
+- [x] CR-152 Typography & responsive pass — one role type scale in `tokens.css`
+      (`text-display/h1/h2/h3/body/body-sm/label/metric`), body 16px, nothing under
+      12px, Sofia Sans Condensed retired (labels → IBM Plex Mono), Unbounded only for
+      display/`h1`, render settings, 44px text actions, discovery view switch beside
+      the `h1`. ADR-026. Follow-up: KI-077 (refresh visual baselines from CI).
+- [x] CR-153 Discovery «Заезды» to the owner's mockup (variant B): intro line,
+      «Список / Карта» with icons, filter chips (bike, «Эта неделя», pace,
+      difficulty, «Бесплатные») in both tabs, the featured «Ближайший» card,
+      compact cards («Мест нет · 2 в очереди», «Запись закрыта»), «Все заезды» and
+      «Показать ещё N заездов». API (additive): `GET /v1/rides` `startsFrom`/
+      `startsTo`/`paceMin`/`paceMax`/`difficulty`/`free`, response `total`, item
+      `waitlistCount`. See `docs/changelog.md`. Follow-up: KI-077 (baselines).
+- [x] CR-154 Global header to the discovery mockup: full-width raised bar, pill
+      sections «Заезды / Мои заезды / Организатору» (links signed out, registry
+      dropdowns signed in), icon-only theme control, ghost «Войти» + filled
+      «Регистрация». Follow-up: KI-077 (baselines).
+- [x] CR-155 Ride page `/rides/[id]` to the owner's mockup + ride requirements
+      — hero beside the sticky «Стартовый лист» ticket (status badge, seats figure,
+      group radio cards, «Записаться», GPX / «Добавить в календарь» / «Поделиться»),
+      restyled «Маршрут по точкам», «Профиль высоты» section, «О заезде» +
+      «Требования». New `RideRequirement` (`ride_requirements`, migration `0021`),
+      `PATCH /v1/rides/:id` `requirements`, `GET /v1/rides/:id` `requirements`
+      (additive), organizer form textarea. See `docs/changelog.md`. Follow-up:
+      KI-079 (baselines).
+- [x] CR-156 Ride creation as a four-step wizard (owner's «Ночной старт»
+      mockup): step 1 «Основное о заезде» (date/time split, difficulty,
+      description, GPX drop zone, «Сохранить черновик» / «Далее: маршрут»,
+      `?ride=<id>` re-edit); steps 2–4 = route/groups/edit screens with
+      `?wizard=1` in the same step frame. API (additive): `POST /v1/rides`
+      `description`/`difficulty`. See `docs/changelog.md`.
+- [x] CR-157 Larger, easier date picker on the create-ride page — new
+      `packages/ui` `DatePicker` (48px days, quick picks, past days disabled,
+      phone bottom sheet, keyboard), `formatCalendarDate`. See `docs/changelog.md`.
+- [x] CR-158 Storybook in `apps/web` (nextjs-vite, docs/test/a11y + MCP addon,
+      components manifest): stories for Button, Input, Badge, RideCard,
+      RideStatus, RideFilters with light/dark/both themes and loading/error/
+      empty/disabled; `play` interaction + axe tests via `test:storybook`.
+      Found KI-080. See `docs/changelog.md`.
+- [x] CR-159 Fix KI-080 — light-theme `--danger` `#D42B20` → `#B92A1E`
+      (`packages/ui/src/tokens.css`, `docs/design.md` §3), clears WCAG AA
+      against `--bg`/`ErrorState`'s tint; Storybook axe exception removed.
+      See `docs/changelog.md`.
+- [x] CR-160 Fix 2GIS route-builder multi-stop bug (found while finishing
+      CR-148) — `packages/maps-2gis/src/route.ts` now sends `type: 'pref'`
+      for every intermediate point, `type: 'stop'` only for the first/last.
+      See `docs/changelog.md`.
+- [x] CR-161 Unblock CI's coverage gate (red since CR-155: untested
+      CR-155/156 term templates, `DatePicker`, `GpxDropzone`) with real tests;
+      fix KI-078 (desktop map fullscreen toggle hidden while the map is
+      degraded) + e2e regression. See `docs/changelog.md`.
+- [x] CR-162 KI-066: `GET /v1/rides/mine/registrations/activity` aggregate
+      replaces the dashboard's per-ride participant reads; KI-065:
+      `PUT /v1/rides/:id/participants-visibility` — hide any time after publish,
+      re-show only while nobody is registered (owner decision). See
+      `docs/changelog.md`.
+- [x] CR-163 Pace the nightly load test's `api-latency.js` scenario so it stays
+      under `RATE_LIMIT_MAX` — it had run without think time since CR-139 and
+      ~89 % of its requests were rate-limited, failing the job every night.
+      `THINK_TIME_S` (0.5 s) per VU. See `docs/changelog.md`.
+- [x] CR-164 KI-060: discovery's «Старт: …» falls back to the start route
+      point's description when its label is just «Старт» — additive
+      `startDescription` on `PublicRideListItem` (same `selectDistinctOn`, no
+      extra query), both discovery call sites through `formatStartPlace`
+      (`FeaturedRideCard` had been rendering the raw label, printing
+      «Старт: Старт»). Also verified and archived four stale KI entries
+      (KI-001/009/010/020); KI-021 stays open. See `docs/changelog.md`.
+- [x] CR-165 Optional per-ride organizer contact: `phone`/`telegram`/`max`
+      (max.ru)/`email`, validated and normalized once in `packages/types`.
+      Private — `GET /v1/rides/:id` serves it only to an active registrant or
+      the owning organizer and omits the key for everyone else; absent from
+      the `Ride` domain type so it can never ride along in the public list.
+      Migration `0022_ride_contact.sql` (nullable pair + both-or-neither and
+      not-blank CHECKs); new `PUT /v1/rides/:id/contact` works at any status.
+      Follow-up KI-081 (no post-publish UI). See `docs/changelog.md`.
+- [x] CR-166 Ride-detail avatars (riders stack + organizer) were filled with
+      `--primary-tint` on the page's own `--bg` — 1.09:1, effectively
+      invisible. Switched to the existing `--primary-fill`/`--on-primary-fill`
+      pair: 4.43:1 (light) / 3.81:1 (dark) for the shape, 4.97:1 AA for the
+      initials. No new colour token. See `docs/changelog.md`.
+- [x] CR-167 Gitignore the local `references/` folder; refresh
+      `coverage-baseline.json` after CR-165/166 — the run showed a _drop_ in
+      `modules/rides` and `apps/web` branches, closed with 2 more API cases
+      (no-organizer-profile authz, PATCH set/clear) and a new
+      `ride-contact-fields.test.tsx`, not by lowering the floor. See
+      `docs/changelog.md`.
+- [x] CR-168 KI-026's real remaining half: there was no way to ever request a
+      _new_ email-verification link. `register` issued the only token a user
+      would ever get, so an expired/undelivered first email left the account
+      permanently unverifiable (and `/register` 409s the taken email). Adds
+      `POST /v1/auth/resend-verification` (session-authenticated, bodyless,
+      sweeps outstanding tokens, both rate-limit tiers) and a shared
+      `ResendVerificationButton` on the three dead-end surfaces; fixes three
+      strings that promised a resend which did not exist. KI-042 re-checked
+      and does not share the gap (`/forgot-password` is already re-requestable).
+      See `docs/changelog.md`.
+- [x] CR-169 KI-081: `PUT /v1/rides/:id/contact` accepts a change at any status
+      (a stale contact must stay fixable) but had no UI — `EditRideForm` is
+      read-only after `draft`, so the contact fields were disabled too. The
+      fields now stay enabled after publish with their own «Сохранить способ
+      связи» button calling that endpoint, exactly KI-065's shape for the
+      visibility toggle; the form's read-only rule is unchanged and a draft
+      still saves through the whole-form `PATCH`. Additive optional `hint` prop
+      on `RideContactFields`. See `docs/changelog.md`.
+- [x] CR-170 Micro-animations instead of decoration (owner request): a shared
+      motion vocabulary in `tokens.css`, all `motion-safe:` — the route track
+      draws in (cards wait until scrolled to), the discovery map eases to a
+      selected ride (additive `MapHandle.panTo`), the difficulty scale fills on
+      view, the registration ticket animates a state change after mount, and
+      the success toast rises in with a drawn check mark and fades out.
+      `docs/design.md` §5 "Motion". See `docs/changelog.md`.
+- [x] CR-171 The discovery map as the main emotional layer (owner request): the
+      chosen ride's route draws itself in on the map (continuing, not
+      restarting, when the full geometry replaces the preview), its start pin
+      pulses three times, and quiet notes sit on the line — difficulty halfway,
+      the summit «▲ N м» once elevation is known. Additive `maps-core` fields
+      (`drawInMs`, `pulse`, `shape: 'tag'`, `meter`, `revealDelayMs`); the 2GIS
+      adapter reconciles markers by id. See `docs/changelog.md`.
+- [x] CR-172 Selecting a ride on `/` frames its whole route (eased `fitBounds`,
+      additive `MapFitOptions.durationMs`) instead of only panning to its start,
+      so CR-171's draw-in and notes stay in view; a ride without a route still
+      pans to its start. See `docs/changelog.md`.
+- [x] CR-173 «Журнал организатора» on the ride page: rides held, share
+      completed (withheld under 3 closed rides), typical pace/distance, usual bike
+      types — additive `organizer.journal` on `GET /v1/rides/:id`, quiet ledger UI.
+      See `docs/changelog.md`.
+- [x] CR-174 Discovery map list paginates: «Показать ещё» + cursor in
+      `DiscoveryList` (was first page only, rest unreachable from the map).
+      See `docs/changelog.md`.
+- [x] CR-175 Discovery filters survive the «Заезды / Карта» switch: state lifted
+      into `DiscoveryTabs` and mirrored into the URL. See `docs/changelog.md`.
+- [x] CR-176 `/` first paint: Suspense fallback is a real-title page skeleton
+      instead of `null` (server prefetch of the list left as an open decision).
+      See `docs/changelog.md`.
+- [x] CR-177 «Список / Карта» tabs: arrow/Home/End keys, roving tabindex, tabpanel,
+      focus kept across the view swap. See `docs/changelog.md`.
+- [x] CR-178 Ride page: organizer rating line links to the «Отзывы» section (`#reviews`);
+      section shown for every ride, a note until finished. See `docs/changelog.md`.
+- [x] CR-179 Coverage gate restored (ui formatters, journal tie-break tests). See `docs/changelog.md`.
+- [x] CR-180 Brand empty states: discovery/organizer copy as next steps, shared contour illustration. See `docs/changelog.md`.
+- [x] CR-181 Finish check-in (owner request): the participant claims «Отметить финиш»,
+      the organizer confirms selectively or in one batch and can mark no-shows
+      (separate `attendance` field, migration `0023`); reviews now need the
+      organizer's confirmation (ADR-027). See `docs/changelog.md`.
+- [x] CR-182 Ride closing: «сошёл» outcome, public results summary, finishing allowed with
+      undecided riders and labelled «не подтверждено» (ADR-028). See `docs/changelog.md`.
+- [x] CR-184 Organizer-screen audit fixes: «Управление заездом» instead of a locked form for
+      a published ride, «Требует решения» for a past start never started, the finish-control
+      bar counts no-shows («В списке», five segments); `/organizer/rides` marks the same
+      overdue rides. See `docs/changelog.md`.
+- [x] CR-185 UX handoff P1/P2: active work above the dashboard KPIs, finish confirmation
+      naming undecided riders, ride context on participants/updates, `/me` widget registry,
+      featured card only for a ride with a route, «Карта недоступна» with «Повторить» when the
+      basemap fails, no sideways scroll on the phone dashboard. See `docs/changelog.md`.
+- [x] CR-186 «Разделы» on the ride management view as icon rows (icon tile, name, one-line
+      hint, chevron) instead of a line of «Маршрут →» links. See `docs/changelog.md`.
+- [x] CR-187 Ride workspace «Управление заездом»: one frame for every
+      `/organizer/rides/[id]/*` page (head + actions in priority order, six local tabs,
+      section heads with a readiness chip), readiness checklist on «Обзор», published
+      sections as results with a lock `Notice` instead of disabled forms. Supersedes
+      CR-186's «Разделы» rows and CR-185's ride context header. See `docs/changelog.md`.
+- [x] CR-188 KI-085 follow-ups: one ride read per workspace tab, Russian field errors in
+      every form (`lib/forms/field-errors.ts`, `VALIDATION_TERMS`), root `.env` for e2e,
+      2×3 ride tabs on narrow phones; red `main` CI fixed (coverage raised with tests,
+      KI-084 baselines from CI's artifact, the `route-points-stops` flake). See
+      `docs/changelog.md`.
+- [x] CR-189 QA `13653ed` item 1: the ride workspace frame («Не подтверждено», results,
+      readiness) follows every finish mark without a reload; e2e can run on isolated
+      ports (`E2E_WEB_PORT`/`E2E_API_PORT`). See `docs/changelog.md`.
+- [x] CR-190 Reschedule a published ride before its start (QA `13653ed` item 2): owner-only
+      `POST /v1/rides/:id/reschedule` with a required reason and a confirmation, recorded as a
+      `RideUpdate` (migration `0025`, ADR-029); card, ticket, `/me`, cabinet and `.ics`
+      (`SEQUENCE`) show the new time; registrants and the waitlist are notified.
+      See `docs/changelog.md`.
+- [x] CR-191 `seed:demo --no-routes` (QA `13653ed` item 3): finished seed rides go through
+      finish claims, organizer confirmation and «сошёл»/no-show before reviews, so no
+      `403 finish_not_confirmed`; re-runs after an interrupted run stay duplicate-free.
+      Item 4: `pnpm lint` no longer depends on pnpm's private hoist (`eslint-config-next`
+      plugins/`next` peer). See `docs/changelog.md`.
+- [x] CR-192 QA `13653ed` items 5, 6, 9: publishing a draft without a route asks first
+      (the route stays optional but can't be added after publishing); a ride update
+      reports its real recipients (`recipientsCount`, «получателей пока нет»); the
+      overview hint lists what stays editable (groups, contact, visibility, reschedule);
+      publishing from the wizard leaves it for the ordinary workspace. See
+      `docs/changelog.md`.
+- [x] CR-194 QA `13653ed` item 8: Russian validation errors on every form — the review
+      comment's missing line, «email» vs «почта» wording, per-form tests with the API's
+      real English replies, and a guard test against English API/Zod text, native
+      validation bubbles and untranslated schema issue codes. See `docs/changelog.md`.
+- [x] CR-193 QA `13653ed` item 7: «Предстоящие» on `/me` and `/me/rides` without cancelled
+      or finished rides (status-first split, «История» tab, cancellations still in sight
+      on `/me`); the catalog's collapsed «Завершённые и отменённые» section
+      (`GET /v1/rides?phase=`), no «Осталось N мест» unless registration is open. See
+      `docs/changelog.md`.
+- [x] CR-195 QA `13653ed` P3: ride cancellation confirmed in `ConfirmDialog` instead of
+      `window.confirm`; the wizard's step 4 enters the start with step 1's `DatePicker` +
+      time field; the queue place reads «№ N в очереди», not «#N». KI-087 tracks the
+      remaining `window.confirm` deletes. See `docs/changelog.md`.
+- [x] CR-196 QA `fe0b4c2`: `pnpm --filter db db:migrate` from a checkout under a
+      Cyrillic path — the migrations folder via `fileURLToPath`, not a percent-encoded
+      `URL.pathname`; regression test from a non-ASCII copy of `packages/db`. See
+      `docs/changelog.md`.
+- [x] CR-197 QA `fe0b4c2`: `next` survives register → verify email → «Перейти ко
+      входу» → sign in (validated on every hop; external/unsafe targets dropped);
+      full-journey e2e. KI-089: the emailed link still has no `next`. See
+      `docs/changelog.md`.
+- [x] CR-198 QA `fe0b4c2` P3: in «Перенести заезд» a new date re-judges the
+      pair-dependent time error («текущее время»/«уже прошло») at once instead of on the
+      next «Продолжить». See `docs/changelog.md`.
+- [x] CR-199 Participant notifications show their time in the ride's timezone (was UTC
+      — 13:01 vs the organizer journal's 16:01); additive `Notification.ride.startTimezone`.
+      See `docs/changelog.md`.
+- [x] CR-201 Claude Code harness: eight more project skills (`visual-baselines`,
+      `close-task`, `qa-report-intake`, `ci-triage`, `storybook-check`, `known-issue`,
+      `dependabot-triage`, `terminology-string`) and a skill routing table in
+      `.claude/CLAUDE.md`. See `docs/changelog.md`.

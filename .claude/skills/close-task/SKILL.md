@@ -13,7 +13,7 @@ over a failing check.
 
 `.claude/context/current-task.md` (goal, acceptance criteria, validation results,
 discovered issues), `git status` + `git diff --stat`, the last 3 entries of
-`docs/changelog.md` (to match their format and length).
+`docs/changelog.md` (to match their format; respect its length limit).
 
 ## Steps
 
@@ -22,14 +22,18 @@ discovered issues), `git status` + `git diff --stat`, the last 3 entries of
 2. **`docs/changelog.md`** — append (bottom) one entry per CR, the house format:
    `## YYYY-MM-DD — CR-XXX — title`, then `Summary:`, `Contract:` (API/types/ui
    changes or "none"), `Files:`, `Validation:` (real commands + counts),
-   `Decisions:`, `Follow-up:`. Never edit past entries. If the live file has more
-   than ~40 entries, archive per its own "Archiving" section.
-3. **`docs/tasks.md`** — check off the CR (`- [x] CR-XXX … — done YYYY-MM-DD`) in its
-   section; add it first if it was never listed.
+   `Decisions:`, `Follow-up:`; Summary ≤ ~600 characters — narratives go in the commit
+   body. Never edit past entries. If the live file has more than ~15 entries, archive
+   per its own "Archiving" section.
+3. **`docs/tasks.md`** — move the CR from "Open" to "Recently done" as one checked
+   line (add it if it was never listed); keep ~8 there, older ones go to the bottom of
+   `docs/tasks-archive.md`.
 4. **`.claude/context/project-state.md`** — it is a snapshot: rewrite the
    "Current task", "In progress", "Next" and "Last updated" sections to the present,
-   add a short paragraph under "Implemented". Don't append history there — history
-   is the changelog's job. If a section has grown into a log, condense it.
+   touching "Implemented" only if an area's one-line summary changed. Don't append
+   history there — that is the changelog's job. Target ≤ ~150 lines; if a section has
+   grown into a log, condense it (old text verbatim to
+   `.claude/context/project-state-archive.md`).
 5. **`known-issue` skill** for every KI discovered or resolved (resolved ones move to
    the archive now, not later).
 6. **Only when relevant:** `.claude/context/architecture-map.md` (structure changed),

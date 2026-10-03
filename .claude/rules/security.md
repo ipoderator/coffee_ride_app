@@ -1,3 +1,18 @@
+---
+paths:
+  - 'apps/api/**'
+  - 'apps/web/src/features/auth/**'
+  - 'apps/web/src/lib/auth/**'
+  - 'apps/web/src/middleware.ts'
+  - 'apps/web/next.config.ts'
+  - 'docs/auth.md'
+  - '.github/**'
+  - '**/Dockerfile'
+  - 'docker-compose*.yml'
+  - 'deploy/**'
+  - '.env.example'
+---
+
 # Security Rules
 
 See `docs/decisions.md` → ADR-006 for the authorization/authentication architecture this
