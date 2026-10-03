@@ -472,6 +472,12 @@ with CR-138's procedure: repo copied into the container (not bind-mounted), the
 container on the compose network, CI's env with an empty MapGL key,
 `--update-snapshots`, then a verify run without it.
 
+Update 2026-10-03 (CR-189..CR-194): CR-188 replaced the six baselines from CI's
+artifact, but `fix/qa-13653ed` changes the seeded screens again (CR-193's catalog seats
+rule/archive section, CR-190's ride page, CR-189/192's workspace). The amd64 image pull
+was retried once more (≈15 min: 2 of 7 layers, then a retry loop) and stopped. Next
+action unchanged: push, then the CI-artifact path with every `*-diff.png` checked.
+
 ### KI-086 — On a ride's participants/updates tab the sidebar lights «Участники»/«Обновления», not «Заезды»
 
 Status: open. Discovered: 2026-10-02 (CR-187, split out of KI-085 by CR-188).
