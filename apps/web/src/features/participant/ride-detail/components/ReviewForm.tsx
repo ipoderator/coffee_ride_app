@@ -10,6 +10,10 @@ import {
   Textarea,
   VALIDATION_TERMS,
 } from 'ui';
+import {
+  fieldErrorMessage,
+  serverFieldErrorMessage,
+} from '@/lib/forms/field-errors';
 import { ApiError, createReview } from '../api';
 
 const RATING_VALUES = [1, 2, 3, 4, 5] as const;
@@ -35,6 +39,7 @@ export function ReviewForm({
   const [rating, setRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
   const [ratingError, setRatingError] = useState<string | null>(null);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -55,11 +60,17 @@ export function ReviewForm({
           ? VALIDATION_TERMS.rating
           : null,
       );
+      // CR-194: a too-long comment used to fail here with nothing on screen.
+      const commentIssue = parsed.error.issues.find(
+        (issue) => issue.path[0] === 'comment',
+      );
+      setCommentError(commentIssue ? fieldErrorMessage(commentIssue) : null);
       setFormError(null);
       return;
     }
 
     setRatingError(null);
+    setCommentError(null);
     setFormError(null);
     setSuccessMessage(null);
     setIsPending(true);
@@ -73,11 +84,18 @@ export function ReviewForm({
         error.problem.code === 'validation_error' &&
         error.problem.errors
       ) {
-        setRatingError(
-          error.problem.errors.some((issue) => issue.path === 'rating')
-            ? VALIDATION_TERMS.rating
-            : null,
+        const ratingRejected = error.problem.errors.some(
+          (issue) => issue.path === 'rating',
         );
+        const commentRejected = error.problem.errors.some(
+          (issue) => issue.path === 'comment',
+        );
+        setRatingError(ratingRejected ? VALIDATION_TERMS.rating : null);
+        setCommentError(commentRejected ? serverFieldErrorMessage() : null);
+        // A rule that is neither field: say so rather than do nothing.
+        if (!ratingRejected && !commentRejected) {
+          setFormError(REVIEWS_TERMS.submitError);
+        }
       } else {
         setFormError(REVIEWS_TERMS.submitError);
       }
@@ -128,7 +146,11 @@ export function ReviewForm({
           )}
         </div>
 
-        <FormField id="review-comment" label={REVIEWS_TERMS.commentLabel}>
+        <FormField
+          id="review-comment"
+          label={REVIEWS_TERMS.commentLabel}
+          error={commentError ?? undefined}
+        >
           <Textarea
             value={comment}
             placeholder={REVIEWS_TERMS.commentPlaceholder}

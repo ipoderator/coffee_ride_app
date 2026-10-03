@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForgotPasswordForm } from './components/ForgotPasswordForm';
 import { requestPasswordReset } from './api';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -49,6 +53,48 @@ describe('ForgotPasswordForm', () => {
       ),
     );
     expect(requestPasswordResetMock).not.toHaveBeenCalled();
+  });
+
+  // CR-194: Russian lines, never the schema's English.
+  it('words an empty or invalid email in Russian', async () => {
+    render(<ForgotPasswordForm />);
+
+    fillAndSubmit('');
+    expect(
+      await screen.findByText('Введите email, например name@example.ru.'),
+    ).toBeInTheDocument();
+
+    fillAndSubmit('not-an-email');
+    expect(
+      await screen.findByText('Введите email, например name@example.ru.'),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(requestPasswordResetMock).not.toHaveBeenCalled();
+  });
+
+  it('shows Russian for a server field error and keeps the API’s English off the screen', async () => {
+    requestPasswordResetMock.mockRejectedValue(
+      englishProblem('validation_error', { status: 400, fields: ['email'] }),
+    );
+
+    render(<ForgotPasswordForm />);
+    fillAndSubmit('rider@example.com');
+
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+  });
+
+  it('shows the generic Russian line for a code it does not know', async () => {
+    requestPasswordResetMock.mockRejectedValue(
+      englishProblem('rate_limited', { status: 429 }),
+    );
+
+    render(<ForgotPasswordForm />);
+    fillAndSubmit('rider@example.com');
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert').textContent).toMatch(/[А-Яа-я]/);
+    expectNoEnglishApiText();
   });
 
   it('ignores a second submit while pending (duplicate-submit protection)', async () => {

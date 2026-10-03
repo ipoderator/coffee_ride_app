@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Bike } from 'types';
 import { GarageForm } from './GarageForm';
 import { createBike, deleteBike, listBikes, updateBike } from '../api';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
@@ -162,6 +166,51 @@ describe('GarageForm — add', () => {
     fireEvent.click(submit);
     expect(createBikeMock).toHaveBeenCalledTimes(1);
     resolve({ bike: bike({ id: 'b-1' }) });
+  });
+});
+
+// CR-194: the bike form speaks Russian whatever the API says.
+describe('GarageForm — English API text (CR-194)', () => {
+  async function openAddForm() {
+    await renderGarage([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить велосипед' }));
+    return screen.getByRole('form', { name: 'Новый велосипед' });
+  }
+
+  it('words a too long brand in Russian without calling the API', async () => {
+    const form = await openAddForm();
+
+    fireEvent.change(within(form).getByLabelText('Марка'), {
+      target: { value: 'x'.repeat(101) },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Добавить' }));
+
+    expect(
+      await within(form).findByText(/^Не длиннее \d+ символов\.$/),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(createBikeMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a server field error',
+      englishProblem('validation_error', { status: 400, fields: ['brand'] }),
+    ],
+    [
+      'a code it does not know',
+      englishProblem('some_new_server_code', { status: 500 }),
+    ],
+  ])('shows the generic Russian line for %s', async (_label, error) => {
+    const form = await openAddForm();
+    createBikeMock.mockRejectedValue(error);
+
+    fireEvent.click(within(form).getByRole('button', { name: 'Добавить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось сохранить изменения. Попробуйте ещё раз.',
+    );
+    expectNoEnglishApiText();
   });
 });
 

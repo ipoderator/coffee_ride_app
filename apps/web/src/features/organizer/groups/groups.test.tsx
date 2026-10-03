@@ -22,6 +22,10 @@ import {
   type RideGroupWithCount,
 } from './api';
 import { parsePace, validateGroupForm } from './validation';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -492,5 +496,37 @@ describe('GroupsEditor — edit, delete, reorder', () => {
         position: 1,
       }),
     );
+  });
+});
+
+// CR-194: whatever the API says in English, the organizer reads Russian.
+describe('GroupsEditor — English API text (CR-194)', () => {
+  it.each([
+    [
+      'a server field error',
+      englishProblem('validation_error', {
+        status: 400,
+        fields: ['name', 'paceKmh'],
+      }),
+    ],
+    [
+      'a code it does not know',
+      englishProblem('some_new_server_code', { status: 500 }),
+    ],
+  ])('shows the generic Russian line for %s', async (_label, error) => {
+    await renderEditor();
+    const form = openAddForm();
+    createRideGroupMock.mockRejectedValue(error);
+    fireEvent.change(within(form).getByLabelText('Средняя скорость, км/ч'), {
+      target: { value: '30' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Добавить' }));
+
+    expect(
+      await screen.findByText(
+        'Не удалось сохранить изменения. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
   });
 });

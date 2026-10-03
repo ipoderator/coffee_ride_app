@@ -21,7 +21,12 @@ import {
   type RoutePoint,
   type RouteSummary,
   type Stop,
+  type RideRouteState,
 } from './api';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -906,5 +911,130 @@ describe('RoutePointsSection (CR-031)', () => {
     expect(
       screen.queryByRole('button', { name: 'Удалить' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// CR-194: every line a stop / route point form shows is Russian — from the
+// client schema, from a server field error, and from a code nobody mapped.
+describe('stop and route point forms speak Russian (CR-194)', () => {
+  const emptyDraft: RideRouteState = {
+    status: 'draft',
+    distanceKm: null,
+    elevationGainMeters: null,
+    start: null,
+    route: null,
+    stops: [],
+    routePoints: [],
+  };
+
+  beforeEach(() => {
+    getRideRouteStateMock.mockReset();
+    getRideRouteStateMock.mockResolvedValue(emptyDraft);
+    createStopMock.mockReset();
+    createRoutePointMock.mockReset();
+  });
+
+  async function openStopForm() {
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Остановки ещё не добавлены');
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить остановку' }));
+  }
+
+  async function openRoutePointForm() {
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Точки маршрута ещё не добавлены');
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить точку' }));
+  }
+
+  function fillStop() {
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: baseStop.name },
+    });
+    fireEvent.change(screen.getByLabelText('Широта'), {
+      target: { value: String(baseStop.lat) },
+    });
+    fireEvent.change(screen.getByLabelText('Долгота'), {
+      target: { value: String(baseStop.lng) },
+    });
+  }
+
+  it('words an empty stop name in Russian without calling the API', async () => {
+    await openStopForm();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findAllByText('Заполните это поле.')).not.toHaveLength(
+      0,
+    );
+    expectNoEnglishApiText();
+    expect(createStopMock).not.toHaveBeenCalled();
+  });
+
+  it('shows Russian for a server field error on a stop', async () => {
+    createStopMock.mockRejectedValue(
+      englishProblem('validation_error', { status: 400, fields: ['name'] }),
+    );
+    await openStopForm();
+    fillStop();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+  });
+
+  it('shows the generic Russian line for a stop error code it does not know', async () => {
+    createStopMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+    await openStopForm();
+    fillStop();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/[А-Яа-яЁё]/);
+    expectNoEnglishApiText();
+  });
+
+  it('shows Russian for a server field error on a route point', async () => {
+    createRoutePointMock.mockRejectedValue(
+      englishProblem('validation_error', { status: 400, fields: ['label'] }),
+    );
+    await openRoutePointForm();
+    fireEvent.change(screen.getByLabelText('Тип'), {
+      target: { value: 'water' },
+    });
+    fireEvent.change(screen.getByLabelText('Широта'), {
+      target: { value: '55.751' },
+    });
+    fireEvent.change(screen.getByLabelText('Долгота'), {
+      target: { value: '37.618' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+  });
+
+  it('shows the generic Russian line for a route point error code it does not know', async () => {
+    createRoutePointMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+    await openRoutePointForm();
+    fireEvent.change(screen.getByLabelText('Тип'), {
+      target: { value: 'water' },
+    });
+    fireEvent.change(screen.getByLabelText('Широта'), {
+      target: { value: '55.751' },
+    });
+    fireEvent.change(screen.getByLabelText('Долгота'), {
+      target: { value: '37.618' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/[А-Яа-яЁё]/);
+    expectNoEnglishApiText();
   });
 });

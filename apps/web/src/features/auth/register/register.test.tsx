@@ -2,6 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterForm } from './components/RegisterForm';
 import { ApiError, registerAccount } from './api';
+import {
+  ENGLISH_API_TEXTS,
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -40,6 +45,66 @@ describe('RegisterForm', () => {
     expect(passwordInput).toHaveAttribute('aria-invalid', 'true');
     expect(await screen.findAllByRole('alert')).toHaveLength(2);
     expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
+  // CR-194 (QA 13653ed): the page used to show the schema's English
+  // «Invalid email address» / «Password must be at least 12 characters.».
+  it('words an empty form in Russian, never the schema’s English', async () => {
+    render(<RegisterForm />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Зарегистрироваться' }));
+
+    expect(
+      await screen.findByText('Введите email, например name@example.ru.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Не короче 12 символов.')).toBeInTheDocument();
+    expect(screen.queryByText('Invalid email address')).not.toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('words an invalid email and a short password in Russian', async () => {
+    render(<RegisterForm />);
+
+    fillAndSubmit('not-an-email', 'short');
+
+    expect(
+      await screen.findByText('Введите email, например name@example.ru.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Не короче 12 символов.')).toBeInTheDocument();
+    expect(
+      screen.queryByText(ENGLISH_API_TEXTS.password),
+    ).not.toBeInTheDocument();
+    expectNoEnglishApiText();
+  });
+
+  it('shows Russian for a server field error and keeps the API’s English off the screen', async () => {
+    registerAccountMock.mockRejectedValue(
+      englishProblem('validation_error', {
+        status: 400,
+        fields: ['email', 'password'],
+      }),
+    );
+
+    render(<RegisterForm />);
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(await screen.findAllByText('Проверьте это поле.')).toHaveLength(2);
+    expectNoEnglishApiText();
+  });
+
+  it('shows the generic Russian line for a code it does not know', async () => {
+    registerAccountMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 418 }),
+    );
+
+    render(<RegisterForm />);
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось выполнить запрос. Попробуйте ещё раз.',
+    );
+    expectNoEnglishApiText();
   });
 
   it('shows a pending state and disables the submit button while the request is in flight', async () => {
