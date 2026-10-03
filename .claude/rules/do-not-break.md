@@ -1,9 +1,24 @@
+---
+paths:
+  - 'apps/**'
+  - 'packages/**'
+  - 'deploy/**'
+  - 'docker-compose*.yml'
+  - '.github/**'
+  - 'load/**'
+  - 'scripts/**'
+  - 'turbo.json'
+  - 'package.json'
+---
+
 # Do Not Break
 
-Invariants a change must preserve — moved verbatim from `project-state.md` by CR-203.
-Before changing an area, grep this file for it (e.g. `grep -n -i "waitlist"`) rather
-than reading it whole; `/review` and `close-task` check the diff against it. Add a
-bullet when a CR establishes a new non-obvious invariant.
+Invariants a change must preserve — moved verbatim from `project-state.md` by CR-203,
+made a path-scoped rule by CR-204 so it loads **whole** whenever code, infra or CI
+files are touched (a keyword grep can miss an invariant worded differently from the
+task). While planning, before any matching file is opened, read it explicitly.
+`/review` and `close-task` check the diff against it. Add a bullet when a CR
+establishes a new non-obvious invariant.
 
 - documented stack;
 - domain terminology;
