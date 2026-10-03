@@ -84,6 +84,34 @@ export const Cancelled: Story = {
   },
 };
 
+/** CR-193: published, registration not open yet — says so, not seats left. */
+export const RegistrationNotOpen: Story = {
+  args: { ride: makeRide({ status: 'published' }) },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText(RIDE_DISCOVERY_TERMS.registrationNotOpenNote),
+    ).toBeVisible();
+    await expect(canvas.queryByText(/Осталось/)).toBeNull();
+  },
+};
+
+/** CR-193: under way or over — the status chip only, no seats block. */
+export const Started: Story = {
+  args: { ride: makeRide({ status: 'started' }) },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText(/из 20/)).toBeNull();
+    await expect(canvas.queryByText(/Осталось/)).toBeNull();
+  },
+};
+
+export const Finished: Story = {
+  args: { ride: makeRide({ status: 'finished' }) },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText(/из 20/)).toBeNull();
+    await expect(canvas.queryByText(/Осталось/)).toBeNull();
+  },
+};
+
 /** Empty data: no route, no metrics — says so instead of dashes or zeros. */
 export const Empty: Story = {
   args: {

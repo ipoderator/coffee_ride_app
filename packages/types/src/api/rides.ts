@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   BICYCLE_TYPES,
+  RIDE_LIST_PHASES,
   type BicycleType,
   type Ride,
   type RideContact,
@@ -367,6 +368,14 @@ export const listPublicRidesQuerySchema = listRidesQuerySchema
       .max(5, 'difficulty must be an integer from 1 to 5.')
       .optional(),
     free: z.stringbool({ error: 'free must be true or false.' }).optional(),
+    // CR-193, additive: `active` — the rides still ahead or under way
+    // (`published`, `registration_open`, `registration_closed`, `started`);
+    // `archive` — `finished`/`cancelled` (`ARCHIVED_RIDE_STATUSES`). Omitted:
+    // both, as before. Every other filter and the date window apply either way,
+    // so `active` + `archive` = the unfiltered list.
+    phase: z
+      .enum(RIDE_LIST_PHASES, 'phase must be one of: active, archive.')
+      .optional(),
   })
   .refine(
     (value) => {

@@ -11,6 +11,7 @@ import {
   isNull,
   lte,
   ne,
+  notInArray,
   or,
   sql,
 } from 'drizzle-orm';
@@ -29,6 +30,7 @@ import {
 } from 'db/schema';
 import type { DbClient } from 'db';
 import {
+  ARCHIVED_RIDE_STATUSES,
   type AttendanceSummary,
   type CoverImageResponse,
   type CreateRideRequest,
@@ -716,6 +718,11 @@ export async function getOwnRideSummary(
  *
  * Each item carries its organizer's public `{ id, name }`, same join
  * {@link getRideForViewer} already does for a single ride.
+ *
+ * CR-193: the optional `phase` splits the same list into what a rider can still
+ * join or attend (`active`) and `ARCHIVED_RIDE_STATUSES` (`archive`), so the
+ * catalog can show finished/cancelled rides apart instead of mixed in. Same
+ * window, same filters, same `(startsAt, id)` order and cursor for both.
  */
 export async function listPublicRides(
   db: DbClient,
@@ -758,6 +765,14 @@ export async function listPublicRides(
   }
   if (query.bicycleType) {
     conditions.push(eq(rides.bicycleType, query.bicycleType));
+  }
+  // CR-193: the catalog's two sections — rides still ahead or under way vs.
+  // `finished`/`cancelled` («Завершённые и отменённые»). Omitted: both, as
+  // before; the two phases partition exactly that list.
+  if (query.phase === 'active') {
+    conditions.push(notInArray(rides.status, [...ARCHIVED_RIDE_STATUSES]));
+  } else if (query.phase === 'archive') {
+    conditions.push(inArray(rides.status, [...ARCHIVED_RIDE_STATUSES]));
   }
   // CR-026 ("Map discovery"), ADR-014: a map-viewport (bbox) filter — the request
   // schema (`listPublicRidesQuerySchema`) already guarantees all four params arrive

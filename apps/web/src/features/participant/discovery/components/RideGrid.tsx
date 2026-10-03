@@ -1,15 +1,7 @@
 'use client';
 
-import {
-  type HTMLAttributes,
-  type ReactNode,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
+import { type HTMLAttributes, type ReactNode, useId, useMemo } from 'react';
 import Link from 'next/link';
-import type { PublicRideListItem } from 'types';
 import {
   Button,
   ContoursIllustration,
@@ -17,23 +9,22 @@ import {
   ErrorState,
   RIDE_DISCOVERY_TERMS,
 } from 'ui';
-import { type ListPublicRidesParams, listPublicRides } from '../api';
 import {
   NO_DISCOVERY_FILTERS,
-  filtersToQuery,
   hasActiveFilters,
 } from '../lib/discovery-filters';
 import {
   useDiscoveryFilters,
   type DiscoveryFiltersControl,
 } from '../lib/use-discovery-filters';
+import { usePublicRides } from '../lib/use-public-rides';
 import { pickFeaturedRide } from '../lib/ride-metrics';
+import { ArchivedRidesSection } from './ArchivedRidesSection';
 import { DiscoveryFilters } from './DiscoveryFilters';
 import { DiscoveryGridSkeleton } from './DiscoveryPageSkeleton';
 import { FeaturedRideCard } from './FeaturedRideCard';
 import { RideGridCard } from './RideGridCard';
-
-type LoadStatus = 'loading' | 'ready' | 'error';
+import { ShowMoreRides } from './ShowMoreRides';
 
 const GRID_CLASSNAME =
   'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5';
@@ -45,6 +36,10 @@ const GRID_CLASSNAME =
  * pagination, ADR-011). Shares `listPublicRides` and the filter chips with
  * `DiscoveryList` (the «Карта» tab) but keeps its own fetch — each tab only
  * pays for the data its own view needs.
+ *
+ * CR-193 (owner QA): those are the `active` rides only; finished and cancelled
+ * ones follow in their own collapsed «Завершённые и отменённые» section
+ * (`phase=archive`, same chips, own «Показать ещё»).
  */
 export function RideGrid({
   viewSwitch,
@@ -57,85 +52,33 @@ export function RideGrid({
   panelProps?: HTMLAttributes<HTMLDivElement>;
 } & DiscoveryFiltersControl = {}) {
   const headingId = useId();
-  const [status, setStatus] = useState<LoadStatus>('loading');
-  const [rides, setRides] = useState<PublicRideListItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [featuredId, setFeaturedId] = useState<string | null>(null);
   const [filters, setFilters] = useDiscoveryFilters({
     filters: controlledFilters,
     onFiltersChange,
   });
-  const [attempt, setAttempt] = useState(0);
-  const [moreStatus, setMoreStatus] = useState<'idle' | 'loading' | 'error'>(
-    'idle',
+  const active = usePublicRides(filters, 'active');
+  const archive = usePublicRides(filters, 'archive');
+
+  // From the first page only, so «Показать ещё» never swaps the featured card.
+  const featured = useMemo(
+    () => pickFeaturedRide(active.firstPage),
+    [active.firstPage],
   );
-  // The first page's exact query (incl. «Эта неделя»'s computed `startsTo`),
-  // so every «Показать ещё» page continues the same list; bumped per new
-  // first-page load so a late next-page response for old filters is dropped.
-  const queryRef = useRef<ListPublicRidesParams>({});
-  const generationRef = useRef(0);
+  const rest = active.items.filter((ride) => ride.id !== featured?.id);
 
-  useEffect(() => {
-    let cancelled = false;
-    const generation = ++generationRef.current;
-    const query = filtersToQuery(filters);
-    queryRef.current = query;
-    setStatus('loading');
-    setMoreStatus('idle');
-
-    listPublicRides(query)
-      .then((response) => {
-        if (cancelled || generation !== generationRef.current) return;
-        setRides(response.items);
-        setTotal(response.total);
-        setNextCursor(response.nextCursor);
-        setFeaturedId(pickFeaturedRide(response.items)?.id ?? null);
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStatus('error');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [filters, attempt]);
-
-  function loadMore() {
-    if (!nextCursor || moreStatus === 'loading') return;
-    const generation = generationRef.current;
-    setMoreStatus('loading');
-    listPublicRides({ ...queryRef.current, cursor: nextCursor })
-      .then((response) => {
-        if (generation !== generationRef.current) return;
-        setRides((current) => [...current, ...response.items]);
-        setTotal(response.total);
-        setNextCursor(response.nextCursor);
-        setMoreStatus('idle');
-      })
-      .catch(() => {
-        if (generation !== generationRef.current) return;
-        setMoreStatus('error');
-      });
+  function retry() {
+    active.retry();
+    if (archive.status === 'error') archive.retry();
   }
 
-  const featured = rides.find((ride) => ride.id === featuredId) ?? null;
-  const rest = rides.filter((ride) => ride.id !== featuredId);
-  const remaining = Math.max(0, total - rides.length);
-
   let body: ReactNode;
-  if (status === 'loading') {
+  if (active.status === 'loading') {
     body = <DiscoveryGridSkeleton />;
-  } else if (status === 'error') {
+  } else if (active.status === 'error') {
     body = (
-      <ErrorState
-        message={RIDE_DISCOVERY_TERMS.loadError}
-        onRetry={() => setAttempt((n) => n + 1)}
-      />
+      <ErrorState message={RIDE_DISCOVERY_TERMS.loadError} onRetry={retry} />
     );
-  } else if (rides.length === 0) {
+  } else if (active.items.length === 0) {
     body = hasActiveFilters(filters) ? (
       <EmptyState
         icon={<ContoursIllustration />}
@@ -180,7 +123,7 @@ export function RideGrid({
                 {RIDE_DISCOVERY_TERMS.allRidesTitle}
               </h2>
               <p className="text-body-sm text-text-muted tabular-nums">
-                <span className="md:hidden">{total}</span>
+                <span className="md:hidden">{active.total}</span>
                 <span className="hidden md:inline">
                   {RIDE_DISCOVERY_TERMS.sortNote}
                 </span>
@@ -194,25 +137,7 @@ export function RideGrid({
           </section>
         ) : null}
 
-        {nextCursor ? (
-          <div className="flex flex-col items-center gap-3">
-            {moreStatus === 'error' ? (
-              <p role="alert" className="text-body-sm text-danger">
-                {RIDE_DISCOVERY_TERMS.loadMoreError}
-              </p>
-            ) : null}
-            <Button
-              variant="secondary"
-              isLoading={moreStatus === 'loading'}
-              onClick={loadMore}
-              className="w-full md:w-auto"
-            >
-              {remaining > 0
-                ? RIDE_DISCOVERY_TERMS.showMore(remaining)
-                : RIDE_DISCOVERY_TERMS.showMoreFallback}
-            </Button>
-          </div>
-        ) : null}
+        <ShowMoreRides list={active} buttonClassName="w-full md:w-auto" />
       </div>
     );
   }
@@ -245,14 +170,27 @@ export function RideGrid({
           aria-live="polite"
           className="hidden shrink-0 text-body-sm text-text-muted tabular-nums md:block"
         >
-          {status === 'ready' && rides.length > 0
-            ? RIDE_DISCOVERY_TERMS.ridesCount(total)
+          {active.status === 'ready' && active.items.length > 0
+            ? RIDE_DISCOVERY_TERMS.ridesCount(active.total)
             : null}
         </p>
       </div>
 
-      <div aria-busy={status === 'loading'} {...panelProps}>
+      <div aria-busy={active.status === 'loading'} {...panelProps}>
         {body}
+        <ArchivedRidesSection
+          archive={archive}
+          hideError={active.status === 'error'}
+          className="mt-10 border-t border-border pt-8 md:mt-14 md:pt-10"
+        >
+          {(rides) => (
+            <div className={GRID_CLASSNAME}>
+              {rides.map((ride) => (
+                <RideGridCard key={ride.id} ride={ride} />
+              ))}
+            </div>
+          )}
+        </ArchivedRidesSection>
       </div>
     </div>
   );

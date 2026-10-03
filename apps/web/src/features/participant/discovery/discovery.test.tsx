@@ -57,7 +57,12 @@ vi.mock('./api', async () => {
   };
 });
 
-const listPublicRidesMock = vi.mocked(listPublicRides);
+// CR-193: both views also read `phase=archive` («Завершённые и отменённые»).
+// Those calls go to `archiveRidesMock` (an empty page unless a test says
+// otherwise), so `listPublicRidesMock` keeps seeing the main list's calls only,
+// minus the `phase` param itself (asserted directly where it matters).
+const listPublicRidesMock = vi.fn<typeof listPublicRides>();
+const archiveRidesMock = vi.fn<typeof listPublicRides>();
 const getRouteGeometryMock = vi.mocked(getRouteGeometry);
 
 const baseRide: PublicRideListItem = {
@@ -100,6 +105,11 @@ const baseRide: PublicRideListItem = {
 
 beforeEach(() => {
   listPublicRidesMock.mockReset();
+  archiveRidesMock.mockReset();
+  archiveRidesMock.mockResolvedValue({ items: [], nextCursor: null, total: 0 });
+  vi.mocked(listPublicRides).mockImplementation(({ phase, ...params } = {}) =>
+    phase === 'archive' ? archiveRidesMock(params) : listPublicRidesMock(params),
+  );
   getRouteGeometryMock.mockReset();
   // Default: the full line never arrives, so the smoothed preview stays.
   getRouteGeometryMock.mockReturnValue(new Promise(() => {}));
@@ -230,6 +240,8 @@ describe('DiscoveryList', () => {
       items: [
         {
           ...baseRide,
+          // CR-193: seats left are shown only while registration is open.
+          status: 'registration_open',
           startLabel: 'Парк Горького',
           registrationsCount: 14,
         },
@@ -256,7 +268,7 @@ describe('DiscoveryList', () => {
     expect(within(row).getByText('Осталось 6 мест')).toBeInTheDocument();
     expect(within(row).getByText('Средний')).toBeInTheDocument();
     expect(within(row).getByText('500 ₽')).toBeInTheDocument();
-    expect(within(row).getByText('Опубликован')).toBeInTheDocument();
+    expect(within(row).getByText('Регистрация открыта')).toBeInTheDocument();
     // The card's "first three" (distance/elevation/pace) never includes duration.
     expect(within(row).queryByText(/2 ч 30/)).not.toBeInTheDocument();
   });
@@ -329,9 +341,10 @@ describe('DiscoveryList', () => {
   it('says «Мест нет» for a full ride and shows no seats chip without a limit', async () => {
     listPublicRidesMock.mockResolvedValue({
       items: [
-        { ...baseRide, registrationsCount: 20 },
+        { ...baseRide, status: 'registration_open', registrationsCount: 20 },
         {
           ...baseRide,
+          status: 'registration_open',
           id: 'ride-2',
           title: 'Без лимита',
           participantLimit: null,
@@ -349,6 +362,74 @@ describe('DiscoveryList', () => {
     expect(
       within(openRow).queryByText(/Осталось|Мест нет/),
     ).not.toBeInTheDocument();
+  });
+
+  // CR-193 (owner QA: a finished card read «Осталось 6 мест»).
+  it.each(['published', 'registration_closed', 'started'] as const)(
+    'shows no seats chip on a %s row — the status badge says why',
+    async (status) => {
+      listPublicRidesMock.mockResolvedValue({
+        items: [{ ...baseRide, status, registrationsCount: 14 }],
+        nextCursor: null,
+        total: 1,
+      });
+
+      render(<DiscoveryList />);
+
+      const row = (await screen.findByText(baseRide.title)).closest('li')!;
+      expect(
+        within(row).queryByText(/Осталось|Мест нет/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it('asks for the active phase, and lists finished/cancelled rides apart, off the map (CR-193)', async () => {
+    listPublicRidesMock.mockResolvedValue({
+      items: [{ ...baseRide, status: 'registration_open' }],
+      nextCursor: null,
+      total: 1,
+    });
+    archiveRidesMock.mockResolvedValue({
+      items: [
+        {
+          ...baseRide,
+          id: 'ride-done',
+          title: 'Завершённый заезд',
+          status: 'finished',
+          registrationsCount: 14,
+        },
+      ],
+      nextCursor: null,
+      total: 1,
+    });
+
+    render(<DiscoveryList />);
+
+    await screen.findByRole('link', { name: baseRide.title });
+    expect(vi.mocked(listPublicRides)).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'active' }),
+    );
+    expect(vi.mocked(listPublicRides)).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'archive' }),
+    );
+    const toggle = await screen.findByRole('button', {
+      name: 'Показать 1 заезд',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Завершённый заезд')).toBeNull();
+
+    fireEvent.click(toggle);
+    const archived = screen.getByRole('list', {
+      name: 'Завершённые и отменённые',
+    });
+    const row = within(archived)
+      .getByRole('link', { name: 'Завершённый заезд' })
+      .closest('li')!;
+    expect(within(row).getByText('Завершён')).toBeInTheDocument();
+    expect(within(row).queryByText(/Осталось/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Скрыть' }),
+    ).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('omits a metric for a field that is still null, never showing 0', async () => {

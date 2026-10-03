@@ -466,6 +466,186 @@ describe('/v1/rides', () => {
       await app.close();
     });
 
+    // CR-193 (owner QA: finished/cancelled mixed in with open rides). The
+    // default list above stays every non-draft status; `phase` splits it.
+    describe('phase (CR-193)', () => {
+      async function seedEveryStatus(
+        app: Awaited<ReturnType<typeof buildApp>>,
+      ) {
+        const owner = await registerAndLogin(app, {
+          withOrganizerProfile: true,
+        });
+        // Each ride a day later than the previous one, so the soonest-first
+        // order (and a page boundary) is known up front.
+        let day = 0;
+        async function createRide(
+          title: string,
+          actions: string[],
+          bicycleType = 'gravel',
+        ) {
+          day += 1;
+          const created = await app.inject({
+            method: 'POST',
+            url: '/v1/rides',
+            headers: { origin: WEB_ORIGIN },
+            cookies: { session: owner.rawToken },
+            payload: {
+              ...VALID_PAYLOAD,
+              title,
+              bicycleType,
+              startsAt: new Date(Date.UTC(2027, 4, day, 5)).toISOString(),
+            },
+          });
+          const rideId = created.json().ride.id as string;
+          for (const action of actions) {
+            const response = await app.inject({
+              method: 'POST',
+              url: `/v1/rides/${rideId}/${action}`,
+              headers: { origin: WEB_ORIGIN },
+              cookies: { session: owner.rawToken },
+            });
+            expect(response.statusCode).toBe(200);
+          }
+          return rideId;
+        }
+
+        const toStarted = [
+          'publish',
+          'open-registration',
+          'close-registration',
+          'start',
+        ];
+        return {
+          draft: await createRide('Черновик', []),
+          finished: await createRide('Завершён', [...toStarted, 'finish']),
+          published: await createRide('Опубликован', ['publish']),
+          cancelled: await createRide('Отменён', ['publish', 'cancel']),
+          open: await createRide('Открыт', ['publish', 'open-registration']),
+          closed: await createRide('Закрыт', [
+            'publish',
+            'open-registration',
+            'close-registration',
+          ]),
+          started: await createRide('Начался', toStarted),
+          cancelledRoad: await createRide(
+            'Отменён, шоссе',
+            ['publish', 'open-registration', 'cancel'],
+            'road',
+          ),
+        };
+      }
+
+      it('active = published/open/closed/started, archive = finished/cancelled, each with its own total; omitted = both', async () => {
+        const app = await buildApp(testEnv);
+        const ids = await seedEveryStatus(app);
+
+        const active = await app.inject({
+          method: 'GET',
+          url: '/v1/rides?phase=active',
+        });
+        expect(active.statusCode).toBe(200);
+        expect(
+          active.json().items.map((item: { id: string }) => item.id),
+        ).toEqual([ids.published, ids.open, ids.closed, ids.started]);
+        expect(active.json().total).toBe(4);
+
+        const archive = await app.inject({
+          method: 'GET',
+          url: '/v1/rides?phase=archive',
+        });
+        expect(archive.statusCode).toBe(200);
+        expect(
+          archive
+            .json()
+            .items.map((item: { id: string; status: string }) => [
+              item.id,
+              item.status,
+            ]),
+        ).toEqual([
+          [ids.finished, 'finished'],
+          [ids.cancelled, 'cancelled'],
+          [ids.cancelledRoad, 'cancelled'],
+        ]);
+        expect(archive.json().total).toBe(3);
+
+        // Default unchanged: the same list as before CR-193, the union of both.
+        const all = await app.inject({ method: 'GET', url: '/v1/rides' });
+        expect(all.json().total).toBe(7);
+        expect(
+          all.json().items.map((item: { id: string }) => item.id),
+        ).not.toContain(ids.draft);
+
+        await app.close();
+      });
+
+      it('applies the other filters inside a phase and pages each phase by its own cursor', async () => {
+        const app = await buildApp(testEnv);
+        const ids = await seedEveryStatus(app);
+
+        const archiveRoad = await app.inject({
+          method: 'GET',
+          url: '/v1/rides?phase=archive&bicycleType=road',
+        });
+        expect(
+          archiveRoad.json().items.map((item: { id: string }) => item.id),
+        ).toEqual([ids.cancelledRoad]);
+        expect(archiveRoad.json().total).toBe(1);
+
+        const activeRoad = await app.inject({
+          method: 'GET',
+          url: '/v1/rides?phase=active&bicycleType=road',
+        });
+        expect(activeRoad.json()).toMatchObject({
+          items: [],
+          nextCursor: null,
+          total: 0,
+        });
+
+        // A start window that leaves out the last two rides (started, road).
+        const windowed = await app.inject({
+          method: 'GET',
+          url: '/v1/rides?phase=active&startsTo=2027-05-06T23:00:00Z',
+        });
+        expect(
+          windowed.json().items.map((item: { id: string }) => item.id),
+        ).toEqual([ids.published, ids.open, ids.closed]);
+
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        do {
+          const response = await app.inject({
+            method: 'GET',
+            url: `/v1/rides?phase=archive&limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+          });
+          expect(response.statusCode).toBe(200);
+          const body: {
+            items: Array<{ id: string }>;
+            nextCursor: string | null;
+            total: number;
+          } = response.json();
+          expect(body.total).toBe(3);
+          seen.push(...body.items.map((item) => item.id));
+          cursor = body.nextCursor;
+        } while (cursor);
+        expect(seen).toEqual([ids.finished, ids.cancelled, ids.cancelledRoad]);
+
+        const activePage1 = await app.inject({
+          method: 'GET',
+          url: '/v1/rides?phase=active&limit=3',
+        });
+        const activePage2 = await app.inject({
+          method: 'GET',
+          url: `/v1/rides?phase=active&limit=3&cursor=${encodeURIComponent(activePage1.json().nextCursor)}`,
+        });
+        expect(
+          activePage2.json().items.map((item: { id: string }) => item.id),
+        ).toEqual([ids.started]);
+        expect(activePage2.json().nextCursor).toBeNull();
+
+        await app.close();
+      });
+    });
+
     it('paginates soonest-first and rejects a malformed cursor with 400 invalid_cursor', async () => {
       const app = await buildApp(testEnv);
       const owner = await registerAndLogin(app, { withOrganizerProfile: true });
@@ -808,6 +988,7 @@ describe('/v1/rides', () => {
       'difficulty=6',
       'difficulty=2.5',
       'free=maybe',
+      'phase=past',
     ])('rejects %s with 400 validation_error (CR-153)', async (query) => {
       const app = await buildApp(testEnv);
 

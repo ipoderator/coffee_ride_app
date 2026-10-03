@@ -23,6 +23,30 @@ export const RIDE_STATUSES = [
 ] as const;
 export type RideStatus = (typeof RIDE_STATUSES)[number];
 
+/**
+ * CR-193: the terminal statuses — a ride in one of them will not take place (any
+ * more) as an event a rider can join or ride. Lists put these apart from the
+ * rest: `GET /v1/rides?phase=archive` (the catalog's «Завершённые и отменённые»)
+ * and `GET /v1/registrations/mine?when=past` (a participant's history, whatever
+ * the ride's date). Every other non-draft status is the `active` phase —
+ * `started` and `registration_closed` included: still happening, just not open.
+ */
+export const ARCHIVED_RIDE_STATUSES = [
+  'finished',
+  'cancelled',
+] as const satisfies readonly RideStatus[];
+export type ArchivedRideStatus = (typeof ARCHIVED_RIDE_STATUSES)[number];
+
+export function isArchivedRideStatus(
+  status: RideStatus,
+): status is ArchivedRideStatus {
+  return (ARCHIVED_RIDE_STATUSES as readonly RideStatus[]).includes(status);
+}
+
+/** CR-193: `GET /v1/rides`'s optional `phase` (see {@link ARCHIVED_RIDE_STATUSES}). */
+export const RIDE_LIST_PHASES = ['active', 'archive'] as const;
+export type RideListPhase = (typeof RIDE_LIST_PHASES)[number];
+
 export const BICYCLE_TYPES = ['road', 'gravel', 'mtb', 'any'] as const;
 export type BicycleType = (typeof BICYCLE_TYPES)[number];
 

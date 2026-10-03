@@ -6,6 +6,9 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
+  notInArray,
+  or,
   sql,
 } from 'drizzle-orm';
 import {
@@ -35,6 +38,7 @@ import type {
   WaitlistEntry,
 } from 'types';
 import {
+  ARCHIVED_RIDE_STATUSES,
   ORGANIZER_ACTIVITY_DAYS,
   ORGANIZER_ACTIVITY_RECENT_LIMIT,
 } from 'types';
@@ -946,6 +950,17 @@ export async function getRiderAvatarDownload(
  * `ride.startsAt < now()`, ordered `startsAt desc` (most recent past first). No
  * `date_trunc('milliseconds', ...)` cursor fix (KI-039) needed — `ride.startsAt` is
  * organizer-entered, not a `now()`-derived microsecond-precision value.
+ *
+ * CR-193 (owner QA): the split is by the ride's status first, its date second.
+ * A `finished`/`cancelled` ride (`ARCHIVED_RIDE_STATUSES`) is history whatever its
+ * date — finished early or cancelled ahead of time, it is not something to come —
+ * so it is `past`, where `startsAt desc` puts such a still-future-dated ride at the
+ * top with its «Отменён»/«Завершён» badge. A `started` ride is `upcoming` even
+ * once its start time has passed: it is under way, the rider may still need its
+ * page (the finish check-in), and it stays there until the organizer finishes it —
+ * the same rule as the organizer's «Заезды сейчас» (CR-183). The two predicates are
+ * exact complements, so every active registration is in exactly one tab, and both
+ * stay plain filters under the unchanged `(startsAt, id)` keyset.
  */
 export async function listMyRegistrations(
   db: DbClient,
@@ -961,12 +976,25 @@ export async function listMyRegistrations(
   const nowIso = new Date().toISOString();
   const isUpcoming = query.when === 'upcoming';
 
+  const notArchived = notInArray(rides.status, [...ARCHIVED_RIDE_STATUSES]);
   const conditions = [
     eq(registrations.userId, userId),
     eq(registrations.status, 'active'),
     isUpcoming
-      ? sql`${rides.startsAt} >= ${nowIso}::timestamptz`
-      : sql`${rides.startsAt} < ${nowIso}::timestamptz`,
+      ? and(
+          notArchived,
+          or(
+            sql`${rides.startsAt} >= ${nowIso}::timestamptz`,
+            eq(rides.status, 'started'),
+          ),
+        )!
+      : or(
+          inArray(rides.status, [...ARCHIVED_RIDE_STATUSES]),
+          and(
+            sql`${rides.startsAt} < ${nowIso}::timestamptz`,
+            ne(rides.status, 'started'),
+          ),
+        )!,
   ];
   if (query.cursor) {
     let cursorKey;

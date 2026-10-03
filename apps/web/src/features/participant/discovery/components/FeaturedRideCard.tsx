@@ -139,7 +139,7 @@ export function FeaturedRideCard({ ride }: { ride: PublicRideListItem }) {
           </p>
         )}
 
-        {cancelled ? null : <SeatsMeter seats={seats} className="md:mt-auto" />}
+        {seats ? <SeatsMeter seats={seats} className="md:mt-auto" /> : null}
 
         {/* The visible text leads the accessible name (WCAG 2.5.3); the ride
             title makes it unique on the page. */}

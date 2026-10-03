@@ -4,6 +4,7 @@ import type {
   GetRouteGeometryResponse,
   ListPublicRidesResponse,
   ProblemDetails,
+  RideListPhase,
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
 
@@ -29,6 +30,8 @@ export interface ListPublicRidesParams {
   paceMax?: number;
   difficulty?: DifficultyLevel;
   free?: boolean;
+  /** CR-193: `active` or `archive` (finished/cancelled); omitted — both. */
+  phase?: RideListPhase;
 }
 
 export async function listPublicRides(

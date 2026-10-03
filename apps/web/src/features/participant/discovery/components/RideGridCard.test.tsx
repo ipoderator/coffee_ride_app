@@ -152,6 +152,38 @@ describe('RideGridCard (CR-144, compact in CR-153)', () => {
     expect(screen.queryByText(/участник/)).toBeNull();
   });
 
+  // CR-193 (owner QA: a finished card read «Осталось 6 мест»).
+  it.each([
+    ['finished', 'Завершён'],
+    ['started', 'Заезд начался'],
+  ] as const)(
+    'shows only the status on a %s ride — no seats, no bar',
+    (status, label) => {
+      const { container } = render(
+        <RideGridCard
+          ride={makeRide({ status, participantLimit: 10, registrationsCount: 4 })}
+        />,
+      );
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.queryByText(/Осталось|Мест нет|из 10/)).toBeNull();
+      expect(container.querySelector('[style*="width"]')).toBeNull();
+    },
+  );
+
+  it('says registration is not open yet on a published ride (CR-193)', () => {
+    render(
+      <RideGridCard
+        ride={makeRide({
+          status: 'published',
+          participantLimit: 10,
+          registrationsCount: 0,
+        })}
+      />,
+    );
+    expect(screen.getByText('Запись ещё не открыта')).toBeInTheDocument();
+    expect(screen.queryByText(/Осталось/)).toBeNull();
+  });
+
   it('drops the cover for a ride without a route and says so (CR-185)', () => {
     const { container } = render(
       <RideGridCard

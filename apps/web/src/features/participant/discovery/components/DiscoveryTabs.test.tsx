@@ -25,7 +25,12 @@ vi.mock('@/lib/maps/create-map-renderer', () => ({
   createMapRenderer: () => null,
 }));
 
-const listPublicRidesMock = vi.mocked(listPublicRides);
+// CR-193: both views also read `phase=archive` («Завершённые и отменённые»).
+// Those calls go to `archiveRidesMock` (an empty page unless a test says
+// otherwise), so `listPublicRidesMock` keeps seeing the main list's calls only,
+// minus the `phase` param itself (asserted directly where it matters).
+const listPublicRidesMock = vi.fn<typeof listPublicRides>();
+const archiveRidesMock = vi.fn<typeof listPublicRides>();
 
 const RIDE: PublicRideListItem = {
   id: 'ride-1',
@@ -69,6 +74,11 @@ beforeEach(() => {
   search = '';
   window.history.replaceState(null, '', '/');
   listPublicRidesMock.mockReset();
+  archiveRidesMock.mockReset();
+  archiveRidesMock.mockResolvedValue({ items: [], nextCursor: null, total: 0 });
+  vi.mocked(listPublicRides).mockImplementation(({ phase, ...params } = {}) =>
+    phase === 'archive' ? archiveRidesMock(params) : listPublicRidesMock(params),
+  );
   listPublicRidesMock.mockResolvedValue({
     items: [RIDE],
     nextCursor: null,

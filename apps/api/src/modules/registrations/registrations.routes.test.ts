@@ -1304,6 +1304,101 @@ describe('GET /v1/registrations/mine', () => {
     await app.close();
   });
 
+  // CR-193 (owner QA: a cancelled and a finished ride with future dates sat in
+  // «Предстоящие»). Status first, date second: finished/cancelled are history
+  // whatever their date; a started ride stays upcoming even past its start.
+  it('puts a finished/cancelled ride in past whatever its date, keeps a started one upcoming, and pages both tabs across the boundary', async () => {
+    const app = await buildApp(testEnv);
+    const { rawToken } = await registerAndLoginUser(app);
+    const { organizerToken, rideId: openFuture } = await createOrganizerRide(
+      app,
+      { startsAt: '2027-03-01T05:00:00.000Z' },
+    );
+    async function rideAt(startsAt: string) {
+      return (await createOrganizerRide(app, { organizerToken, startsAt }))
+        .rideId;
+    }
+    const closedFuture = await rideAt('2027-04-01T05:00:00.000Z');
+    const startedPast = await rideAt('2020-06-01T05:00:00.000Z');
+    const cancelledFuture = await rideAt('2027-05-01T05:00:00.000Z');
+    const finishedFuture = await rideAt('2027-06-01T05:00:00.000Z');
+    const openPast = await rideAt('2020-01-01T05:00:00.000Z');
+
+    for (const rideId of [
+      openFuture,
+      closedFuture,
+      startedPast,
+      cancelledFuture,
+      finishedFuture,
+      openPast,
+    ]) {
+      const registered = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+      expect(registered.statusCode).toBe(201);
+    }
+    async function transition(rideId: string, actions: string[]) {
+      for (const action of actions) {
+        const response = await app.inject({
+          method: 'POST',
+          url: `/v1/rides/${rideId}/${action}`,
+          headers: { origin: WEB_ORIGIN },
+          cookies: { session: organizerToken },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+    }
+    await transition(closedFuture, ['close-registration']);
+    await transition(startedPast, ['close-registration', 'start']);
+    await transition(cancelledFuture, ['cancel']);
+    await transition(finishedFuture, ['close-registration', 'start', 'finish']);
+
+    async function readAll(when: 'upcoming' | 'past') {
+      const pages: Array<Array<[string, string]>> = [];
+      let cursor: string | null = null;
+      do {
+        const response = await app.inject({
+          method: 'GET',
+          url: `/v1/registrations/mine?when=${when}&limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+          cookies: { session: rawToken },
+        });
+        expect(response.statusCode).toBe(200);
+        const body: {
+          items: Array<{ ride: { id: string; status: string } }>;
+          nextCursor: string | null;
+        } = response.json();
+        pages.push(
+          body.items.map((item): [string, string] => [
+            item.ride.id,
+            item.ride.status,
+          ]),
+        );
+        cursor = body.nextCursor;
+      } while (cursor);
+      return pages;
+    }
+
+    expect(await readAll('upcoming')).toEqual([
+      [
+        [startedPast, 'started'],
+        [openFuture, 'registration_open'],
+      ],
+      [[closedFuture, 'registration_closed']],
+    ]);
+    expect(await readAll('past')).toEqual([
+      [
+        [finishedFuture, 'finished'],
+        [cancelledFuture, 'cancelled'],
+      ],
+      [[openPast, 'registration_open']],
+    ]);
+
+    await app.close();
+  });
+
   it('paginates the upcoming tab soonest-first and rejects a malformed cursor with 400 invalid_cursor', async () => {
     const app = await buildApp(testEnv);
     const { rawToken } = await registerAndLoginUser(app);

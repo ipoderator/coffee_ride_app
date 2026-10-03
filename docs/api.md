@@ -286,6 +286,15 @@ validation_error`. Response gains `total` (every ride matching the filters,
 ignoring `cursor`/`limit` — one extra `count(*)`), items gain `waitlistCount`
 (`waiting` entries, a count only — already public on `GET /v1/rides/:id`; a
 fifth batched query).
+**CR-193** (owner QA: finished/cancelled rides mixed in with open ones) —
+additive, optional `?phase=active|archive`: `active` keeps the rides still ahead
+or under way (`published`/`registration_open`/`registration_closed`/`started`),
+`archive` the terminal ones (`finished`/`cancelled` — `ARCHIVED_RIDE_STATUSES` in
+`packages/types`). Omitted → both, exactly as before (existing callers unchanged).
+Every other filter, the `startsAt >= now` window, the `(startsAt asc, id asc)`
+order and `total` apply inside the chosen phase, so `active` + `archive` partition
+the unfiltered list; each phase pages with its own `nextCursor`. Any other value →
+`400 validation_error`. The catalog (`/`) requests the two phases as two sections.
 
 GET `/v1/rides/mine` — **implemented (CR-088)**. Requires a valid session cookie
 (`401` otherwise). Every ride owned by the caller, any status — distinct from the
@@ -717,7 +726,14 @@ one is not "a ride you're registered for" any more, same filter
 public+organizer summary. `400` if `when` is missing/invalid — required, one of
 `upcoming` (`ride.startsAt >= now()`, ordered `startsAt asc`, soonest first) or `past`
 (`ride.startsAt < now()`, ordered `startsAt desc`, most recent past first); two
-independently cursor-paginated tabs, not one page split client-side. Waitlist entries
+independently cursor-paginated tabs, not one page split client-side. **CR-193**
+(owner QA — a cancelled and a finished ride with future dates were «upcoming»): the
+split is by ride status first, date second. A `finished`/`cancelled` ride is `past`
+whatever its `startsAt` (with `startsAt desc`, a still-future-dated one leads the
+page, its status on the card); a `started` ride is `upcoming` even after its start
+time, until the organizer finishes it. Exactly: `upcoming` = status not
+`finished`/`cancelled` **and** (`startsAt >= now()` **or** `started`); `past` = its
+complement. Order and cursor unchanged. Waitlist entries
 are out of scope (still visible on the specific ride's `/rides/[id]` page). `200` →
 `{ items: MyRegistrationSummary[], nextCursor }`, each item `{ registration: Registration,
 ride: PublicRide }` — reuses both existing shapes, no third one invented. Collection,
