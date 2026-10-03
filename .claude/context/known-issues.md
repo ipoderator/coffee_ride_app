@@ -478,6 +478,22 @@ Next action: same change as CR-195's `RideOverview` (a `ConfirmDialog` with a
 `*ConfirmTitle`/`*ConfirmDescription` pair per action, tests and stories without
 `vi.spyOn(window, 'confirm')`).
 
+### KI-088 — `discovery-map-chromium-linux.png` predates KI-078 and still shows the expand button over the notice
+
+Status: open. Discovered: 2026-10-03 (CI run 37112228653, after CR-195).
+Problem: the baseline was taken on 2026-09-28 (`3d609d0`); since CR-185 (2026-10-02)
+the expand button is hidden while the map is unavailable (KI-078,
+`DiscoveryList.tsx`), so the app no longer renders what the baseline shows (the button
+covering «Карта» in «Карта временно недоступна…»). The spec still passes: the button's
+area (~0.3 % of the frame) is inside `maxDiffPixelRatio: 0.02`, so CI never produces an
+`*-actual.png` to take. A real regression of that size in this corner would pass too.
+Impact: low — the screenshot test is slightly weaker for this screen; the UI is right
+(checked locally without a MapGL key).
+Workaround: none needed.
+Next action: regenerate this one baseline (Docker amd64 per `.claude/rules/testing.md`,
+or a CI run with that test's tolerance tightened once to get its actual — then restore
+the tolerance). The `mobile` baseline hides the button below `lg` anyway.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

@@ -114,6 +114,9 @@ test.describe('discovery screens', () => {
   test('discovery map', async ({ page }) => {
     await page.goto('/?view=map');
     await expect(page.getByTestId('discovery-list-panel')).toBeVisible();
+    // The panel is there while its rows are still skeletons — wait for the
+    // ride itself, as the grid test does (a CI run caught the skeletons).
+    await expect(page.locator('a[href^="/rides/"]').first()).toBeVisible();
     await expect(page).toHaveScreenshot('discovery-map.png', {
       stylePath: HIDE_SEEDED_ART,
     });

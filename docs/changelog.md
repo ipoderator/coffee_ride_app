@@ -383,3 +383,8 @@ Contract: `packages/ui` — `RIDE_EDIT_TERMS.cancelConfirm` replaced by `cancelC
 Files: `apps/web/src/features/organizer/rides/components/{RideOverview,EditRideForm,CreateRideForm}.tsx`, `apps/web/src/features/participant/ride-detail/components/RegistrationTicket.tsx`, `apps/web/src/lib/datetime/zoned-time.ts`, `apps/web/src/features/{organizer/rides/rides,participant/ride-detail/ride-detail}.test.tsx`, `apps/web/e2e/ride-lifecycle.spec.ts`, `apps/web/src/stories/{RideManagement,RegistrationTicket}.stories.tsx`, `packages/ui/src/terminology.ts`, `docs/design.md` §6 (the ticket) and §9 (`DatePicker`).
 Validation: `web`/`ui` typecheck + lint clean; web unit 749/749; ui 246/246; Storybook 177/177 with axe (new `CancelConfirm`, `Waitlisted`); e2e chromium `access-control`/`critical-journeys`/`ride-lifecycle`/`registration-waitlist` 11/11 on isolated ports. No screenshot baseline shows the changed states.
 Decisions: none. Follow-up: KI-087 — six other destructive confirmations (avatar/cover/GPX/route point/stop delete) still use `window.confirm`.
+
+## 2026-10-03 — CI: the discovery-map screenshot waits for the ride row
+
+Summary: CI run 37112228653 failed `visual-regression › discovery map` on its first attempt (9 % of pixels — the list still showed skeleton rows) and passed on retry. The spec waited only for the list panel; it now also waits for the ride link, as the grid spec already did. Checked 5× locally (`--repeat-each 5`). The same run's diff showed the Linux baseline predates KI-078 (the expand button drawn over the «map unavailable» notice) — recorded as KI-088.
+Files: `apps/web/e2e/visual-regression.spec.ts`, `.claude/context/known-issues.md`.
