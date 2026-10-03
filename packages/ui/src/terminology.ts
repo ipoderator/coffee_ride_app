@@ -1183,6 +1183,16 @@ export const RIDE_DISCOVERY_TERMS = {
   seatsTakenShort: (count: number, limit: number) => `${count} из ${limit}`,
   registrationClosedNote: 'Запись закрыта',
   waitlistQueued: (count: number) => `${count} в очереди`,
+  // CR-193 (owner QA): «Осталось N мест» only while a seat can be taken —
+  // a published ride not yet open says so instead.
+  registrationNotOpenNote: 'Запись ещё не открыта',
+  // CR-193: finished/cancelled rides, apart from the ones still ahead —
+  // a collapsed section under the list, with its own «Показать ещё».
+  archiveTitle: 'Завершённые и отменённые',
+  archiveShow: (count: number) =>
+    `Показать ${count} ${pluralRu(count, 'заезд', 'заезда', 'заездов')}`,
+  archiveHide: 'Скрыть',
+  archiveLoadError: 'Не удалось загрузить завершённые и отменённые заезды.',
 } as const;
 
 /**
@@ -1537,14 +1547,16 @@ export const PARTICIPANTS_GROUP_TERMS = {
 export const MY_REGISTRATIONS_TERMS = {
   pageTitle: 'Мои регистрации',
   tabUpcoming: 'Предстоящие',
-  tabPast: 'Прошедшие',
+  // CR-193 (owner QA): finished and cancelled rides live here whatever their
+  // date, so «Прошедшие» would mislabel next week's cancelled ride.
+  tabPast: 'История',
   loadError: 'Не удалось загрузить регистрации. Попробуйте ещё раз.',
   emptyUpcomingTitle: 'Нет предстоящих регистраций',
   emptyUpcomingDescription:
     'Зарегистрируйтесь на заезд в разделе «Заезды», чтобы увидеть его здесь.',
-  emptyPastTitle: 'Пока нет прошедших заездов',
+  emptyPastTitle: 'История пока пуста',
   emptyPastDescription:
-    'Здесь появятся заезды, в которых вы уже приняли участие.',
+    'Здесь появятся прошедшие, завершённые и отменённые заезды.',
 } as const;
 
 /**
@@ -1560,6 +1572,9 @@ export const PARTICIPANT_HOME_TERMS = {
   registrationsEmptyDescription:
     'Найдите подходящий маршрут и выберите группу. После записи здесь появятся время старта и обновления организатора.',
   findRide: 'Найти заезд',
+  // CR-193: a cancelled ride leaves «Ближайшие» but stays in sight here until
+  // its date has passed (then it is only in «История»).
+  cancelledLabel: 'Отменены организатором',
   allRegistrations: 'Все регистрации',
   registrationsLoadError: 'Не удалось загрузить регистрации.',
   organizerLabel: 'Организатору',

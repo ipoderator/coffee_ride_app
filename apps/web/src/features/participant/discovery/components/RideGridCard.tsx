@@ -36,6 +36,9 @@ const TAG_CLASSNAME =
  * — a compact head (status + an explicit «Маршрут пока не загружен») instead
  * of a full-height empty contour panel.
  *
+ * CR-193: no seats block on a started, finished or cancelled ride
+ * (`rideCardSeats` → `null`) — only the status chip, never «Осталось N мест».
+ *
  * No participant avatars here on purpose: `GET /v1/rides` is fully public
  * (no session), and showing riders' photos/names to an anonymous visitor
  * would leak identity the ride-detail riders list only shows once
@@ -124,7 +127,7 @@ export function RideGridCard({ ride }: { ride: PublicRideListItem }) {
           </p>
         )}
 
-        {cancelled ? null : <SeatsMeter seats={seats} className="mt-1" />}
+        {seats ? <SeatsMeter seats={seats} className="mt-1" /> : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
           <span className={TAG_CLASSNAME}>

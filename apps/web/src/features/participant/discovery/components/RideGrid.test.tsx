@@ -15,7 +15,12 @@ vi.mock('../api', async () => {
   return { ...actual, listPublicRides: vi.fn() };
 });
 
-const listPublicRidesMock = vi.mocked(listPublicRides);
+// CR-193: both views also read `phase=archive` («Завершённые и отменённые»).
+// Those calls go to `archiveRidesMock` (an empty page unless a test says
+// otherwise), so `listPublicRidesMock` keeps seeing the main list's calls only,
+// minus the `phase` param itself (asserted directly where it matters).
+const listPublicRidesMock = vi.fn<typeof listPublicRides>();
+const archiveRidesMock = vi.fn<typeof listPublicRides>();
 
 function makeRide(
   id: string,
@@ -67,6 +72,11 @@ function makeRide(
 
 beforeEach(() => {
   listPublicRidesMock.mockReset();
+  archiveRidesMock.mockReset();
+  archiveRidesMock.mockResolvedValue({ items: [], nextCursor: null, total: 0 });
+  vi.mocked(listPublicRides).mockImplementation(({ phase, ...params } = {}) =>
+    phase === 'archive' ? archiveRidesMock(params) : listPublicRidesMock(params),
+  );
 });
 
 describe('RideGrid (CR-153)', () => {
@@ -287,5 +297,147 @@ describe('RideGrid (CR-153)', () => {
       'aria-pressed',
       'false',
     );
+  });
+
+  // CR-193 (owner QA: finished/cancelled mixed in with open rides).
+  describe('«Завершённые и отменённые»', () => {
+    it('asks the main list for active rides and shows no archive section when there is none', async () => {
+      listPublicRidesMock.mockResolvedValue({
+        items: [makeRide('a')],
+        nextCursor: null,
+        total: 1,
+      });
+
+      render(<RideGrid />);
+      await screen.findByRole('article', { name: 'Заезд a' });
+      expect(vi.mocked(listPublicRides)).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'active' }),
+      );
+      await waitFor(() => expect(archiveRidesMock).toHaveBeenCalledTimes(1));
+      expect(
+        screen.queryByRole('region', { name: 'Завершённые и отменённые' }),
+      ).toBeNull();
+    });
+
+    it('lists finished and cancelled rides apart, collapsed, with their own «Показать ещё»', async () => {
+      listPublicRidesMock.mockResolvedValue({
+        items: [makeRide('a')],
+        nextCursor: null,
+        total: 1,
+      });
+      archiveRidesMock
+        .mockResolvedValueOnce({
+          items: [
+            makeRide('done', { status: 'finished', registrationsCount: 4 }),
+            makeRide('off', { status: 'cancelled' }),
+          ],
+          nextCursor: 'archive-2',
+          total: 3,
+        })
+        .mockResolvedValueOnce({
+          items: [makeRide('off-2', { status: 'cancelled' })],
+          nextCursor: null,
+          total: 3,
+        });
+
+      render(<RideGrid />);
+      const archive = await screen.findByRole('region', {
+        name: 'Завершённые и отменённые',
+      });
+      // The featured card is the only active ride; the total counts it alone.
+      expect(screen.getByText('1 заезд')).toBeInTheDocument();
+      expect(screen.queryByText('Заезд done')).toBeNull();
+
+      const toggle = within(archive).getByRole('button', {
+        name: 'Показать 3 заезда',
+      });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(within(archive).queryByRole('link')).toBeNull();
+
+      fireEvent.click(toggle);
+      expect(
+        within(archive)
+          .getAllByRole('link')
+          .map((link) => link.getAttribute('href')),
+      ).toEqual(['/rides/done', '/rides/off']);
+      const done = within(archive).getByRole('link', { name: /Заезд done/ });
+      expect(within(done).getByText('Завершён')).toBeInTheDocument();
+      expect(within(done).queryByText(/Осталось/)).toBeNull();
+
+      fireEvent.click(
+        within(archive).getByRole('button', { name: 'Показать ещё 1 заезд' }),
+      );
+      await within(archive).findByRole('link', { name: /Заезд off-2/ });
+      expect(archiveRidesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cursor: 'archive-2' }),
+      );
+
+      fireEvent.click(within(archive).getByRole('button', { name: 'Скрыть' }));
+      expect(within(archive).queryByRole('link')).toBeNull();
+    });
+
+    it('applies the chips to the archive too', async () => {
+      listPublicRidesMock.mockResolvedValue({
+        items: [makeRide('a')],
+        nextCursor: null,
+        total: 1,
+      });
+      archiveRidesMock.mockResolvedValue({
+        items: [makeRide('off', { status: 'cancelled' })],
+        nextCursor: null,
+        total: 1,
+      });
+
+      render(<RideGrid />);
+      await screen.findByRole('region', { name: 'Завершённые и отменённые' });
+      fireEvent.click(screen.getByRole('button', { name: 'Бесплатные' }));
+      await waitFor(() => expect(archiveRidesMock).toHaveBeenCalledTimes(2));
+      expect(archiveRidesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ free: true }),
+      );
+    });
+
+    it('shows a quiet notice with retry when only the archive fails', async () => {
+      listPublicRidesMock.mockResolvedValue({
+        items: [makeRide('a')],
+        nextCursor: null,
+        total: 1,
+      });
+      archiveRidesMock
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValueOnce({ items: [], nextCursor: null, total: 0 });
+
+      render(<RideGrid />);
+      const notice = await screen.findByText(
+        'Не удалось загрузить завершённые и отменённые заезды.',
+      );
+      expect(screen.queryByRole('alert')).toBeNull();
+      fireEvent.click(
+        within(notice.closest('[role="status"]') as HTMLElement).getByRole(
+          'button',
+        ),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByText(
+            'Не удалось загрузить завершённые и отменённые заезды.',
+          ),
+        ).toBeNull(),
+      );
+      expect(archiveRidesMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('says nothing about the archive when the whole list failed', async () => {
+      listPublicRidesMock.mockRejectedValue(new Error('network'));
+      archiveRidesMock.mockRejectedValue(new Error('network'));
+
+      render(<RideGrid />);
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(
+        screen.queryByText(
+          'Не удалось загрузить завершённые и отменённые заезды.',
+        ),
+      ).toBeNull();
+    });
   });
 });

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { RIDE_CREATE_TERMS, RIDE_DISCOVERY_TERMS, UI_TERMS } from 'ui';
 import { DiscoveryFilters } from '@/features/participant/discovery/components/DiscoveryFilters';
 import { RideGrid } from '@/features/participant/discovery/components/RideGrid';
@@ -8,7 +8,7 @@ import {
   NO_DISCOVERY_FILTERS,
   type DiscoveryFilters as Filters,
 } from '@/features/participant/discovery/lib/discovery-filters';
-import { SAMPLE_RIDES, listResponse } from './fixtures';
+import { SAMPLE_RIDES, listResponse, makeRide } from './fixtures';
 
 // `/`'s filter chips (`DiscoveryFilters`, CR-153). Standalone stories drive
 // the chips themselves; the `InList*` stories render them inside the real
@@ -34,10 +34,16 @@ function ControlledFilters({
   );
 }
 
-/** Every `GET /api/v1/rides` query string the stubbed list received. */
+/** Every `GET /api/v1/rides?phase=active` query string the stubbed list
+ * received — the rides a visitor can still join (CR-193). */
 const ridesRequests = fn<(search: string) => void>();
 
-function stubRides(respond: () => Promise<Response>) {
+/** CR-193: `phase=archive` (finished/cancelled) is its own request, answered
+ * by `archive` — empty unless a story gives it rides. */
+function stubRides(
+  respond: () => Promise<Response>,
+  archive: () => Promise<Response> = () => json(listResponse([])),
+) {
   return () => {
     const original = globalThis.fetch;
     ridesRequests.mockClear();
@@ -45,6 +51,7 @@ function stubRides(respond: () => Promise<Response>) {
       const raw = input instanceof Request ? input.url : String(input);
       const url = new URL(raw, window.location.href);
       if (url.pathname !== '/api/v1/rides') return original(input, init);
+      if (url.searchParams.get('phase') === 'archive') return archive();
       ridesRequests(url.search);
       return respond();
     };
@@ -269,6 +276,55 @@ export const InListWithResults: Story = {
         expect.stringContaining('startsTo='),
       ),
     );
+  },
+};
+
+/** CR-193: finished and cancelled rides are not mixed in with the open ones —
+ * a collapsed «Завершённые и отменённые» section under the list; opened, their
+ * cards show the status, never «Осталось N мест». */
+export const InListWithArchive: Story = {
+  ...inList,
+  beforeEach: stubRides(
+    () => json(listResponse(SAMPLE_RIDES)),
+    () =>
+      json(
+        listResponse([
+          makeRide({
+            id: 'ride-finished',
+            title: 'Утренний круг по Крылатским холмам',
+            status: 'finished',
+          }),
+          makeRide({
+            id: 'ride-cancelled',
+            title: 'Гравий до Истры',
+            status: 'cancelled',
+          }),
+        ]),
+      ),
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const archive = await canvas.findByRole('region', {
+      name: RIDE_DISCOVERY_TERMS.archiveTitle,
+    });
+    await expect(
+      canvas.queryByRole('heading', {
+        name: 'Утренний круг по Крылатским холмам',
+      }),
+    ).not.toBeInTheDocument();
+
+    const toggle = within(archive).getByRole('button', {
+      name: RIDE_DISCOVERY_TERMS.archiveShow(2),
+    });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      within(archive).getByRole('heading', {
+        name: 'Утренний круг по Крылатским холмам',
+      }),
+    ).toBeVisible();
+    await expect(within(archive).getByText('Гравий до Истры')).toBeVisible();
+    await expect(within(archive).queryByText(/Осталось/)).toBeNull();
   },
 };
 

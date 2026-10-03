@@ -23,6 +23,7 @@ const REGISTRATION = {
 
 function stub({
   registrations = [] as unknown[],
+  past = [] as unknown[],
   organizer = 200 as 200 | 404 | 500,
   failRegistrations = false,
 } = {}) {
@@ -30,7 +31,7 @@ function stub({
     const original = globalThis.fetch;
     globalThis.fetch = async (input, init) => {
       const raw = input instanceof Request ? input.url : String(input);
-      const { pathname } = new URL(raw, window.location.href);
+      const { pathname, searchParams } = new URL(raw, window.location.href);
       const respond = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), {
           status,
@@ -39,7 +40,11 @@ function stub({
       if (pathname === '/api/v1/registrations/mine') {
         return failRegistrations
           ? respond({ status: 500, code: 'internal_error' }, 500)
-          : respond({ items: registrations, nextCursor: null });
+          : respond({
+              // CR-193: `when=past` is history — cancelled rides included.
+              items: searchParams.get('when') === 'past' ? past : registrations,
+              nextCursor: null,
+            });
       }
       if (pathname === '/api/v1/organizers/me') {
         if (organizer === 200) {
@@ -112,6 +117,35 @@ export const ParticipantWithBooking: Story = {
         name: `${PARTICIPANT_HOME_TERMS.allRegistrations} →`,
       }),
     ).toBeVisible();
+  },
+};
+
+/** CR-193: a cancelled ride is not «upcoming», but its cancellation stays in
+ * sight under «Отменены организатором» until its date has passed. */
+export const CancelledAhead: Story = {
+  beforeEach: stub({
+    past: [
+      {
+        registration: REGISTRATION,
+        ride: makeRide({
+          id: 'ride-1',
+          status: 'cancelled',
+          // Far ahead, so the story never ages into «past».
+          startsAt: '2099-10-04T06:00:00.000Z',
+        }),
+      },
+    ],
+  }),
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByText(PARTICIPANT_HOME_TERMS.cancelledLabel),
+    ).toBeVisible();
+    await expect(
+      canvas.getByText(PARTICIPANT_HOME_TERMS.registrationsEmptyTitle),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('link', { name: 'Гравийная сотка по Подмосковью' }),
+    ).toHaveAttribute('href', '/rides/ride-1');
   },
 };
 

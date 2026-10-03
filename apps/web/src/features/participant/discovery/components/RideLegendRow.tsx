@@ -55,7 +55,10 @@ export function RideLegendRow({
     timeZone: ride.startTimezone,
   });
   const metrics = buildRideRowMetrics(ride);
-  const seats = ridesSeatsLabel(ride);
+  // CR-193: seats left only while a seat can be taken — on any other status
+  // the badge beside the date says why not (closed, under way, over).
+  const seats =
+    ride.status === 'registration_open' ? ridesSeatsLabel(ride) : null;
   const startPlace = formatStartPlace(ride.startLabel, ride.startDescription);
   const startText = [
     startPlace

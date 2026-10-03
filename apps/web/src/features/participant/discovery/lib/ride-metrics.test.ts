@@ -197,9 +197,9 @@ describe('rideCardSeats (CR-144)', () => {
     const seats = rideCardSeats(
       makeRide({ participantLimit: 10, registrationsCount: 12 }),
     );
-    expect(seats.note).toBe('Мест нет');
-    expect(seats.level).toBe('full');
-    expect(seats.fillPercent).toBe(100);
+    expect(seats?.note).toBe('Мест нет');
+    expect(seats?.level).toBe('full');
+    expect(seats?.fillPercent).toBe(100);
   });
 
   it('has no bar and says there is no limit for an unlimited ride', () => {
@@ -213,6 +213,51 @@ describe('rideCardSeats (CR-144)', () => {
       level: 'open',
       fillPercent: null,
     });
+  });
+
+  // CR-193 (owner QA: a finished card read «Осталось 6 мест»).
+  it.each(['started', 'finished', 'cancelled'] as const)(
+    'has no seats block at all for a %s ride',
+    (status) => {
+      expect(
+        rideCardSeats(
+          makeRide({ status, participantLimit: 10, registrationsCount: 4 }),
+        ),
+      ).toBeNull();
+    },
+  );
+
+  it('never offers seats left before registration opens or after it closes', () => {
+    expect(
+      rideCardSeats(
+        makeRide({
+          status: 'published',
+          participantLimit: 10,
+          registrationsCount: 0,
+        }),
+        { short: true },
+      ),
+    ).toEqual({
+      count: '0 из 10',
+      note: 'Запись ещё не открыта',
+      level: 'full',
+      fillPercent: 0,
+    });
+    expect(
+      rideCardSeats(
+        makeRide({
+          status: 'registration_closed',
+          participantLimit: 10,
+          registrationsCount: 10,
+          waitlistCount: 2,
+        }),
+      )?.note,
+    ).toBe('Запись закрыта');
+    expect(
+      rideCardSeats(
+        makeRide({ status: 'published', participantLimit: null }),
+      )?.note,
+    ).toBe('Запись ещё не открыта');
   });
 });
 

@@ -1,4 +1,4 @@
-import type { PublicRideListItem } from 'types';
+import { isArchivedRideStatus, type PublicRideListItem } from 'types';
 import {
   formatDistanceParts,
   formatElevationParts,
@@ -127,27 +127,37 @@ export interface RideCardSeats {
  * registration says so («Запись закрыта») instead of the seats left, a full
  * ride names its queue («Мест нет · 2 в очереди»), and `short` drops
  * «участников» from the count («4 из 10») for the compact card.
+ *
+ * CR-193 (owner QA: a finished card read «Осталось 6 мест»): seats left
+ * («Осталось N мест», «Мест нет») only while a seat can be taken —
+ * `registration_open`; a published ride not open yet says «Запись ещё не
+ * открыта». `null` — no seats block at all — once the ride is under way or
+ * over (`started`, `finished`, `cancelled`): the status chip says what it is.
  */
 export function rideCardSeats(
   ride: PublicRideListItem,
   { short = false }: { short?: boolean } = {},
-): RideCardSeats {
+): RideCardSeats | null {
+  if (ride.status === 'started' || isArchivedRideStatus(ride.status)) {
+    return null;
+  }
   const left = ridesSeatsLeft(ride);
-  const closed = ride.status === 'registration_closed';
+  const notOpenNote =
+    ride.status === 'registration_open'
+      ? null
+      : ride.status === 'registration_closed'
+        ? RIDE_DISCOVERY_TERMS.registrationClosedNote
+        : RIDE_DISCOVERY_TERMS.registrationNotOpenNote;
   if (left === null || ride.participantLimit === null) {
     return {
       count: RIDE_DISCOVERY_TERMS.participantsCount(ride.registrationsCount),
-      note: closed
-        ? RIDE_DISCOVERY_TERMS.registrationClosedNote
-        : RIDE_DISCOVERY_TERMS.noSeatsLimit,
+      note: notOpenNote ?? RIDE_DISCOVERY_TERMS.noSeatsLimit,
       level: 'open',
       fillPercent: null,
     };
   }
-  let note = ridesSeatsLabel(ride)!;
-  if (closed) {
-    note = RIDE_DISCOVERY_TERMS.registrationClosedNote;
-  } else if (left === 0 && ride.waitlistCount > 0) {
+  let note = notOpenNote ?? ridesSeatsLabel(ride)!;
+  if (notOpenNote === null && left === 0 && ride.waitlistCount > 0) {
     note = `${note} · ${RIDE_DISCOVERY_TERMS.waitlistQueued(ride.waitlistCount)}`;
   }
   return {
@@ -159,7 +169,7 @@ export function rideCardSeats(
     ),
     note,
     level:
-      closed || left === 0
+      notOpenNote !== null || left === 0
         ? 'full'
         : left <= LOW_SEATS_THRESHOLD
           ? 'low'
