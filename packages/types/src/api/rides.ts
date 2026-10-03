@@ -12,6 +12,7 @@ import { ROUTE_POINT_TYPES, type RoutePoint } from '../domain/route-point.js';
 import type { Registration } from '../domain/registration.js';
 import type { WaitlistEntry } from '../domain/waitlist-entry.js';
 import type { Review } from '../domain/review.js';
+import type { RideUpdate } from '../domain/ride-update.js';
 import type { Paginated } from './pagination.js';
 import type { RideGroupSummary } from './ride-groups.js';
 
@@ -210,6 +211,11 @@ export interface GetRideResponse {
   // CR-155: additive — the ride's «Требования» lines (`RideRequirement`), in the
   // organizer's order; `[]` when none.
   requirements: string[];
+  // CR-190: additive. `rescheduleCount` — how many times the start has been
+  // moved (the calendar file's `SEQUENCE`, so a re-downloaded event replaces the
+  // old one); `lastReschedule` — the latest move, `null` if never moved.
+  rescheduleCount: number;
+  lastReschedule: RideReschedule | null;
 }
 
 // CR-155: `RideRequirement` limits, shared by the request schema and the
@@ -612,6 +618,44 @@ export type SetParticipantsVisibilityRequest = z.infer<
 >;
 export interface SetParticipantsVisibilityResponse {
   ride: Ride;
+}
+
+// CR-190 (ADR-029 draft): `POST /v1/rides/:id/reschedule` — moves a published
+// ride's start before it has started. `startsAt` is the new instant, converted by
+// the client from the local wall time in the ride's own `startTimezone`
+// (unchanged by a reschedule — the place doesn't move). `reason` is required: it
+// is what registrants and the waitlist read beside «было → стало».
+export const RESCHEDULE_REASON_MAX_LENGTH = 500;
+export const rescheduleRideRequestSchema = z.object({
+  startsAt: z.iso.datetime(
+    'startsAt must be an ISO 8601 date-time (e.g. with a Z or offset).',
+  ),
+  reason: z
+    .string()
+    .trim()
+    .min(1, 'Reason cannot be empty.')
+    .max(
+      RESCHEDULE_REASON_MAX_LENGTH,
+      `Reason must be at most ${RESCHEDULE_REASON_MAX_LENGTH} characters.`,
+    ),
+});
+export type RescheduleRideRequest = z.infer<typeof rescheduleRideRequestSchema>;
+export interface RescheduleRideResponse {
+  ride: Ride;
+  /** The update that records the reschedule in the ride's history. */
+  rideUpdate: RideUpdate;
+}
+
+/**
+ * CR-190: the latest reschedule of a ride, as `GET /v1/rides/:id` serves it —
+ * public like the ride itself (the reason is the organizer's announcement to
+ * everyone looking at the ride, not participant data).
+ */
+export interface RideReschedule {
+  previousStartsAt: string;
+  startsAt: string;
+  reason: string;
+  rescheduledAt: string;
 }
 
 // CR-114 ("Route builder"): `POST /v1/rides/:id/route/build`. Ordered

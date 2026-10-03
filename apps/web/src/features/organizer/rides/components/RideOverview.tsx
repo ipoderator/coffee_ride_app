@@ -34,6 +34,7 @@ import {
   type RideContactDraft,
 } from './RideContactFields';
 import { RideReadinessList } from './RideReadinessList';
+import { RescheduleRideCard } from './RescheduleRideCard';
 
 const CANCELLABLE_STATUSES: ReadonlyArray<Ride['status']> = [
   'published',
@@ -69,7 +70,7 @@ export function RideOverview({
 }: {
   workspace: RideWorkspaceContextValue;
 }) {
-  const { data, sections, applyRide } = workspace;
+  const { data, sections, applyRide, refresh } = workspace;
   const { ride } = data;
   const rideId = ride.id;
   const headingId = useId();
@@ -335,6 +336,19 @@ export function RideOverview({
           </div>
         </Card>
       </div>
+
+      {/* CR-190: before the start only (the card renders nothing after). */}
+      <RescheduleRideCard
+        ride={ride}
+        registrationsCount={data.registrationsCount}
+        waitlistCount={data.waitlistCount}
+        lastReschedule={data.lastReschedule}
+        onRescheduled={async (moved) => {
+          applyRide(moved);
+          // The move's own record: `lastReschedule` and the latest update.
+          await refresh();
+        }}
+      />
 
       {CANCELLABLE_STATUSES.includes(status) && (
         <Card className="flex flex-col items-start gap-3">

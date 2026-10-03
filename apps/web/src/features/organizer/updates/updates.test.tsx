@@ -21,6 +21,7 @@ const existingUpdate: RideUpdate = {
   rideId: 'ride-1',
   message: 'Первое сообщение.',
   createdAt: '2027-01-02T00:00:00.000Z',
+  reschedule: null,
 };
 
 describe('UpdateComposer', () => {

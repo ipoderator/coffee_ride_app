@@ -1,10 +1,11 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import {
   notifications,
   organizerProfiles,
   registrations,
   rideUpdates,
   rides,
+  waitlistEntries,
 } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
@@ -13,6 +14,7 @@ import type {
   ListRideUpdatesResponse,
   ListRidesQuery,
   Notification,
+  RideReschedule,
   RideUpdate,
 } from 'types';
 import {
@@ -82,6 +84,7 @@ export type NotificationJobName =
   | 'registration_confirmed'
   | 'ride_update'
   | 'ride_cancelled'
+  | 'ride_rescheduled'
   | 'verification_email'
   | 'password_reset_email';
 
@@ -97,6 +100,13 @@ export interface RideUpdateJobData {
 
 export interface RideCancelledJobData {
   rideId: string;
+}
+
+// CR-190: the `RideUpdate` row that records the reschedule — the worker reads
+// the recipients when it runs, same as `ride_update`.
+export interface RideRescheduledJobData {
+  rideId: string;
+  rideUpdateId: string;
 }
 
 // CR-100 (ADR-007): the raw, single-use token is embedded in the URL at
@@ -117,6 +127,7 @@ export type NotificationJobData =
   | RegistrationConfirmedJobData
   | RideUpdateJobData
   | RideCancelledJobData
+  | RideRescheduledJobData
   | VerificationEmailJobData
   | PasswordResetEmailJobData;
 
@@ -177,6 +188,14 @@ function toRideUpdate(row: typeof rideUpdates.$inferSelect): RideUpdate {
     rideId: row.rideId,
     message: row.message,
     createdAt: row.createdAt.toISOString(),
+    // CR-190: the DB CHECK keeps the pair both-or-neither.
+    reschedule:
+      row.previousStartsAt && row.newStartsAt
+        ? {
+            previousStartsAt: row.previousStartsAt.toISOString(),
+            startsAt: row.newStartsAt.toISOString(),
+          }
+        : null,
   };
 }
 
@@ -186,7 +205,10 @@ function toNotification(row: {
   type: Notification['type'];
   rideId: string;
   rideTitle: string;
+  rideStartTimezone: string;
   message: string | null;
+  previousStartsAt: Date | null;
+  newStartsAt: Date | null;
   createdAt: Date;
   readAt: Date | null;
 }): Notification {
@@ -198,6 +220,14 @@ function toNotification(row: {
     message: row.message,
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt ? row.readAt.toISOString() : null,
+    reschedule:
+      row.previousStartsAt && row.newStartsAt
+        ? {
+            previousStartsAt: row.previousStartsAt.toISOString(),
+            startsAt: row.newStartsAt.toISOString(),
+            startTimezone: row.rideStartTimezone,
+          }
+        : null,
   };
 }
 
@@ -361,6 +391,148 @@ export async function notifyRideCancelled(
   );
 }
 
+// Raw fan-out insert for CR-190, no try/catch — same split as
+// {@link insertActiveRegistrantNotifications}. Unlike an ordinary update, a
+// reschedule also reaches the waitlist: a queued rider is waiting for a seat on
+// *this* start and needs to know it moved. `union` (not `union all`) keeps one
+// notification per person even if a stale row ever lists someone twice.
+async function insertRescheduleNotifications(
+  db: DbClient,
+  rideId: string,
+  rideUpdateId: string,
+): Promise<void> {
+  const recipients = await db
+    .select({ userId: registrations.userId })
+    .from(registrations)
+    .where(
+      and(eq(registrations.rideId, rideId), eq(registrations.status, 'active')),
+    )
+    .union(
+      db
+        .select({ userId: waitlistEntries.userId })
+        .from(waitlistEntries)
+        .where(
+          and(
+            eq(waitlistEntries.rideId, rideId),
+            eq(waitlistEntries.status, 'waiting'),
+          ),
+        ),
+    );
+  if (recipients.length === 0) return;
+
+  await db.insert(notifications).values(
+    recipients.map((row) => ({
+      userId: row.userId,
+      rideId,
+      rideUpdateId,
+      type: 'ride_update' as const,
+    })),
+  );
+}
+
+/**
+ * CR-190: records a reschedule as a `RideUpdate` inside the caller's
+ * transaction — `rides.service.ts`'s `rescheduleRide` moves `rides.starts_at`
+ * and writes this row atomically, so the ride's history and audit trail
+ * (who, when, from → to, why) can never disagree with the ride itself. This
+ * module owns `ride_updates`; the rides module never writes it directly.
+ */
+export async function recordRideReschedule(
+  tx: Pick<DbClient, 'insert'>,
+  input: {
+    rideId: string;
+    userId: string;
+    reason: string;
+    previousStartsAt: Date;
+    newStartsAt: Date;
+  },
+): Promise<RideUpdate> {
+  const [inserted] = await tx
+    .insert(rideUpdates)
+    .values({
+      rideId: input.rideId,
+      message: input.reason,
+      previousStartsAt: input.previousStartsAt,
+      newStartsAt: input.newStartsAt,
+      updatedBy: input.userId,
+    })
+    .returning();
+  if (!inserted) {
+    throw new Error('Ride update insert returned no row.');
+  }
+  return toRideUpdate(inserted);
+}
+
+/**
+ * CR-190: called after `rescheduleRide`'s transaction has committed — never
+ * inside it (`.claude/rules/resilience.md`). Notifies every active registrant
+ * and every `waiting` waitlist entry. Same enqueue-or-deliver shape and
+ * log-and-swallow discipline as {@link notifyActiveRegistrants}: a failure
+ * here never undoes or fails the reschedule.
+ */
+export async function notifyRideRescheduled(
+  db: DbClient,
+  logger: NotificationLogger,
+  queue: NotificationQueue | null,
+  rideId: string,
+  rideUpdateId: string,
+): Promise<void> {
+  try {
+    await enqueueOrDeliver(
+      queue,
+      (q) => q.add('ride_rescheduled', { rideId, rideUpdateId }),
+      () => insertRescheduleNotifications(db, rideId, rideUpdateId),
+      true,
+    );
+  } catch (err) {
+    logger.error(
+      { err, rideId, rideUpdateId },
+      'Failed to fan out ride_rescheduled notifications',
+    );
+  }
+}
+
+/**
+ * CR-190: how many times a ride's start has moved and the latest move, for
+ * `GET /v1/rides/:id` (the calendar file's `SEQUENCE` and the ride page's
+ * «Перенесён» note). Reads this module's own table, so the rides module asks
+ * here instead of querying `ride_updates` itself.
+ */
+export async function getRideRescheduleSummary(
+  db: Pick<DbClient, 'select'>,
+  rideId: string,
+): Promise<{ count: number; last: RideReschedule | null }> {
+  const isReschedule = and(
+    eq(rideUpdates.rideId, rideId),
+    isNotNull(rideUpdates.previousStartsAt),
+  );
+  const [countRow] = await db
+    .select({ value: count() })
+    .from(rideUpdates)
+    .where(isReschedule);
+  const total = countRow?.value ?? 0;
+  if (total === 0) return { count: 0, last: null };
+
+  const [last] = await db
+    .select()
+    .from(rideUpdates)
+    .where(isReschedule)
+    .orderBy(desc(rideUpdates.createdAt), desc(rideUpdates.id))
+    .limit(1);
+  return {
+    count: total,
+    last:
+      last?.previousStartsAt && last.newStartsAt
+        ? {
+            previousStartsAt: last.previousStartsAt.toISOString(),
+            startsAt: last.newStartsAt.toISOString(),
+            reason: last.message,
+            rescheduledAt: last.createdAt.toISOString(),
+          }
+        : null,
+  };
+}
+
 interface EmailContent {
   subject: string;
   html: string;
@@ -502,6 +674,11 @@ export async function processNotificationJob(
       );
       return;
     }
+    case 'ride_rescheduled': {
+      const { rideId, rideUpdateId } = data as RideRescheduledJobData;
+      await insertRescheduleNotifications(db, rideId, rideUpdateId);
+      return;
+    }
     case 'verification_email': {
       const { email, verifyUrl } = data as VerificationEmailJobData;
       await sendEmail(
@@ -613,7 +790,11 @@ const notificationSelection = {
   type: notifications.type,
   rideId: notifications.rideId,
   rideTitle: rides.title,
+  rideStartTimezone: rides.startTimezone,
   message: rideUpdates.message,
+  // CR-190: a reschedule's two ends (both null for any other notification).
+  previousStartsAt: rideUpdates.previousStartsAt,
+  newStartsAt: rideUpdates.newStartsAt,
   createdAt: notifications.createdAt,
   readAt: notifications.readAt,
 };

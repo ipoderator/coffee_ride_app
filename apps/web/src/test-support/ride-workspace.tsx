@@ -52,6 +52,7 @@ export function workspaceData({
     attendanceSummary: null,
     requirements: [],
     contact: undefined,
+    lastReschedule: null,
     latestUpdate: null,
     ...rest,
   };

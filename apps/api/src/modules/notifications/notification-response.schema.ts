@@ -7,6 +7,10 @@ export const rideUpdateResponseSchema = z.object({
   rideId: z.string(),
   message: z.string(),
   createdAt: z.string(),
+  // CR-190: additive — a reschedule's two ends, `null` for an ordinary update.
+  reschedule: z
+    .object({ previousStartsAt: z.string(), startsAt: z.string() })
+    .nullable(),
 });
 
 // CR-041 ("In-app notifications"): the one "notification over the wire" shape,
@@ -20,4 +24,12 @@ export const notificationResponseSchema = z.object({
   message: z.string().nullable(),
   createdAt: z.string(),
   readAt: z.string().nullable(),
+  // CR-190: additive — see `Notification.reschedule` (`packages/types`).
+  reschedule: z
+    .object({
+      previousStartsAt: z.string(),
+      startsAt: z.string(),
+      startTimezone: z.string(),
+    })
+    .nullable(),
 });

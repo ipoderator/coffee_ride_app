@@ -83,6 +83,22 @@ export const Registered: Story = {
   },
 };
 
+/** CR-190: the ride was moved — the previous start, quietly, under the dates. */
+export const RegisteredRescheduled: Story = {
+  args: {
+    state: 'registered',
+    registrationsCount: 13,
+    viewerRegistration: registration,
+    viewerStartNumber: 13,
+    rescheduledFrom: 'сб 3 октября · 08:00 · МСК',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByTestId('ticket-rescheduled')).toHaveTextContent(
+      'Перенесён, было сб 3 октября · 08:00 · МСК',
+    );
+  },
+};
+
 /** CR-181: the ride is under way — the rider can report a finish. */
 export const FinishCheckInOpen: Story = {
   args: {

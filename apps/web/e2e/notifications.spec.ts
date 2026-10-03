@@ -15,7 +15,7 @@ import { newSignedInActor } from './helpers/ui';
 // inbox, and opening one marks it read. Fan-out runs through the Redis queue
 // when one is configured (CR-050), so the inbox is polled, not read once.
 
-const UPDATE_MESSAGE = `E2E: старт переносится на 9:00 (${Date.now()})`;
+const UPDATE_MESSAGE = `E2E: встречаемся у южного входа (${Date.now()})`;
 
 function notificationCard(page: Page, label: string): Locator {
   return page.getByRole('link').filter({ hasText: label });

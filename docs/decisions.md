@@ -1367,3 +1367,51 @@ Status: Accepted (2026-10-02, owner proposal, CR-182). Extends ADR-027.
 ### Rollback
 
 Stop writing `dnf` and map it to `null`; leaving the unused enum value is harmless.
+
+## ADR-029 — Rescheduling a published ride: a dedicated action, recorded as a `RideUpdate`
+
+Status: Accepted (2026-10-03, owner QA report `QA_13653ed`, item 2, CR-190).
+
+### Context
+
+After publication a ride's core facts are locked (`PATCH` is draft-only): riders signed
+up for exactly those conditions. Weather and road closures still move rides. The only
+way to say so was an «Обновление» text («старт перенесён на 9:00»), which left the
+card, tickets, `/me`, the organizer cabinet and the calendar file on the old time.
+
+### Decision
+
+1. **A dedicated endpoint**, `POST /v1/rides/:id/reschedule` `{ startsAt, reason }`,
+   owner-only (404 otherwise), for `published`/`registration_open`/`registration_closed`
+   only — `409 ride_is_draft` (use `PATCH`), `409 ride_not_reschedulable` after the start;
+   `422` for a start not in the future or unchanged. The status, not the clock, decides
+   "before the start": an overdue, never-started ride can still be moved.
+2. **Only the instant moves.** `startTimezone`, status, registrations, groups and the
+   waitlist are kept. A rider who can't make the new time cancels as usual, which
+   promotes the waitlist — no automatic release, no re-confirmation step.
+3. **The record is a `RideUpdate`** (migration `0025`): two nullable `timestamptz`
+   columns `previous_starts_at`/`new_starts_at`, the reason in `message`, written in the
+   same transaction (under the `rides` row lock) as the new `rides.starts_at`. CHECKs
+   keep the pair both-or-neither and refuse a no-op. This is the audit trail (who,
+   when, from → to, why) and the ride's history — no new entity
+   (`.claude/CLAUDE.md` → Domain entities).
+4. **Notifications after the commit**: one `ride_update` notification carrying
+   `reschedule` per active registrant **and** per `waiting` waitlist entry (unlike an
+   ordinary update, which reaches registrants only), through a `ride_rescheduled` job
+   with the CR-142 direct-delivery fallback. A failed fan-out never undoes the move.
+5. **Calendar**: `GET /v1/rides/:id` exposes `rescheduleCount`, used as the `.ics`
+   `SEQUENCE` with the unchanged `UID`, so a re-downloaded file replaces the event.
+
+### Consequences
+
+- Every surface that reads `rides.starts_at` (card, ticket, `/me`, organizer lists)
+  shows the new time with no extra work; the ride page and ticket also say «было …»
+  while the ride is ahead.
+- No email for a reschedule yet (in-app only, same as other ride updates).
+- A calendar the rider already imported is not updated by push — only a re-download
+  replaces it.
+
+### Rollback
+
+Stop calling the endpoint; drop the two columns and CHECKs (migration down). Moved rides
+keep their new `starts_at`; reschedule updates become ordinary messages.

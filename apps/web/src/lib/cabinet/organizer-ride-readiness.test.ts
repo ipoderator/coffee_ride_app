@@ -44,6 +44,7 @@ function data(
     waitlistCount: 0,
     attendanceSummary: null,
     requirements: [],
+    lastReschedule: null,
     latestUpdate: null,
     ...extra,
   };
@@ -249,6 +250,7 @@ describe('ride section readiness (CR-187)', () => {
             rideId: 'ride-1',
             message: 'Встречаемся у северного входа',
             createdAt: '2099-10-02T15:40:00.000Z',
+            reschedule: null,
           },
         }),
       ),

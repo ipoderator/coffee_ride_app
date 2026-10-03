@@ -24,6 +24,7 @@ const registrationConfirmed: Notification = {
   message: null,
   createdAt: '2027-01-02T00:00:00.000Z',
   readAt: null,
+  reschedule: null,
 };
 
 const rideUpdate: Notification = {
@@ -31,9 +32,10 @@ const rideUpdate: Notification = {
   userId: 'user-1',
   type: 'ride_update',
   ride: { id: 'ride-2', title: 'Вечерний заезд' },
-  message: 'Старт перенесён на 9:00.',
+  message: 'Встречаемся у южного входа.',
   createdAt: '2027-01-03T00:00:00.000Z',
   readAt: '2027-01-03T01:00:00.000Z',
+  reschedule: null,
 };
 
 describe('NotificationList', () => {
@@ -86,7 +88,7 @@ describe('NotificationList', () => {
     render(<NotificationList />);
 
     expect(await screen.findByText('Обновление по заезду')).toBeInTheDocument();
-    expect(screen.getByText('Старт перенесён на 9:00.')).toBeInTheDocument();
+    expect(screen.getByText('Встречаемся у южного входа.')).toBeInTheDocument();
     expect(screen.queryByText('Новое')).not.toBeInTheDocument();
   });
 

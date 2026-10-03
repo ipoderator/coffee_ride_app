@@ -26,6 +26,21 @@ describe('buildIcs', () => {
     expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
   });
 
+  it('starts at SEQUENCE 0 and, after a reschedule, keeps the UID with a higher SEQUENCE (CR-190)', () => {
+    const first = buildIcs(event, now).split('\r\n');
+    expect(first).toContain('SEQUENCE:0');
+
+    const moved = buildIcs(
+      { ...event, startsAt: new Date('2026-10-05T07:00:00.000Z'), sequence: 2 },
+      new Date('2026-09-30T08:00:00.000Z'),
+    ).split('\r\n');
+    expect(moved).toContain('UID:ride-1@coffee-ride');
+    expect(moved).toContain('SEQUENCE:2');
+    expect(moved).toContain('DTSTAMP:20260930T080000Z');
+    expect(moved).toContain('DTSTART:20261005T070000Z');
+    expect(moved).toContain('DTEND:20261005T103000Z');
+  });
+
   it('omits DTEND without a duration', () => {
     const ics = buildIcs({ ...event, durationMinutes: null }, now);
     expect(ics).not.toContain('DTEND');

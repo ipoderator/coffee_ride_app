@@ -1,4 +1,9 @@
-import { formatDate, formatTime, RIDE_READINESS_TERMS } from 'ui';
+import {
+  formatDate,
+  formatTime,
+  RIDE_READINESS_TERMS,
+  RIDE_RESCHEDULE_TERMS,
+} from 'ui';
 import type { RideReadinessResolver } from '@/lib/cabinet/ride-workspace';
 
 const T = RIDE_READINESS_TERMS.updates;
@@ -47,7 +52,12 @@ export const updatesReadiness: RideReadinessResolver = ({
     title: T.latestTitle,
     detail: T.latestDetail(
       `${date}, ${formatTime(sentAt, { timeZone })}`,
-      excerpt(latestUpdate.message),
+      // CR-190: a reschedule's message is its reason — say what it was.
+      excerpt(
+        latestUpdate.reschedule
+          ? RIDE_RESCHEDULE_TERMS.readinessExcerpt(latestUpdate.message)
+          : latestUpdate.message,
+      ),
     ),
     chip: T.latestChip(date),
     action: T.actionWrite,

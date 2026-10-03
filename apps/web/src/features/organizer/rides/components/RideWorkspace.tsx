@@ -78,6 +78,8 @@ async function readWorkspace(
     attendanceSummary: response.attendanceSummary ?? null,
     requirements: response.requirements,
     contact: response.contact,
+    // CR-190: absent from an older API response — never moved.
+    lastReschedule: response.lastReschedule ?? null,
     latestUpdate,
   };
 }

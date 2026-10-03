@@ -41,6 +41,8 @@ import {
   type ListRidesQuery,
   type ListRidesResponse,
   type OrganizerRideSummary,
+  type RescheduleRideRequest,
+  type RescheduleRideResponse,
   type Ride,
   type RideContactType,
   type RouteGeometryPoint,
@@ -57,7 +59,10 @@ import {
   toWaitlistEntry,
 } from '../registrations/registrations.service.js';
 import {
+  getRideRescheduleSummary,
   notifyRideCancelled,
+  notifyRideRescheduled,
+  recordRideReschedule,
   type NotificationLogger,
   type NotificationQueue,
 } from '../notifications/notifications.service.js';
@@ -231,6 +236,44 @@ const RIDE_NOT_FINISHABLE = () =>
     409,
     'Ride is not finishable',
     'Only a started ride can be finished.',
+  );
+
+// CR-190 (ADR-029 draft): a reschedule is for a published ride that has not
+// started. A draft has its own way to change the start (`PATCH`), so it gets
+// its own code — a client can point the organizer there instead of reporting
+// a dead end.
+const RIDE_NOT_RESCHEDULABLE = () =>
+  new RideServiceError(
+    'ride_not_reschedulable',
+    409,
+    'Ride cannot be rescheduled',
+    'Only a published ride that has not started yet can be rescheduled; a started, finished or cancelled ride keeps its start.',
+  );
+
+const RIDE_IS_DRAFT = () =>
+  new RideServiceError(
+    'ride_is_draft',
+    409,
+    'Ride is still a draft',
+    'A draft is not rescheduled — change its start with PATCH /v1/rides/:id.',
+  );
+
+// 422, not 409: the ride's state is fine, the requested start is not — the same
+// request will never succeed (same reasoning as `group_required`).
+const RESCHEDULE_START_IN_PAST = () =>
+  new RideServiceError(
+    'reschedule_start_in_past',
+    422,
+    'New start is in the past',
+    'The new start must be later than now.',
+  );
+
+const RESCHEDULE_START_UNCHANGED = () =>
+  new RideServiceError(
+    'reschedule_start_unchanged',
+    422,
+    'New start is the current start',
+    'The new start is the same as the current one — nothing to reschedule.',
   );
 
 const INVALID_CURSOR = () =>
@@ -1127,6 +1170,8 @@ export async function getRideForViewer(
   // active-registration count — same embedding precedent as `stops` above.
   const groups = await listRideGroupSummaries(db, rideId);
   const requirements = await listRideRequirements(db, rideId);
+  // CR-190: the calendar file's SEQUENCE and the «Перенесён» note.
+  const reschedules = await getRideRescheduleSummary(db, rideId);
 
   // CR-165: the organizer's contact is private (`.claude/rules/security.md`:
   // "return unnecessary participant data" cuts both ways — this is the
@@ -1173,6 +1218,8 @@ export async function getRideForViewer(
     viewerStartNumber: startNumberRow?.rank ?? null,
     viewerWaitlistPosition: waitlistPositionRow?.rank ?? null,
     requirements,
+    rescheduleCount: reschedules.count,
+    lastReschedule: reschedules.last,
   };
 }
 
@@ -1631,6 +1678,96 @@ export async function cancelRide(
   await notifyRideCancelled(db, logger, queue, rideId);
 
   return toPublicRide(updated);
+}
+
+// CR-190: the statuses in which a ride is published and has not started — the
+// same set `cancelRide` accepts, named separately because the two rules could
+// diverge.
+const RESCHEDULABLE_STATUSES: ReadonlySet<string> = new Set([
+  'published',
+  'registration_open',
+  'registration_closed',
+]);
+
+/**
+ * CR-190 (ADR-029 draft): moves a published ride's start before it has
+ * started. The ride keeps its status, timezone, registrations, groups and
+ * waitlist — participants' rights are the existing ones: anyone who can't make
+ * the new time cancels as usual (`cancelRegistration`, which promotes the
+ * waitlist).
+ *
+ * One transaction, under the same `rides` row lock registration takes: the
+ * new `startsAt` (+ `updatedAt`/`updatedBy`) and a `RideUpdate` recording
+ * from → to and the reason. Once it has committed, every active registrant and
+ * every waiting waitlist entry is notified — never inside the transaction, and a
+ * failed fan-out never undoes the reschedule (`.claude/rules/resilience.md`).
+ *
+ * Check order: ownership (404, never revealing a stranger's ride), then status
+ * (`ride_is_draft` / `ride_not_reschedulable`, 409), then the new start (422:
+ * not later than now, or no change). An overdue ride — start passed, not yet
+ * started — can be moved: the status, not the clock, says whether it started.
+ */
+export async function rescheduleRide(
+  db: DbClient,
+  logger: NotificationLogger,
+  queue: NotificationQueue | null,
+  userId: string,
+  rideId: string,
+  input: RescheduleRideRequest,
+  now: Date = new Date(),
+): Promise<RescheduleRideResponse> {
+  const organizerProfileId = await resolveOwnOrganizerProfileId(db, userId);
+  if (!organizerProfileId) {
+    throw RIDE_NOT_FOUND();
+  }
+  const newStartsAt = new Date(input.startsAt);
+
+  const result = await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ status: rides.status, startsAt: rides.startsAt })
+      .from(rides)
+      .where(
+        and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)),
+      )
+      .limit(1)
+      .for('update');
+    if (!existing) {
+      throw RIDE_NOT_FOUND();
+    }
+    if (existing.status === 'draft') {
+      throw RIDE_IS_DRAFT();
+    }
+    if (!RESCHEDULABLE_STATUSES.has(existing.status)) {
+      throw RIDE_NOT_RESCHEDULABLE();
+    }
+    if (newStartsAt.getTime() <= now.getTime()) {
+      throw RESCHEDULE_START_IN_PAST();
+    }
+    if (newStartsAt.getTime() === existing.startsAt.getTime()) {
+      throw RESCHEDULE_START_UNCHANGED();
+    }
+
+    const [updated] = await tx
+      .update(rides)
+      .set({ startsAt: newStartsAt, updatedAt: now, updatedBy: userId })
+      .where(eq(rides.id, rideId))
+      .returning();
+    if (!updated) {
+      throw new Error('Ride update returned no row.');
+    }
+    const rideUpdate = await recordRideReschedule(tx, {
+      rideId,
+      userId,
+      reason: input.reason,
+      previousStartsAt: existing.startsAt,
+      newStartsAt,
+    });
+    return { ride: toPublicRide(updated), rideUpdate };
+  });
+
+  await notifyRideRescheduled(db, logger, queue, rideId, result.rideUpdate.id);
+
+  return result;
 }
 
 /**

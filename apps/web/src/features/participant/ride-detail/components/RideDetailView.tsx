@@ -49,6 +49,7 @@ import {
   RIDE_DETAIL_TERMS,
   RIDE_PAGE_TERMS,
   RIDE_POSTER_TERMS,
+  RIDE_RESCHEDULE_TERMS,
   RIDE_TICKET_TERMS,
   FINISH_CHECKIN_TERMS,
   REVIEWS_TERMS,
@@ -450,6 +451,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     viewerStartNumber,
     viewerWaitlistPosition,
     requirements,
+    lastReschedule,
+    rescheduleCount,
     // CR-165: present only when the API decided this viewer may see it (an
     // active registration on this ride, or the organizer) — so the UI simply
     // renders what it was given, without re-deriving the rule.
@@ -468,6 +471,15 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const relativeDay = upcoming
     ? formatRelativeDay(startsAt, new Date(), { timeZone })
     : null;
+  // CR-190: the start this ride had before its latest move — said quietly
+  // while the ride is still ahead; after the start it is history. `?? null`:
+  // an older API response has no such field.
+  const movedFrom =
+    upcoming && lastReschedule
+      ? formatRideStartLine(new Date(lastReschedule.previousStartsAt), {
+          timeZone,
+        })
+      : null;
 
   const rideStart =
     ride.startLat !== null && ride.startLng !== null
@@ -617,6 +629,9 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                   location: startPointLabel,
                   url: window.location.href,
                   description: ride.description,
+                  // CR-190: same UID, higher SEQUENCE after each move, so a
+                  // calendar replaces the event it already has.
+                  sequence: rescheduleCount ?? 0,
                 },
                 `coffee-ride-${ride.id}.ics`,
               )
@@ -655,6 +670,19 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             </span>
           ) : null}
         </div>
+        {movedFrom && lastReschedule ? (
+          <div
+            className="flex max-w-2xl flex-col gap-0.5 text-body-sm text-text-secondary"
+            data-testid="ride-rescheduled-note"
+          >
+            <p className="tabular-nums">
+              {RIDE_RESCHEDULE_TERMS.movedNote(movedFrom)}
+            </p>
+            <p className="wrap-anywhere">
+              {RIDE_RESCHEDULE_TERMS.reasonLine(lastReschedule.reason)}
+            </p>
+          </div>
+        ) : null}
         <h1
           className={cn(
             'max-w-[17ch] font-title text-display text-balance',
@@ -734,6 +762,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             priceRub={ride.priceRub}
             startPointLabel={startPointLabel}
             footer={ticketActions}
+            rescheduledFrom={movedFrom}
             onChange={(registration) => {
               setViewerRegistration(registration);
               if (registration) setViewerWaitlistEntry(null);

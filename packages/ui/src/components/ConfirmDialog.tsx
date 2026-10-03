@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Button, type ButtonVariant } from './Button';
 import { Dialog } from './Dialog';
 
@@ -24,6 +25,9 @@ export interface ConfirmDialogProps {
    * waitlist) both remove the viewer from something. `primary` is available for a
    * future non-destructive confirmation. */
   confirmVariant?: Extract<ButtonVariant, 'primary' | 'danger'>;
+  /** CR-190: optional details between the description and the buttons — e.g. a
+   * reschedule's «было / станет». Omitted by every earlier caller. */
+  children?: ReactNode;
 }
 
 export function ConfirmDialog({
@@ -36,6 +40,7 @@ export function ConfirmDialog({
   cancelLabel,
   isConfirming = false,
   confirmVariant = 'danger',
+  children,
 }: ConfirmDialogProps) {
   return (
     <Dialog
@@ -59,6 +64,8 @@ export function ConfirmDialog({
           </Button>
         </>
       }
-    />
+    >
+      {children}
+    </Dialog>
   );
 }
