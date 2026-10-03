@@ -124,14 +124,23 @@ export function ParticipantTable({ rideId }: { rideId: string }) {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      await action();
-    } catch {
-      // A stale list is the usual cause (`participant_not_found`): re-read it
-      // quietly, without the loading skeleton, so the organizer sees the truth.
-      showToast(FINISH_CHECKIN_TERMS.saveError, 'danger');
-      getRideParticipants(rideId)
-        .then((response) => setItems(response.items))
-        .catch(() => undefined);
+      try {
+        await action();
+      } catch {
+        // A stale list is the usual cause (`participant_not_found`): re-read it
+        // quietly, without the loading skeleton, so the organizer sees the truth.
+        showToast(FINISH_CHECKIN_TERMS.saveError, 'danger');
+        getRideParticipants(rideId)
+          .then((response) => setItems(response.items))
+          .catch(() => undefined);
+      }
+      // CR-189: the workspace frame (the section chip's «Не подтверждено: N»,
+      // the readiness, the «нет итогового статуса» line) reads its own copy of
+      // the attendance summary — re-read it after every outcome of a save,
+      // not only a successful one. Awaited, so the buttons stay locked until
+      // the frame has caught up and two quick marks can't land out of order.
+      // Standalone (tests, stories) there is no frame to refresh.
+      await workspace?.refresh();
     } finally {
       setIsSaving(false);
     }

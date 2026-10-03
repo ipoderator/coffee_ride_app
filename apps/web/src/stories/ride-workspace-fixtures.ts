@@ -1,6 +1,7 @@
 import type {
   GetRideResponse,
   Ride,
+  RegistrationAttendance,
   RideGroupSummary,
   RideParticipantSummary,
   RideUpdate,
@@ -104,6 +105,24 @@ export interface WorkspaceStub {
   waitlist?: RideParticipantSummary[];
   /** Every `/rides/ride-1` read fails (the workspace's error state). */
   failRide?: boolean;
+  /**
+   * CR-189: finish marks stick — `PUT .../attendance` changes the stubbed
+   * participants, `POST .../finish` the ride's status, and the ride read
+   * reports the matching `attendanceSummary`, like the API. Without it the
+   * summary stays `null` and neither call is answered.
+   */
+  liveAttendance?: boolean;
+}
+
+function summarize(items: readonly RideParticipantSummary[]) {
+  const summary = { finished: 0, dnf: 0, noShow: 0, unresolved: 0 };
+  for (const item of items) {
+    if (item.attendance === 'finished') summary.finished += 1;
+    else if (item.attendance === 'dnf') summary.dnf += 1;
+    else if (item.attendance === 'no_show') summary.noShow += 1;
+    else summary.unresolved += 1;
+  }
+  return summary;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -117,8 +136,12 @@ function json(body: unknown, status = 200): Response {
 export function stubWorkspace(stub: WorkspaceStub = {}) {
   return () => {
     const original = globalThis.fetch;
-    const ride = { ...BASE_RIDE, ...stub.ride };
+    let ride = { ...BASE_RIDE, ...stub.ride };
     const groups = stub.detail?.groups ?? [];
+    // A private copy: a mark changes it, never the story's own fixture.
+    const participants = (stub.participants ?? []).map((item) => ({
+      ...item,
+    }));
     globalThis.fetch = async (input, init) => {
       const raw = input instanceof Request ? input.url : String(input);
       const { pathname } = new URL(raw, window.location.href);
@@ -134,9 +157,11 @@ export function stubWorkspace(stub: WorkspaceStub = {}) {
           stops: [],
           routePoints: [],
           groups,
-          registrationsCount: stub.participants?.length ?? 0,
+          registrationsCount: participants.length,
           waitlistCount: stub.waitlist?.length ?? 0,
-          attendanceSummary: null,
+          attendanceSummary: stub.liveAttendance
+            ? summarize(participants)
+            : null,
           ...stub.detail,
         });
       }
@@ -159,7 +184,31 @@ export function stubWorkspace(stub: WorkspaceStub = {}) {
         });
       }
       if (pathname === `${base}/participants`) {
-        return json({ items: stub.participants ?? [], nextCursor: null });
+        return json({ items: participants, nextCursor: null });
+      }
+      if (
+        stub.liveAttendance &&
+        pathname === `${base}/finish` &&
+        init?.method === 'POST'
+      ) {
+        ride = { ...ride, status: 'finished' };
+        return json({ ride });
+      }
+      if (
+        stub.liveAttendance &&
+        pathname === `${base}/attendance` &&
+        init?.method === 'PUT'
+      ) {
+        const { registrationIds, attendance } = JSON.parse(
+          String(init.body),
+        ) as {
+          registrationIds: string[];
+          attendance: RegistrationAttendance | null;
+        };
+        for (const item of participants) {
+          if (registrationIds.includes(item.id)) item.attendance = attendance;
+        }
+        return json({ updated: registrationIds.length });
       }
       if (pathname === `${base}/waitlist`) {
         return json({ items: stub.waitlist ?? [], nextCursor: null });

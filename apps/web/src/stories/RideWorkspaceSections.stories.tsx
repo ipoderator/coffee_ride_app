@@ -1,10 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import type { ReactNode } from 'react';
-import { expect } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import {
+  FINISH_CHECKIN_TERMS,
   ORGANIZER_GROUPS_TERMS,
   PARTICIPANTS_TERMS,
   RIDE_COVER_TERMS,
+  RIDE_EDIT_TERMS,
+  RIDE_READINESS_TERMS,
   RIDE_ROUTE_TERMS,
   RIDE_UPDATES_TERMS,
 } from 'ui';
@@ -209,6 +212,118 @@ export const ParticipantsBeforeStart: Story = {
     await expect(
       canvas.queryByRole('button', { name: /Финиш/ }),
     ).not.toBeInTheDocument();
+  },
+};
+
+/** CR-189: a started ride — every mark moves the chip beside the heading
+ * («Не отмечено: N» → «Все отмечены») and the «нет итогового статуса» line,
+ * without a reload. */
+export const ParticipantsStartedMarking: Story = {
+  args: { segment: 'participants' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'started' },
+    participants: [
+      participant('reg-1', 'Анна К.'),
+      participant('reg-2', 'Илья В.'),
+    ],
+    liveAttendance: true,
+  }),
+  play: async ({ canvas, userEvent }) => {
+    const T = RIDE_READINESS_TERMS.participants;
+    await expect(await canvas.findByText(T.unresolvedChip(2))).toBeVisible();
+    const row = async (name: string) =>
+      within(
+        await canvas.findByRole('group', {
+          name: FINISH_CHECKIN_TERMS.rowActionsLabel(name),
+        }),
+      );
+    await userEvent.click(
+      (await row('Анна К.')).getByRole('button', {
+        name: FINISH_CHECKIN_TERMS.markDnf,
+      }),
+    );
+    await expect(await canvas.findByText(T.unresolvedChip(1))).toBeVisible();
+    await userEvent.click(
+      (await row('Илья В.')).getByRole('button', {
+        name: FINISH_CHECKIN_TERMS.confirmOne,
+      }),
+    );
+    await expect(await canvas.findByText(T.allMarkedChip)).toBeVisible();
+    await expect(
+      canvas.queryByTestId('unresolved-before-finish'),
+    ).not.toBeInTheDocument();
+  },
+};
+
+/** CR-189: a finished ride with one rider still undecided — confirming the
+ * last one turns «Не подтверждено: 1» into «Итоги подведены» at once. */
+export const ParticipantsFinishedLastMark: Story = {
+  args: { segment: 'participants' },
+  globals: { theme: 'dark' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'finished', startsAt: '2026-09-20T05:00:00.000Z' },
+    participants: [
+      participant('reg-1', 'Анна К.', { attendance: 'finished' }),
+      participant('reg-2', 'Илья В.'),
+    ],
+    liveAttendance: true,
+  }),
+  play: async ({ canvas, userEvent }) => {
+    const T = RIDE_READINESS_TERMS.participants;
+    await expect(await canvas.findByText(T.unconfirmedChip(1))).toBeVisible();
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: FINISH_CHECKIN_TERMS.confirmOne,
+      }),
+    );
+    await expect(await canvas.findByText(T.finishedChip)).toBeVisible();
+    await expect(
+      canvas.queryByText(T.unconfirmedChip(1)),
+    ).not.toBeInTheDocument();
+  },
+};
+
+/** CR-189: finishing with one rider undecided leaves a note and an open
+ * «Не подтверждено: 1»; deciding that rider closes both without a reload. */
+export const ParticipantsFinishThenLastMark: Story = {
+  args: { segment: 'participants' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'started' },
+    participants: [
+      participant('reg-1', 'Анна К.', { attendance: 'finished' }),
+      participant('reg-2', 'Илья В.'),
+    ],
+    liveAttendance: true,
+  }),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const T = RIDE_READINESS_TERMS.participants;
+    await userEvent.click(
+      await canvas.findByRole('button', { name: RIDE_EDIT_TERMS.finish }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByRole(
+      'dialog',
+      { name: FINISH_CHECKIN_TERMS.finishConfirmTitle },
+    );
+    await userEvent.click(
+      within(dialog).getByRole('button', {
+        name: FINISH_CHECKIN_TERMS.finishConfirmAction,
+      }),
+    );
+    await expect(
+      await canvas.findByText(FINISH_CHECKIN_TERMS.finishedWithUnresolved(1)),
+    ).toBeVisible();
+    await expect(await canvas.findByText(T.unconfirmedChip(1))).toBeVisible();
+
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: FINISH_CHECKIN_TERMS.confirmOne,
+      }),
+    );
+    await expect(await canvas.findByText(T.finishedChip)).toBeVisible();
+    await expect(
+      canvas.queryByText(FINISH_CHECKIN_TERMS.finishedWithUnresolved(1)),
+    ).not.toBeInTheDocument();
+    await expect(canvas.getByText(RIDE_EDIT_TERMS.finishSuccess)).toBeVisible();
   },
 };
 

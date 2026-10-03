@@ -6,12 +6,21 @@ import {
   within,
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RideStatus } from 'types';
+import { getRide } from '@/features/organizer/rides/api';
+import { RideWorkspace } from '@/features/organizer/rides/components/RideWorkspace';
+import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
+import {
+  useRideWorkspace,
+  type RideWorkspaceData,
+} from '@/lib/cabinet/ride-workspace';
 import {
   TestRideWorkspace,
   workspaceData,
 } from '@/test-support/ride-workspace';
 import { ParticipantTable } from './components/ParticipantTable';
 import { WaitlistTable } from './components/WaitlistTable';
+import { participantsReadiness } from './readiness';
 import {
   ApiError,
   confirmClaimedFinishes,
@@ -37,7 +46,21 @@ vi.mock('./api', async () => {
   };
 });
 
+// CR-189: the real ride workspace frame reads the ride through the rides
+// feature's client; only its network calls are stubbed.
+vi.mock('@/features/organizer/rides/api', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/features/organizer/rides/api')
+  >('@/features/organizer/rides/api');
+  return {
+    ...actual,
+    getRide: vi.fn(),
+    getLatestRideUpdate: vi.fn().mockResolvedValue(null),
+  };
+});
+
 const getRideParticipantsMock = vi.mocked(getRideParticipants);
+const getWorkspaceRideMock = vi.mocked(getRide);
 const getRideWaitlistMock = vi.mocked(getRideWaitlist);
 const getRideGroupsMock = vi.mocked(getRideGroups);
 const getRideStatusMock = vi.mocked(getRideStatus);
@@ -520,5 +543,272 @@ describe('Participants inside the ride workspace (KI-085)', () => {
     expect(queued.closest('li')).toHaveTextContent('Группа: —');
     expect(getRideGroupsMock).not.toHaveBeenCalled();
     expect(getRideStatusMock).not.toHaveBeenCalled();
+  });
+});
+
+// CR-189: the ride workspace's frame (the chip beside the section heading —
+// «Не отмечено/Не подтверждено: N» — the «нет итогового статуса» line and the
+// readiness) reads its own copy of the ride's `attendanceSummary`. A mark made
+// in the table has to reach that copy at once: the QA run saw
+// «Не подтверждено: 1» stay on screen until a reload.
+describe('Participants refresh the ride workspace after a mark (CR-189)', () => {
+  const claimed: RideParticipantSummary = {
+    ...first,
+    id: 'reg-claimed',
+    displayName: 'Заявил Финиш',
+    finishClaimedAt: '2027-05-01T09:00:00.000Z',
+  };
+  const silent: RideParticipantSummary = {
+    ...second,
+    id: 'reg-silent',
+    displayName: 'Молчун',
+  };
+  const done: RideParticipantSummary = {
+    ...first,
+    id: 'reg-done',
+    displayName: 'Уже Подтверждён',
+    attendance: 'finished',
+  };
+
+  function summaryData(
+    status: RideStatus,
+    unresolved: number,
+  ): RideWorkspaceData {
+    return workspaceData({
+      ride: { status },
+      registrationsCount: 3,
+      attendanceSummary: {
+        finished: 3 - unresolved,
+        dnf: 0,
+        noShow: 0,
+        unresolved,
+      },
+    });
+  }
+
+  /** What the frame derives from the workspace's ride (the section chip). */
+  function FrameChip() {
+    const workspace = useRideWorkspace();
+    return (
+      <p data-testid="frame-chip">
+        {workspace ? participantsReadiness(workspace.data)?.chip : null}
+      </p>
+    );
+  }
+
+  function renderInWorkspace(
+    status: RideStatus,
+    items: RideParticipantSummary[],
+    unresolvedBefore: number,
+    reread: () => RideWorkspaceData,
+  ) {
+    getRideParticipantsMock.mockResolvedValue({ items, nextCursor: null });
+    render(
+      <TestRideWorkspace
+        data={summaryData(status, unresolvedBefore)}
+        reread={reread}
+      >
+        <FrameChip />
+        <ParticipantTable rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+  }
+
+  it('turns «Не подтверждено: 1» into «Итоги подведены» when the last undecided rider is marked, without a reload', async () => {
+    setAttendanceMock.mockResolvedValue({ updated: 1 });
+    const reread = vi.fn(() => summaryData('finished', 0));
+    renderInWorkspace('finished', [done, silent], 1, reread);
+
+    await screen.findByText('Молчун');
+    expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+      'Не подтверждено: 1',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+        'Итоги подведены',
+      ),
+    );
+    expect(setAttendanceMock).toHaveBeenCalledWith(
+      'ride-1',
+      ['reg-silent'],
+      'finished',
+    );
+    expect(reread).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns «Не отмечено: 1» into «Все отмечены» before the finish', async () => {
+    setAttendanceMock.mockResolvedValue({ updated: 1 });
+    const reread = vi.fn(() => summaryData('started', 0));
+    renderInWorkspace('started', [done, silent], 1, reread);
+
+    await screen.findByText('Молчун');
+    expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+      'Не отмечено: 1',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Не пришёл' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+        'Все отмечены',
+      ),
+    );
+    expect(reread).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes the frame again after an undo', async () => {
+    setAttendanceMock.mockResolvedValue({ updated: 1 });
+    const reread = vi.fn(() => summaryData('finished', 1));
+    renderInWorkspace(
+      'finished',
+      [{ ...silent, attendance: 'dnf' }],
+      0,
+      reread,
+    );
+
+    await screen.findByText('Молчун');
+    expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+      'Итоги подведены',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Вернуть' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+        'Не подтверждено: 1',
+      ),
+    );
+    expect(setAttendanceMock).toHaveBeenCalledWith(
+      'ride-1',
+      ['reg-silent'],
+      null,
+    );
+  });
+
+  it('refreshes the frame after «Подтвердить всех заявивших»', async () => {
+    confirmClaimedMock.mockResolvedValue({ updated: 1 });
+    const reread = vi.fn(() => summaryData('finished', 0));
+    renderInWorkspace('finished', [done, claimed], 1, reread);
+
+    await screen.findByText('Заявил Финиш');
+    expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+      'Не подтверждено: 1',
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Подтвердить всех заявивших (1)' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+        'Итоги подведены',
+      ),
+    );
+    expect(reread).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes the frame too when a save fails, so neither copy stays stale', async () => {
+    setAttendanceMock.mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Participant not found',
+        status: 404,
+        detail: 'Some of the selected participants are not active.',
+        instance: '/v1/rides/ride-1/attendance',
+        code: 'participant_not_found',
+      }),
+    );
+    const reread = vi.fn(() => summaryData('finished', 2));
+    renderInWorkspace('finished', [done, silent], 1, reread);
+
+    await screen.findByText('Молчун');
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+
+    await waitFor(() => expect(reread).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('frame-chip')).toHaveTextContent(
+      'Не подтверждено: 2',
+    );
+  });
+
+  describe('inside the real workspace frame', () => {
+    function mockWorkspaceRide(status: RideStatus, unresolved: number) {
+      getWorkspaceRideMock.mockResolvedValue({
+        isOwner: true,
+        requirements: [],
+        registrationsCount: 3,
+        waitlistCount: 0,
+        ride: workspaceData({ ride: { status } }).ride,
+        attendanceSummary: {
+          finished: 3 - unresolved,
+          dnf: 0,
+          noShow: 0,
+          unresolved,
+        },
+      });
+    }
+
+    function renderPage() {
+      render(
+        <RideWorkspace
+          rideId="ride-1"
+          current="participants"
+          sections={ORGANIZER_RIDE_SECTIONS}
+        >
+          <ParticipantTable rideId="ride-1" />
+        </RideWorkspace>,
+      );
+    }
+
+    it('shows «Итоги подведены» as soon as the last undecided rider of a finished ride is confirmed', async () => {
+      getRideParticipantsMock.mockResolvedValue({
+        items: [done, silent],
+        nextCursor: null,
+      });
+      setAttendanceMock.mockResolvedValue({ updated: 1 });
+      mockWorkspaceRide('finished', 1);
+      renderPage();
+
+      expect(await screen.findByText('Не подтверждено: 1')).toBeInTheDocument();
+      await screen.findByText('Молчун');
+
+      // From now on the server has nobody undecided.
+      mockWorkspaceRide('finished', 0);
+      fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+
+      expect(await screen.findByText('Итоги подведены')).toBeInTheDocument();
+      expect(screen.queryByText('Не подтверждено: 1')).not.toBeInTheDocument();
+      // The row followed too, and the list never went back to a skeleton.
+      expect(
+        screen.getByRole('group', { name: 'Финиш: Молчун' }),
+      ).toHaveTextContent('Финиш подтверждён');
+    });
+
+    it('clears the «нет итогового статуса» line and the chip of a started ride', async () => {
+      getRideParticipantsMock.mockResolvedValue({
+        items: [done, silent],
+        nextCursor: null,
+      });
+      setAttendanceMock.mockResolvedValue({ updated: 1 });
+      mockWorkspaceRide('started', 1);
+      renderPage();
+
+      expect(await screen.findByText('Не отмечено: 1')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('unresolved-before-finish'),
+      ).toBeInTheDocument();
+      await screen.findByText('Молчун');
+
+      mockWorkspaceRide('started', 0);
+      fireEvent.click(screen.getByRole('button', { name: 'Сошёл' }));
+
+      expect(await screen.findByText('Все отмечены')).toBeInTheDocument();
+      expect(screen.queryByText('Не отмечено: 1')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('unresolved-before-finish'),
+      ).not.toBeInTheDocument();
+    });
   });
 });

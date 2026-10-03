@@ -15,6 +15,7 @@ import { RideWizardFrame } from './components/RideWizardFrame';
 import { RideWizardSteps } from './components/RideWizardSteps';
 import { isWizardMode, wizardStepHref } from './wizard-steps';
 import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
+import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
 import type { RideSectionLink } from '@/lib/cabinet/types';
 import {
   ApiError,
@@ -1716,5 +1717,64 @@ describe('RideWorkspace (CR-187)', () => {
     expect(screen.queryByText('Раздел')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Повторить/ }));
     expect(await screen.findByText('Раздел')).toBeInTheDocument();
+  });
+
+  // CR-189: the note after finishing with undecided riders counts them; the
+  // organizer then marks them in the participants section, which asks the
+  // frame to re-read. The note must follow instead of freezing its count.
+  it('keeps the finish note in step with the riders a section decides afterwards (CR-189)', async () => {
+    const detail = (status: Ride['status'], unresolved: number) => ({
+      isOwner: true,
+      requirements: [],
+      registrationsCount: 2,
+      ride: { ...baseRide, status },
+      attendanceSummary: {
+        finished: 2 - unresolved,
+        dnf: 0,
+        noShow: 0,
+        unresolved,
+      },
+    });
+    getRideMock.mockResolvedValue(detail('started', 1));
+    finishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'finished' },
+    });
+    // What a section does after it saved a decision.
+    function SectionDecision() {
+      const workspace = useRideWorkspace();
+      return (
+        <button type="button" onClick={() => void workspace?.refresh()}>
+          Решение сохранено
+        </button>
+      );
+    }
+
+    render(
+      <RideWorkspace rideId="ride-1" current="participants" sections={[]}>
+        <SectionDecision />
+      </RideWorkspace>,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Завершить заезд' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Завершить' }));
+    expect(
+      await screen.findByText(/Заезд завершён, но у 1 участника/),
+    ).toBeInTheDocument();
+
+    // The last rider is decided: the server now has nobody undecided.
+    getRideMock.mockResolvedValue(detail('finished', 0));
+    fireEvent.click(screen.getByRole('button', { name: 'Решение сохранено' }));
+
+    expect(await screen.findByText('Заезд завершён.')).toBeInTheDocument();
+    expect(screen.queryByText(/нет итогового статуса/)).not.toBeInTheDocument();
+
+    // …and it counts again if a decision is taken back.
+    getRideMock.mockResolvedValue(detail('finished', 2));
+    fireEvent.click(screen.getByRole('button', { name: 'Решение сохранено' }));
+    expect(
+      await screen.findByText(/Заезд завершён, но у 2 участников/),
+    ).toBeInTheDocument();
   });
 });

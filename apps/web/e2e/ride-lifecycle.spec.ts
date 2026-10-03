@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { FINISH_CHECKIN_TERMS, RIDE_EDIT_TERMS, RIDE_STATUS_TERMS } from 'ui';
+import {
+  FINISH_CHECKIN_TERMS,
+  RIDE_EDIT_TERMS,
+  RIDE_READINESS_TERMS,
+  RIDE_STATUS_TERMS,
+} from 'ui';
 import {
   createDraftRide,
   createOrganizerProfile,
@@ -7,6 +12,7 @@ import {
   login,
   registerAndVerify,
   registerForRide,
+  setDisplayName,
 } from './helpers/api-fixtures';
 import { confirmInDialog, newIsolatedRequest } from './helpers/ui';
 
@@ -131,6 +137,93 @@ test('organizer confirms finishing a ride with unresolved riders', async ({
     page.getByText(FINISH_CHECKIN_TERMS.finishedWithUnresolved(1)),
   ).toBeVisible();
   await expect(finish).toHaveCount(0);
+});
+
+// CR-189. The workspace frame's results chip («Не отмечено: N» → «Все отмечены»,
+// «Не подтверждено: N» → «Итоги подведены») follows every mark made in the
+// participants table at once — the QA run saw «Не подтверждено: 1» stay until
+// a reload. Same ride, from the start to the last decision, in one page load.
+test('organizer marks riders and the workspace frame follows without a reload', async ({
+  page,
+}) => {
+  const T = RIDE_READINESS_TERMS.participants;
+  await signInOrganizer(page, 'Клуб e2e: отметки');
+  const { rideId } = await createPublishedRide(
+    page.request,
+    `E2E отметки ${Date.now()}`,
+  );
+  const names = ['Райдер Анна', 'Райдер Борис', 'Райдер Вера'] as const;
+  for (const name of names) {
+    const rider = await newIsolatedRequest();
+    const account = await registerAndVerify(rider);
+    await login(rider, account.email, account.password);
+    await setDisplayName(rider, name);
+    await registerForRide(rider, rideId);
+    await rider.dispose();
+  }
+
+  await page.goto(`/organizer/rides/${rideId}/participants`);
+  await transition(
+    page,
+    RIDE_EDIT_TERMS.closeRegistration,
+    RIDE_EDIT_TERMS.closeRegistrationSuccess,
+  );
+  await transition(page, RIDE_EDIT_TERMS.start, RIDE_EDIT_TERMS.startSuccess);
+  // From here on the page is never reloaded: a navigation would clear this.
+  await page.evaluate(() => {
+    (window as unknown as { pageLoadMarker: boolean }).pageLoadMarker = true;
+  });
+
+  const chip = (label: string) => page.getByText(label, { exact: true });
+  const row = (name: string) =>
+    page.getByRole('group', {
+      name: FINISH_CHECKIN_TERMS.rowActionsLabel(name),
+    });
+  const mark = (name: string, label: string) =>
+    row(name).getByRole('button', { name: label, exact: true }).click();
+
+  // Before the finish: «Не отмечено: N» counts down, undo counts back up.
+  await expect(chip(T.unresolvedChip(3))).toBeVisible();
+  await mark(names[0], FINISH_CHECKIN_TERMS.confirmOne);
+  await expect(chip(T.unresolvedChip(2))).toBeVisible();
+  await mark(names[1], FINISH_CHECKIN_TERMS.markDnf);
+  await expect(chip(T.unresolvedChip(1))).toBeVisible();
+  await mark(names[2], FINISH_CHECKIN_TERMS.markNoShow);
+  await expect(chip(T.allMarkedChip)).toBeVisible();
+  await expect(chip(T.unresolvedChip(1))).toHaveCount(0);
+  await expect(page.getByTestId('unresolved-before-finish')).toHaveCount(0);
+  await mark(names[2], FINISH_CHECKIN_TERMS.undo);
+  await expect(chip(T.unresolvedChip(1))).toBeVisible();
+  await expect(page.getByTestId('unresolved-before-finish')).toBeVisible();
+
+  // Finish with the one undecided rider left: the results are not closed.
+  await page.getByRole('button', { name: RIDE_EDIT_TERMS.finish }).click();
+  await confirmInDialog(page, FINISH_CHECKIN_TERMS.finishConfirmAction);
+  await expect(
+    page.getByText(FINISH_CHECKIN_TERMS.finishedWithUnresolved(1)),
+  ).toBeVisible();
+  await expect(chip(T.unconfirmedChip(1))).toBeVisible();
+
+  // The last decision closes them — the frame says so at once.
+  await mark(names[2], FINISH_CHECKIN_TERMS.confirmOne);
+  await expect(chip(T.finishedChip)).toBeVisible();
+  await expect(chip(T.unconfirmedChip(1))).toHaveCount(0);
+  // The note about the undecided rider is gone with them.
+  await expect(
+    page.getByText(FINISH_CHECKIN_TERMS.finishedWithUnresolved(1)),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(RIDE_EDIT_TERMS.finishSuccess, { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { pageLoadMarker?: boolean }).pageLoadMarker,
+    ),
+  ).toBe(true);
+
+  // …and it is what the server says, not just what the screen was told.
+  await page.reload();
+  await expect(chip(T.finishedChip)).toBeVisible();
 });
 
 test('organizer cancels a ride with registration open', async ({ page }) => {

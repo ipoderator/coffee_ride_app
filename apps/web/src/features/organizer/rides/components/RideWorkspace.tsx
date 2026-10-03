@@ -47,7 +47,13 @@ import { RideWorkspaceTabs } from './RideWorkspaceTabs';
 
 type LoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 type Busy = 'open' | 'close' | 'start' | 'finish' | null;
-type Message = { tone: 'success' | 'danger'; text: string } | null;
+type Message = {
+  tone: 'success' | 'danger';
+  text: string;
+  /** CR-189: the finish note counts undecided riders — it follows the
+   * workspace's live count instead of freezing the count at the finish. */
+  followsUnresolved?: boolean;
+} | null;
 
 async function readWorkspace(
   rideId: string,
@@ -160,13 +166,15 @@ export function RideWorkspace({
     kind: Exclude<Busy, null>,
     call: (id: string) => Promise<{ ride: Ride }>,
     success: string,
+    followsUnresolved = false,
   ): Promise<boolean> {
     if (busy) return false;
     setMessage(null);
     setBusy(kind);
     try {
       const response = await call(rideId);
-      applyRide(response.ride, success);
+      applyRide(response.ride);
+      setMessage({ tone: 'success', text: success, followsUnresolved });
       return true;
     } catch {
       setMessage({ tone: 'danger', text: RIDE_EDIT_TERMS.loadError });
@@ -214,6 +222,7 @@ export function RideWorkspace({
       unresolvedCount
         ? FINISH_CHECKIN_TERMS.finishedWithUnresolved(unresolvedCount)
         : RIDE_EDIT_TERMS.finishSuccess,
+      Boolean(unresolvedCount),
     );
     setFinishConfirmOpen(false);
   }
@@ -272,6 +281,13 @@ export function RideWorkspace({
   const { ride } = data;
   const statusTerm = RIDE_STATUS_TERMS[ride.status];
   const unresolved = data.attendanceSummary?.unresolved ?? 0;
+  // CR-189: the finish note says how many riders are still undecided — once
+  // the organizer marks the last one it is the plain «Заезд завершён.».
+  const successText = message?.followsUnresolved
+    ? unresolved > 0
+      ? FINISH_CHECKIN_TERMS.finishedWithUnresolved(unresolved)
+      : RIDE_EDIT_TERMS.finishSuccess
+    : message?.text;
   const section = sections.find((item) => item.segment === current);
   const readiness = section
     ? (ORGANIZER_RIDE_READINESS[section.segment]?.(data) ?? null)
@@ -349,7 +365,7 @@ export function RideWorkspace({
 
           {message?.tone === 'success' && (
             <p role="status" className="text-body-sm text-success">
-              {message.text}
+              {successText}
             </p>
           )}
           {message?.tone === 'danger' && (
