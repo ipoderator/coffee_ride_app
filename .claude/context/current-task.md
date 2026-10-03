@@ -54,5 +54,5 @@ and `e2e/helpers/{api-fixtures,ui}.ts` — verified `critical-journeys.spec.ts` 
 ## Open
 
 - Linux screenshot baselines (KI-084): Docker amd64 pull or CI artifact after push.
-- QA P3 not in scope: ride cancellation still `window.confirm`; two date controls in
-  the wizard; `#`/`№` for queue positions.
+- QA P3: done in CR-195 (25c4d11, local on `main`, not pushed); KI-087 — the other
+  `window.confirm` deletes.

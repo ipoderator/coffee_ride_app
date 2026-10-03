@@ -52,6 +52,12 @@ finished go to «История», `started` stays), catalog `?phase=active|arch
 collapsed «Завершённые и отменённые» section, seats only while registration is open.
 CR-194 — Russian validation errors everywhere + a source guard test.
 
+CR-195 (2026-10-03, committed locally on `main`, not pushed): the QA report's P3
+leftovers — ride cancellation confirmed in `ConfirmDialog` (no `window.confirm`), the
+draft form (wizard step 4 / «Обзор») enters the start with step 1's `DatePicker` +
+time field, the ticket's queue place reads «№ N в очереди». KI-087: six destructive
+deletes (avatar/cover/GPX/route point/stop) still use `window.confirm`.
+
 CR-188 (2026-10-02, committed): KI-085's follow-ups. Each ride-workspace tab
 reads `GET /v1/rides/:id` once — sections take the ride from `useRideWorkspace()` and
 re-read through its `refresh()` (standalone they still read themselves). Field errors
@@ -928,16 +934,16 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-189..CR-194 are committed and pushed to `main`; CI pending (KI-084 baselines).
+None — CR-189..CR-194 are pushed to `main`; CR-195 is one local commit on top, not
+pushed yet. CI pending (KI-084 baselines).
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
 1. **Confirm CI on `main`** — screenshot baselines (KI-084) are the
-   open risk (CI-artifact path). Owner-flagged P3 leftovers from the QA report not
-   in scope: one confirmation pattern for ride cancellation (still `window.confirm`),
-   one date control in the wizard, `#`/`№` for queue positions.
+   open risk (CI-artifact path). The QA report's P3 leftovers are done (CR-195);
+   KI-087 (the remaining `window.confirm` deletes) is the natural follow-up.
    CR-190 follow-ups: no e2e journey for the reschedule, no email (in-app only).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
    style id from their 2GIS account; then an additive `theme` option on
