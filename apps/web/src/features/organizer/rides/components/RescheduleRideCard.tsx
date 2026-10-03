@@ -105,8 +105,9 @@ export function RescheduleRideCard({
     10,
   );
   const zoneHint = formatTimeZoneHint(currentStart, timeZone);
-  const candidate =
-    date && time ? zonedTimeToUtcIso(`${date}T${time}`, timeZone) : null;
+  const toCandidate = (d: string, t: string) =>
+    d && t ? zonedTimeToUtcIso(`${d}T${t}`, timeZone) : null;
+  const candidate = toCandidate(date, time);
   const candidateLine = candidate
     ? formatRideStartLine(new Date(candidate), { timeZone })
     : null;
@@ -139,6 +140,33 @@ export function RescheduleRideCard({
     });
   }
 
+  /** The time errors that depend on the date+time pair, not on time alone. */
+  function pairError(start: string | null): string | undefined {
+    if (!start) return undefined;
+    const instant = new Date(start).getTime();
+    if (instant <= now().getTime()) return T.inPast;
+    if (instant === currentStart.getTime()) return T.unchanged;
+    return undefined;
+  }
+
+  // QA `fe0b4c2` (CR-198): «Это текущее время старта…» (or «…уже прошло»)
+  // sits under the time but is about the pair — a new date with the same
+  // time must re-judge it at once, not on the next «Продолжить». An error
+  // about the time field alone («Укажите новое время…») stays.
+  function changeDate(value: string) {
+    setDate(value);
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.date;
+      if (next.time === T.inPast || next.time === T.unchanged) {
+        const recomputed = pairError(toCandidate(value, time));
+        if (recomputed) next.time = recomputed;
+        else delete next.time;
+      }
+      return next;
+    });
+  }
+
   function validate(): Pending | null {
     const next: FieldErrors = {};
     if (!date) next.date = T.dateRequired;
@@ -146,10 +174,9 @@ export function RescheduleRideCard({
     const trimmed = reason.trim();
     if (!trimmed) next.reason = T.reasonRequired;
     else if (trimmed.length > REASON_MAX_LENGTH) next.reason = T.reasonTooLong;
-    if (candidate && !next.date && !next.time) {
-      const instant = new Date(candidate).getTime();
-      if (instant <= now().getTime()) next.time = T.inPast;
-      else if (instant === currentStart.getTime()) next.time = T.unchanged;
+    if (!next.date && !next.time) {
+      const pair = pairError(candidate);
+      if (pair) next.time = pair;
     }
     setErrors(next);
     if (Object.keys(next).length > 0 || !candidate) return null;
@@ -305,10 +332,7 @@ export function RescheduleRideCard({
             >
               <DatePicker
                 value={date}
-                onChange={(value) => {
-                  setDate(value);
-                  clearError('date');
-                }}
+                onChange={changeDate}
                 min={today}
                 today={today}
                 disabled={isSubmitting}

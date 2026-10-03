@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn } from 'storybook/test';
+import { formatCalendarDate } from 'ui';
 import { RescheduleRideCard } from '@/features/organizer/rides/components/RescheduleRideCard';
 
 // CR-190: «Перенести заезд» on a published ride's overview — the closed card,
@@ -99,6 +100,36 @@ export const ValidationErrors: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: 'Продолжить' }));
     await expect(canvas.getByText('Напишите причину переноса.')).toBeVisible();
+  },
+};
+
+/**
+ * CR-198 (QA `fe0b4c2`): «Это текущее время старта» disappears as soon as
+ * another date is picked with the same time — a different start already.
+ */
+export const NewDateClearsUnchanged: Story = {
+  globals: { theme: 'dark' },
+  play: async ({ canvas, userEvent }) => {
+    const unchanged = 'Это текущее время старта — выберите другое.';
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Перенести заезд' }),
+    );
+    await userEvent.type(
+      canvas.getByLabelText('Причина переноса'),
+      'Обещают грозу.',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Продолжить' }));
+    await expect(canvas.getByText(unchanged)).toBeVisible();
+
+    await userEvent.click(canvas.getByLabelText('Новая дата'));
+    await userEvent.click(
+      canvas.getByRole('button', { name: formatCalendarDate('2099-10-05') }),
+    );
+
+    await expect(canvas.queryByText(unchanged)).not.toBeInTheDocument();
+    await expect(canvas.getByLabelText('Новое время старта')).toHaveValue(
+      '08:00',
+    );
   },
 };
 

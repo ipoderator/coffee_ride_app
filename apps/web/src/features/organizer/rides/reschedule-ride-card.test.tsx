@@ -1,5 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type { Ride } from 'types';
+import { formatCalendarDate } from 'ui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, rescheduleRide } from './api';
 import { RescheduleRideCard } from './components/RescheduleRideCard';
@@ -52,6 +59,14 @@ function setTime(value: string) {
   fireEvent.change(screen.getByLabelText('Новое время старта'), {
     target: { value },
   });
+}
+
+function pickDate(ymd: string) {
+  fireEvent.click(screen.getByLabelText('Новая дата'));
+  const dialog = screen.getByRole('dialog', { name: 'Выбор даты' });
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: formatCalendarDate(ymd) }),
+  );
 }
 
 function setReason(value: string) {
@@ -111,6 +126,63 @@ describe('RescheduleRideCard (CR-190)', () => {
       screen.getByText('Это текущее время старта — выберите другое.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // CR-198 (QA `fe0b4c2`): the «текущее время» error sits under the time but
+  // is about the date+time pair. A new date with the same time is a different
+  // start, so the error must go at once — not on the next «Продолжить».
+  describe('a new date re-judges the time error at once', () => {
+    const UNCHANGED = 'Это текущее время старта — выберите другое.';
+    const IN_PAST = 'Это время уже прошло — выберите время позже текущего.';
+
+    it('clears «текущее время» when another date keeps the same time', () => {
+      renderCard();
+      openForm();
+      setReason('Дождь');
+      submit();
+      expect(screen.getByText(UNCHANGED)).toBeInTheDocument();
+
+      pickDate('2026-10-05');
+
+      expect(screen.queryByText(UNCHANGED)).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Новое время старта')).not.toHaveAttribute(
+        'aria-invalid',
+        'true',
+      );
+      expect(screen.getByLabelText('Новое время старта')).toHaveValue('08:00');
+      expect(screen.queryByRole('dialog', { name: 'Выбор даты' })).toBeNull();
+    });
+
+    it('replaces it when the new pair is wrong for another reason', () => {
+      renderCard();
+      openForm();
+      setReason('Дождь');
+      submit();
+      expect(screen.getByText(UNCHANGED)).toBeInTheDocument();
+
+      // Today (NOW is 12:00 in Moscow) at 08:00 — already gone.
+      pickDate('2026-10-01');
+
+      expect(screen.queryByText(UNCHANGED)).not.toBeInTheDocument();
+      expect(screen.getByText(IN_PAST)).toBeInTheDocument();
+    });
+
+    it('keeps an error about the time field itself', () => {
+      renderCard();
+      openForm();
+      setTime('');
+      setReason('Дождь');
+      submit();
+      expect(
+        screen.getByText('Укажите новое время старта.'),
+      ).toBeInTheDocument();
+
+      pickDate('2026-10-05');
+
+      expect(
+        screen.getByText('Укажите новое время старта.'),
+      ).toBeInTheDocument();
+    });
   });
 
   it('confirms with «было → станет», sends the instant in the ride’s zone, and reports success', async () => {
