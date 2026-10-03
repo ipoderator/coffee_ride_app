@@ -216,7 +216,11 @@ function toNotification(row: {
     id: row.id,
     userId: row.userId,
     type: row.type,
-    ride: { id: row.rideId, title: row.rideTitle },
+    ride: {
+      id: row.rideId,
+      title: row.rideTitle,
+      startTimezone: row.rideStartTimezone,
+    },
     message: row.message,
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt ? row.readAt.toISOString() : null,

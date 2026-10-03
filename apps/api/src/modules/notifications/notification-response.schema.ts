@@ -20,7 +20,12 @@ export const notificationResponseSchema = z.object({
   id: z.string(),
   userId: z.string(),
   type: z.enum(NOTIFICATION_TYPES),
-  ride: z.object({ id: z.string(), title: z.string() }),
+  // CR-199: additive `startTimezone` — see `Notification.ride`.
+  ride: z.object({
+    id: z.string(),
+    title: z.string(),
+    startTimezone: z.string(),
+  }),
   message: z.string().nullable(),
   createdAt: z.string(),
   readAt: z.string().nullable(),

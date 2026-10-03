@@ -411,3 +411,11 @@ Summary: owner QA report `QA_REPORT_fe0b4c2` (P3): «Перенести заез
 Files: `apps/web/src/features/organizer/rides/{components/RescheduleRideCard.tsx,reschedule-ride-card.test.tsx}`, `apps/web/src/stories/RescheduleRideCard.stories.tsx` (`NewDateClearsUnchanged`, dark theme). No API, contract, schema or visual change.
 Validation: `web` typecheck + lint clean; web unit 767/767 (three new cases; two fail on the old component); Storybook `RescheduleRideCard` 7/7 with axe.
 Decisions: none.
+
+## 2026-10-03 — CR-199 — Notification times in the ride's timezone
+
+Summary: the same ride update showed 16:01 in the organizer's journal and 13:01 in «Мои заезды → Уведомления»: `NotificationList` formatted `createdAt` with `formatDate`/`formatTime`'s UTC default, while the journal (`UpdateComposer`) reads it in the ride's `startTimezone`. The card had no zone to use — `Notification.ride` was only `{ id, title }`, and the ride's zone travelled only inside `reschedule` (CR-190). `Notification.ride` gained an additive `startTimezone` (the API already selected `rides.startTimezone` for `reschedule`, so no new query or join), and the card's date and time are read in it — every notification type, same wall clock as the organizer.
+Contract: additive — `ride.startTimezone` on every item of `GET /v1/notifications/mine` and `POST /v1/notifications/:id/read` (`docs/api.md`). No schema change, no other backend behavior change.
+Files: `packages/types/src/domain/notification.ts`, `apps/api/src/modules/notifications/{notification-response.schema,notifications.service,notifications.routes.test}.ts`, `apps/web/src/features/participant/notifications/{components/NotificationList.tsx,notifications.test.tsx}`, `apps/web/src/stories/NotificationList.stories.tsx` (new — the list had no story: feed/empty/error/loading/dark), `docs/api.md`.
+Validation: web unit 771/771 (four new cases — MSK not UTC, a date that differs from the UTC date, per-ride zones, every type in one feed — all four fail on the old component); web + api + types typecheck and lint clean; api `notifications`/`registrations`/`rides` 391 passed (5 opt-in live tests skipped), the routes test now asserts `ride.startTimezone`; Storybook `NotificationList` 5/5 with axe.
+Decisions: none.

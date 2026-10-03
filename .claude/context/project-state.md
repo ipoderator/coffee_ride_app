@@ -52,6 +52,10 @@ finished go to «История», `started` stays), catalog `?phase=active|arch
 collapsed «Завершённые и отменённые» section, seats only while registration is open.
 CR-194 — Russian validation errors everywhere + a source guard test.
 
+CR-199 (2026-10-03, committed on `main`): a participant notification's time is read in
+the ride's `startTimezone` (was UTC — 13:01 vs the organizer journal's 16:01);
+`Notification.ride` gained an additive `startTimezone`.
+
 CR-198 (2026-10-03, committed on `main`): QA `fe0b4c2` P3 — in «Перенести заезд» a
 new date immediately re-judges the time error that depends on the date+time pair
 (`RescheduleRideCard`'s `pairError`).

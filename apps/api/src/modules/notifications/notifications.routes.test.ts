@@ -239,6 +239,8 @@ describe('Communication (CR-038/039/040/041)', () => {
       );
       expect(updateNotification).toBeDefined();
       expect(updateNotification.ride.id).toBe(rideId);
+      // CR-199: the ride's zone travels with the card (fixture: Europe/Moscow).
+      expect(updateNotification.ride.startTimezone).toBe('Europe/Moscow');
       expect(updateNotification.message).toBe(
         'Встречаемся у южного входа в парк.',
       );

@@ -26,7 +26,11 @@ export interface Notification {
   id: string;
   userId: string;
   type: NotificationType;
-  ride: { id: string; title: string };
+  /**
+   * `startTimezone` (CR-199, additive): the ride's IANA zone, so the card's
+   * own timestamp reads the same wall clock as the organizer's journal.
+   */
+  ride: { id: string; title: string; startTimezone: string };
   message: string | null;
   createdAt: string;
   readAt: string | null;

@@ -1,30 +1,34 @@
-# Current task — CR-198: reschedule date change re-judges the time error — DONE (committed)
+# Current task — CR-199: notification times in the ride's timezone — DONE (committed)
 
-Source: owner QA report `QA_REPORT_fe0b4c2_2026-10-03.md` (P3). Branch `main`. CR-196 and
-CR-197's changes were present and kept untouched; all three committed together.
+Source: owner report — the same ride update shows 16:01 (MSK) in the organizer journal
+and 13:01 (UTC) in «Мои заезды → Уведомления». Branch `main`.
 
 ## Goal
 
-«Перенести заезд»: after «Это текущее время старта — выберите другое.», picking another
-date with the same time must clear (or re-judge) that error at once.
+`NotificationList` reads each card's date/time in the ride's `startTimezone`.
 
 ## Acceptance criteria
 
-- Date change re-judges the pair-dependent time error (`inPast`/`unchanged`). — done.
-- «Укажите новое время старта.» (time-only) is not cleared by a date change. — done.
-- Regression test for the QA scenario. — done (3 cases; 2 fail on the old component).
-- No visual change; no commit/push.
+- Europe/Moscow ride → MSK time, not UTC. — done.
+- Date follows the ride zone when it differs from the UTC date. — done.
+- Other notification types and feed states unchanged. — done.
+- Zone delivered by the API: additive `Notification.ride.startTimezone` (already
+  selected for `reschedule`; no new query). — done.
 
 ## Files
 
-`apps/web/src/features/organizer/rides/{components/RescheduleRideCard.tsx,
-reschedule-ride-card.test.tsx}`, `apps/web/src/stories/RescheduleRideCard.stories.tsx`;
-docs: changelog, tasks, project-state.
+`packages/types/src/domain/notification.ts`; `apps/api/src/modules/notifications/
+{notification-response.schema,notifications.service,notifications.routes.test}.ts`;
+`apps/web/src/features/participant/notifications/{components/NotificationList.tsx,
+notifications.test.tsx}`; `apps/web/src/stories/NotificationList.stories.tsx` (new);
+`docs/api.md`, changelog, tasks, project-state.
 
 ## Validation
 
-web typecheck + lint exit 0; web unit 767/767; Storybook `RescheduleRideCard` 7/7 (axe).
+web unit 771/771 (4 new; all fail on the old component); web/api/types typecheck +
+lint clean; api notifications/registrations/rides 391 passed, 5 skipped (opt-in live);
+Storybook NotificationList 5/5 with axe.
 
 ## Final result
 
-Implemented, validated, committed and pushed (with CR-196, CR-197).
+Implemented, validated, committed and pushed.

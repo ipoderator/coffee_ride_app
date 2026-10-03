@@ -130,6 +130,8 @@ export function NotificationList() {
     <div className="flex flex-col gap-3">
       {items.map((item) => {
         const createdAt = new Date(item.createdAt);
+        // CR-199: the ride's own zone, same wall clock as the organizer's journal.
+        const timeZone = item.ride.startTimezone;
         const isUnread = item.readAt === null;
         return (
           <Link
@@ -170,7 +172,8 @@ export function NotificationList() {
                 </p>
               )}
               <p className="text-body-sm text-text-muted">
-                {formatDate(createdAt)} {formatTime(createdAt)}
+                {formatDate(createdAt, { timeZone })}{' '}
+                {formatTime(createdAt, { timeZone })}
               </p>
             </Card>
           </Link>

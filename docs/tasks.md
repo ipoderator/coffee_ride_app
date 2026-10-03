@@ -1399,3 +1399,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-198 QA `fe0b4c2` P3: in «Перенести заезд» a new date re-judges the
       pair-dependent time error («текущее время»/«уже прошло») at once instead of on the
       next «Продолжить». See `docs/changelog.md`.
+- [x] CR-199 Participant notifications show their time in the ride's timezone (was UTC
+      — 13:01 vs the organizer journal's 16:01); additive `Notification.ride.startTimezone`.
+      See `docs/changelog.md`.

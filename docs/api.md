@@ -937,7 +937,8 @@ nested under `/rides` — same reasoning as `GET /v1/registrations/mine` (no
 single-ride parent). The caller's own notifications only, newest first — no filter
 dimension of its own (unlike `/registrations/mine`'s required `when`). `200` →
 `{ items: Notification[], nextCursor }`. Each item: `{ id, userId, type, ride: {
-id, title }, message, createdAt, readAt }` — `type` is one of
+id, title, startTimezone }, message, createdAt, readAt }` (`ride.startTimezone`,
+CR-199: the ride's IANA zone, the one the card's time is read in) — `type` is one of
 `registration_confirmed` / `ride_update` / `ride_cancelled`; `message` is the
 originating `RideUpdate.message` text for `ride_update`, `null` otherwise;
 `readAt` is `null` until marked read. Collection, paginated per ADR-011.
