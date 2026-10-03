@@ -1361,3 +1361,8 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `RideUpdate` (migration `0025`, ADR-029); card, ticket, `/me`, cabinet and `.ics`
       (`SEQUENCE`) show the new time; registrants and the waitlist are notified.
       See `docs/changelog.md`.
+- [x] CR-191 `seed:demo --no-routes` (QA `13653ed` item 3): finished seed rides go through
+      finish claims, organizer confirmation and «сошёл»/no-show before reviews, so no
+      `403 finish_not_confirmed`; re-runs after an interrupted run stay duplicate-free.
+      Item 4: `pnpm lint` no longer depends on pnpm's private hoist (`eslint-config-next`
+      plugins/`next` peer). See `docs/changelog.md`.

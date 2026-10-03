@@ -13,6 +13,7 @@
 // eslint-config-next does not yet ship a prebuilt flat config export, so we
 // bridge its legacy-style shareable configs via FlatCompat, per Next's own
 // documented setup for ESLint 9 + flat config.
+import { createRequire } from 'module';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { FlatCompat } from '@eslint/eslintrc';
@@ -20,8 +21,26 @@ import { FlatCompat } from '@eslint/eslintrc';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// CR-191. eslint-config-next names its plugins (`react-hooks`, `@next/next`,
+// ...) as plain strings, and FlatCompat resolves those names relative to
+// `resolvePluginsRelativeTo`, which defaults to `baseDirectory` (this
+// directory). Under pnpm's strict node_modules those plugins are
+// dependencies of eslint-config-next, not of apps/web, so they are not
+// reachable from here — they only used to resolve by accident through pnpm's
+// private hoist (`node_modules/.pnpm/node_modules`, which `pnpm`'s bin shims
+// add to NODE_PATH). Without that hoist (`hoist=false`, a different launcher,
+// a clean checkout in some environments) ESLint fails with `couldn't find the
+// plugin "eslint-plugin-react-hooks"`. Resolving plugins from
+// eslint-config-next's own real location (where pnpm places its dependencies
+// beside it) makes the result independent of hoisting, and needs no
+// plugin version duplicated in this package.json.
+const eslintConfigNextDir = dirname(
+  createRequire(import.meta.url).resolve('eslint-config-next/package.json'),
+);
+
 const compat = new FlatCompat({
   baseDirectory: __dirname,
+  resolvePluginsRelativeTo: eslintConfigNextDir,
 });
 
 const eslintConfig = [
