@@ -36,7 +36,7 @@ and `e2e/helpers/{api-fixtures,ui}.ts` — verified `critical-journeys.spec.ts` 
 - [x] CR-189 (255e1b1)
 - [x] CR-190 (a1c5169, merged 375e766; ADR-029, changelog, tasks, api.md written with it)
 - [x] CR-191 (8496267; changelog + tasks written with it)
-- [ ] CR-192
+- [x] CR-192 (c42c973, rebased on CR-190/191; changelog + tasks written with it)
 - [ ] CR-193
 - [ ] CR-194
 - [ ] merge, full validation, docs/context
