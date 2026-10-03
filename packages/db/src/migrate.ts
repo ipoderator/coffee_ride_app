@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
+import { migrationsFolder } from './migrations-folder.js';
 
 // Standalone CLI script — reads DATABASE_URL directly rather than importing
 // apps/api's env module (that would invert the dependency direction fixed by
@@ -41,7 +42,7 @@ const MIGRATION_LOCK_KEY = 8_812_046; // arbitrary, fixed — must never change
 try {
   await client`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`;
   await migrate(drizzle(client), {
-    migrationsFolder: new URL('../migrations', import.meta.url).pathname,
+    migrationsFolder: migrationsFolder(import.meta.url),
   });
 } finally {
   await client`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`;

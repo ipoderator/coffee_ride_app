@@ -7,8 +7,9 @@ export default defineConfig({
     ...nodeLibraryVitestConfig().test,
     coverage: coverageConfig({
       // Scripts run by hand (migrate, seed) and the schema have no unit tests;
-      // only the seed's testable steps are measured.
-      include: ['src/seed-demo-finish.ts'],
+      // only the seed's testable steps and the migrations-folder resolver are
+      // measured.
+      include: ['src/seed-demo-finish.ts', 'src/migrations-folder.ts'],
     }),
   },
 });

@@ -39,7 +39,8 @@ shipping a `users` table now); `src/client.ts` exports a `createDbClient(
 connectionString)` factory (a library, not a global env-reading singleton —
 `apps/api` will own the actual `DATABASE_URL` and call this when a route needs
 it, starting CR-011); `src/migrate.ts` is the standalone migration-runner script
-CR-076's deploy step reuses later. Validated live against a real local Postgres
+CR-076's deploy step reuses later (it finds `migrations/` through
+`src/migrations-folder.ts` — `fileURLToPath`, safe under non-ASCII paths, CR-196). Validated live against a real local Postgres
 (Docker wasn't available in this environment — see `docs/changelog.md`): a
 scratch table was generated, migrated, queried through `createDbClient`, then
 fully removed, leaving the committed `migrations/meta/_journal.json` at its
