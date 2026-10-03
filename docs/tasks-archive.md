@@ -1414,15 +1414,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `close-task`, `qa-report-intake`, `ci-triage`, `storybook-check`, `known-issue`,
       `dependabot-triage`, `terminology-string`) and a skill routing table in
       `.claude/CLAUDE.md`. See `docs/changelog.md`.
-- [x] CR-194 QA `13653ed` item 8: Russian validation errors on every form — the review
-      comment's missing line, «email» vs «почта» wording, per-form tests with the API's
-      real English replies, and a guard test against English API/Zod text, native
-      validation bubbles and untranslated schema issue codes. See `docs/changelog.md`.
-- [x] CR-193 QA `13653ed` item 7: «Предстоящие» on `/me` and `/me/rides` without cancelled
-      or finished rides (status-first split, «История» tab, cancellations still in sight
-      on `/me`); the catalog's collapsed «Завершённые и отменённые» section
-      (`GET /v1/rides?phase=`), no «Осталось N мест» unless registration is open. See
-      `docs/changelog.md`.
 - [x] CR-195 QA `13653ed` P3: ride cancellation confirmed in `ConfirmDialog` instead of
       `window.confirm`; the wizard's step 4 enters the start with step 1's `DatePicker` +
       time field; the queue place reads «№ N в очереди», not «#N». KI-087 tracks the
