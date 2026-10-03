@@ -37,7 +37,7 @@ list — and CR-130 (done 2026-09-26): the «Ночной старт» visual di
 
 ## Current task
 
-CR-189..CR-194 (2026-10-03, branch `fix/qa-13653ed`, not pushed): the owner's QA report
+CR-189..CR-194 (2026-10-03, committed and pushed to `main`): the owner's QA report
 for `13653ed`, all nine items. CR-189 — the ride workspace frame follows every finish
 mark without a reload; e2e can run on isolated ports (`E2E_WEB_PORT`/`E2E_API_PORT`).
 CR-190 — reschedule a published ride before its start (`POST /v1/rides/:id/reschedule`,
@@ -928,14 +928,14 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-189..CR-194 are committed on `fix/qa-13653ed`, not yet pushed/merged to `main`.
+None — CR-189..CR-194 are committed and pushed to `main`; CI pending (KI-084 baselines).
 
 ## Next
 
 Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ride volume grows; the API already supports bbox, the web client doesn't send it); a public organizer page / `GET /v1/organizers/:id/reviews` (declined — the header rating can differ from a ride's own review list); splitting `rides.service.ts`/`registrations.service.ts` (not now).
 
-1. **Push `fix/qa-13653ed` and confirm CI** — screenshot baselines (KI-084) are the
-   open risk; then merge to `main`. Owner-flagged P3 leftovers from the QA report not
+1. **Confirm CI on `main`** — screenshot baselines (KI-084) are the
+   open risk (CI-artifact path). Owner-flagged P3 leftovers from the QA report not
    in scope: one confirmation pattern for ride cancellation (still `window.confirm`),
    one date control in the wizard, `#`/`№` for queue positions.
    CR-190 follow-ups: no e2e journey for the reschedule, no email (in-app only).

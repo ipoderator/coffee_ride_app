@@ -1,4 +1,4 @@
-# Current task — CR-189..CR-194: QA report for 13653ed (2026-10-02) — DONE (committed on `fix/qa-13653ed`, not pushed)
+# Current task — CR-189..CR-194: QA report for 13653ed (2026-10-02) — DONE (committed, pushed to `main`)
 
 Source: the owner's QA report `QA_13653ed_2026-10-02.md` (checked against HEAD
 `7d67990`, which is newer than the report — every item is re-checked before fixing).
