@@ -3,3 +3,13 @@ packages:
   - packages/*
 allowBuilds:
   argon2: true
+# CR-191. eslint-config-next's `parser.js` does `require('next/dist/compiled/
+# babel/eslint-parser')` but the package declares no dependency on `next`, so
+# under pnpm's strict layout it only resolved through pnpm's private hoist
+# (node_modules/.pnpm/node_modules, reached via NODE_PATH). Declaring `next` as
+# its peer makes pnpm link apps/web's own `next` beside eslint-config-next,
+# independent of hoisting (and of `hoist=false`).
+packageExtensions:
+  eslint-config-next:
+    peerDependencies:
+      next: '*'

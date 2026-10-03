@@ -17,7 +17,9 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:backup": "bash scripts/backup.sh",
     "db:restore": "bash scripts/restore.sh",
-    "seed:demo": "tsx src/seed-demo.ts"
+    "seed:demo": "tsx src/seed-demo.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -26,10 +28,14 @@
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@types/node": "^24.13.4",
+    "@vitest/coverage-v8": "5.0.1",
+    "config": "workspace:*",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9.0.0",
     "tsx": "^4.23.15",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.1"
   }
 }

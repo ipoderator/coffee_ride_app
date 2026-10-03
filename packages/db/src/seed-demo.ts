@@ -1,4 +1,13 @@
 import postgres from 'postgres';
+import {
+  ApiError,
+  assertFinishPlan,
+  postReviews,
+  recordAttendance,
+  type FinishOutcomes,
+  type FinishReview,
+  type RegisteredRider,
+} from './seed-demo-finish.js';
 
 // CR-148. Demo data for local development: organizers, participants, rides in
 // every lifecycle state, pace groups, stops, route points, registrations, a
@@ -13,8 +22,15 @@ import postgres from 'postgres';
 // stops before anything is published (`pnpm seed:demo --no-routes` skips it).
 //
 // Only the reset step touches the database directly: it deletes every
-// `@demo.coffeeride.local` account and its rides, so a re-run starts clean.
-// GPX/cover objects of deleted rides stay in the dev bucket (harmless).
+// `@demo.coffeeride.local` account and its rides, so a re-run starts clean —
+// after a complete run and after one that stopped half way alike, nothing is
+// duplicated. GPX/cover objects of deleted rides stay in the dev bucket
+// (harmless).
+//
+// A finished ride is finished the way a real one is (CR-191, CR-181/ADR-027):
+// riders claim «I finished», the organizer confirms and records `dnf` /
+// `no_show` outcomes, and only confirmed finishers review (see
+// `seed-demo-finish.ts`).
 //
 // Faster with the dev-only rate-limit overrides from `.env.example`
 // (`AUTH_RATE_LIMIT_MAX`, `RATE_LIMIT_MAX`); without them a 429 is waited out.
@@ -53,16 +69,6 @@ function assertLocal(): string {
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
-
-class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string | undefined,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -337,7 +343,11 @@ interface RideSeed {
   riders?: string[];
   waitlist?: string[];
   updates?: string[];
-  reviews?: { rider: string; rating: number; comment?: string }[];
+  // Finished rides only. Every rider in `riders` finishes unless listed here:
+  // `dnf` = «сошёл», `noShow` = never came. Reviewers must be finishers.
+  dnf?: FinishOutcomes['dnf'];
+  noShow?: FinishOutcomes['noShow'];
+  reviews?: FinishReview[];
   // Final state; `registration_open` when omitted.
   finalStatus?:
     | 'draft'
@@ -559,6 +569,7 @@ const RIDES: RideSeed[] = [
       'rider.timur',
       'rider.natalia',
     ],
+    dnf: ['rider.natalia'],
     reviews: [
       {
         rider: 'rider.sergey',
@@ -597,7 +608,8 @@ const RIDES: RideSeed[] = [
       { type: 'start', label: 'Станция Одинцово', at: P.odintsovo },
       { type: 'finish', label: 'Звенигород', at: P.zvenigorod },
     ],
-    riders: ['rider.dmitry', 'rider.olga', 'rider.timur'],
+    riders: ['rider.dmitry', 'rider.olga', 'rider.timur', 'rider.pavel'],
+    noShow: ['rider.pavel'],
     reviews: [
       {
         rider: 'rider.dmitry',
@@ -787,10 +799,16 @@ async function seedRide(
 
   const groupFor = (index: number) =>
     groupIds.length ? { groupId: groupIds[index % groupIds.length] } : {};
+  const registrations = new Map<string, RegisteredRider>();
   for (const [index, key] of (seed.riders ?? []).entries()) {
-    await api('POST', `/v1/rides/${id}/register`, {
+    const { data } = await api<{ registration: { id: string } }>(
+      'POST',
+      `/v1/rides/${id}/register`,
+      { session: rider(key).session, body: groupFor(index) },
+    );
+    registrations.set(key, {
       session: rider(key).session,
-      body: groupFor(index),
+      registrationId: data.registration.id,
     });
   }
   for (const [index, key] of (seed.waitlist ?? []).entries()) {
@@ -814,18 +832,33 @@ async function seedRide(
   }
   if (status === 'finished') {
     await api('POST', `/v1/rides/${id}/start`, { session });
+    await recordAttendance(api, {
+      rideId: id,
+      organizerSession: session,
+      riders: registrations,
+      dnf: seed.dnf,
+      noShow: seed.noShow,
+    });
     await api('POST', `/v1/rides/${id}/finish`, { session });
-    for (const review of seed.reviews ?? []) {
-      await api('POST', `/v1/rides/${id}/reviews`, {
-        session: rider(review.rider).session,
-        body: { rating: review.rating, comment: review.comment ?? null },
-      });
-    }
+    await postReviews(api, {
+      rideId: id,
+      riders: registrations,
+      reviews: seed.reviews ?? [],
+    });
   }
   console.log(`  ✓ ${seed.title} — ${status}`);
 }
 
 async function main(): Promise<void> {
+  for (const seed of RIDES) {
+    assertFinishPlan(seed.title, {
+      finished: seed.finalStatus === 'finished',
+      riders: seed.riders,
+      dnf: seed.dnf,
+      noShow: seed.noShow,
+      reviews: seed.reviews,
+    });
+  }
   const databaseUrl = assertLocal();
   await api('GET', '/health').catch(() => {
     throw new Error(

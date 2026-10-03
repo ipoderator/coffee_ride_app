@@ -62,7 +62,9 @@ S3 alone? Use `docker compose up -d s3 s3-init`, or uploads report
 
 Demo data: with `pnpm dev` running, `pnpm seed:demo` wipes and recreates the
 `@demo.coffeeride.local` accounts (3 organizers, 8 riders, password
-`demo-coffee-ride-2026`) and 9 rides in every lifecycle state, through the API.
+`demo-coffee-ride-2026`) and 9 rides in every lifecycle state, through the API
+(finished rides get confirmed finishes, a «сошёл» and a no-show, then reviews).
+Safe to re-run at any point — also after an interrupted run.
 Routes come from the app's route builder, so the API must reach 2GIS (KI-056);
 `pnpm seed:demo --no-routes` skips that step.
 
