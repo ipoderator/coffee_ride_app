@@ -794,7 +794,8 @@ reasoning as KI-024/KI-025/KI-027). Same viewer-visibility rule as `GET
 /v1/rides/:id` (`resolveOptionalUser`: the ride's owner always, anyone else only once
 the ride has left `draft`). `404 route_not_found` if the ride has no route. `200` →
 the raw GPX bytes, `Content-Type: application/gpx+xml`,
-`Content-Disposition: attachment; filename="<original filename>"`. `503
+`Content-Disposition: attachment; filename="<ASCII fallback>"; filename*=UTF-8''<original
+filename, percent-encoded>` (CR-205 — a raw non-Latin-1 name was a 500). `503
 route_storage_unavailable` on a storage failure, same as `POST`/`PATCH`.
 
 GET `/v1/rides/:id/route/geometry` — **implemented (CR-028, "Route rendering")**.

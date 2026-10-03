@@ -19,10 +19,6 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
-- [x] CR-197 QA `fe0b4c2`: `next` survives register → verify email → «Перейти ко
-      входу» → sign in (validated on every hop; external/unsafe targets dropped);
-      full-journey e2e. KI-089: the emailed link still has no `next`. See
-      `docs/changelog.md`.
 - [x] CR-198 QA `fe0b4c2` P3: in «Перенести заезд» a new date re-judges the
       pair-dependent time error («текущее время»/«уже прошло») at once instead of on the
       next «Продолжить». See `docs/changelog.md`.
@@ -43,3 +39,6 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       `docs/changelog.md`.
 - [x] CR-204 `do-not-break.md` as a path-scoped rule loaded whole; area history via
       changelog grep in the read protocol. See `docs/changelog.md`.
+- [x] CR-205 Security audit fixes: GPX download `Content-Disposition` (Cyrillic name
+      was a 500), web page security headers, single-use token race, fastify and
+      transitive bumps, Dependabot alerts on. KI-090 opened. See `docs/changelog.md`.

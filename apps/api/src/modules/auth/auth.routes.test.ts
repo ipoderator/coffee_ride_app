@@ -294,6 +294,31 @@ describe('POST /v1/auth/verify-email', () => {
     await app.close();
   });
 
+  // CR-205: the single-use check is the guarded UPDATE inside the transaction,
+  // not the pre-check SELECT both concurrent requests pass.
+  it('lets exactly one of several concurrent requests use the same token', async () => {
+    const app = await buildApp(testEnv);
+    const token = await registerAndGetToken(app);
+
+    const responses = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        app.inject({
+          method: 'POST',
+          url: '/v1/auth/verify-email',
+          payload: { token },
+        }),
+      ),
+    );
+
+    const codes = responses.map((r) => r.statusCode).sort();
+    expect(codes).toEqual([200, 400, 400, 400]);
+    for (const r of responses.filter((r) => r.statusCode === 400)) {
+      expect(r.json().code).toBe('verification_token_already_used');
+    }
+
+    await app.close();
+  });
+
   it('rejects an expired token', async () => {
     const app = await buildApp(testEnv);
     const token = await registerAndGetToken(app);
@@ -704,6 +729,36 @@ describe('POST /v1/auth/reset-password', () => {
     });
     expect(second.statusCode).toBe(400);
     expect(second.json().code).toBe('reset_token_already_used');
+
+    await app.close();
+  });
+
+  // CR-205: same guarded-UPDATE single-use check as verify-email — before it,
+  // every request that passed the pre-check SELECT reset the password.
+  it('lets exactly one of several concurrent resets use the same token', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken } = await requestPasswordReset(app.db, email);
+
+    const passwords = Array.from(
+      { length: 4 },
+      (_, i) => `concurrent-password-${i}-xyz`,
+    );
+    const responses = await Promise.all(
+      passwords.map((password) =>
+        app.inject({
+          method: 'POST',
+          url: '/v1/auth/reset-password',
+          payload: { token: resetToken, password },
+        }),
+      ),
+    );
+
+    const codes = responses.map((r) => r.statusCode).sort();
+    expect(codes).toEqual([200, 400, 400, 400]);
+    for (const r of responses.filter((r) => r.statusCode === 400)) {
+      expect(r.json().code).toBe('reset_token_already_used');
+    }
 
     await app.close();
   });

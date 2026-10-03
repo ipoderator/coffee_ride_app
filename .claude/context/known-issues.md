@@ -476,6 +476,19 @@ Next action: owner decision — an optional `next` on `POST /v1/auth/register`
 `apps/web/src/lib/auth/next-path.ts` (that validator would move to `packages/types`)
 and appended to the emailed link; or keep it web-only.
 
+### KI-090 — `pnpm audit` still reports Next 15's pinned postcss 8.4.31
+
+Status: open. Discovered: 2026-10-03 (CR-205).
+Problem: `pnpm audit --prod` lists 4 postcss advisories (2 high: source-map path
+traversal/file read; 2 moderate: `</style>` XSS in stringify, an incomplete fix),
+all via `apps__web>next>postcss`. Next pins `postcss` exactly at 8.4.31 in every
+15.x release (15.5.27 included); Next 16.3.7 moves to 8.5.23.
+Impact: low — postcss only runs at `next build` over the repo's own CSS; no
+user-controlled CSS or source map ever reaches it.
+Workaround: none needed at runtime; don't override Next's pin by hand.
+Next action: the Next 16 major upgrade (Dependabot PR #22), as its own planned task
+per the `dependabot-triage` skill; then re-run `pnpm audit --prod`.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

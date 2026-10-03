@@ -1,41 +1,66 @@
-# Current task — CR-200: KI-087 / KI-088 / KI-082 — DONE (committed)
+# Current task — CR-205: security audit fixes — DONE (committed)
 
-Source: owner — "бери все 3 первых" (next-steps list after CR-199). Branch `main`.
+Source: owner — "нужно проверить наш проект на безопасность" → audit (security-review
+skill, whole app) → "исправь проблемы". Branch `main`.
 
 ## Goal
 
-1. KI-087: the six remaining destructive `window.confirm`s (avatar ×2, ride cover,
-   GPX route, route point, stop) → `ConfirmDialog`, same as CR-195's ride cancel.
-2. KI-088: regenerate `discovery-map-chromium-linux.png` (stale since KI-078/CR-185).
-3. KI-082: its status line/CR-188 paragraph belong to KI-084 (closed); correct the
-   record — the probe-host issue itself is an accepted limitation guarded weekly.
+Fix the audit's findings 1–4; finding 5 (register 409 enumeration / per-account
+lockout) is an accepted trade-off — recorded, not changed.
+
+1. GPX download `Content-Disposition` built from the raw uploaded filename: a Cyrillic
+   name → 500 `ERR_INVALID_CHAR` (reproduced), a `"` injects header parameters.
+2. Web HTML pages ship no security headers (no frame-ancestors/X-Frame-Options, HSTS,
+   nosniff, Referrer-Policy; `X-Powered-By: Next.js`).
+3. Dependencies: fastify <5.12.5, `ip-address` via `@fastify/rate-limit`; Dependabot
+   alerts disabled on the GitHub repo.
+4. Single-use token TOCTOU: `resetPassword`/`verifyEmail` check `usedAt` before the
+   transaction and never check the guarded UPDATE's row count.
 
 ## Acceptance criteria
 
-- No `window.confirm` left in `apps/web/src`; each delete opens the app's dialog
-  (title + description + «Удалить…»/«Не удалять»), dismiss = no request, confirm =
-  delete; duplicate-submit protected (`isConfirming`).
-- Unit tests and e2e drive the dialog, not `vi.spyOn(window, 'confirm')` /
-  `page.once('dialog')`; stories cover the open dialog with axe.
-- KI-088 baseline regenerated on x86_64 (Docker amd64, or the CI-artifact path) and
-  showing no expand button over the notice.
-- known-issues updated/archived.
+- Download of a route uploaded as `маршрут.gpx` returns 200 with an ASCII `filename`
+  fallback + RFC 5987 `filename*=UTF-8''…`; a `"`/`;`/CR-LF in the name can't add
+  parameters. Covered by a route test.
+- Every web response carries the security headers; `X-Powered-By` gone; no CSP that
+  breaks 2GIS MapGL / Next inline scripts (CSP left out deliberately unless verified).
+- `pnpm audit --prod` no longer lists fastify / ip-address advisories reachable at
+  runtime; remaining ones documented.
+- Two concurrent resets/verifies with one token: exactly one succeeds. Tests.
+- typecheck, lint, affected unit tests green.
+
+## Planned files
+
+- `apps/api/src/modules/rides/rides.routes.ts` (+ helper, test)
+- `apps/web/next.config.ts`
+- `apps/api/src/modules/auth/auth.service.ts` (+ test)
+- `apps/api/package.json`, `pnpm-lock.yaml`
+- `.claude/rules/security.md` (web headers line)
 
 ## Progress
 
-- [x] KI-087 terms + components
-- [x] KI-087 tests/stories/e2e
-- [x] KI-088 baseline — amd64 pull stalled (2/7 layers, 10 min, stopped); owner chose
-      the temporary branch + draft PR path (#28, closed, branch deleted). CI run
-      37147345143's actual drops only the expand button → committed as the baseline.
-- [x] KI-082 record
-- [x] validation, docs (changelog/tasks/project-state)
+- [x] 1 Content-Disposition (`lib/content-disposition.ts`)
+- [x] 2 web headers (`next.config.ts` `headers()`, `poweredByHeader: false`)
+- [x] 3 fastify 5.12.5, ip-address/fast-uri/brace-expansion in-range; Dependabot
+      alerts enabled via `gh api -X PUT …/vulnerability-alerts` (204)
+- [x] 4 token TOCTOU (guarded claim inside the transaction)
+- [x] validation
+- [x] close-task
 
-## Validation
+## Validation results
 
-web unit 772/772; ui 246/246; web+ui typecheck/lint clean; Storybook 196/196 (axe);
-e2e media-uploads/route-points-stops/gpx-route 10/10 (local stack + S3).
+- api vitest: 41 files, 599 passed / 8 skipped; the reset concurrency test fails on
+  HEAD's `auth.service.ts` (4×200), passes now. The verify-email one passes on both
+  (no argon2 delay → no interleave locally) — kept as a guard.
+- turbo typecheck+lint (api, web): 17/17. Prettier clean.
+- e2e chromium: security-headers 2/2; home, critical-journeys, gpx-route,
+  password-reset 11/11 (dev servers on :3000/:4000 reused).
+- `pnpm audit --prod`: 16 → 4 (all postcss via Next 15 → KI-090).
+
+## Discovered issues
+
+- KI-090: Next 15 pins postcss 8.4.31; fixed only by Next 16.
 
 ## Final result
 
-KI-087 and KI-088 closed (archived), KI-082 corrected. Committed and pushed.
+Done, committed and pushed. Changelog entry CR-205; changelog archived (CR-190..CR-197).

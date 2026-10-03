@@ -144,6 +144,23 @@ export async function registerUser(
   }
 }
 
+// CR-205: thrown both by the pre-check and by the in-transaction claim.
+const VERIFICATION_TOKEN_ALREADY_USED = () =>
+  new AuthServiceError(
+    'verification_token_already_used',
+    400,
+    'Verification link already used',
+    'This verification link was already used.',
+  );
+
+const RESET_TOKEN_ALREADY_USED = () =>
+  new AuthServiceError(
+    'reset_token_already_used',
+    400,
+    'Reset link already used',
+    'This password reset link was already used.',
+  );
+
 export async function verifyEmail(
   db: DbClient,
   rawToken: string,
@@ -165,12 +182,7 @@ export async function verifyEmail(
     );
   }
   if (tokenRow.usedAt) {
-    throw new AuthServiceError(
-      'verification_token_already_used',
-      400,
-      'Verification link already used',
-      'This verification link was already used.',
-    );
+    throw VERIFICATION_TOKEN_ALREADY_USED();
   }
   if (tokenRow.expiresAt.getTime() < Date.now()) {
     throw new AuthServiceError(
@@ -183,10 +195,22 @@ export async function verifyEmail(
 
   const updatedUser = await db.transaction(async (tx) => {
     const now = new Date();
-    await tx
+    // CR-205: the `usedAt` check above ran outside this transaction — a
+    // concurrent request with the same link may have claimed it since. The
+    // guarded UPDATE is the actual single-use check.
+    const claimed = await tx
       .update(emailVerificationTokens)
       .set({ usedAt: now })
-      .where(eq(emailVerificationTokens.id, tokenRow.id));
+      .where(
+        and(
+          eq(emailVerificationTokens.id, tokenRow.id),
+          isNull(emailVerificationTokens.usedAt),
+        ),
+      )
+      .returning({ id: emailVerificationTokens.id });
+    if (claimed.length === 0) {
+      throw VERIFICATION_TOKEN_ALREADY_USED();
+    }
 
     const [updated] = await tx
       .update(users)
@@ -398,12 +422,7 @@ export async function resetPassword(
     );
   }
   if (tokenRow.usedAt) {
-    throw new AuthServiceError(
-      'reset_token_already_used',
-      400,
-      'Reset link already used',
-      'This password reset link was already used.',
-    );
+    throw RESET_TOKEN_ALREADY_USED();
   }
   if (tokenRow.expiresAt.getTime() < Date.now()) {
     throw new AuthServiceError(
@@ -419,6 +438,27 @@ export async function resetPassword(
   const updatedUser = await db.transaction(async (tx) => {
     const now = new Date();
 
+    // Sweeps up `tokenRow` itself plus every other outstanding token for this
+    // user in one statement — no separate "mark this one" / "mark the rest"
+    // pair needed. CR-205: runs first and must have claimed `tokenRow` — the
+    // `usedAt` check above ran outside this transaction, so a concurrent reset
+    // with the same link may have used it since; this guarded UPDATE is the
+    // actual single-use check (the loser waits on the row lock, then matches
+    // nothing).
+    const claimed = await tx
+      .update(passwordResetTokens)
+      .set({ usedAt: now })
+      .where(
+        and(
+          eq(passwordResetTokens.userId, tokenRow.userId),
+          isNull(passwordResetTokens.usedAt),
+        ),
+      )
+      .returning({ id: passwordResetTokens.id });
+    if (!claimed.some((row) => row.id === tokenRow.id)) {
+      throw RESET_TOKEN_ALREADY_USED();
+    }
+
     const [updated] = await tx
       .update(users)
       .set({ passwordHash, updatedAt: now })
@@ -427,19 +467,6 @@ export async function resetPassword(
     if (!updated) {
       throw new Error('User update returned no row.');
     }
-
-    // Sweeps up `tokenRow` itself (still unused, per the check above) plus
-    // every other outstanding token for this user in one statement — no
-    // separate "mark this one" / "mark the rest" pair needed.
-    await tx
-      .update(passwordResetTokens)
-      .set({ usedAt: now })
-      .where(
-        and(
-          eq(passwordResetTokens.userId, tokenRow.userId),
-          isNull(passwordResetTokens.usedAt),
-        ),
-      );
 
     await tx.delete(sessions).where(eq(sessions.userId, tokenRow.userId));
 

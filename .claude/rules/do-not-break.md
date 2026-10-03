@@ -39,6 +39,12 @@ establishes a new non-obvious invariant.
   `.claude/rules/security.md`);
 - a password reset revoking every session for that user and invalidating
   every other outstanding reset token for that user (CR-060);
+- single-use tokens (verify-email, reset-password) claimed by a guarded
+  `UPDATE … WHERE used_at IS NULL` inside the transaction whose row count is
+  checked — the pre-check SELECT alone lets concurrent requests all pass (CR-205);
+- `apps/web/next.config.ts`'s `headers()` (frame-ancestors/X-Frame-Options,
+  nosniff, Referrer-Policy, HSTS) and `poweredByHeader: false`, excluding
+  `/api/*`, whose headers stay helmet's (CR-205);
 - `@fastify/helmet`'s CSP staying `upgrade-insecure-requests`-free (this app
   doesn't terminate TLS itself — that directive would break `/docs` over
   local `http://`) and `frame-ancestors`/`X-Frame-Options` staying

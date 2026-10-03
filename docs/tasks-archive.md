@@ -1422,3 +1422,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       Cyrillic path — the migrations folder via `fileURLToPath`, not a percent-encoded
       `URL.pathname`; regression test from a non-ASCII copy of `packages/db`. See
       `docs/changelog.md`.
+- [x] CR-197 QA `fe0b4c2`: `next` survives register → verify email → «Перейти ко
+      входу» → sign in (validated on every hop; external/unsafe targets dropped);
+      full-journey e2e. KI-089: the emailed link still has no `next`. See
+      `docs/changelog.md`.

@@ -29,7 +29,8 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   `error-reporting` (`app.reportError`).
 - `lib/`: `cursor` (pagination), `account-rate-limit`, `race-timeout`, `request-id`,
   `trust-proxy`, `read-upload`/`image-processing`/`image-storage` (sharp, S3),
-  `graceful-shutdown`, `email/` (provider interface + Unisender).
+  `graceful-shutdown`, `content-disposition` (safe attachment header), `email/`
+  (provider interface + Unisender).
 - `modules/<capability>/` = `*.routes.ts` (thin) → `*.service.ts` (rules, authz,
   transactions) + `*-response.schema.ts`:
   - `auth` — register/login/logout/me, verify + resend, forgot/reset password;

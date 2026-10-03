@@ -27,6 +27,8 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 None active. Latest work, all committed and pushed to `main` (details in
 `docs/changelog.md`):
 
+- CR-205 — security audit fixes: GPX download header, web page security headers,
+  single-use token race, dependency bumps, Dependabot alerts on (KI-090 opened).
 - CR-204 — `do-not-break.md` became a path-scoped rule (loads whole); area history
   via changelog grep in the read protocol.
 - CR-203 — this file cut to a snapshot; `do-not-break.md` split out.
@@ -75,6 +77,8 @@ differ from a ride's own review list); splitting `rides.service.ts`/
 4. Before launch: a commercial 2GIS key (KI-075); first real deployment (KI-045).
 5. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
+6. **KI-090** — the Next 16 upgrade (Dependabot #22) as its own task; clears the last
+   `pnpm audit` advisories (Next 15's pinned postcss).
 
 ## Important decisions
 
@@ -89,7 +93,8 @@ ADR-009 (cabinet feature modules), ADR-010/020 (maps adapter + render layer), AD
 Open KIs (details: `.claude/context/known-issues.md`): KI-045 production manifest never
 run end to end; KI-055/056 Unisender and 2GIS REST unreachable from this machine;
 KI-075 2GIS demo key (≤ 50 km routing); KI-057 light basemap in the dark theme; KI-082
-undocumented tile-probe host (accepted, guarded weekly); KI-086/089 await owner
+undocumented tile-probe host (accepted, guarded weekly); KI-090 postcss pinned by
+Next 15 (build-time only); KI-086/089 await owner
 decisions; KI-021/026/038/042 long-standing narrow items.
 
 ## Do not break
@@ -99,4 +104,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-03 (CR-204)
+2026-10-03 (CR-205)

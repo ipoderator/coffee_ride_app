@@ -28,11 +28,36 @@ try {
 const API_INTERNAL_URL =
   process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
+// CR-205: security headers for every page `web` serves — CR-061's helmet only
+// covers `apps/api`'s own responses, and Caddy (`deploy/Caddyfile`) adds none.
+// No script/style CSP on purpose: Next's inline bootstrap scripts, the theme
+// init script (`app/layout.tsx`) and 2GIS MapGL would each need nonces/hosts
+// verified first; the directives below restrict nothing a page loads.
+// HSTS: browsers ignore it over plain `http://`, so local dev is unaffected.
+// `/api/*` is excluded — those responses are the API's, with helmet's headers.
+const SECURITY_HEADERS = [
+  {
+    key: 'Content-Security-Policy',
+    value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+  },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=31536000; includeSubDomains',
+  },
+];
+
 const nextConfig: NextConfig = {
   // CR-074: the Docker runtime image copies only `.next/standalone`'s traced
   // output (a minimal `node_modules` plus the built server), not the full
   // monorepo — see `apps/web/Dockerfile`.
   output: 'standalone',
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: '/((?!api/).*)', headers: SECURITY_HEADERS }];
+  },
   async rewrites() {
     return [
       {

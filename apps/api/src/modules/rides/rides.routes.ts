@@ -15,6 +15,7 @@ import {
   updateRoutePointRequestSchema,
   updateStopRequestSchema,
 } from 'types';
+import { attachmentContentDisposition } from '../../lib/content-disposition.js';
 import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import { registrationResponseSchema } from '../registrations/registration-response.schema.js';
 import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-response.schema.js';
@@ -701,7 +702,7 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
       );
       return reply
         .status(200)
-        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .header('Content-Disposition', attachmentContentDisposition(filename))
         .type('application/gpx+xml')
         .send(body);
     },

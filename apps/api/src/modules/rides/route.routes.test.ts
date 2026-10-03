@@ -697,6 +697,33 @@ describe('/v1/rides/:id/route', () => {
       await app.close();
     });
 
+    // CR-205: a non-Latin-1 name in the raw header was a 500 (`ERR_INVALID_CHAR`).
+    it('downloads a route uploaded under a Cyrillic file name', async () => {
+      const app = await buildApp(testEnv);
+      const { rawToken, rideId } = await registerAndLogin(app);
+      const uploaded = multipartGpxBody(VALID_GPX, 'маршрут.gpx');
+      await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/route`,
+        headers: { origin: WEB_ORIGIN, 'content-type': uploaded.contentType },
+        cookies: { session: rawToken },
+        payload: uploaded.body,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/route/download`,
+        cookies: { session: rawToken },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-disposition']).toBe(
+        `attachment; filename="_______.gpx"; filename*=UTF-8''${encodeURIComponent('маршрут.gpx')}`,
+      );
+      expect(response.body).toBe(VALID_GPX);
+      await app.close();
+    });
+
     it("hides a stranger's draft ride route with 404", async () => {
       const app = await buildApp(testEnv);
       const { rawToken, rideId } = await registerAndLogin(app);
