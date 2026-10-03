@@ -52,6 +52,12 @@ finished go to «История», `started` stays), catalog `?phase=active|arch
 collapsed «Завершённые и отменённые» section, seats only while registration is open.
 CR-194 — Russian validation errors everywhere + a source guard test.
 
+CR-200 (2026-10-03, committed on `main`): KI-087 closed — every destructive delete
+(avatar ×2, cover, GPX, stop, route point) asks in `ConfirmDialog`, no
+`window.confirm` left; KI-082's misfiled status corrected (an accepted limitation);
+KI-088 closed — `discovery-map-chromium-linux.png` replaced with CI's x86_64 actual
+(taken from a temporary draft PR, #28, closed).
+
 CR-199 (2026-10-03, committed on `main`): a participant notification's time is read in
 the ride's `startTimezone` (was UTC — 13:01 vs the organizer journal's 16:01);
 `Notification.ride` gained an additive `startTimezone`.
@@ -952,8 +958,7 @@ entries in `docs/changelog.md`.
 
 ## In progress
 
-None — CR-196..CR-198 (QA `fe0b4c2`) are committed and pushed to `main`; CI for them
-not yet checked. CR-189..CR-195: CI run 37112228653 green.
+None — CR-200 is committed and pushed to `main`. CI: CR-199's run 37146005929 green.
 
 ## Next
 
@@ -961,8 +966,7 @@ Deferred by the owner (2026-10-02): map bbox fetch + marker clustering (until ri
 
 1. **KI-089** — owner decision: carry `next` into the emailed verification link
    (optional `next` on `POST /v1/auth/register`) or keep CR-197 web-only.
-   The QA report's P3 leftovers are done (CR-195);
-   KI-087 (the remaining `window.confirm` deletes) is the natural follow-up.
+   The QA report's P3 leftovers are done (CR-195), KI-087's deletes too (CR-200).
    CR-190 follow-ups: no e2e journey for the reschedule, no email (in-app only).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL
    style id from their 2GIS account; then an additive `theme` option on
@@ -1352,4 +1356,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-10-03 (CR-189..CR-199; CR-201 harness skills; CR-200 in progress)
+2026-10-03 (CR-189..CR-202)

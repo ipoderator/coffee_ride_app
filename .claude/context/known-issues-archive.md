@@ -2373,3 +2373,44 @@ green end to end, screenshot specs included — the CR-188 baselines still match
 changed screens (CR-193's archive section never renders in the mocked discovery
 shots; the seeded rides are open, so their seats block is unchanged). No new
 baselines needed.
+
+### KI-087 — Deleting a file or a route point still asks through the browser's `window.confirm`
+
+Status: resolved 2026-10-03 (CR-200). Discovered: 2026-10-03 (CR-195).
+Problem: CR-195 moved «Отменить заезд» to `ConfirmDialog`; six other destructive
+confirmations still use the native, unstyled `window.confirm`: avatar delete (both
+`profile/components/AvatarUploadForm.tsx`), ride cover delete
+(`cover-image/components/CoverImageUploadForm.tsx`), GPX route delete
+(`route/components/RouteUploadForm.tsx`), route point and stop delete
+(`route/components/{RoutePointsSection,StopsSection}.tsx`).
+Impact: low — they work and are reversible by re-uploading/re-adding, but look foreign
+next to the app's own dialogs.
+Workaround: none needed.
+Next action: same change as CR-195's `RideOverview` (a `ConfirmDialog` with a
+`*ConfirmTitle`/`*ConfirmDescription` pair per action, tests and stories without
+`vi.spyOn(window, 'confirm')`).
+Resolution (2026-10-03, CR-200): all six now open `ConfirmDialog`
+(`deleteConfirmTitle`/`deleteConfirmDescription`/`deleteKeep` per terms block, the
+confirm button reuses each block's `delete` label); unit tests, e2e and new stories
+drive the dialog — no `window.confirm` left in `apps/web/src`.
+
+### KI-088 — `discovery-map-chromium-linux.png` predates KI-078 and still shows the expand button over the notice
+
+Status: resolved 2026-10-03 (CR-200). Discovered: 2026-10-03 (CI run 37112228653, after CR-195).
+Problem: the baseline was taken on 2026-09-28 (`3d609d0`); since CR-185 (2026-10-02)
+the expand button is hidden while the map is unavailable (KI-078,
+`DiscoveryList.tsx`), so the app no longer renders what the baseline shows (the button
+covering «Карта» in «Карта временно недоступна…»). The spec still passes: the button's
+area (~0.3 % of the frame) is inside `maxDiffPixelRatio: 0.02`, so CI never produces an
+`*-actual.png` to take. A real regression of that size in this corner would pass too.
+Impact: low — the screenshot test is slightly weaker for this screen; the UI is right
+(checked locally without a MapGL key).
+Workaround: none needed.
+Next action: regenerate this one baseline (Docker amd64 per `.claude/rules/testing.md`,
+or a CI run with that test's tolerance tightened once to get its actual — then restore
+the tolerance). The `mobile` baseline hides the button below `lg` anyway.
+Resolution (2026-10-03, CR-200): the amd64 image pull stalled again (2 of 7 layers, no
+progress for 10 min, stopped). A temporary draft PR (#28, `tmp/ki-088-baseline`, closed
+and deleted, never merged) removed only this PNG, so CI run 37147345143 wrote the x86_64
+actual; it differs from the old baseline only by the expand button no longer covering
+the notice. Committed as the new baseline.

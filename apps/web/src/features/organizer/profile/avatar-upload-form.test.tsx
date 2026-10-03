@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvatarUploadForm } from './components/AvatarUploadForm';
 import {
@@ -74,7 +74,6 @@ describe('AvatarUploadForm (organizer)', () => {
 
   it('deletes the avatar after confirmation', async () => {
     deleteOrganizerAvatarMock.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(
       <AvatarUploadForm
@@ -83,6 +82,14 @@ describe('AvatarUploadForm (organizer)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Удалить фото' }));
+    // CR-200 (KI-087): the app's own dialog, not `window.confirm`.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Удалить загруженное фото?',
+    });
+    expect(dialog).toHaveTextContent('Это действие необратимо.');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Удалить фото' }),
+    );
 
     expect(await screen.findByText('Фото удалено.')).toBeInTheDocument();
     expect(deleteOrganizerAvatarMock).toHaveBeenCalled();

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TestRideWorkspace,
@@ -238,12 +238,18 @@ describe('CoverImageUploadForm', () => {
       coverImageUrl: '/v1/rides/ride-1/cover',
     });
     deleteCoverImageMock.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<CoverImageUploadForm rideId="ride-1" />);
     await screen.findByRole('button', { name: 'Удалить обложку' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить обложку' }));
+    // CR-200 (KI-087): the app's own dialog, not `window.confirm`.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Удалить загруженную обложку?',
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Удалить обложку' }),
+    );
 
     expect(await screen.findByText('Обложка удалена.')).toBeInTheDocument();
     expect(deleteCoverImageMock).toHaveBeenCalledWith('ride-1');
@@ -255,13 +261,14 @@ describe('CoverImageUploadForm', () => {
       status: 'draft',
       coverImageUrl: '/v1/rides/ride-1/cover',
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-
     render(<CoverImageUploadForm rideId="ride-1" />);
     await screen.findByRole('button', { name: 'Удалить обложку' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить обложку' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Не удалять' }));
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteCoverImageMock).not.toHaveBeenCalled();
   });
 

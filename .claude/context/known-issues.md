@@ -428,13 +428,10 @@ whether the 403 case still needs its own error code.
 
 ### KI-082 — The basemap watch probes an undocumented 2GIS tile host
 
-Status: open — fix ready (CR-188), awaiting the next CI run. Discovered: 2026-10-02 (CR-185).
-CR-188: the six baselines were replaced with the `*-actual.png` files of CI run
-37022093199 (bdd20b6 = CR-185's screens), each checked against its `*-diff.png` — only
-the intended CR-185 changes (no featured card without a route, the compact no-route grid
-card, live/upcoming rides above the dashboard KPIs; «ride card» now captures the grid
-card itself, which `a[href^="/rides/"]` matches first once the featured card's button is
-gone). CR-186/187/188 change none of these screens. Close once CI's e2e step is green.
+Status: open — accepted limitation, guarded by the weekly contract job. Discovered: 2026-10-02 (CR-185).
+Correction (CR-200): CR-188 recorded its baseline replacement here by mistake — that
+work and its "close once CI is green" belonged to KI-084, closed 2026-10-03 (see the
+archive). Nothing about the probe host was ever "fix ready"; it stays open as below.
 Problem: MapGL reports nothing when its tile servers are unreachable, so
 `packages/maps-2gis/src/basemap-watch.ts` probes `TILE_PROBE_URL`
 (`https://tile0-sdk.maps.2gis.com/`) with a `no-cors` fetch. The host is a 2GIS
@@ -461,38 +458,6 @@ Impact: low — a nav highlight; the workspace's own tabs show the right place.
 Workaround: none needed.
 Next action: owner decision — keep CR-150's rule, or light «Заезды» on every ride tab
 (drop the two `activeOn` entries; `CabinetSidebar.test.tsx` pins the current rule).
-
-### KI-087 — Deleting a file or a route point still asks through the browser's `window.confirm`
-
-Status: open. Discovered: 2026-10-03 (CR-195).
-Problem: CR-195 moved «Отменить заезд» to `ConfirmDialog`; six other destructive
-confirmations still use the native, unstyled `window.confirm`: avatar delete (both
-`profile/components/AvatarUploadForm.tsx`), ride cover delete
-(`cover-image/components/CoverImageUploadForm.tsx`), GPX route delete
-(`route/components/RouteUploadForm.tsx`), route point and stop delete
-(`route/components/{RoutePointsSection,StopsSection}.tsx`).
-Impact: low — they work and are reversible by re-uploading/re-adding, but look foreign
-next to the app's own dialogs.
-Workaround: none needed.
-Next action: same change as CR-195's `RideOverview` (a `ConfirmDialog` with a
-`*ConfirmTitle`/`*ConfirmDescription` pair per action, tests and stories without
-`vi.spyOn(window, 'confirm')`).
-
-### KI-088 — `discovery-map-chromium-linux.png` predates KI-078 and still shows the expand button over the notice
-
-Status: open. Discovered: 2026-10-03 (CI run 37112228653, after CR-195).
-Problem: the baseline was taken on 2026-09-28 (`3d609d0`); since CR-185 (2026-10-02)
-the expand button is hidden while the map is unavailable (KI-078,
-`DiscoveryList.tsx`), so the app no longer renders what the baseline shows (the button
-covering «Карта» in «Карта временно недоступна…»). The spec still passes: the button's
-area (~0.3 % of the frame) is inside `maxDiffPixelRatio: 0.02`, so CI never produces an
-`*-actual.png` to take. A real regression of that size in this corner would pass too.
-Impact: low — the screenshot test is slightly weaker for this screen; the UI is right
-(checked locally without a MapGL key).
-Workaround: none needed.
-Next action: regenerate this one baseline (Docker amd64 per `.claude/rules/testing.md`,
-or a CI run with that test's tolerance tightened once to get its actual — then restore
-the tolerance). The `mobile` baseline hides the button below `lg` anyway.
 
 ### KI-089 — The emailed verification link doesn't carry the return target (`next`)
 

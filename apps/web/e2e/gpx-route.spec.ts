@@ -44,8 +44,12 @@ test('organizer uploads, replaces and deletes a GPX route', async ({
   await expect(page.getByText(RIDE_ROUTE_TERMS.replaceSuccess)).toBeVisible();
   await expect(page.getByText(replacement.name)).toBeVisible();
 
-  page.once('dialog', (dialog) => void dialog.accept());
+  // CR-200 (KI-087): the app's own dialog, not a native confirm().
   await page.getByRole('button', { name: RIDE_ROUTE_TERMS.delete }).click();
+  await page
+    .getByRole('dialog', { name: RIDE_ROUTE_TERMS.deleteConfirmTitle })
+    .getByRole('button', { name: RIDE_ROUTE_TERMS.delete })
+    .click();
   await expect(page.getByText(RIDE_ROUTE_TERMS.deleteSuccess)).toBeVisible();
   await expect(page.getByText(RIDE_ROUTE_TERMS.emptyTitle)).toBeVisible();
 });

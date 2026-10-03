@@ -1,34 +1,41 @@
-# Current task — CR-199: notification times in the ride's timezone — DONE (committed)
+# Current task — CR-200: KI-087 / KI-088 / KI-082 — DONE (committed)
 
-Source: owner report — the same ride update shows 16:01 (MSK) in the organizer journal
-and 13:01 (UTC) in «Мои заезды → Уведомления». Branch `main`.
+Source: owner — "бери все 3 первых" (next-steps list after CR-199). Branch `main`.
 
 ## Goal
 
-`NotificationList` reads each card's date/time in the ride's `startTimezone`.
+1. KI-087: the six remaining destructive `window.confirm`s (avatar ×2, ride cover,
+   GPX route, route point, stop) → `ConfirmDialog`, same as CR-195's ride cancel.
+2. KI-088: regenerate `discovery-map-chromium-linux.png` (stale since KI-078/CR-185).
+3. KI-082: its status line/CR-188 paragraph belong to KI-084 (closed); correct the
+   record — the probe-host issue itself is an accepted limitation guarded weekly.
 
 ## Acceptance criteria
 
-- Europe/Moscow ride → MSK time, not UTC. — done.
-- Date follows the ride zone when it differs from the UTC date. — done.
-- Other notification types and feed states unchanged. — done.
-- Zone delivered by the API: additive `Notification.ride.startTimezone` (already
-  selected for `reschedule`; no new query). — done.
+- No `window.confirm` left in `apps/web/src`; each delete opens the app's dialog
+  (title + description + «Удалить…»/«Не удалять»), dismiss = no request, confirm =
+  delete; duplicate-submit protected (`isConfirming`).
+- Unit tests and e2e drive the dialog, not `vi.spyOn(window, 'confirm')` /
+  `page.once('dialog')`; stories cover the open dialog with axe.
+- KI-088 baseline regenerated on x86_64 (Docker amd64, or the CI-artifact path) and
+  showing no expand button over the notice.
+- known-issues updated/archived.
 
-## Files
+## Progress
 
-`packages/types/src/domain/notification.ts`; `apps/api/src/modules/notifications/
-{notification-response.schema,notifications.service,notifications.routes.test}.ts`;
-`apps/web/src/features/participant/notifications/{components/NotificationList.tsx,
-notifications.test.tsx}`; `apps/web/src/stories/NotificationList.stories.tsx` (new);
-`docs/api.md`, changelog, tasks, project-state.
+- [x] KI-087 terms + components
+- [x] KI-087 tests/stories/e2e
+- [x] KI-088 baseline — amd64 pull stalled (2/7 layers, 10 min, stopped); owner chose
+      the temporary branch + draft PR path (#28, closed, branch deleted). CI run
+      37147345143's actual drops only the expand button → committed as the baseline.
+- [x] KI-082 record
+- [x] validation, docs (changelog/tasks/project-state)
 
 ## Validation
 
-web unit 771/771 (4 new; all fail on the old component); web/api/types typecheck +
-lint clean; api notifications/registrations/rides 391 passed, 5 skipped (opt-in live);
-Storybook NotificationList 5/5 with axe.
+web unit 772/772; ui 246/246; web+ui typecheck/lint clean; Storybook 196/196 (axe);
+e2e media-uploads/route-points-stops/gpx-route 10/10 (local stack + S3).
 
 ## Final result
 
-Implemented, validated, committed and pushed.
+KI-087 and KI-088 closed (archived), KI-082 corrected. Committed and pushed.

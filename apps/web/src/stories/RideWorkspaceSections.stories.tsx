@@ -10,6 +10,8 @@ import {
   RIDE_READINESS_TERMS,
   RIDE_ROUTE_TERMS,
   RIDE_UPDATES_TERMS,
+  ROUTE_POINT_TERMS,
+  STOPS_TERMS,
 } from 'ui';
 import { CoverImageUploadForm } from '@/features/organizer/cover-image/components/CoverImageUploadForm';
 import { GroupsEditor } from '@/features/organizer/groups/components/GroupsEditor';
@@ -130,6 +132,106 @@ export const RouteDraftEmpty: Story = {
   },
 };
 
+const STOP = {
+  id: 'stop-1',
+  rideId: RIDE_ID,
+  name: 'Кофейня у моста',
+  description: null,
+  lat: 55.75,
+  lng: 37.62,
+  durationMinutes: 20,
+  position: 0,
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  updatedBy: null,
+};
+
+const ROUTE_POINT = {
+  id: 'point-1',
+  rideId: RIDE_ID,
+  type: 'water' as const,
+  label: 'Родник у моста',
+  description: null,
+  lat: 55.76,
+  lng: 37.63,
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  updatedBy: null,
+};
+
+/** The open delete dialog, found in the page body (it is portalled out of
+ * the story's canvas) and left open so the story's axe check covers it. */
+async function openDeleteDialog(
+  canvasElement: HTMLElement,
+  trigger: HTMLElement,
+  title: string,
+) {
+  trigger.click();
+  const dialog = await within(canvasElement.ownerDocument.body).findByRole(
+    'dialog',
+    { name: title },
+  );
+  await expect(dialog).toHaveTextContent('Это действие необратимо.');
+  return dialog;
+}
+
+/** CR-200 (KI-087): deleting the draft's GPX asks in the app's own dialog,
+ * not the browser's `window.confirm`. */
+export const RouteDeleteConfirm: Story = {
+  args: { segment: 'route' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'draft' },
+    detail: { route: ROUTE },
+  }),
+  play: async ({ canvas, canvasElement }) => {
+    const dialog = await openDeleteDialog(
+      canvasElement,
+      await canvas.findByRole('button', { name: RIDE_ROUTE_TERMS.delete }),
+      RIDE_ROUTE_TERMS.deleteConfirmTitle,
+    );
+    await expect(
+      within(dialog).getByRole('button', { name: RIDE_ROUTE_TERMS.deleteKeep }),
+    ).toBeVisible();
+  },
+};
+
+/** CR-200 (KI-087): a stop's row delete, same dialog, dark theme. */
+export const StopDeleteConfirm: Story = {
+  args: { segment: 'route' },
+  globals: { theme: 'dark' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'draft' },
+    detail: { stops: [STOP] },
+  }),
+  play: async ({ canvas, canvasElement }) => {
+    await canvas.findByText(STOP.name);
+    const row = canvas.getByText(STOP.name).closest('li')!;
+    await openDeleteDialog(
+      canvasElement,
+      within(row).getByRole('button', { name: STOPS_TERMS.delete }),
+      STOPS_TERMS.deleteConfirmTitle,
+    );
+  },
+};
+
+/** CR-200 (KI-087): a route point's row delete. */
+export const RoutePointDeleteConfirm: Story = {
+  args: { segment: 'route' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'draft' },
+    detail: { routePoints: [ROUTE_POINT] },
+  }),
+  play: async ({ canvas, canvasElement }) => {
+    const label = await canvas.findByText(/Родник у моста/);
+    const row = label.closest('li')!;
+    await openDeleteDialog(
+      canvasElement,
+      within(row).getByRole('button', { name: ROUTE_POINT_TERMS.delete }),
+      ROUTE_POINT_TERMS.deleteConfirmTitle,
+    );
+  },
+};
+
 /** Published without a cover: preview placeholder and the file rules. */
 export const CoverPublished: Story = {
   args: { segment: 'cover' },
@@ -153,6 +255,21 @@ export const CoverDraft: Story = {
     await expect(
       await canvas.findByRole('button', { name: RIDE_COVER_TERMS.upload }),
     ).toBeVisible();
+  },
+};
+
+/** CR-200 (KI-087): deleting the draft's cover asks in the app's dialog. */
+export const CoverDeleteConfirm: Story = {
+  args: { segment: 'cover' },
+  beforeEach: stubWorkspace({
+    ride: { status: 'draft', coverImageUrl: `/v1/rides/${RIDE_ID}/cover` },
+  }),
+  play: async ({ canvas, canvasElement }) => {
+    await openDeleteDialog(
+      canvasElement,
+      await canvas.findByRole('button', { name: RIDE_COVER_TERMS.delete }),
+      RIDE_COVER_TERMS.deleteConfirmTitle,
+    );
   },
 };
 

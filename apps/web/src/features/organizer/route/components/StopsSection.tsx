@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createStopRequestSchema, type CreateStopRequest } from 'types';
-import { Button, Card, cn, STOPS_TERMS } from 'ui';
+import { Button, Card, ConfirmDialog, cn, STOPS_TERMS } from 'ui';
 import {
   ApiError,
   createStop,
@@ -88,6 +88,8 @@ export function StopsSection({
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  // CR-200 (KI-087): the row whose delete waits in the app's own dialog.
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   function applyValidationErrors(payload: unknown): FieldErrors | null {
     const parsed = createStopRequestSchema.safeParse(payload);
@@ -182,8 +184,6 @@ export function StopsSection({
 
   async function handleDelete(stopId: string) {
     if (isPending) return;
-    if (!window.confirm(STOPS_TERMS.deleteConfirm)) return;
-
     setFormError(null);
     setIsPending(true);
     try {
@@ -194,6 +194,7 @@ export function StopsSection({
       handleApiError(error);
     } finally {
       setIsPending(false);
+      setDeleteTargetId(null);
     }
   }
 
@@ -363,7 +364,7 @@ export function StopsSection({
                         type="button"
                         className={cn(ROW_ACTION_CLASS, 'text-danger')}
                         disabled={isPending}
-                        onClick={() => handleDelete(stop.id)}
+                        onClick={() => setDeleteTargetId(stop.id)}
                       >
                         {STOPS_TERMS.delete}
                       </button>
@@ -417,6 +418,20 @@ export function StopsSection({
           {successMessage}
         </p>
       )}
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        onClose={() => {
+          if (!isPending) setDeleteTargetId(null);
+        }}
+        onConfirm={() => {
+          if (deleteTargetId) void handleDelete(deleteTargetId);
+        }}
+        isConfirming={isPending}
+        title={STOPS_TERMS.deleteConfirmTitle}
+        description={STOPS_TERMS.deleteConfirmDescription}
+        confirmLabel={STOPS_TERMS.delete}
+        cancelLabel={STOPS_TERMS.deleteKeep}
+      />
     </Card>
   );
 }

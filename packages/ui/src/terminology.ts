@@ -536,7 +536,10 @@ export const AVATAR_TERMS = {
   delete: 'Удалить фото',
   deletePending: 'Удаление…',
   deleteSuccess: 'Фото удалено.',
-  deleteConfirm: 'Удалить загруженное фото? Это действие необратимо.',
+  // CR-200 (KI-087): `ConfirmDialog` (was `window.confirm`'s one line).
+  deleteConfirmTitle: 'Удалить загруженное фото?',
+  deleteConfirmDescription: 'Это действие необратимо.',
+  deleteKeep: 'Не удалять',
   avatarMissing: 'Выберите файл изображения для загрузки.',
   avatarInvalid: 'Файл не распознан как изображение JPEG, PNG или WebP.',
   avatarTooLarge: 'Файл превышает допустимый размер (8 МБ).',
@@ -1220,7 +1223,10 @@ export const RIDE_ROUTE_TERMS = {
   delete: 'Удалить маршрут',
   deletePending: 'Удаление…',
   deleteSuccess: 'Маршрут удалён.',
-  deleteConfirm: 'Удалить загруженный маршрут? Это действие необратимо.',
+  // CR-200 (KI-087): `ConfirmDialog` (was `window.confirm`'s one line).
+  deleteConfirmTitle: 'Удалить загруженный маршрут?',
+  deleteConfirmDescription: 'Это действие необратимо.',
+  deleteKeep: 'Не удалять',
   download: 'Скачать трек (GPX)',
   distanceLabel: 'Дистанция трека',
   elevationGainLabel: 'Набор высоты трека',
@@ -1309,7 +1315,10 @@ export const RIDE_COVER_TERMS = {
   delete: 'Удалить обложку',
   deletePending: 'Удаление…',
   deleteSuccess: 'Обложка удалена.',
-  deleteConfirm: 'Удалить загруженную обложку? Это действие необратимо.',
+  // CR-200 (KI-087): `ConfirmDialog` (was `window.confirm`'s one line).
+  deleteConfirmTitle: 'Удалить загруженную обложку?',
+  deleteConfirmDescription: 'Это действие необратимо.',
+  deleteKeep: 'Не удалять',
   coverImageMissing: 'Выберите файл изображения для загрузки.',
   coverImageInvalid: 'Файл не распознан как изображение JPEG, PNG или WebP.',
   coverImageTooLarge: 'Файл превышает допустимый размер (8 МБ).',
@@ -1371,7 +1380,10 @@ export const STOPS_TERMS = {
   delete: 'Удалить',
   deletePending: 'Удаление…',
   deleteSuccess: 'Остановка удалена.',
-  deleteConfirm: 'Удалить остановку? Это действие необратимо.',
+  // CR-200 (KI-087): `ConfirmDialog` (was `window.confirm`'s one line).
+  deleteConfirmTitle: 'Удалить остановку?',
+  deleteConfirmDescription: 'Это действие необратимо.',
+  deleteKeep: 'Не удалять',
   loadError: 'Не удалось сохранить остановку. Попробуйте ещё раз.',
   notEditable: 'Остановки можно менять только у черновика заезда.',
 } as const;
@@ -1417,7 +1429,10 @@ export const ROUTE_POINT_TERMS = {
   delete: 'Удалить',
   deletePending: 'Удаление…',
   deleteSuccess: 'Точка маршрута удалена.',
-  deleteConfirm: 'Удалить точку маршрута? Это действие необратимо.',
+  // CR-200 (KI-087): `ConfirmDialog` (was `window.confirm`'s one line).
+  deleteConfirmTitle: 'Удалить точку маршрута?',
+  deleteConfirmDescription: 'Это действие необратимо.',
+  deleteKeep: 'Не удалять',
   loadError: 'Не удалось сохранить точку маршрута. Попробуйте ещё раз.',
   notEditable: 'Точки маршрута можно менять только у черновика заезда.',
 } as const;

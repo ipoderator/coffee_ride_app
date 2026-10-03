@@ -10,6 +10,7 @@ import {
 import {
   Button,
   Card,
+  ConfirmDialog,
   cn,
   ROUTE_POINT_TERMS,
   ROUTE_POINT_TYPE_TERMS,
@@ -97,6 +98,8 @@ export function RoutePointsSection({
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  // CR-200 (KI-087): the row whose delete waits in the app's own dialog.
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   function applyValidationErrors(payload: unknown): FieldErrors | null {
     const parsed = createRoutePointRequestSchema.safeParse(payload);
@@ -195,8 +198,6 @@ export function RoutePointsSection({
 
   async function handleDelete(routePointId: string) {
     if (isPending) return;
-    if (!window.confirm(ROUTE_POINT_TERMS.deleteConfirm)) return;
-
     setFormError(null);
     setIsPending(true);
     try {
@@ -207,6 +208,7 @@ export function RoutePointsSection({
       handleApiError(error);
     } finally {
       setIsPending(false);
+      setDeleteTargetId(null);
     }
   }
 
@@ -382,7 +384,7 @@ export function RoutePointsSection({
                         type="button"
                         className={cn(ROW_ACTION_CLASS, 'text-danger')}
                         disabled={isPending}
-                        onClick={() => handleDelete(routePoint.id)}
+                        onClick={() => setDeleteTargetId(routePoint.id)}
                       >
                         {ROUTE_POINT_TERMS.delete}
                       </button>
@@ -434,6 +436,20 @@ export function RoutePointsSection({
           {successMessage}
         </p>
       )}
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        onClose={() => {
+          if (!isPending) setDeleteTargetId(null);
+        }}
+        onConfirm={() => {
+          if (deleteTargetId) void handleDelete(deleteTargetId);
+        }}
+        isConfirming={isPending}
+        title={ROUTE_POINT_TERMS.deleteConfirmTitle}
+        description={ROUTE_POINT_TERMS.deleteConfirmDescription}
+        confirmLabel={ROUTE_POINT_TERMS.delete}
+        cancelLabel={ROUTE_POINT_TERMS.deleteKeep}
+      />
     </Card>
   );
 }

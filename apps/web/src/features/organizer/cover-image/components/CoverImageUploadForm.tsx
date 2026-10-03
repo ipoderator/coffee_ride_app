@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Card,
+  ConfirmDialog,
   ErrorState,
   FileInput,
   Notice,
@@ -55,6 +56,8 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  // CR-200 (KI-087): delete asks in the app's own dialog.
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,8 +156,6 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
 
   async function handleDelete() {
     if (isPending) return;
-    if (!window.confirm(RIDE_COVER_TERMS.deleteConfirm)) return;
-
     resetMessages();
     setIsPending(true);
     try {
@@ -166,6 +167,7 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
       handleUploadError(error);
     } finally {
       setIsPending(false);
+      setDeleteConfirmOpen(false);
     }
   }
 
@@ -331,12 +333,24 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
                     type="button"
                     variant="danger"
                     isLoading={isPending}
-                    onClick={handleDelete}
+                    onClick={() => setDeleteConfirmOpen(true)}
                     className="self-start"
                   >
                     {RIDE_COVER_TERMS.delete}
                   </Button>
                 )}
+                <ConfirmDialog
+                  open={deleteConfirmOpen}
+                  onClose={() => {
+                    if (!isPending) setDeleteConfirmOpen(false);
+                  }}
+                  onConfirm={() => void handleDelete()}
+                  isConfirming={isPending}
+                  title={RIDE_COVER_TERMS.deleteConfirmTitle}
+                  description={RIDE_COVER_TERMS.deleteConfirmDescription}
+                  confirmLabel={RIDE_COVER_TERMS.delete}
+                  cancelLabel={RIDE_COVER_TERMS.deleteKeep}
+                />
               </div>
             )}
           </div>

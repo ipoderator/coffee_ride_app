@@ -24,7 +24,7 @@ async function uploadReplaceDelete(
     upload: string;
     replace: string;
     delete: string;
-    deleteConfirm: string;
+    deleteConfirmTitle: string;
     uploadSuccess: string;
     replaceSuccess: string;
     deleteSuccess: string;
@@ -40,11 +40,11 @@ async function uploadReplaceDelete(
   await page.getByRole('button', { name: terms.replace }).click();
   await expect(page.getByText(terms.replaceSuccess)).toBeVisible();
 
-  page.once('dialog', (dialog) => {
-    expect(dialog.message()).toBe(terms.deleteConfirm);
-    void dialog.accept();
-  });
+  // CR-200 (KI-087): the app's own dialog, not a native confirm().
   await page.getByRole('button', { name: terms.delete }).click();
+  const dialog = page.getByRole('dialog', { name: terms.deleteConfirmTitle });
+  await dialog.getByRole('button', { name: terms.delete }).click();
+  await expect(dialog).toBeHidden();
   await expect(page.getByText(terms.deleteSuccess)).toBeVisible();
   await expect(page.getByRole('button', { name: terms.upload })).toBeVisible();
 }

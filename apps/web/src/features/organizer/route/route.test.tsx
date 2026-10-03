@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TestRideWorkspace,
@@ -349,12 +355,18 @@ describe('RouteUploadForm', () => {
       routePoints: [],
     });
     deleteRouteMock.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<RouteUploadForm rideId="ride-1" />);
     await screen.findByText('track.gpx', { exact: false });
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить маршрут' }));
+    // CR-200 (KI-087): the app's own dialog, not `window.confirm`.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Удалить загруженный маршрут?',
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Удалить маршрут' }),
+    );
 
     await waitFor(() => expect(deleteRouteMock).toHaveBeenCalledWith('ride-1'));
     expect(await screen.findByText('Маршрут удалён.')).toBeInTheDocument();
@@ -371,13 +383,14 @@ describe('RouteUploadForm', () => {
       stops: [],
       routePoints: [],
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-
     render(<RouteUploadForm rideId="ride-1" />);
     await screen.findByText('track.gpx', { exact: false });
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить маршрут' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Не удалять' }));
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteRouteMock).not.toHaveBeenCalled();
   });
 
@@ -650,7 +663,6 @@ describe('StopsSection (CR-030)', () => {
   });
 
   it('deletes a stop after confirmation', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     getRideRouteStateMock
       .mockResolvedValueOnce({
         status: 'draft',
@@ -676,14 +688,18 @@ describe('StopsSection (CR-030)', () => {
     await screen.findByText('Кофейня на набережной');
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    // CR-200 (KI-087): the app's own dialog, not `window.confirm`.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Удалить остановку?',
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
 
     expect(await screen.findByText('Остановка удалена.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteStopMock).toHaveBeenCalledWith('ride-1', baseStop.id);
-    confirmSpy.mockRestore();
   });
 
   it('locks the row actions while a change is still saving (KI-085)', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const draft = {
       status: 'draft',
       distanceKm: null,
@@ -709,6 +725,11 @@ describe('StopsSection (CR-030)', () => {
     render(<RouteUploadForm rideId="ride-1" />);
     await screen.findByText('Мост');
     fireEvent.click(screen.getAllByRole('button', { name: 'Удалить' })[0]!);
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Удалить',
+      }),
+    );
 
     // Before: a second click here was silently dropped by the busy guard.
     await waitFor(() =>
@@ -724,7 +745,6 @@ describe('StopsSection (CR-030)', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Удалить' })).toBeEnabled(),
     );
-    confirmSpy.mockRestore();
   });
 
   it('hides add/edit/delete controls for a non-draft ride', async () => {
@@ -852,7 +872,6 @@ describe('RoutePointsSection (CR-031)', () => {
   });
 
   it('deletes a route point after confirmation', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     getRideRouteStateMock
       .mockResolvedValueOnce({
         status: 'draft',
@@ -878,6 +897,10 @@ describe('RoutePointsSection (CR-031)', () => {
     await screen.findByText('Вода · Родник у моста');
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Удалить точку маршрута?',
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
 
     expect(
       await screen.findByText('Точка маршрута удалена.'),
@@ -886,7 +909,30 @@ describe('RoutePointsSection (CR-031)', () => {
       'ride-1',
       baseRoutePoint.id,
     );
-    confirmSpy.mockRestore();
+  });
+
+  it('keeps a route point when its delete dialog is dismissed', async () => {
+    getRideRouteStateMock.mockResolvedValue({
+      status: 'draft',
+      distanceKm: null,
+      elevationGainMeters: null,
+      start: null,
+      route: null,
+      stops: [],
+      routePoints: [baseRoutePoint],
+    });
+
+    render(<RouteUploadForm rideId="ride-1" />);
+    await screen.findByText('Вода · Родник у моста');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Это действие необратимо.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Не удалять' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteRoutePointMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Вода · Родник у моста')).toBeInTheDocument();
   });
 
   it('hides add/edit/delete controls for a non-draft ride', async () => {

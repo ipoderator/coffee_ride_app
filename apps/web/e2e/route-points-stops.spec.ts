@@ -35,11 +35,12 @@ test('organizer adds, edits and deletes a stop', async ({ page }) => {
   await expect(page.getByText(STOPS_TERMS.saveSuccess)).toBeVisible();
   await expect(page.getByText('Кофейня у моста')).toBeVisible();
 
-  page.once('dialog', (dialog) => {
-    expect(dialog.message()).toBe(STOPS_TERMS.deleteConfirm);
-    void dialog.accept();
-  });
+  // CR-200 (KI-087): the app's own dialog, not a native confirm().
   await page.getByRole('button', { name: STOPS_TERMS.delete }).click();
+  await page
+    .getByRole('dialog', { name: STOPS_TERMS.deleteConfirmTitle })
+    .getByRole('button', { name: STOPS_TERMS.delete })
+    .click();
   await expect(page.getByText(STOPS_TERMS.deleteSuccess)).toBeVisible();
   await expect(page.getByText(STOPS_TERMS.emptyTitle)).toBeVisible();
 });
@@ -68,11 +69,11 @@ test('organizer adds, edits and deletes a route point', async ({ page }) => {
   await expect(page.getByText(ROUTE_POINT_TERMS.saveSuccess)).toBeVisible();
   await expect(page.getByText('Смотровая площадка')).toBeVisible();
 
-  page.once('dialog', (dialog) => {
-    expect(dialog.message()).toBe(ROUTE_POINT_TERMS.deleteConfirm);
-    void dialog.accept();
-  });
   await page.getByRole('button', { name: ROUTE_POINT_TERMS.delete }).click();
+  await page
+    .getByRole('dialog', { name: ROUTE_POINT_TERMS.deleteConfirmTitle })
+    .getByRole('button', { name: ROUTE_POINT_TERMS.delete })
+    .click();
   await expect(page.getByText(ROUTE_POINT_TERMS.deleteSuccess)).toBeVisible();
   await expect(page.getByText(ROUTE_POINT_TERMS.emptyTitle)).toBeVisible();
 });

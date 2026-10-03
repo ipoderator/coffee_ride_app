@@ -1,7 +1,15 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Avatar, AVATAR_TERMS, Button, Card, ErrorState, FileInput } from 'ui';
+import {
+  Avatar,
+  AVATAR_TERMS,
+  Button,
+  Card,
+  ConfirmDialog,
+  ErrorState,
+  FileInput,
+} from 'ui';
 import { apiAssetUrl } from '@/lib/api/asset-url';
 import {
   ApiError,
@@ -31,6 +39,8 @@ export function AvatarUploadForm({
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  // CR-200 (KI-087): delete asks in the app's own dialog.
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function resetMessages() {
@@ -91,8 +101,6 @@ export function AvatarUploadForm({
 
   async function handleDelete() {
     if (isPending) return;
-    if (!window.confirm(AVATAR_TERMS.deleteConfirm)) return;
-
     resetMessages();
     setIsPending(true);
     try {
@@ -103,6 +111,7 @@ export function AvatarUploadForm({
       handleError(error);
     } finally {
       setIsPending(false);
+      setDeleteConfirmOpen(false);
     }
   }
 
@@ -174,12 +183,24 @@ export function AvatarUploadForm({
             type="button"
             variant="danger"
             isLoading={isPending}
-            onClick={handleDelete}
+            onClick={() => setDeleteConfirmOpen(true)}
             className="self-start"
           >
             {AVATAR_TERMS.delete}
           </Button>
         )}
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          onClose={() => {
+            if (!isPending) setDeleteConfirmOpen(false);
+          }}
+          onConfirm={() => void handleDelete()}
+          isConfirming={isPending}
+          title={AVATAR_TERMS.deleteConfirmTitle}
+          description={AVATAR_TERMS.deleteConfirmDescription}
+          confirmLabel={AVATAR_TERMS.delete}
+          cancelLabel={AVATAR_TERMS.deleteKeep}
+        />
       </div>
     </Card>
   );

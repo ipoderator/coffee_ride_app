@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvatarUploadForm } from './components/AvatarUploadForm';
 import { ApiError, deleteAvatar, replaceAvatar, uploadAvatar } from './api';
@@ -124,7 +124,7 @@ describe('AvatarUploadForm (participant)', () => {
 
   it('deletes the avatar after confirmation', async () => {
     deleteAvatarMock.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const nativeConfirm = vi.spyOn(window, 'confirm');
 
     render(
       <AvatarUploadForm
@@ -133,17 +133,25 @@ describe('AvatarUploadForm (participant)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Удалить фото' }));
+    // CR-200 (KI-087): the app's own dialog, not `window.confirm`.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Удалить загруженное фото?',
+    });
+    expect(dialog).toHaveTextContent('Это действие необратимо.');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Удалить фото' }),
+    );
 
     expect(await screen.findByText('Фото удалено.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteAvatarMock).toHaveBeenCalled();
+    expect(nativeConfirm).not.toHaveBeenCalled();
     expect(
       screen.getByRole('button', { name: 'Загрузить фото' }),
     ).toBeInTheDocument();
   });
 
-  it('does not delete when the confirmation is dismissed', () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-
+  it('does not delete when the confirmation is dismissed', async () => {
     render(
       <AvatarUploadForm
         initialAvatarUrl="/v1/users/me/avatar"
@@ -151,7 +159,13 @@ describe('AvatarUploadForm (participant)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Удалить фото' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Не удалять' }));
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteAvatarMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Удалить фото' }),
+    ).toBeInTheDocument();
   });
 });

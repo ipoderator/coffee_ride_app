@@ -151,3 +151,12 @@ Files: `.claude/CLAUDE.md`, `.claude/rules/*.md` (`paths:` frontmatter; `auth.md
 Validation: Prettier clean; targeted-read commands run against the real files; `paths:` syntax checked against the Claude Code memory docs.
 Decisions: none.
 Follow-up: `project-state.md` (94 KB, "Current task" alone 42 KB) not yet cut to a snapshot — the rewrite was held while CR-200's uncommitted edits sit in it; draft ready, owner to confirm.
+
+## 2026-10-03 — CR-200 — Deletes ask in the app's dialog (KI-087); KI-082's record; KI-088's baseline
+
+Summary: avatar (×2), cover, GPX, stop and route-point deletes now open `ConfirmDialog` instead of `window.confirm`, as CR-195 did for ride cancellation (KI-087). KI-082's status was KI-084's text filed under it by CR-188 — corrected; the probe host stays an accepted limitation. KI-088: the stale `discovery-map-chromium-linux.png` passed within tolerance, so a temporary draft PR (#28) deleted it to make CI write the x86_64 actual, now the baseline.
+Contract: `packages/ui` terms — `deleteConfirm` → `deleteConfirmTitle`/`deleteConfirmDescription`/`deleteKeep` in `AVATAR_TERMS`, `RIDE_COVER_TERMS`, `RIDE_ROUTE_TERMS`, `STOPS_TERMS`, `ROUTE_POINT_TERMS` (every caller updated); no API change.
+Files: the six forms under `apps/web/src/features/{participant,organizer}/…` and their tests; `apps/web/e2e/{media-uploads,route-points-stops,gpx-route}.spec.ts`; stories `RideWorkspaceSections` (+4) and `AvatarUploadForm` (new); `e2e/visual-regression.spec.ts-snapshots/discovery-map-chromium-linux.png`.
+Validation: web unit 772/772; ui 246/246; web+ui typecheck/lint clean; Storybook 196/196 with axe; e2e upload/route specs 10/10 locally; CI run 37147345143: the actual only drops the expand button over the notice, 57 other e2e passed.
+Decisions: none.
+Follow-up: none — the amd64 Playwright image still stalls here (2 of 7 layers).

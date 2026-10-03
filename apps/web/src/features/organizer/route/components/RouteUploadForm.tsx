@@ -7,6 +7,7 @@ import {
   Button,
   buttonClassName,
   Card,
+  ConfirmDialog,
   cn,
   ErrorState,
   FileInput,
@@ -63,6 +64,8 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  // CR-200 (KI-087): delete asks in the app's own dialog.
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspace = useRideWorkspace();
@@ -193,8 +196,6 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
 
   async function handleDelete() {
     if (isPending) return;
-    if (!window.confirm(RIDE_ROUTE_TERMS.deleteConfirm)) return;
-
     resetMessages();
     setIsPending(true);
     try {
@@ -206,6 +207,7 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
       handleUploadError(error);
     } finally {
       setIsPending(false);
+      setDeleteConfirmOpen(false);
     }
   }
 
@@ -502,12 +504,24 @@ export function RouteUploadForm({ rideId }: { rideId: string }) {
               type="button"
               variant="danger"
               isLoading={isPending}
-              onClick={handleDelete}
+              onClick={() => setDeleteConfirmOpen(true)}
               className="self-start"
             >
               {RIDE_ROUTE_TERMS.delete}
             </Button>
           )}
+          <ConfirmDialog
+            open={deleteConfirmOpen}
+            onClose={() => {
+              if (!isPending) setDeleteConfirmOpen(false);
+            }}
+            onConfirm={() => void handleDelete()}
+            isConfirming={isPending}
+            title={RIDE_ROUTE_TERMS.deleteConfirmTitle}
+            description={RIDE_ROUTE_TERMS.deleteConfirmDescription}
+            confirmLabel={RIDE_ROUTE_TERMS.delete}
+            cancelLabel={RIDE_ROUTE_TERMS.deleteKeep}
+          />
         </div>
       </Card>
 
