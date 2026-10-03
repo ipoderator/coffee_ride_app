@@ -254,9 +254,8 @@ describe('rideCardSeats (CR-144)', () => {
       )?.note,
     ).toBe('Запись закрыта');
     expect(
-      rideCardSeats(
-        makeRide({ status: 'published', participantLimit: null }),
-      )?.note,
+      rideCardSeats(makeRide({ status: 'published', participantLimit: null }))
+        ?.note,
     ).toBe('Запись ещё не открыта');
   });
 });

@@ -212,7 +212,9 @@ describe('UpcomingRegistrationsWidget (CR-185)', () => {
       'href',
       '/',
     );
-    expect(screen.queryByRole('link', { name: 'Все регистрации →' })).toBeNull();
+    expect(
+      screen.queryByRole('link', { name: 'Все регистрации →' }),
+    ).toBeNull();
   });
 
   // CR-193 (owner QA): a cancelled ride is no longer «upcoming», but the

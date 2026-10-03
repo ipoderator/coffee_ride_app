@@ -108,7 +108,9 @@ beforeEach(() => {
   archiveRidesMock.mockReset();
   archiveRidesMock.mockResolvedValue({ items: [], nextCursor: null, total: 0 });
   vi.mocked(listPublicRides).mockImplementation(({ phase, ...params } = {}) =>
-    phase === 'archive' ? archiveRidesMock(params) : listPublicRidesMock(params),
+    phase === 'archive'
+      ? archiveRidesMock(params)
+      : listPublicRidesMock(params),
   );
   getRouteGeometryMock.mockReset();
   // Default: the full line never arrives, so the smoothed preview stays.
@@ -427,9 +429,10 @@ describe('DiscoveryList', () => {
       .closest('li')!;
     expect(within(row).getByText('Завершён')).toBeInTheDocument();
     expect(within(row).queryByText(/Осталось/)).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Скрыть' }),
-    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Скрыть' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
   });
 
   it('omits a metric for a field that is still null, never showing 0', async () => {

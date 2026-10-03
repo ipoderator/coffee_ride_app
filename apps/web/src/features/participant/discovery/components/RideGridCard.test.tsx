@@ -161,7 +161,11 @@ describe('RideGridCard (CR-144, compact in CR-153)', () => {
     (status, label) => {
       const { container } = render(
         <RideGridCard
-          ride={makeRide({ status, participantLimit: 10, registrationsCount: 4 })}
+          ride={makeRide({
+            status,
+            participantLimit: 10,
+            registrationsCount: 4,
+          })}
         />,
       );
       expect(screen.getByText(label)).toBeInTheDocument();

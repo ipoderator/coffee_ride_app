@@ -77,7 +77,9 @@ beforeEach(() => {
   archiveRidesMock.mockReset();
   archiveRidesMock.mockResolvedValue({ items: [], nextCursor: null, total: 0 });
   vi.mocked(listPublicRides).mockImplementation(({ phase, ...params } = {}) =>
-    phase === 'archive' ? archiveRidesMock(params) : listPublicRidesMock(params),
+    phase === 'archive'
+      ? archiveRidesMock(params)
+      : listPublicRidesMock(params),
   );
   listPublicRidesMock.mockResolvedValue({
     items: [RIDE],
