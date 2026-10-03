@@ -900,8 +900,11 @@ ride_not_found` both when the id doesn't exist and when it belongs to a differen
 organizer (same rule as `GET /v1/rides/:id/participants`). No ride-status gate
 beyond ownership — sending an update on a ride with no active registrants yet is
 harmless (zero notifications created), not an error. Body: `{ message }` (1-2000
-chars). `201` → `{ rideUpdate }` (`RideUpdate`: `id`/`rideId`/`message`/
-`createdAt`). Fans out a `ride_update` notification (see Notifications below) to
+chars). `201` → `{ rideUpdate, recipientsCount }` (`RideUpdate`: `id`/`rideId`/
+`message`/`createdAt`; `recipientsCount`, additive in CR-192: how many active
+registrants the update is addressed to at send time, `0` when nobody is
+registered — the update is still recorded in the history, nobody receives it).
+Fans out a `ride_update` notification (see Notifications below) to
 every currently-active registrant, after the `RideUpdate` row has already been
 inserted — never inside the same transaction (`.claude/rules/resilience.md`); a
 fan-out failure is logged and never turns this endpoint's response into an error.

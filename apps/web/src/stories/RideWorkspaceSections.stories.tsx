@@ -25,6 +25,7 @@ import {
   ROUTE,
   participant,
   stubWorkspace,
+  type WorkspaceStub,
 } from './ride-workspace-fixtures';
 
 // CR-187: the ride workspace's five sections — each a task heading with a
@@ -364,6 +365,90 @@ export const UpdatesComposer: Story = {
     await expect(preview).toHaveTextContent('Встречаемся у северного входа');
     await expect(
       canvas.getByText(RIDE_UPDATES_TERMS.recipients(1)),
+    ).toBeVisible();
+  },
+};
+
+/** CR-192: `POST /updates` as the API answers it — with the recipient count —
+ * on top of the workspace stub. */
+function stubSendUpdate(stub: WorkspaceStub, recipientsCount: number) {
+  const stubReads = stubWorkspace(stub);
+  return () => {
+    const restoreReads = stubReads();
+    const reads = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const raw = input instanceof Request ? input.url : String(input);
+      const { pathname } = new URL(raw, window.location.href);
+      const method = (
+        init?.method ?? (input instanceof Request ? input.method : 'GET')
+      ).toUpperCase();
+      if (
+        method === 'POST' &&
+        pathname === `/api/v1/rides/${RIDE_ID}/updates`
+      ) {
+        return new Response(
+          JSON.stringify({
+            rideUpdate: {
+              id: 'u-new',
+              rideId: RIDE_ID,
+              message: 'Встречаемся у северного входа',
+              createdAt: '2099-09-30T15:40:00.000Z',
+            },
+            recipientsCount,
+          }),
+          { status: 201, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return reads(input, init);
+    };
+    return restoreReads;
+  };
+}
+
+async function sendUpdate(
+  canvas: Parameters<NonNullable<Story['play']>>[0]['canvas'],
+  userEvent: Parameters<NonNullable<Story['play']>>[0]['userEvent'],
+) {
+  await userEvent.type(
+    await canvas.findByLabelText(RIDE_UPDATES_TERMS.messageLabel),
+    'Встречаемся у северного входа',
+  );
+  await userEvent.click(
+    canvas.getByRole('button', { name: RIDE_UPDATES_TERMS.send }),
+  );
+}
+
+/** CR-192: nobody registered → the result says nobody receives it. */
+export const UpdatesSentNoRecipients: Story = {
+  args: { segment: 'updates' },
+  beforeEach: stubSendUpdate({}, 0),
+  play: async ({ canvas, userEvent }) => {
+    await sendUpdate(canvas, userEvent);
+    await expect(
+      await canvas.findByText(RIDE_UPDATES_TERMS.sendSuccess(0)),
+    ).toBeVisible();
+    await expect(
+      canvas.queryByText(/отправлено участникам/),
+    ).not.toBeInTheDocument();
+  },
+};
+
+/** CR-192: with riders the result is count-aware. */
+export const UpdatesSentToRiders: Story = {
+  args: { segment: 'updates' },
+  beforeEach: stubSendUpdate(
+    {
+      participants: [
+        participant('reg-1', 'Анна К.'),
+        participant('reg-2', 'Илья В.'),
+      ],
+    },
+    2,
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await sendUpdate(canvas, userEvent);
+    await expect(
+      await canvas.findByText(RIDE_UPDATES_TERMS.sendSuccess(2)),
     ).toBeVisible();
   },
 };

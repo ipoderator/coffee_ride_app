@@ -6,7 +6,8 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Ride } from 'types';
+import type { Ride, RouteSummary } from 'types';
+import { ToastProvider } from 'ui';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
 import { EditRideForm as EditRideTab } from './components/EditRideForm';
@@ -35,8 +36,9 @@ import {
 } from './api';
 
 const routerPushMock = vi.fn();
+const routerReplaceMock = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock, replace: routerReplaceMock }),
 }));
 
 vi.mock('./api', async () => {
@@ -98,6 +100,19 @@ const baseRide: Ride = {
   createdAt: '2027-01-01T00:00:00.000Z',
   updatedAt: '2027-01-01T00:00:00.000Z',
   updatedBy: 'user-1',
+};
+
+// CR-192: a ride with a track publishes straight away; one without asks first.
+const routeSummary: RouteSummary = {
+  id: 'route-1',
+  rideId: 'ride-1',
+  gpxFileName: 'morning.gpx',
+  gpxFileSizeBytes: 48_000,
+  distanceKm: 42,
+  elevationGainMeters: 380,
+  pointCount: 1240,
+  createdAt: '2027-01-01T00:00:00.000Z',
+  updatedAt: '2027-01-01T00:00:00.000Z',
 };
 
 function fillMinimalValidForm() {
@@ -536,6 +551,7 @@ describe('EditRideForm', () => {
     cancelRideMock.mockReset();
     startRideMock.mockReset();
     finishRideMock.mockReset();
+    routerReplaceMock.mockReset();
   });
 
   it('shows a not-found state for a ride that does not exist or is not owned by the caller', async () => {
@@ -905,11 +921,119 @@ describe('EditRideForm', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('publishes a draft ride with a route straight away, with no confirmation', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+      route: routeSummary,
+    });
+    publishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+    expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(publishRideMock).toHaveBeenCalledWith('ride-1');
+  });
+
+  // CR-192: the route is draft-only, so publishing without one is final.
+  it('asks before publishing a ride without a route, and publishes on confirm', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+    });
+    publishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Опубликовать без маршрута?',
+    });
+    expect(dialog).toHaveTextContent(
+      'После публикации маршрут добавить уже нельзя',
+    );
+    expect(publishRideMock).not.toHaveBeenCalled();
+    // The way back: the route screen (not the wizard's step: not in the wizard).
+    expect(
+      within(dialog).getByRole('link', { name: 'Добавить маршрут' }),
+    ).toHaveAttribute('href', '/organizer/rides/ride-1/route');
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Опубликовать без маршрута' }),
+    );
+
+    expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+    expect(publishRideMock).toHaveBeenCalledTimes(1);
+    expect(publishRideMock).toHaveBeenCalledWith('ride-1');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // The screen flips to the management view immediately once published.
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Перед стартом' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Открыть регистрацию' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Название')).not.toBeInTheDocument();
+  });
+
+  it('stays a draft when the publish confirmation is dismissed', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+    await screen.findByRole('dialog');
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(publishRideMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Название')).toBeInTheDocument();
+  });
+
+  it('still publishes in one click when a cover image is missing (cover stays optional)', async () => {
+    getRideMock.mockResolvedValue({
+      ride: { ...baseRide, coverImageUrl: null },
+      isOwner: true,
+      requirements: [],
+      route: routeSummary,
+    });
+    publishRideMock.mockResolvedValue({
+      ride: { ...baseRide, status: 'published' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+    expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('publishes a draft ride and shows a success message', async () => {
     getRideMock.mockResolvedValue({
       ride: baseRide,
       isOwner: true,
       requirements: [],
+      route: routeSummary,
     });
     publishRideMock.mockResolvedValue({
       ride: { ...baseRide, status: 'published' },
@@ -953,10 +1077,159 @@ describe('EditRideForm', () => {
     await screen.findByRole('heading', { level: 1 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+    // No route on this ride: confirm the dialog; the refusal then replaces it.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Опубликовать без маршрута' }),
+    );
 
     expect(
       await screen.findByText(/Подтвердите email, чтобы опубликовать заезд/),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  describe("as the new-ride wizard's last step (CR-192)", () => {
+    function WizardStep() {
+      return (
+        <ToastProvider>
+          <RideWizardFrame current="publish" rideId="ride-1">
+            <RideWorkspace
+              rideId="ride-1"
+              current="edit"
+              sections={[]}
+              variant="wizard"
+            >
+              <EditRideTab wizard />
+            </RideWorkspace>
+          </RideWizardFrame>
+        </ToastProvider>
+      );
+    }
+
+    it('leaves the wizard for the ordinary workspace after publishing, with a notice', async () => {
+      getRideMock.mockResolvedValue({
+        ride: baseRide,
+        isOwner: true,
+        requirements: [],
+        route: routeSummary,
+      });
+      publishRideMock.mockResolvedValue({
+        ride: { ...baseRide, status: 'published' },
+      });
+
+      render(<WizardStep />);
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.getByText('Новый заезд · шаг 4 из 4')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+      await waitFor(() =>
+        expect(routerReplaceMock).toHaveBeenCalledWith(
+          '/organizer/rides/ride-1/edit',
+        ),
+      );
+      expect(routerReplaceMock).toHaveBeenCalledTimes(1);
+      // The toast outlives the page that is replaced.
+      expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+      // Until the new page arrives the form cannot publish a second time.
+      expect(
+        screen.getByRole('button', { name: 'Публикация…' }),
+      ).toBeDisabled();
+    });
+
+    it('asks about the missing route first, then leaves the wizard on confirm', async () => {
+      getRideMock.mockResolvedValue({
+        ride: baseRide,
+        isOwner: true,
+        requirements: [],
+      });
+      publishRideMock.mockResolvedValue({
+        ride: { ...baseRide, status: 'published' },
+      });
+
+      render(<WizardStep />);
+      await screen.findByRole('heading', { level: 1 });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(publishRideMock).not.toHaveBeenCalled();
+      expect(routerReplaceMock).not.toHaveBeenCalled();
+      // Back to add the route = the wizard's own route step.
+      expect(
+        within(dialog).getByRole('link', { name: 'Добавить маршрут' }),
+      ).toHaveAttribute('href', '/organizer/rides/ride-1/route?wizard=1');
+
+      fireEvent.click(
+        within(dialog).getByRole('button', {
+          name: 'Опубликовать без маршрута',
+        }),
+      );
+
+      await waitFor(() =>
+        expect(routerReplaceMock).toHaveBeenCalledWith(
+          '/organizer/rides/ride-1/edit',
+        ),
+      );
+    });
+
+    it('stays on the step and shows the error when publishing fails', async () => {
+      getRideMock.mockResolvedValue({
+        ride: baseRide,
+        isOwner: true,
+        requirements: [],
+        route: routeSummary,
+      });
+      publishRideMock.mockRejectedValue(new Error('network'));
+
+      render(<WizardStep />);
+      await screen.findByRole('heading', { level: 1 });
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+      expect(
+        await screen.findByText(
+          'Не удалось загрузить заезд. Попробуйте ещё раз.',
+        ),
+      ).toBeInTheDocument();
+      expect(routerReplaceMock).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole('button', { name: 'Опубликовать' }),
+      ).toBeEnabled();
+    });
+  });
+
+  // CR-192: the hint named only contact and visibility as editable, but the
+  // groups of a published ride are editable too (until it finishes).
+  it('says what stays editable after publishing, groups included', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    const hint = await screen.findByText(/Менять можно группы по темпу/);
+    expect(hint).toHaveTextContent('до 6');
+    expect(hint).toHaveTextContent('удалить — только группу без участников');
+    expect(hint).toHaveTextContent('способ связи, видимость списка');
+    // CR-190: the start moves only through the reschedule, before the start.
+    expect(hint).toHaveTextContent('через перенос, до старта');
+    expect(screen.queryByText(/Меняются только/)).not.toBeInTheDocument();
+  });
+
+  it('says the groups are closed too once the ride is finished or cancelled', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'finished' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText(/условия и группы больше не меняются/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Менять можно группы/)).not.toBeInTheDocument();
   });
 
   it('shows no publish button for a non-draft ride', async () => {

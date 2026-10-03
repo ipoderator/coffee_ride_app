@@ -707,6 +707,10 @@ export async function processNotificationJob(
  * isn't the caller's. No ride-status gate beyond ownership
  * (`.claude/context/current-task.md`: sending an update on a ride with no
  * registrants yet is harmless, not an error).
+ *
+ * CR-192: also reports `recipientsCount`, the active registrants at send time
+ * (read before the insert, so a failing count writes nothing) — the fan-out is
+ * async, so the response is where the organizer learns «никто не получит».
  */
 export async function createRideUpdate(
   db: DbClient,
@@ -715,8 +719,15 @@ export async function createRideUpdate(
   userId: string,
   rideId: string,
   input: CreateRideUpdateRequest,
-): Promise<RideUpdate> {
+): Promise<{ rideUpdate: RideUpdate; recipientsCount: number }> {
   await assertOwnRide(db, userId, rideId);
+
+  const [recipients] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(registrations)
+    .where(
+      and(eq(registrations.rideId, rideId), eq(registrations.status, 'active')),
+    );
 
   const [inserted] = await db
     .insert(rideUpdates)
@@ -735,7 +746,10 @@ export async function createRideUpdate(
     inserted.id,
   );
 
-  return toRideUpdate(inserted);
+  return {
+    rideUpdate: toRideUpdate(inserted),
+    recipientsCount: recipients?.count ?? 0,
+  };
 }
 
 /**

@@ -32,7 +32,7 @@ export default async function EditRidePage({
       sections={filterEnabled(ORGANIZER_RIDE_SECTIONS)}
       variant={wizardMode ? 'wizard' : 'full'}
     >
-      <EditRideForm />
+      <EditRideForm wizard={wizardMode} />
     </RideWorkspace>
   );
   // CR-156: opened from the new-ride wizard → the same screen inside its

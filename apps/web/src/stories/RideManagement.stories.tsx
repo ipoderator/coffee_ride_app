@@ -36,7 +36,8 @@ function OverviewTab() {
 const meta = {
   title: 'Organizer/RideManagement',
   component: OverviewTab,
-  parameters: { layout: 'padded' },
+  // CR-192: the draft form leaves the wizard through the app router.
+  parameters: { layout: 'padded', nextjs: { appDirectory: true } },
 } satisfies Meta<typeof OverviewTab>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -65,6 +66,35 @@ export const Draft: Story = {
   },
 };
 
+/** CR-192: no route on a draft: publishing asks first — the route can never
+ * be added afterwards. Both ways out are there (Esc stays on the form). */
+export const DraftPublishWithoutRoute: Story = {
+  beforeEach: stubWorkspace({ ride: { status: 'draft' } }),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', { name: RIDE_EDIT_TERMS.publish }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByRole(
+      'dialog',
+      { name: RIDE_EDIT_TERMS.publishNoRouteTitle },
+    );
+    await expect(dialog).toHaveTextContent(
+      RIDE_EDIT_TERMS.publishNoRouteDescription,
+    );
+    await expect(
+      within(dialog).getByRole('link', {
+        name: RIDE_EDIT_TERMS.publishNoRouteAddRoute,
+      }),
+    ).toHaveAttribute('href', `/organizer/rides/${RIDE_ID}/route`);
+    await expect(
+      within(dialog).getByRole('button', {
+        name: RIDE_EDIT_TERMS.publishNoRouteConfirm,
+      }),
+    ).toBeEnabled();
+    // Left open: the story's a11y check then runs on the dialog itself.
+  },
+};
+
 /** Published, registration not open yet: opening it is the primary action. */
 export const Published: Story = {
   beforeEach: stubWorkspace({
@@ -80,6 +110,10 @@ export const Published: Story = {
     await expect(
       canvas.queryByLabelText(RIDE_EDIT_TERMS.titleLabel),
     ).not.toBeInTheDocument();
+    // CR-192: what stays editable — groups, contact, list visibility.
+    await expect(
+      canvas.getByText(RIDE_WORKSPACE_TERMS.factsHint),
+    ).toBeVisible();
   },
 };
 
@@ -221,6 +255,10 @@ export const Finished: Story = {
     await expect(
       canvas.queryByRole('button', { name: RIDE_EDIT_TERMS.cancel }),
     ).not.toBeInTheDocument();
+    // CR-192: the groups are closed too.
+    await expect(
+      canvas.getByText(RIDE_WORKSPACE_TERMS.factsHintClosed),
+    ).toBeVisible();
   },
 };
 

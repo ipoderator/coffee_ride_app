@@ -265,7 +265,9 @@ export function RideOverview({
             ))}
           </dl>
           <p className="text-body-sm text-text-muted">
-            {RIDE_WORKSPACE_TERMS.factsHint}
+            {status === 'finished' || status === 'cancelled'
+              ? RIDE_WORKSPACE_TERMS.factsHintClosed
+              : RIDE_WORKSPACE_TERMS.factsHint}
           </p>
         </Card>
 

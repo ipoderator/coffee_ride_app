@@ -56,7 +56,7 @@ test('ride update and cancellation reach the inbox; opening one marks it read', 
     .getByRole('button', { name: RIDE_UPDATES_TERMS.send })
     .click();
   await expect(
-    organizer.page.getByText(RIDE_UPDATES_TERMS.sendSuccess),
+    organizer.page.getByText(RIDE_UPDATES_TERMS.sendSuccess(1)),
   ).toBeVisible();
   await cancelRide(organizer.context.request, rideId);
   await organizer.context.close();

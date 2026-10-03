@@ -26,6 +26,8 @@ const notificationIdParamsSchema = z.object({
 
 const createRideUpdateResponseWrapper = z.object({
   rideUpdate: rideUpdateResponseSchema,
+  // CR-192: active registrants the update is addressed to at send time.
+  recipientsCount: z.number().int().nonnegative(),
 });
 const listRideUpdatesResponseSchema = z.object({
   items: z.array(rideUpdateResponseSchema),
@@ -60,7 +62,7 @@ export const rideUpdatesRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: requireAuth,
     },
     async (request, reply) => {
-      const rideUpdate = await createRideUpdate(
+      const result = await createRideUpdate(
         app.db,
         app.log,
         app.notificationQueue,
@@ -68,7 +70,7 @@ export const rideUpdatesRoutes: FastifyPluginAsyncZod = async (app) => {
         request.params.id,
         request.body,
       );
-      return reply.status(201).send({ rideUpdate });
+      return reply.status(201).send(result);
     },
   );
 

@@ -57,11 +57,14 @@ test('organizer takes a ride from draft to finished', async ({ page }) => {
     page.getByRole('heading', { name: RIDE_EDIT_TERMS.pageTitle }),
   ).toBeVisible();
 
-  await transition(
-    page,
-    RIDE_EDIT_TERMS.publish,
-    RIDE_EDIT_TERMS.publishSuccess,
-  );
+  // CR-192: this draft has no route, which can never be added once
+  // published — publishing asks first.
+  await page.getByRole('button', { name: RIDE_EDIT_TERMS.publish }).click();
+  expect(await publicStatus(rideId)).toBe(404);
+  await confirmInDialog(page, RIDE_EDIT_TERMS.publishNoRouteConfirm);
+  await expect(
+    page.getByText(RIDE_EDIT_TERMS.publishSuccess, { exact: true }),
+  ).toBeVisible();
   expect(await publicStatus(rideId)).toBe(200);
   await transition(
     page,
