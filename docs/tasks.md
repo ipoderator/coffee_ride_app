@@ -1402,3 +1402,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-199 Participant notifications show their time in the ride's timezone (was UTC
       — 13:01 vs the organizer journal's 16:01); additive `Notification.ride.startTimezone`.
       See `docs/changelog.md`.
+- [x] CR-201 Claude Code harness: eight more project skills (`visual-baselines`,
+      `close-task`, `qa-report-intake`, `ci-triage`, `storybook-check`, `known-issue`,
+      `dependabot-triage`, `terminology-string`) and a skill routing table in
+      `.claude/CLAUDE.md`. See `docs/changelog.md`.

@@ -660,7 +660,7 @@ discovery's filters still cover only `bicycleType` (KI-030).
 
 ## Implemented
 
-**Infra/tooling**: pnpm + Turborepo monorepo, Node 24 LTS. Git on `main`, remote
+**Infra/tooling**: pnpm + Turborepo monorepo, Node 24 LTS. Claude Code harness (CR-201): 17 project skills in `.claude/skills/`, picked through the routing table in `.claude/CLAUDE.md` → "Skill routing" (by loop step, plus out-of-task situations and global skills) instead of opening every `SKILL.md`. Git on `main`, remote
 `origin` (github.com/ipoderator/coffee_ride_app, public). CI (GitHub Actions) runs
 format/lint/typecheck/build/test plus DB migrations, and (CR-080, new) a real
 `minio` service + a genuine, unmocked S3 round-trip test
@@ -1352,4 +1352,4 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 
 ## Last updated
 
-2026-10-03 (CR-189..CR-194)
+2026-10-03 (CR-189..CR-199; CR-201 harness skills; CR-200 in progress)

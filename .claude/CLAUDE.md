@@ -133,28 +133,61 @@ Implemented behavior, changed files, migrations, API or configuration changes, a
 
 Risks, defects, technical debt, assumptions, and anything that could not be confirmed. Include the relevant evidence or location.
 
-## Project skills
+## Skill routing
 
-`.claude/skills/` holds project-specific skills that encode the recurring workflows below
-as step-by-step procedures (triggered automatically by task description, same mechanism
-as any other Claude skill — no need to invoke them by name):
+Pick skills from this table — do not list or open every `SKILL.md` to decide. Load
+(Skill tool) only the skill whose trigger matches, and read only that one file. A row
+marked "global" is a user-level/plugin skill, not in `.claude/skills/`. Skills are
+procedures, not replacements for the rules files they link to.
 
-- `new-cabinet-feature` — adding a feature to the organizer/participant dashboard (ADR-009).
-- `new-api-endpoint` — adding/changing a REST endpoint (layering, authz, validation).
-- `db-migration` — schema changes with invariant-protecting constraints.
-- `map-provider-change` — adding/swapping a map provider behind the adapter (ADR-010).
-- `security-review` — systematic walkthrough of `.claude/rules/security.md`.
-- `adr` — recording an architectural decision the way this project already does it.
-- `commit-push` — `/commit-push`: review, secret-check, commit and push finished work
-  (`.claude/rules/git.md`).
-- `run-dev` — start the local dev stack (`apps/api` + `apps/web` via `pnpm dev`)
-  for manual testing/verification.
-- `mockup-to-screen` — bring an existing page in line with an approved mockup
-  (gap table → decisions → implement inside the tokens/type scale → screenshots).
-  `shots.mjs` beside it screenshots key pages at 320/390/1440.
+### By development-loop step
 
-These are procedures, not replacements for the underlying rules files — read the linked
-rules file in full for anything the skill doesn't cover.
+| Loop step     | Skill                                     | Call it when                                                                                                            |
+| ------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1–4 Read/plan | `qa-report-intake`                        | the owner hands over a QA/UX report or list of P1/P2/P3 defects                                                         |
+| 1–4 Read/plan | `adr`                                     | a real architectural choice is being made or reconsidered                                                               |
+| 1–4 Read/plan | `grilling` (global)                       | the owner asks to stress-test a plan/idea ("пограйли")                                                                  |
+| 6 Implement   | `new-api-endpoint`                        | adding/changing a REST endpoint in `apps/api`                                                                           |
+| 6 Implement   | `db-migration`                            | any change under `packages/db` schema/migrations                                                                        |
+| 6 Implement   | `new-cabinet-feature`                     | a new organizer/participant cabinet feature, widget or nav item                                                         |
+| 6 Implement   | `mockup-to-screen`                        | bringing a page in line with an approved mockup                                                                         |
+| 6 Implement   | `map-provider-change`                     | adding/swapping a map/geocoding provider                                                                                |
+| 6 Implement   | `terminology-string`                      | adding/changing any user-visible Russian string                                                                         |
+| 6 Implement   | `engineering:debug` (global)              | a bug whose cause isn't obvious after one read of the code                                                              |
+| 7 Validate    | `storybook-check`                         | after any `apps/web`/`packages/ui` component change — always, before "done"                                             |
+| 7 Validate    | `run-dev` → `browser-automation` (global) | a change must be seen working in the real app                                                                           |
+| 7 Validate    | `visual-baselines`                        | a screenshotted screen changed, or CI fails on `*-linux.png`                                                            |
+| 8 Review      | `simplify` (global)                       | after implementing, on the task's diff (quality pass, applies fixes)                                                    |
+| 8 Review      | `code-review` (global)                    | correctness review of the diff before commit; `security-review` too if auth/authz/uploads/participant data were touched |
+| 8 Review      | `security-review`                         | touched `/auth`, sessions, ownership checks, uploads or participant data                                                |
+| 12–14 Close   | `close-task`                              | every non-trivial task, after validation (context, changelog, tasks, report)                                            |
+| 12–14 Close   | `known-issue`                             | a blocker/limitation must outlive the session, or a KI is resolved                                                      |
+| 15 Commit     | `commit-push`                             | the owner asks to commit/push                                                                                           |
+
+### Outside a task
+
+| Situation                                                 | Skill                                            |
+| --------------------------------------------------------- | ------------------------------------------------ |
+| CI red / "почему упал CI" / after a push whose run failed | `ci-triage`                                      |
+| Dependabot PRs pile up, dependency security alert         | `dependabot-triage`                              |
+| Waiting for a CI run or deploy                            | `loop` (global), or Monitor on `gh run watch`    |
+| "Запусти проект"                                          | `run-dev`                                        |
+| Pre-release / production deploy (KI-045)                  | `engineering:deploy-checklist` (global)          |
+| Tech-debt audit, "что рефакторить"                        | `engineering:tech-debt` (global)                 |
+| Test strategy for a new area                              | `engineering:testing-strategy` (global)          |
+| Frequent permission prompts                               | `fewer-permission-prompts` (global)              |
+| UI design critique/polish beyond a mockup                 | `impeccable` (global)                            |
+| New/changed project skill                                 | `skill-creator` (global), then update this table |
+
+### Usual chains
+
+- Frontend feature: `new-cabinet-feature` → `terminology-string` → `storybook-check`
+  → (`visual-baselines` if a screenshotted screen moved) → `simplify` → `close-task`.
+- API feature: `db-migration` → `new-api-endpoint` → `security-review` → `close-task`.
+- QA report: `qa-report-intake` → per CR the chains above → `close-task` → `commit-push`
+  → `ci-triage` if red.
+
+`mockup-to-screen/shots.mjs` screenshots key pages at 320/390/1440.
 
 ## Self-correction protocol
 
