@@ -18,7 +18,7 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.45.0",
+    "lucide-react": "^1.49.0",
     "maps-2gis": "workspace:*",
     "maps-core": "workspace:*",
     "next": "^15.5.25",
