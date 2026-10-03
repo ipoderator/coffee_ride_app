@@ -108,6 +108,27 @@ export const WithError: Story = {
       'aria-invalid',
       'true',
     );
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      RIDE_CONTACT_VALUE_ERRORS.telegram,
+    );
+  },
+};
+
+/** CR-194: the picker says «Почта», so its line speaks of the «адрес почты» —
+ * the account forms' «email» wording is for the account flows only. */
+export const WithEmailError: Story = {
+  args: {
+    value: { type: 'email', value: 'не-почта' },
+    error: RIDE_CONTACT_VALUE_ERRORS.email,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByLabelText('Контакт')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    await expect(canvas.getByRole('alert')).toHaveTextContent(
+      'Введите адрес почты, например name@example.ru.',
+    );
   },
 };
 

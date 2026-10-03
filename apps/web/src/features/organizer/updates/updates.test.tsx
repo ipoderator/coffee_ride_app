@@ -7,6 +7,10 @@ import {
 } from '@/lib/cabinet/ride-workspace';
 import { UpdateComposer } from './components/UpdateComposer';
 import { ApiError, createRideUpdate, getRideUpdates } from './api';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -269,5 +273,25 @@ describe('UpdateComposer', () => {
     expect(
       screen.queryByText('Message rejected by the server.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the generic Russian line for a code it does not know (CR-194)', async () => {
+    getRideUpdatesMock.mockResolvedValue({ items: [], nextCursor: null });
+    createRideUpdateMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+
+    render(<UpdateComposer rideId="ride-1" />);
+    await screen.findByText('Обновлений пока нет');
+
+    fireEvent.change(screen.getByLabelText('Сообщение участникам'), {
+      target: { value: 'Нормальное сообщение.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось выполнить запрос. Попробуйте ещё раз.',
+    );
+    expectNoEnglishApiText();
   });
 });

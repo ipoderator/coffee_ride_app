@@ -14,6 +14,10 @@ import { EditRideForm as EditRideTab } from './components/EditRideForm';
 import { RideWorkspace } from './components/RideWorkspace';
 import { RideWizardFrame } from './components/RideWizardFrame';
 import { RideWizardSteps } from './components/RideWizardSteps';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 import { isWizardMode, wizardStepHref } from './wizard-steps';
 import { ORGANIZER_RIDE_SECTIONS } from '@/lib/cabinet/organizer-ride-sections';
 import { useRideWorkspace } from '@/lib/cabinet/ride-workspace';
@@ -365,6 +369,49 @@ describe('CreateRideForm', () => {
     expect(
       screen.queryByText('Title cannot be empty.'),
     ).not.toBeInTheDocument();
+  });
+
+  // CR-194: step 1's own lines, on an untouched form and on an empty title.
+  it('words a missing date and time in Russian', async () => {
+    render(<CreateRideForm />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+
+    expect(await screen.findByText('Укажите дату старта.')).toBeInTheDocument();
+    expect(screen.getByText('Укажите время старта.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(createRideMock).not.toHaveBeenCalled();
+  });
+
+  it('words an empty title in Russian', async () => {
+    render(<CreateRideForm />);
+    fillMinimalValidForm();
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: '' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+
+    expect(await screen.findByText('Заполните это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(createRideMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the generic Russian line for a code it does not know', async () => {
+    createRideMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+
+    render(<CreateRideForm />);
+    fillMinimalValidForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+
+    expect(
+      await screen.findByText(
+        'Не удалось сохранить заезд. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
   });
 });
 
@@ -1026,6 +1073,28 @@ describe('EditRideForm', () => {
 
     expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('shows the generic Russian line for a code it does not know (CR-194)', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+    });
+    updateRideMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить заезд. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
   });
 
   it('publishes a draft ride and shows a success message', async () => {

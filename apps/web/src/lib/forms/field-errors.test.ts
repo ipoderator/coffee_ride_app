@@ -4,6 +4,7 @@ import {
   registerRequestSchema,
   updateRideRequestSchema,
 } from 'types';
+import { RIDE_CONTACT_VALUE_ERRORS } from 'ui';
 import { fieldErrorMessage, serverFieldErrorMessage } from './field-errors';
 
 const NBSP = ' ';
@@ -95,7 +96,12 @@ describe('fieldErrorMessage (KI-085)', () => {
       email: 'не почта',
       password: 'x'.repeat(12),
     });
+    // CR-194: «email» in sentences, as `AUTH_TERMS` writes it; the ride
+    // contact's «Почта» picker keeps «адрес почты» (RIDE_CONTACT_VALUE_ERRORS).
     expect(fieldErrorMessage(issueFor(email, 'email'))).toBe(
+      'Введите email, например name@example.ru.',
+    );
+    expect(RIDE_CONTACT_VALUE_ERRORS.email).toBe(
       'Введите адрес почты, например name@example.ru.',
     );
 

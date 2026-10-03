@@ -8,6 +8,11 @@ import {
   getOrganizerProfile,
   updateOrganizerProfile,
 } from './api';
+import {
+  ENGLISH_API_TEXTS,
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -151,6 +156,78 @@ describe('OrganizerProfileForm', () => {
     expect(createOrganizerProfileMock).not.toHaveBeenCalled();
   });
 
+  // CR-194 (QA 13653ed): an empty name used to read «Organizer name cannot be
+  // empty.» — the schema's English, on a Russian page.
+  it('words an empty organizer name in Russian', async () => {
+    getOrganizerProfileMock.mockRejectedValue(NOT_FOUND_ERROR);
+
+    render(<OrganizerProfileForm />);
+    await screen.findByRole('button', { name: 'Создать профиль' });
+
+    submit(/Создать профиль/);
+
+    expect(await screen.findByText('Заполните это поле.')).toBeInTheDocument();
+    expect(screen.queryByText(ENGLISH_API_TEXTS.name)).not.toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(createOrganizerProfileMock).not.toHaveBeenCalled();
+  });
+
+  it('words a too long name and description in Russian, on create and on edit', async () => {
+    getOrganizerProfileMock.mockRejectedValue(NOT_FOUND_ERROR);
+
+    const { unmount } = render(<OrganizerProfileForm />);
+    await screen.findByRole('button', { name: 'Создать профиль' });
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: 'x'.repeat(101) },
+    });
+    fireEvent.change(screen.getByLabelText('Описание'), {
+      target: { value: 'y'.repeat(501) },
+    });
+    submit(/Создать профиль/);
+
+    expect(
+      await screen.findByText('Не длиннее 100 символов.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Не длиннее 500 символов.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+    unmount();
+
+    getOrganizerProfileMock.mockResolvedValue({
+      organizerProfile: baseProfile,
+      rating: null,
+      reviewCount: 0,
+    });
+    render(<OrganizerProfileForm />);
+    await screen.findByRole('button', { name: 'Сохранить' });
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: '   ' },
+    });
+    submit(/Сохранить/);
+
+    expect(await screen.findByText('Заполните это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(updateOrganizerProfileMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the generic Russian line for a code it does not know', async () => {
+    getOrganizerProfileMock.mockRejectedValue(NOT_FOUND_ERROR);
+    createOrganizerProfileMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+
+    render(<OrganizerProfileForm />);
+    await screen.findByRole('button', { name: 'Создать профиль' });
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: 'Гравийный клуб' },
+    });
+    submit(/Создать профиль/);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось выполнить запрос. Попробуйте ещё раз.',
+    );
+    expectNoEnglishApiText();
+  });
+
   it('creates the organizer profile and shows a success message', async () => {
     getOrganizerProfileMock.mockRejectedValue(NOT_FOUND_ERROR);
     createOrganizerProfileMock.mockResolvedValue({
@@ -247,6 +324,7 @@ describe('OrganizerProfileForm', () => {
     expect(
       screen.queryByText('Organizer name cannot be empty.'),
     ).not.toBeInTheDocument();
+    expectNoEnglishApiText();
   });
 
   it('drops the stale "saved" line as soon as the form is edited again', async () => {

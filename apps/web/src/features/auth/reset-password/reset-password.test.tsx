@@ -2,6 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResetPasswordForm } from './components/ResetPasswordForm';
 import { ApiError, resetPassword } from './api';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -91,5 +95,47 @@ describe('ResetPasswordForm', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(resetPasswordMock).not.toHaveBeenCalled();
+  });
+
+  // CR-194: Russian lines, never «Password must be at least 12 characters.».
+  it('words a short or empty password in Russian', async () => {
+    render(<ResetPasswordForm token="reset-token-123" />);
+
+    fillAndSubmit('short');
+    expect(
+      await screen.findByText('Не короче 12 символов.'),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
+
+    fillAndSubmit('');
+    expect(screen.getByText('Не короче 12 символов.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(resetPasswordMock).not.toHaveBeenCalled();
+  });
+
+  it('shows Russian for a server field error and keeps the API’s English off the screen', async () => {
+    resetPasswordMock.mockRejectedValue(
+      englishProblem('validation_error', { status: 400, fields: ['password'] }),
+    );
+
+    render(<ResetPasswordForm token="reset-token-123" />);
+    fillAndSubmit('a-strong-new-password-123');
+
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+  });
+
+  it('shows the generic Russian line for a code it does not know', async () => {
+    resetPasswordMock.mockRejectedValue(
+      englishProblem('some_new_server_code', { status: 500 }),
+    );
+
+    render(<ResetPasswordForm token="reset-token-123" />);
+    fillAndSubmit('a-strong-new-password-123');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось сохранить пароль.',
+    );
+    expectNoEnglishApiText();
   });
 });

@@ -1,6 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn } from 'storybook/test';
-import { FormField, Input, Skeleton, type InputProps } from 'ui';
+import {
+  FormField,
+  Input,
+  Skeleton,
+  VALIDATION_TERMS,
+  type InputProps,
+} from 'ui';
 
 // `Input` is always used inside `FormField` (a real `<label>`, the hint/error
 // wired through `aria-describedby`/`aria-invalid`) — the stories do the same,
@@ -67,15 +73,17 @@ export const Empty: Story = {
   },
 };
 
-/** Validation error: replaces the hint, announced, linked to the field. */
+/** Validation error: replaces the hint, announced, linked to the field. The
+ * line is the shared Russian wording (`VALIDATION_TERMS`, CR-194) — never a
+ * schema's English. */
 export const WithError: Story = {
-  args: { error: 'Укажите место старта', defaultValue: '' },
+  args: { error: VALIDATION_TERMS.required, defaultValue: '' },
   play: async ({ canvas }) => {
     const input = canvas.getByLabelText('Место старта');
     await expect(input).toHaveAttribute('aria-invalid', 'true');
-    await expect(input).toHaveAccessibleDescription('Укажите место старта');
+    await expect(input).toHaveAccessibleDescription(VALIDATION_TERMS.required);
     await expect(canvas.getByRole('alert')).toHaveTextContent(
-      'Укажите место старта',
+      VALIDATION_TERMS.required,
     );
     await expect(
       canvas.queryByText('Где группа собирается перед стартом'),
@@ -111,7 +119,11 @@ function AllStates() {
       <FormField id="story-default" label="Место старта" hint="Подсказка">
         <Input placeholder="Например, Воробьёвы горы" />
       </FormField>
-      <FormField id="story-error" label="Дистанция, км" error="Введите число">
+      <FormField
+        id="story-error"
+        label="Дистанция, км"
+        error={VALIDATION_TERMS.number}
+      >
         <Input defaultValue="сто" />
       </FormField>
       <FormField id="story-disabled" label="Организатор">

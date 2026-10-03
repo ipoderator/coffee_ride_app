@@ -263,6 +263,7 @@ describe('VALIDATION_TERMS (KI-085)', () => {
     expect(RIDE_CONTACT_VALUE_ERRORS.phone).toBe(VALIDATION_TERMS.russianPhone);
     expect(RIDE_CONTACT_VALUE_ERRORS.max).toBe(VALIDATION_TERMS.russianPhone);
     expect(RIDE_CONTACT_VALUE_ERRORS.telegram).toContain('@coffee_ride');
-    expect(RIDE_CONTACT_VALUE_ERRORS.email).toBe(VALIDATION_TERMS.email);
+    // CR-194: the picker says «Почта»; account forms say «email».
+    expect(RIDE_CONTACT_VALUE_ERRORS.email).toBe(VALIDATION_TERMS.contactEmail);
   });
 });

@@ -1372,3 +1372,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       overview hint lists what stays editable (groups, contact, visibility, reschedule);
       publishing from the wizard leaves it for the ordinary workspace. See
       `docs/changelog.md`.
+- [x] CR-194 QA `13653ed` item 8: Russian validation errors on every form — the review
+      comment's missing line, «email» vs «почта» wording, per-form tests with the API's
+      real English replies, and a guard test against English API/Zod text, native
+      validation bubbles and untranslated schema issue codes. See `docs/changelog.md`.

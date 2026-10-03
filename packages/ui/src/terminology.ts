@@ -2186,7 +2186,11 @@ export const VALIDATION_TERMS = {
   number: 'Введите число.',
   integer: 'Введите целое число.',
   choose: 'Выберите вариант из списка.',
-  email: 'Введите адрес почты, например name@example.ru.',
+  // CR-194: account flows (register, login, reset) write «email» in sentences,
+  // as `AUTH_TERMS` does — the field's label is «Email». The ride contact's own
+  // picker calls it «Почта» (`RIDE_CONTACT_TYPE_TERMS`), so its line keeps that.
+  email: 'Введите email, например name@example.ru.',
+  contactEmail: 'Введите адрес почты, например name@example.ru.',
   format: 'Проверьте, как заполнено поле.',
   invalid: 'Проверьте это поле.',
   // A field's own shape rule (the `specific` argument of `fieldErrorMessage`).
@@ -2205,7 +2209,7 @@ export const RIDE_CONTACT_VALUE_ERRORS: Record<RideContactType, string> = {
   phone: VALIDATION_TERMS.russianPhone,
   max: VALIDATION_TERMS.russianPhone,
   telegram: VALIDATION_TERMS.telegram,
-  email: VALIDATION_TERMS.email,
+  email: VALIDATION_TERMS.contactEmail,
 };
 
 // ----------------------------- end KI-085 -----------------------------------

@@ -7,6 +7,10 @@ import { getCurrentUser } from '@/lib/api/current-user';
 import { SessionProvider } from '@/lib/auth/session-context';
 import { LoginForm } from './components/LoginForm';
 import { ApiError, login } from './api';
+import {
+  englishProblem,
+  expectNoEnglishApiText,
+} from '@/test-support/english-problem';
 
 const replaceMock = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -92,6 +96,60 @@ describe('LoginForm', () => {
       ),
     );
     expect(loginMock).not.toHaveBeenCalled();
+  });
+
+  // CR-194: Russian lines, never the schema's English.
+  it('words an empty form in Russian', async () => {
+    renderForm();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
+
+    expect(
+      await screen.findByText('Введите email, например name@example.ru.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Заполните это поле.')).toBeInTheDocument();
+    expectNoEnglishApiText();
+    expect(loginMock).not.toHaveBeenCalled();
+  });
+
+  it('words an invalid email in Russian', async () => {
+    renderForm();
+
+    fillAndSubmit('not-an-email', 'whatever-password');
+
+    expect(
+      await screen.findByText('Введите email, например name@example.ru.'),
+    ).toBeInTheDocument();
+    expectNoEnglishApiText();
+  });
+
+  it('shows Russian for a server field error and keeps the API’s English off the screen', async () => {
+    loginMock.mockRejectedValue(
+      englishProblem('validation_error', {
+        status: 400,
+        fields: ['email', 'password'],
+      }),
+    );
+
+    renderForm();
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(await screen.findAllByText('Проверьте это поле.')).toHaveLength(2);
+    expectNoEnglishApiText();
+  });
+
+  it('shows the generic Russian line for a code it does not know', async () => {
+    loginMock.mockRejectedValue(
+      englishProblem('rate_limited', { status: 429 }),
+    );
+
+    renderForm();
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось выполнить запрос. Попробуйте ещё раз.',
+    );
+    expectNoEnglishApiText();
   });
 
   it('shows a pending state and disables the submit button while in flight', async () => {
