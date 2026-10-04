@@ -16,15 +16,12 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "lucide-react": "^1.45.0",
     "maps-2gis": "workspace:*",
     "maps-core": "workspace:*",
     "next": "^15.5.25",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "tailwind-merge": "^3.6.0",
     "types": "workspace:*",
     "ui": "workspace:*"
   },

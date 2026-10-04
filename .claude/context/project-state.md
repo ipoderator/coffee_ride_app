@@ -24,9 +24,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-None active. Latest work, all committed and pushed to `main` (details in
-`docs/changelog.md`):
+None active. Latest work (details in `docs/changelog.md`):
 
+- CR-206 — the `ponytail` plugin installed globally (user-level, not in this repo); its
+  repo audit applied where risk-free: three unused `apps/web` deps dropped,
+  `formatPriceParts` inlined.
 - CR-205 — security audit fixes: GPX download header, web page security headers,
   single-use token race, dependency bumps, Dependabot alerts on (KI-090 opened).
 - CR-204 — `do-not-break.md` became a path-scoped rule (loads whole); area history

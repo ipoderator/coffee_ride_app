@@ -226,18 +226,14 @@ export function formatTime(
 }
 
 /**
- * Whole rubles, split: NBSP-grouped thousands, `unit: '₽'`. Zero/missing is free —
- * `{ value: 'Бесплатно', unit: '' }`, not `{ value: '0', unit: '₽' }`.
+ * Whole rubles, NBSP-grouped thousands — `1 500 ₽`; zero/missing is free —
+ * `Бесплатно`, never `0 ₽`. Unlike the other metrics there is no
+ * `formatPriceParts` twin: no caller renders the amount and the `₽` in separate
+ * slots (CR-206).
  */
-export function formatPriceParts(rubles: Maybe<number>): MetricParts {
-  if (isMissing(rubles) || rubles === 0)
-    return { value: 'Бесплатно', unit: '' };
-  return { value: formatWholeGrouped(rubles), unit: '₽' };
-}
-
-/** Whole rubles, NBSP-grouped thousands — `1 500 ₽`; zero/missing is free — `Бесплатно`. */
 export function formatPrice(rubles: Maybe<number>): string {
-  return joinParts(formatPriceParts(rubles));
+  if (isMissing(rubles) || rubles === 0) return 'Бесплатно';
+  return joinParts({ value: formatWholeGrouped(rubles), unit: '₽' });
 }
 
 /**

@@ -22,7 +22,6 @@ import {
   formatRideContactValue,
   formatParticipantsParts,
   formatPrice,
-  formatPriceParts,
   formatRating,
   formatRatingParts,
   formatSpeed,
@@ -235,11 +234,6 @@ describe('*Parts helpers (CR-065)', () => {
       unit: 'мин',
     });
     expect(formatDurationParts(120)).toEqual({ value: '2', unit: 'ч' });
-  });
-
-  it('formatPriceParts splits value and unit, free as a unit-less value', () => {
-    expect(formatPriceParts(1500)).toEqual({ value: `1${NBSP}500`, unit: '₽' });
-    expect(formatPriceParts(0)).toEqual({ value: 'Бесплатно', unit: '' });
   });
 
   it('formatRatingParts splits value and unit, no reviews as missing', () => {

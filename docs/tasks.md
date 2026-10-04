@@ -42,3 +42,8 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-205 Security audit fixes: GPX download `Content-Disposition` (Cyrillic name
       was a 500), web page security headers, single-use token race, fastify and
       transitive bumps, Dependabot alerts on. KI-090 opened. See `docs/changelog.md`.
+- [x] CR-206 `ponytail` plugin installed globally; its whole-repo audit applied where
+      risk-free: `class-variance-authority`/`clsx`/`tailwind-merge` dropped from
+      `apps/web`, `formatPriceParts` inlined. `postgres` deliberately kept in
+      `apps/api` (bundle requires it — see `scripts/build.mjs`). Upload/replace
+      duplication left for a separate task. See `docs/changelog.md`.

@@ -106,3 +106,12 @@ Files: `apps/api/src/lib/content-disposition{,.test}.ts` (new), `apps/api/src/mo
 Validation: api vitest 599 passed/8 skipped (the reset race test fails on the old code: 4×200); api+web typecheck/lint clean; e2e security-headers + home/critical-journeys/gpx-route/password-reset 13/13; `pnpm audit --prod` 16 → 4.
 Decisions: no script/style CSP on pages (Next inline scripts, 2GIS MapGL unverified); `/register`'s 409 (account existence) kept — rate-limited, a UX trade-off.
 Follow-up: KI-090 — the 4 remaining advisories are Next 15's pinned postcss 8.4.31 (build-time only); fixed by the Next 16 upgrade (Dependabot #22).
+
+## 2026-10-04 — CR-206 — ponytail-audit low-risk cleanups
+
+Summary: installed the `ponytail` plugin globally and ran its whole-repo over-engineering audit. Applied only the findings that cannot change behavior: `class-variance-authority` (declared in `apps/web`, zero references repo-wide) and `clsx`/`tailwind-merge` dropped from `apps/web` (the only `cn()` lives in `packages/ui`, which declares both itself; `apps/web/src/lib/utils.ts` just re-exports it). `formatPriceParts` inlined into `formatPrice` — the one `*Parts` helper of ten with no caller outside `format.ts`.
+Contract: none. No API, types, DB or user-visible string change.
+Files: `apps/web/package.json`, `packages/ui/src/{format,format.test}.ts`, `pnpm-lock.yaml`.
+Validation: ui vitest 245 passed, web unit 772 passed, storybook 196 passed (render+play+axe); typecheck/lint/format clean; `pnpm build` 7/7; built API smoke-tested live — `/health` 200 with `db: ok`.
+Decisions: `postgres` stays a direct `apps/api` dependency — removed it first, then restored it: `scripts/build.mjs` documents that esbuild inlines `packages/db`'s source, so the bundle itself requires `postgres`, and pnpm only symlinks a package's own declared deps. `pnpm build` passes either way; only the `node dist/server.js` smoke test catches it. `apps/web/src/lib/utils.ts` kept despite 0 importers — `components.json`'s `aliases.utils` points at it, so removing it would break `shadcn add`.
+Follow-up: the audit's `uploadRoute`/`replaceRoute` (~25 shared lines) and `uploadCoverImage`/`replaceCoverImage` (~40) duplication is left as-is — a logic change in the upload paths, not a low-risk cleanup. `apps/web/coverage/` is committed to the tree; check `.gitignore` if unintended.
