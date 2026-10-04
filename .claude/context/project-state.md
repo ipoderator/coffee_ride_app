@@ -26,6 +26,8 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 None active. Latest work (details in `docs/changelog.md`):
 
+- CR-207 — `ToastProvider` clears its pending timers on unmount; an uncleared one
+  fired after jsdom teardown and failed `ci` with every test passing (predates CR-206).
 - CR-206 — the `ponytail` plugin installed globally (user-level, not in this repo); its
   repo audit applied where risk-free: three unused `apps/web` deps dropped,
   `formatPriceParts` inlined.

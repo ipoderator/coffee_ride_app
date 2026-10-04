@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from 'react';
@@ -83,6 +84,31 @@ function SuccessMark() {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(0);
+  // CR-207: every pending auto-dismiss/exit timer, so unmounting clears them.
+  // Without this a toast shown shortly before the provider goes away fires its
+  // `setToasts` afterwards — in the browser a React "update on an unmounted
+  // component", and under jsdom a hard `ReferenceError: window is not defined`
+  // once the test environment is already torn down, which failed the whole
+  // Vitest run (CI only: it needs the timer to outlive teardown).
+  const timers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  useEffect(
+    () => () => {
+      for (const timer of timers.current) clearTimeout(timer);
+      timers.current.clear();
+    },
+    [],
+  );
+
+  // Keeps `timers` free of ids that already ran, so a long-lived provider
+  // (the app root mounts one for the whole session) doesn't accumulate them.
+  const schedule = useCallback((run: () => void, delayMs: number) => {
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
+      run();
+    }, delayMs);
+    timers.current.add(timer);
+  }, []);
 
   const dismissToast = useCallback((id: number) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -92,16 +118,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, tone: ToastTone = 'success') => {
       const id = nextId.current++;
       setToasts((current) => [...current, { id, message, tone }]);
-      setTimeout(() => {
+      schedule(() => {
         setToasts((current) =>
           current.map((toast) =>
             toast.id === id ? { ...toast, leaving: true } : toast,
           ),
         );
-        setTimeout(() => dismissToast(id), EXIT_MS);
+        schedule(() => dismissToast(id), EXIT_MS);
       }, AUTO_DISMISS_MS);
     },
-    [dismissToast],
+    [dismissToast, schedule],
   );
 
   return (

@@ -47,3 +47,7 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       `apps/web`, `formatPriceParts` inlined. `postgres` deliberately kept in
       `apps/api` (bundle requires it — see `scripts/build.mjs`). Upload/replace
       duplication left for a separate task. See `docs/changelog.md`.
+- [x] CR-207 `ToastProvider` clears its pending auto-dismiss/exit timers on unmount —
+      an uncleared timer fired `setToasts` after jsdom teardown, failing `ci` with
+      every test passing (and updating an unmounted component in the browser).
+      Predates CR-206. See `docs/changelog.md`.

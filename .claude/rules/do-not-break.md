@@ -215,4 +215,9 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
   too, or that ride's discovery card shows no track;
 - `TRUST_PROXY_HOPS` only on an `api` reachable solely through `web` (no `ports:`
   in `docker-compose.prod.yml`) — `lib/trust-proxy.ts` trusts private peers only,
-  but the hop count still assumes exactly that chain (KI-044).
+  but the hop count still assumes exactly that chain (KI-044);
+- `ToastProvider`'s timer bookkeeping (`packages/ui/src/components/Toast.tsx`,
+  CR-207): every auto-dismiss/exit `setTimeout` goes through `schedule()` and is
+  cleared on unmount — a bare `setTimeout` here fires `setToasts` after the
+  provider is gone, which under jsdom is an uncaught `ReferenceError: window is
+not defined` that fails the whole Vitest run with every test still passing.

@@ -96,6 +96,28 @@ describe('Toast', () => {
     ).toBeNull();
   });
 
+  it('clears a pending auto-dismiss timer on unmount (CR-207)', () => {
+    const { unmount } = render(
+      <ToastProvider>
+        <ShowToastButton message="Заезд опубликован." />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Показать' }));
+    unmount();
+
+    // Before CR-207 both timers survived the unmount and their `setToasts`
+    // ran against a gone provider — under jsdom that surfaced as an uncaught
+    // `ReferenceError: window is not defined` once the environment was torn
+    // down, failing the whole run even though every test passed.
+    expect(vi.getTimerCount()).toBe(0);
+    expect(() =>
+      act(() => {
+        vi.advanceTimersByTime(4000 + 200);
+      }),
+    ).not.toThrow();
+  });
+
   it('useToast without a ToastProvider ancestor fails soft, not throws', () => {
     expect(() =>
       render(<ShowToastButton message="Вы в списке ожидания." />),
