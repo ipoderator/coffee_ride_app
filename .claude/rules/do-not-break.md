@@ -219,5 +219,6 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 - `ToastProvider`'s timer bookkeeping (`packages/ui/src/components/Toast.tsx`,
   CR-207): every auto-dismiss/exit `setTimeout` goes through `schedule()` and is
   cleared on unmount — a bare `setTimeout` here fires `setToasts` after the
-  provider is gone, which under jsdom is an uncaught `ReferenceError: window is
-not defined` that fails the whole Vitest run with every test still passing.
+  provider is gone, which under jsdom throws an uncaught `ReferenceError`
+  (`window` undefined after teardown) and fails the whole Vitest run with every
+  test still passing.
