@@ -24,8 +24,12 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-None active. Latest work (details in `docs/changelog.md`):
+CR-208 (Dependabot triage) — paused, resumes once `main` is green. Latest work
+(details in `docs/changelog.md`):
 
+- CR-209 — the auth coverage gate reddened `ci` on commits that changed no code:
+  CR-205's token races covered the in-transaction guard only by chance. Two
+  deterministic tests added; baseline untouched.
 - CR-207 — `ToastProvider` clears its pending timers on unmount; an uncleared one
   fired after jsdom teardown and failed `ci` with every test passing (predates CR-206).
 - CR-206 — the `ponytail` plugin installed globally (user-level, not in this repo); its
@@ -60,7 +64,13 @@ None active. Latest work (details in `docs/changelog.md`):
 
 ## In progress
 
-None. CI: CR-199's run 37146005929 green; later pushes not yet checked.
+CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. Blocked
+on two things: `main` had to go green first (CR-209), and the npm bumps (#8/#9/#23)
+cannot resolve until `ip-address@10.7.3` leaves Dependabot's 3-day quarantine on
+2026-10-05 ~10:35Z. #26 (seaweedfs) needs `pnpm smoke:docker` before merging.
+
+CI: `main` was red at `463a86b` (run 37190099752, coverage gate). CR-209's fix is
+committed; its own run is the first check that the gate holds.
 
 ## Next
 

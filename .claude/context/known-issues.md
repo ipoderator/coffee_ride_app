@@ -489,6 +489,27 @@ Workaround: none needed at runtime; don't override Next's pin by hand.
 Next action: the Next 16 major upgrade (Dependabot PR #22), as its own planned task
 per the `dependabot-triage` skill; then re-run `pnpm audit --prod`.
 
+### KI-091 — Dependabot's Node 26 / Postgres 18 majors are declined, not merged
+
+Status: open (deliberate — a standing decision, not a defect). Discovered: 2026-10-04
+(CR-208).
+Problem: Dependabot reopens three Node majors (PRs #19 `/apps/api`, #20 `/apps/web`,
+#21 `/packages/db`: `node:24-alpine` → `26-alpine`) and one Postgres major (PR #15:
+`postgres:17-alpine` → `18-alpine`) every week. Both are runtime/framework majors,
+which `dependabot-triage` routes to a planned CR rather than a bump-PR merge.
+Impact: recurring red/stale PRs in the queue; no runtime risk while unmerged. Node 24
+is the LTS this project pins (`package.json` `engines.node >=24.0.0`, `.nvmrc`, all
+three Dockerfiles — CR-067); Node 26 only enters LTS in late October 2026. Postgres 18
+needs a data-directory upgrade path for `docker-compose.prod.yml`'s volume, which is
+not a lockfile change.
+Workaround: leave the PRs open as a reminder (the owner's call, 2026-10-04) rather
+than closing them with an `ignore` rule — an `ignore` entry would also hide the
+eventual LTS transition.
+Next action: Node 26 — revisit once it is the active LTS and `.nvmrc`/`engines`/the
+three Dockerfiles move together as one CR. Postgres 18 — its own CR covering the
+`pg_upgrade`/dump-restore path for the production volume, before touching the image
+tag.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

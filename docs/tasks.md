@@ -51,3 +51,11 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       an uncleared timer fired `setToasts` after jsdom teardown, failing `ci` with
       every test passing (and updating an unmounted component in the browser).
       Predates CR-206. See `docs/changelog.md`.
+- [ ] CR-208 Dependabot triage — 13 open PRs classified; majors declined (KI-091),
+      Next 16 is its own task (KI-090). Paused behind CR-209's red `ci`; the npm
+      bumps also wait on `ip-address@10.7.3`'s quarantine (expires 2026-10-05
+      ~10:35Z). See `.claude/context/current-task.md`.
+- [x] CR-209 Deterministic tests for both single-use-token guarded UPDATEs — the
+      coverage gate failed on `main` at a markdown-only commit because CR-205's
+      concurrency races covered the in-transaction branch only by chance.
+      See `docs/changelog.md`.

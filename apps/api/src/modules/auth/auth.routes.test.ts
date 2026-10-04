@@ -9,9 +9,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv, type Env } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
-import { requestPasswordReset } from './auth.service.js';
+import {
+  requestPasswordReset,
+  resetPassword,
+  verifyEmail,
+} from './auth.service.js';
 import { createRedisClient } from '../../redis.js';
 import { hashSessionToken } from './session.js';
+import { hashToken } from './tokens.js';
 
 // These tests exercise the real service/repository layers against a live
 // Postgres database (`.claude/rules/testing.md` — behavior, not mocks, for
@@ -315,6 +320,51 @@ describe('POST /v1/auth/verify-email', () => {
     for (const r of responses.filter((r) => r.statusCode === 400)) {
       expect(r.json().code).toBe('verification_token_already_used');
     }
+
+    await app.close();
+  });
+
+  // CR-209: the test above races four real requests, so whether a loser is
+  // rejected by the pre-check `usedAt` or by the guarded UPDATE inside the
+  // transaction depends on timing — in CI the in-transaction branch went
+  // uncovered often enough to drop the auth coverage floor and redden `ci` on
+  // commits that changed no code. This drives that branch directly by claiming
+  // the token in the window the guarded UPDATE exists for: after `verifyEmail`
+  // has read the row and passed its pre-check, before its transaction opens.
+  it('rejects a token claimed between the pre-check and the transaction', async () => {
+    const app = await buildApp(testEnv);
+    const token = await registerAndGetToken(app);
+
+    let claimedByRace = false;
+    const racingDb = new Proxy(app.db, {
+      get(target, prop, receiver) {
+        if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+        return async (...args: Parameters<typeof app.db.transaction>) => {
+          claimedByRace = true;
+          await app.db
+            .update(emailVerificationTokens)
+            .set({ usedAt: new Date() })
+            .where(
+              sql`${emailVerificationTokens.tokenHash} = ${hashToken(token)}`,
+            );
+          return target.transaction(...args);
+        };
+      },
+    }) as typeof app.db;
+
+    await expect(verifyEmail(racingDb, token)).rejects.toMatchObject({
+      code: 'verification_token_already_used',
+    });
+    expect(claimedByRace).toBe(true);
+
+    // The race's own claim stands; the user is not verified by the loser.
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/verify-email',
+      payload: { token },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('verification_token_already_used');
 
     await app.close();
   });
@@ -759,6 +809,50 @@ describe('POST /v1/auth/reset-password', () => {
     for (const r of responses.filter((r) => r.statusCode === 400)) {
       expect(r.json().code).toBe('reset_token_already_used');
     }
+
+    await app.close();
+  });
+
+  // CR-209: the deterministic counterpart to the race above, for the same
+  // reason as verify-email's — which branch rejects a loser depends on
+  // timing, so the in-transaction one cannot be left to chance. Claims the
+  // token after `resetPassword` has passed its pre-check, before its
+  // transaction opens.
+  it('rejects a token claimed between the pre-check and the transaction', async () => {
+    const app = await buildApp(testEnv);
+    const { email } = await registerTestUser(app);
+    const { resetToken } = await requestPasswordReset(app.db, email);
+    if (!resetToken) throw new Error('No reset token issued');
+
+    let claimedByRace = false;
+    const racingDb = new Proxy(app.db, {
+      get(target, prop, receiver) {
+        if (prop !== 'transaction') return Reflect.get(target, prop, receiver);
+        return async (...args: Parameters<typeof app.db.transaction>) => {
+          claimedByRace = true;
+          await app.db
+            .update(passwordResetTokens)
+            .set({ usedAt: new Date() })
+            .where(
+              sql`${passwordResetTokens.tokenHash} = ${hashToken(resetToken)}`,
+            );
+          return target.transaction(...args);
+        };
+      },
+    }) as typeof app.db;
+
+    await expect(
+      resetPassword(racingDb, resetToken, 'a-losing-password-123'),
+    ).rejects.toMatchObject({ code: 'reset_token_already_used' });
+    expect(claimedByRace).toBe(true);
+
+    // The loser's password never took effect — the original one still works.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: PASSWORD },
+    });
+    expect(login.statusCode).toBe(200);
 
     await app.close();
   });
