@@ -230,3 +230,14 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
   provider is gone, which under jsdom throws an uncaught `ReferenceError`
   (`window` undefined after teardown) and fails the whole Vitest run with every
   test still passing.
+- `VerifyEmailStatus`'s per-token promise cache (`apps/web/src/features/auth/
+verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
+  verification token is sent to the API exactly once per token, no matter how often
+  the effect runs. e2e serves the web app with `pnpm dev`, so React Strict Mode's
+  dev-only double-invoke otherwise makes the component race itself — the second call
+  gets `verification_token_already_used` and «Ссылка недействительна…» renders over a
+  verification that succeeded (this failed `login-return.spec.ts` on every CI retry).
+  The `cancelled` flag does not cover it: it gates `setState`, not a request already
+  in flight. Don't "simplify" the cached promise into a boolean re-entry guard either
+  — the second effect run must still subscribe to the first run's promise, or the
+  screen sits on the skeleton forever.

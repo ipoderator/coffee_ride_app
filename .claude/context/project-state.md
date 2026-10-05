@@ -24,9 +24,15 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-208 (Dependabot triage) — paused, resumes once `main` is green. Latest work
-(details in `docs/changelog.md`):
+CR-208 (Dependabot triage) — paused; `main` is now green, so it can resume. Latest
+work (details in `docs/changelog.md`):
 
+- CR-211 — `/verify-email` sent its single-use token twice: the request lived in a
+  `useEffect`, and e2e serves the web app with `pnpm dev`, so React Strict Mode's
+  double-invoke burned the link and rendered «Ссылка недействительна» over a
+  verification that had succeeded. The in-flight promise is now cached per token.
+  The API was correct throughout; this closes CR-209's open `login-return.spec.ts`
+  follow-up.
 - CR-210 — pre-launch configuration readiness: a warning tier below `loadEnv()`'s
   boot refusal (`apps/api/src/preflight.ts`, `pnpm preflight`) for configuration
   that boots but leaves a feature dead — above all an email key with no verified
@@ -74,7 +80,8 @@ coverage gate holds. The npm bumps (#8/#9/#23) depended on `ip-address@10.7.3`
 leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
 #26 (seaweedfs) still needs `pnpm smoke:docker` before merging.
 
-CR-210's changes are committed.
+CR-210 and CR-211 are committed and pushed; CI run `37314070977` at `b5826fd` is
+green end to end, so the `login-return.spec.ts` failure CR-209 left open is closed.
 
 ## Next
 
