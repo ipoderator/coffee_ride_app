@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, ErrorState, Skeleton, VERIFY_EMAIL_TERMS } from 'ui';
 import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import { loginHref } from '@/lib/auth/next-path';
@@ -36,11 +36,36 @@ export function VerifyEmailStatus({
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // CR-211. The request must be sent exactly once per token, not once per
+  // effect run: the token is single-use (`.claude/rules/do-not-break.md` —
+  // claimed by a guarded `UPDATE … WHERE used_at IS NULL`), so a second call
+  // with the same one legitimately answers
+  // `verification_token_already_used`. React Strict Mode's dev-only
+  // double-invoke made the component race itself — the first call verified,
+  // the second burned the link and rendered «Ссылка недействительна…» over a
+  // verification that had in fact succeeded. `cancelled` below cannot prevent
+  // this: it only gates `setState`, after the request is already in flight.
+  // Same class of fix as CR-101's `containerGeneration` guard in
+  // `packages/maps-2gis/src/render.ts`.
+  //
+  // The in-flight promise is cached rather than the effect merely bailing
+  // out: a re-run must still *subscribe* to the original request's result.
+  // Guarding re-entry alone would leave the second run with nothing to
+  // await — its predecessor's `cancelled` cleanup having already fired — and
+  // the screen would sit on the skeleton forever.
+  const pending = useRef<{
+    token: string;
+    promise: ReturnType<typeof verifyEmail>;
+  } | null>(null);
+
   useEffect(() => {
     if (!token) return;
+    if (pending.current?.token !== token) {
+      pending.current = { token, promise: verifyEmail({ token }) };
+    }
     let cancelled = false;
 
-    verifyEmail({ token })
+    pending.current.promise
       .then(() => {
         if (cancelled) return;
         setStatus('success');

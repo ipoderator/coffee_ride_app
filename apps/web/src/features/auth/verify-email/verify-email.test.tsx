@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import VerifyEmailPage from '@/app/verify-email/page';
 import { VerifyEmailStatus } from './components/VerifyEmailStatus';
@@ -87,6 +88,49 @@ describe('VerifyEmailStatus', () => {
         screen.getByText(/Ссылка недействительна или уже была использована/),
       ).toBeInTheDocument(),
     );
+  });
+
+  // CR-211. The token is single-use, so sending it twice makes the second
+  // call answer `verification_token_already_used` and the screen show
+  // «Ссылка недействительна…» over a verification that actually succeeded.
+  // React Strict Mode's dev-only double-invoke did exactly that and failed
+  // e2e `login-return.spec.ts` on every retry. StrictMode is not enabled in
+  // this suite, so these assert the invariant it violated: one request per
+  // token, no matter how often the effect runs.
+  describe('the single-use token is sent exactly once', () => {
+    it('does not re-send the token when the effect runs again', async () => {
+      verifyEmailMock.mockResolvedValue({ user: verifiedUser });
+      const { rerender } = render(
+        <StrictMode>
+          <VerifyEmailStatus token="abc123" />
+        </StrictMode>,
+      );
+
+      expect(
+        await screen.findByRole('heading', { name: 'Email подтверждён' }),
+      ).toBeInTheDocument();
+      rerender(
+        <StrictMode>
+          <VerifyEmailStatus token="abc123" />
+        </StrictMode>,
+      );
+
+      expect(verifyEmailMock).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole('heading', { name: 'Email подтверждён' }),
+      ).toBeInTheDocument();
+    });
+
+    it('still verifies when the token changes', async () => {
+      verifyEmailMock.mockResolvedValue({ user: verifiedUser });
+      const { rerender } = render(<VerifyEmailStatus token="first" />);
+      await screen.findByRole('heading', { name: 'Email подтверждён' });
+
+      rerender(<VerifyEmailStatus token="second" />);
+
+      await waitFor(() => expect(verifyEmailMock).toHaveBeenCalledTimes(2));
+      expect(verifyEmailMock).toHaveBeenLastCalledWith({ token: 'second' });
+    });
   });
 
   // CR-197 (QA `fe0b4c2`): «Перейти ко входу» went to a bare `/login`, so a
