@@ -1415,3 +1415,68 @@ card, tickets, `/me`, the organizer cabinet and the calendar file on the old tim
 
 Stop calling the endpoint; drop the two columns and CHECKs (migration down). Moved rides
 keep their new `starts_at`; reschedule updates become ordinary messages.
+
+## ADR-030 — Error tracking at launch: structured stdout plus the existing webhook seam, no vendor
+
+Status: Accepted (2026-10-05, owner decision, CR-210). Closes the vendor question
+CR-079 left open when it resolved KI-006.
+
+### Context
+
+CR-079 resolved KI-006 (no observability) by building the mechanism, not the vendor:
+`apps/api/src/plugins/error-reporting.ts` decorates `app.reportError(error, message,
+context?, logger?)`, which always logs structurally and optionally forwards to a
+webhook sink given `ERROR_REPORTING_WEBHOOK_URL`. Every unexpected 500
+(`error-handler.ts`) and every notification job that fails after its retries
+(`queue.ts`) routes through that one funnel. Request-id correlation (`lib/
+request-id.ts`, echoed as `X-Request-Id`) lets a single request be traced across the
+Caddy → web → api hop.
+
+What was deliberately left undecided was which error-tracking product, if any, sits
+behind the seam. Three files have said "no vendor is decided yet" ever since
+(`.env.example`, `docs/deployment.md` §1, `env.ts`'s comment on the variable), which
+reads as an oversight rather than a position — and a pre-launch review raised it as an
+open blocker on exactly that basis.
+
+The realistic options were a SaaS vendor (Sentry), a self-hosted Sentry-compatible
+service (GlitchTip), or keeping what exists.
+
+### Decision
+
+**Ship with structured stdout logging plus the existing optional webhook seam. No
+error-tracking vendor is adopted for launch.**
+
+- `ERROR_REPORTING_WEBHOOK_URL` stays optional and stays a generic JSON POST sink, not
+  a vendor SDK. Setting it later needs no code change.
+- No vendor SDK is added to `apps/api`. Adding one later is an ADR amending this one,
+  not a configuration tweak — a tracker receives error payloads that can contain
+  participant data, which makes it a data-sharing decision, not just a dependency.
+- The operator is responsible for the host retaining or shipping container logs. With
+  no sink configured, container stdout is the only record of an error, and it is lost
+  with the container. `deploy/FIRST-DEPLOY.md` §6 makes this an explicit checklist item
+  rather than an assumption.
+- CR-210's preflight reports the unset variable as a warning naming this consequence,
+  so an operator confirms the choice instead of inheriting it silently.
+
+Revisit when any of these is true: error volume exceeds what reading logs can
+practically cover; more than one person is on call; or an error needs to reach someone
+who does not have shell access to the host. None hold at launch — there is no traffic
+yet and one operator.
+
+### Consequences
+
+- Nothing alerts. An unexpected 500 is visible only to someone reading logs. Accepted
+  at launch volume; it is the first thing that stops being acceptable as traffic grows.
+- No per-error grouping, trend, or release correlation — the things a tracker is
+  actually for. Recovering a past error depends entirely on the host's log retention.
+- No third party receives error payloads, so no payload-scrubbing work is owed before
+  launch; that work moves into whichever ADR adopts a vendor.
+- Zero recurring cost and no extra service to operate, consistent with ADR-018 leaving
+  infrastructure choices to the operator.
+
+### Rollback
+
+Nothing to roll back — this ratifies the current code. Adopting a vendor later is a new
+ADR: either point `ERROR_REPORTING_WEBHOOK_URL` at an ingestion endpoint (no code
+change) or add the SDK behind `plugins/error-reporting.ts`'s existing seam, keeping
+`app.reportError` the single funnel (`.claude/rules/do-not-break.md`).

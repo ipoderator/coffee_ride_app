@@ -27,6 +27,10 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 CR-208 (Dependabot triage) — paused, resumes once `main` is green. Latest work
 (details in `docs/changelog.md`):
 
+- CR-210 — pre-launch configuration readiness: a warning tier below `loadEnv()`'s
+  boot refusal (`apps/api/src/preflight.ts`, `pnpm preflight`) for configuration
+  that boots but leaves a feature dead — above all an email key with no verified
+  sender; `deploy/FIRST-DEPLOY.md`; ADR-030 on error tracking.
 - CR-209 — the auth coverage gate reddened `ci` on commits that changed no code:
   CR-205's token races covered the in-transaction guard only by chance. Two
   deterministic tests added; baseline untouched.
@@ -64,13 +68,13 @@ CR-208 (Dependabot triage) — paused, resumes once `main` is green. Latest work
 
 ## In progress
 
-CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. Blocked
-on two things: `main` had to go green first (CR-209), and the npm bumps (#8/#9/#23)
-cannot resolve until `ip-address@10.7.3` leaves Dependabot's 3-day quarantine on
-2026-10-05 ~10:35Z. #26 (seaweedfs) needs `pnpm smoke:docker` before merging.
+CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. No
+longer blocked on `main`: both runs at `fd1819b` (CR-209) concluded `success`, so the
+coverage gate holds. The npm bumps (#8/#9/#23) depended on `ip-address@10.7.3`
+leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
+#26 (seaweedfs) still needs `pnpm smoke:docker` before merging.
 
-CI: `main` was red at `463a86b` (run 37190099752, coverage gate). CR-209's fix is
-committed; its own run is the first check that the gate holds.
+CR-210's changes are committed.
 
 ## Next
 
@@ -88,15 +92,24 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    mapped inside `packages/maps-2gis`.
 3. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is reachable
    from this machine (KI-056); the seed could also fill requirements.
-4. Before launch: a commercial 2GIS key (KI-075); first real deployment (KI-045).
-5. **KI-086** — owner decision: which sidebar item lights on a ride's
+4. **Before launch, owner-side** (CR-210 prepared the repository for each; none is
+   code work): a commercial 2GIS key (KI-075); a verified Unisender Go sender in
+   `EMAIL_FROM_ADDRESS`, without which password reset and email verification are dead
+   ends for real users (KI-026/KI-042/KI-055) — `pnpm preflight` now warns on both;
+   then the first real deployment against `deploy/FIRST-DEPLOY.md` (KI-045).
+5. **KI-075's error mapping** — a separate CR the owner kept out of CR-210's scope:
+   2GIS's 403 (demo-key distance, and a commercial key's own quota/licence refusals)
+   maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
+   недоступен» instead of «точки слишком далеко друг от друга». A commercial key
+   changes the limit, not the mapping.
+6. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
-6. **KI-090** — the Next 16 upgrade (Dependabot #22) as its own task; clears the last
+7. **KI-090** — the Next 16 upgrade (Dependabot #22) as its own task; clears the last
    `pnpm audit` advisories (Next 15's pinned postcss).
 
 ## Important decisions
 
-All in `docs/decisions.md` (ADR-001..ADR-029, grep by number). Most load-bearing:
+All in `docs/decisions.md` (ADR-001..ADR-030, grep by number). Most load-bearing:
 ADR-006/013 (auth, DB sessions, single origin, no CORS), ADR-008 (modular monolith),
 ADR-009 (cabinet feature modules), ADR-010/020 (maps adapter + render layer), ADR-011
 (`/v1`, cursor pagination, RFC 9457), ADR-012 (`timestamptz` + ride timezone), ADR-016
@@ -118,4 +131,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-03 (CR-205)
+2026-10-05 (CR-210)

@@ -21,7 +21,9 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
 ## apps/api (`apps/api/src`)
 
 - `app.ts` builds the app; `server.ts` boots; `env.ts` Zod env (refuses placeholders
-  in production); `routes/v1.ts` mounts modules under `/v1`; `routes/health.ts` —
+  in production); `preflight.ts` warns on config that boots but leaves a feature dead
+  (`scripts/preflight.ts` = `pnpm preflight`, also logged at boot — CR-210);
+  `routes/v1.ts` mounts modules under `/v1`; `routes/health.ts` —
   unversioned `/health` (DB/Redis/S3, always 200).
 - `plugins/`: `auth` (session → `request.user`), `csrf` (Origin/Referer on unsafe
   methods), `db`, `s3`, `email` (Unisender or null), `maps` (`app.mapProvider` or null),

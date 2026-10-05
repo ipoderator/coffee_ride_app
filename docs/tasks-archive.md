@@ -1426,3 +1426,15 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       входу» → sign in (validated on every hop; external/unsafe targets dropped);
       full-journey e2e. KI-089: the emailed link still has no `next`. See
       `docs/changelog.md`.
+- [x] CR-198 QA `fe0b4c2` P3: in «Перенести заезд» a new date re-judges the
+      pair-dependent time error («текущее время»/«уже прошло») at once instead of on the
+      next «Продолжить». See `docs/changelog.md`.
+- [x] CR-199 Participant notifications show their time in the ride's timezone (was UTC
+      — 13:01 vs the organizer journal's 16:01); additive `Notification.ride.startTimezone`.
+      See `docs/changelog.md`.
+- [x] CR-201 Claude Code harness: eight more project skills (`visual-baselines`,
+      `close-task`, `qa-report-intake`, `ci-triage`, `storybook-check`, `known-issue`,
+      `dependabot-triage`, `terminology-string`) and a skill routing table in
+      `.claude/CLAUDE.md`. See `docs/changelog.md`.
+- [x] CR-202 Token economy: context files cut to snapshots with verbatim archives,
+      targeted-read protocol, path-scoped `.claude/rules`. See `docs/changelog.md`.

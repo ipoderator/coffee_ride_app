@@ -216,6 +216,14 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 - `TRUST_PROXY_HOPS` only on an `api` reachable solely through `web` (no `ports:`
   in `docker-compose.prod.yml`) — `lib/trust-proxy.ts` trusts private peers only,
   but the hop count still assumes exactly that chain (KI-044);
+- `apps/api/src/preflight.ts` stays a **warning** tier and never refuses a boot
+  (CR-210): `loadEnv()` is the only thing that decides what boots, and every
+  configuration it accepts — an unconfigured Redis, S3, 2GIS key or email provider —
+  is a deliberately supported degraded mode (ADR-016, KI-046, `GET /health`'s
+  `not_configured`). Turning a finding into a boot failure, or making
+  `pnpm preflight` exit non-zero on warnings, would break exactly the degraded
+  deployments the rest of the codebase is built to support; findings also stay free of
+  configuration _values_, naming fields only (`.claude/rules/security.md`).
 - `ToastProvider`'s timer bookkeeping (`packages/ui/src/components/Toast.tsx`,
   CR-207): every auto-dismiss/exit `setTimeout` goes through `schedule()` and is
   cleared on unmount — a bare `setTimeout` here fires `setToasts` after the

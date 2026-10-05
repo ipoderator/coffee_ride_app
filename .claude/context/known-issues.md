@@ -148,6 +148,15 @@ Next action: unchanged and now the only remaining half — user sets
 from a network that can resolve `unisender.ru` (KI-055). Until then the
 resend button issues a valid token and the producer no-ops, exactly as
 `register`'s has since CR-100.
+Update 2026-10-05 (CR-210): the half-configured state is no longer silent.
+`pnpm preflight` (`apps/api/src/preflight.ts`) reports an
+`UNISENDER_API_KEY` set with an empty `EMAIL_FROM_ADDRESS` as a warning
+naming this exact consequence, and `apps/api` logs the same warning at boot
+— previously `plugins/email.ts`'s all-or-nothing gate absorbed it into
+`app.emailProvider = null` with nothing anywhere saying so. `deploy/
+FIRST-DEPLOY.md` §5 makes completing a real verification against a real
+mailbox a required first-deploy check. Next action unchanged: the owner sets
+a verified sender; the gap itself is config-side and unchanged.
 
 ### KI-038 — `next build` crashes if a `development`-valued `NODE_ENV` reaches it from the shell
 
@@ -249,6 +258,12 @@ the `EMAIL_FROM_ADDRESS`/KI-055 half above. Deliberately not given a resend
 button: `/forgot-password` _is_ the resend, and adding a second
 session-authenticated path would be meaningless (a user who can log in does
 not need a password reset). Next action unchanged.
+Update 2026-10-05 (CR-210): the delivery gap is now reported rather than
+silent — see KI-026's CR-210 update; the same preflight warning covers this
+issue, since both flows share `app.emailProvider`. `deploy/FIRST-DEPLOY.md`
+§5 makes completing a real password reset from an emailed link a required
+first-deploy check, so this cannot be missed at launch the way a passing
+health check would let it be. Next action unchanged.
 
 ### KI-045 — CR-075/CR-076's Caddy/compose production manifest has never been run end to end
 
@@ -296,6 +311,22 @@ route on :443. Caddy's X-Forwarded-For handling — the Caddy → web hop's one
 observable effect on `api` — was probed and relied on for KI-044. Still
 unverified: ACME/TLS and the `backup` service, both need a real host.
 
+Update 2026-10-05 (CR-210): `deploy/FIRST-DEPLOY.md` is now the checklist
+for the run this issue is waiting for. It separates what CI's `docker-smoke`
+job already proves (images build, migrations apply, `api` publishes no host
+port, `web` reaches `api` by service name, the rate limiter sees real client
+addresses) from the four things no sandbox or CI run could ever have covered
+— Caddy's config at runtime, ACME/TLS issuance, the Caddy → web hop, and the
+`backup` service — and gives each a pass criterion. It also flags two traps
+worth naming before the first attempt: verify DNS resolves from somewhere
+other than the host before starting Caddy (a failed ACME challenge is
+rate-limited at Let's Encrypt, and retrying makes the next hour worse), and
+`curl -sI https://<DOMAIN>/` must be run without `-k`, which would hide
+exactly what the step checks. A backup that has never been restored is not
+treated as a backup. Next action unchanged — a real host, with this file as
+the procedure; close this issue only if every step in it passed, and record
+what failed if one did.
+
 ### KI-055 — `unisender.ru` (all subdomains) fails DNS resolution from this sandbox
 
 Status: open. Discovered: 2026-09-20 (CR-100, ADR-007 session).
@@ -326,6 +357,13 @@ sender verified in the Unisender Go account — see KI-026/KI-042's matching
 Update 2026-10-01: still `SERVFAIL` from this machine (resolver `10.12.0.1`,
 VPN), and `.env`'s `EMAIL_FROM_ADDRESS` is still empty — both on the owner's
 side; KI-026/KI-042's remaining halves wait on them.
+Update 2026-10-05 (CR-210): unchanged as an environment constraint — not
+re-probed this session, since the owner elected to perform the real send
+themselves from a machine with access. What changed is that the missing
+`EMAIL_FROM_ADDRESS` half is now surfaced by `pnpm preflight` and by an
+`api` boot warning instead of being absorbed silently, and
+`deploy/FIRST-DEPLOY.md` §5 requires one real end-to-end send before the
+deploy is considered done.
 
 ### KI-056 — 2GIS REST APIs (Routing/Geocoder) unreachable from this machine's current egress
 
@@ -425,6 +463,16 @@ Workaround: place waypoints closer than 50 km.
 Next action: owner obtains a commercial 2GIS key (Routing + Geocoder) and
 replaces the secret in both places; then check the commercial limit and
 whether the 403 case still needs its own error code.
+Update 2026-10-05 (CR-210): the owner kept the error-mapping half out of
+CR-210's scope, so it is now tracked as its own candidate CR
+(`project-state.md` → Next §5) rather than as a line inside this issue's
+next action. It does not go away with a commercial key: a commercial key
+changes the distance limit, it does not stop 403 being how 2GIS refuses a
+quota or licence violation, and every 403 still renders as «сервис
+недоступен» rather than naming the real cause. Separately, `pnpm preflight`
+now warns when `MAPS_2GIS_API_KEY` is unset, and `env.ts` preprocesses its
+empty-string-from-Compose value to `undefined` like the other optional
+vars (KI-046's fix had missed this one field).
 
 ### KI-082 — The basemap watch probes an undocumented 2GIS tile host
 

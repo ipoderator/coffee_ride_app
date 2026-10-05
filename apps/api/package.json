@@ -10,8 +10,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "node scripts/build.mjs",
     "start": "node dist/server.js",
+    "preflight": "tsx scripts/preflight.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

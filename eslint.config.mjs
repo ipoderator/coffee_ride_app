@@ -69,4 +69,13 @@ export default tseslint.config(
     },
     rules: { 'no-console': 'off' },
   },
+  {
+    // Operator-facing CLI scripts (`scripts/`, e.g. `coverage-check.mjs`,
+    // `apps/api/scripts/preflight.ts`): the console report *is* the output,
+    // not a leftover debug statement — same reasoning as the skill scripts
+    // above. Deliberately not extended to `src/**`, where a log line belongs
+    // in the structured logger (CR-210).
+    files: ['scripts/**/*.{mjs,ts}', 'apps/*/scripts/**/*.{mjs,ts}'],
+    rules: { 'no-console': 'off' },
+  },
 );

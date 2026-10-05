@@ -1,0 +1,15 @@
+{
+  // CR-210. `tsconfig.json`'s `rootDir`/`include` are scoped to `src` because
+  // they drive the build's `outDir`. Operator-facing TypeScript scripts in
+  // `scripts/` are run with `tsx`, never emitted, so they were outside `tsc`
+  // entirely — a type error in one would only surface when an operator ran it,
+  // which for `preflight.ts` means during a deploy. This adds them to
+  // `pnpm typecheck` without touching what `pnpm build` emits.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "allowImportingTsExtensions": true
+  },
+  "include": ["scripts/**/*.ts", "src/**/*.ts"]
+}

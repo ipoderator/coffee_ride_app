@@ -42,7 +42,17 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_BUCKET: z.string().optional(),
-  MAPS_2GIS_API_KEY: z.string().optional(),
+  // Same empty-string-from-Compose preprocessing as REDIS_URL/S3_ENDPOINT
+  // above (KI-046): docker-compose.prod.yml wires this through `${VAR}`
+  // unconditionally, so an unset key arrives as `''`, not as absent. Without
+  // this, the type says "a key is configured" while the value is empty —
+  // `plugins/maps.ts`'s truthiness check happens to degrade correctly anyway,
+  // but anything that tests for `undefined` (CR-210's preflight) would be
+  // wrong. Added CR-210.
+  MAPS_2GIS_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
   // CR-100 (ADR-007). Optional, same "not configured is a degraded mode"
   // shape as MAPS_2GIS_API_KEY/S3_* above: unset means `app.emailProvider`
   // is `null` and auth email-sending producers silently no-op (dev-only
@@ -68,11 +78,13 @@ const envSchema = z.object({
     z.string().email().optional(),
   ),
   EMAIL_FROM_NAME: z.string().default('Coffee Ride'),
-  // CR-079/KI-006. Optional: no error-tracking vendor is decided yet (no ADR
-  // names one) — unset means `app.reportError` (plugins/error-reporting.ts)
-  // only logs structurally. Same empty-string-from-Compose preprocessing as
-  // REDIS_URL/S3_ENDPOINT above (this field is what originally surfaced
-  // KI-046).
+  // CR-079, ADR-030. Optional, and unset is the accepted launch
+  // configuration: no error-tracking vendor is adopted, so `app.reportError`
+  // (plugins/error-reporting.ts) only logs structurally and the host owns log
+  // retention. CR-210's preflight warns when it is unset so that stays a
+  // confirmed choice rather than an unnoticed one. Same empty-string-from-
+  // Compose preprocessing as REDIS_URL/S3_ENDPOINT above (this field is what
+  // originally surfaced KI-046).
   ERROR_REPORTING_WEBHOOK_URL: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z.string().url().optional(),

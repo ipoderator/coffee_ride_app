@@ -46,13 +46,32 @@ service consumes it. In particular:
   (`docker-compose.prod.yml`'s `build.args`), the second is read at runtime by `api`
   only. Also fine to leave unset — every map surface has a documented degraded state
   (KI-031).
-- `ERROR_REPORTING_WEBHOOK_URL` — optional; leave unset until an error-tracking vendor
-  is actually chosen (CR-079/KI-006 — still undecided). Unset means errors are still
-  fully visible via structured stdout logs, just not additionally forwarded anywhere.
+- `ERROR_REPORTING_WEBHOOK_URL` — optional, and unset is the accepted launch
+  configuration (ADR-030): no error-tracking vendor is adopted. Errors stay fully
+  visible via structured stdout logs, just not forwarded anywhere — which makes the
+  host responsible for retaining or shipping those logs, since with no sink configured
+  stdout is the only record of an error and it is lost with the container.
 
 `apps/api` validates this whole set at boot (`env.ts`) and refuses to start rather than
 run with a missing/placeholder production value — a misconfigured `.env` fails loudly
 and immediately, not as a runtime surprise later.
+
+Check the file before deploying, without booting anything:
+
+```sh
+pnpm preflight --env /path/to/your/production.env
+```
+
+`apps/api/scripts/preflight.ts` (CR-210) reports two tiers. An **ERROR** is a
+configuration `loadEnv()` would refuse to boot — fix it first; it exits 1. A
+**WARNING** is configuration that boots, in a deliberately supported degraded mode,
+but that leaves a user-facing feature non-functional in production — most importantly
+`UNISENDER_API_KEY` set with `EMAIL_FROM_ADDRESS` empty, which silently makes email
+verification and password reset dead ends for every real user (KI-026, KI-042).
+Warnings exit 0 on purpose: they are the operator's call, and a check that fails on an
+accepted degraded mode teaches people to ignore it. The same warnings are logged at
+`api` boot. On a first deploy, work through `deploy/FIRST-DEPLOY.md` alongside this
+document.
 
 ## 2. First boot: migrate before serving traffic
 
@@ -131,6 +150,10 @@ not duplicated here. They're driven entirely by `DATABASE_URL`, same as this fil
 migration step, with no assumption about where Postgres runs.
 
 ## Known limitations
+
+A first deploy works through `deploy/FIRST-DEPLOY.md`, which separates what CI's
+`docker-smoke` job already proves from what has never been executed anywhere (Caddy at
+runtime, ACME/TLS, the `backup` service) and gives each a pass criterion.
 
 - None of this procedure has been exercised by an actual `docker build`/`docker compose
 up`/`docker compose run` in any session — Docker's daemon has been unreachable

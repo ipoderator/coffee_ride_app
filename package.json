@@ -18,6 +18,7 @@
     "coverage:baseline": "node scripts/coverage-check.mjs --update",
     "test:e2e": "turbo test:e2e",
     "smoke:docker": "bash deploy/smoke/run.sh",
+    "preflight": "pnpm --filter api preflight",
     "load:test": "bash load/run-all.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

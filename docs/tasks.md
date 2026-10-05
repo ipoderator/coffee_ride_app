@@ -19,18 +19,10 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
-- [x] CR-198 QA `fe0b4c2` P3: in «Перенести заезд» a new date re-judges the
-      pair-dependent time error («текущее время»/«уже прошло») at once instead of on the
-      next «Продолжить». See `docs/changelog.md`.
-- [x] CR-199 Participant notifications show their time in the ride's timezone (was UTC
-      — 13:01 vs the organizer journal's 16:01); additive `Notification.ride.startTimezone`.
-      See `docs/changelog.md`.
-- [x] CR-201 Claude Code harness: eight more project skills (`visual-baselines`,
-      `close-task`, `qa-report-intake`, `ci-triage`, `storybook-check`, `known-issue`,
-      `dependabot-triage`, `terminology-string`) and a skill routing table in
-      `.claude/CLAUDE.md`. See `docs/changelog.md`.
-- [x] CR-202 Token economy: context files cut to snapshots with verbatim archives,
-      targeted-read protocol, path-scoped `.claude/rules`. See `docs/changelog.md`.
+- [x] CR-210 pre-launch configuration readiness: `pnpm preflight` warns on
+      configuration that boots but leaves a feature dead (empty
+      `EMAIL_FROM_ADDRESS` above all), `deploy/FIRST-DEPLOY.md`, ADR-030 on
+      error tracking — done 2026-10-05. See docs/changelog.md
 - [x] CR-200 KI-087: avatar/cover/GPX/stop/route-point deletes ask in `ConfirmDialog`,
       not `window.confirm`; KI-082's misfiled status corrected; KI-088's baseline
       captured from CI (temporary draft PR) — done 2026-10-03. See `docs/changelog.md`.
