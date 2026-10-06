@@ -534,8 +534,39 @@ all via `apps__web>next>postcss`. Next pins `postcss` exactly at 8.4.31 in every
 Impact: low — postcss only runs at `next build` over the repo's own CSS; no
 user-controlled CSS or source map ever reaches it.
 Workaround: none needed at runtime; don't override Next's pin by hand.
-Next action: the Next 16 major upgrade (Dependabot PR #22), as its own planned task
-per the `dependabot-triage` skill; then re-run `pnpm audit --prod`.
+Next action: none for the postcss advisories — resolved, see below.
+Update 2026-10-06 (CR-212): Next 16.3.8 landed, moving postcss 8.4.31 → 8.5.23.
+Three of the four advisories are gone (both `</style>` XSS moderates and the
+source-map path-traversal high). `pnpm audit --prod` now reports exactly one
+high, and it is a different package: `source-map-js@1.2.1` via
+`apps__web>next>postcss>source-map-js` (GHSA-68fv-2mgg-jv7q, event-loop DoS
+through indexed source-map section offsets; patched in 1.2.2). Same impact
+reasoning as before — it only runs at `next build` over the repo's own CSS, no
+user-controlled source map ever reaches it — and the pin is inside Next's own
+dependency tree, so there is nothing to override by hand. Keep this open until
+a Next release bumps it.
+
+### KI-092 — `react-hooks/set-state-in-effect` is a warning, not an error
+
+Status: open. Discovered: 2026-10-06 (CR-212, the Next 16 upgrade).
+Problem: eslint-config-next 16 enables React Compiler's hook rules, among them
+`react-hooks/set-state-in-effect`. This app loads data with the pattern
+"`useEffect` → `setStatus('loading')` → fetch → `setStatus('success')`", which
+the rule reports: 28 violations across 26 files (`DiscoveryList`,
+`RideDetailView`, `RideWorkspace`, `use-public-rides`, every cabinet widget and
+form). Each is a genuine cascading-render smell — the effect renders once,
+then immediately re-renders.
+Impact: low today (the pattern works; the warning does not fail CI), but it is
+28 real findings left unaddressed, and the rule cannot catch a new violation as
+an error while it is dialled down.
+Workaround: `apps/web/eslint.config.mjs` sets the rule to `warn` (CR-212), so
+the violations stay visible in every lint run instead of being silenced with
+per-file disables, without blocking a dependency bump on an app-wide refactor.
+Next action: its own task — move data loading off the "set state in an effect"
+pattern (a `use`/Suspense-based loader, a fetch-on-render hook, or server
+components where the page allows it), file by file; then raise the rule back to
+`error` and delete this entry. Do not add `eslint-disable` lines in the
+meantime.
 
 ### KI-091 — Dependabot's Node 26 / Postgres 18 majors are declined, not merged
 

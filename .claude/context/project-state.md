@@ -27,6 +27,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 CR-208 (Dependabot triage) — paused; `main` is now green, so it can resume. Latest
 work (details in `docs/changelog.md`):
 
+- CR-212 — Next 16.3.8 (Dependabot #22, the last red check): `apps/web` stays on
+  webpack via an explicit `--webpack`, because Turbopack has no `extensionAlias`
+  for `packages/types`' NodeNext `.js` imports (vercel/next.js#82945);
+  eslint-config-next 16's prebuilt flat configs are imported directly, retiring
+  the FlatCompat bridge. New `set-state-in-effect` rule parked at `warn` (KI-092).
 - CR-211 — `/verify-email` sent its single-use token twice: the request lived in a
   `useEffect`, and e2e serves the web app with `pnpm dev`, so React Strict Mode's
   double-invoke burned the link and rendered «Ссылка недействительна» over a
@@ -80,8 +85,9 @@ coverage gate holds. The npm bumps (#8/#9/#23) depended on `ip-address@10.7.3`
 leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
 #26 (seaweedfs) still needs `pnpm smoke:docker` before merging.
 
-CR-210 and CR-211 are committed and pushed; CI run `37314070977` at `b5826fd` is
-green end to end, so the `login-return.spec.ts` failure CR-209 left open is closed.
+CR-210..CR-212 are committed; `main` was green end to end at `5a75455`
+(run `37317030807`). CR-212 supersedes Dependabot PR #22 — close it rather than
+merging, its `package.json` change is a subset that breaks ESLint on its own.
 
 ## Next
 

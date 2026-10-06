@@ -72,6 +72,21 @@ const nextConfig: NextConfig = {
   // (correct for `tsc`/`tsx`, which both understand that convention).
   // Webpack doesn't, by default — `apps/web` is `types`' first bundler-based
   // consumer (CR-011), so this is the first build that needs the alias.
+  //
+  // CR-212: this alias is also why `apps/web` stays on webpack under Next 16,
+  // whose default bundler is Turbopack. Turbopack has no `extensionAlias`
+  // equivalent (vercel/next.js#82945, still open) and `resolveExtensions`
+  // does not substitute — it appends extensions to an extensionless request
+  // rather than rewriting `.js` to `.ts`, verified by building against it:
+  // 144 `Can't resolve './api/*.js'` errors from `packages/types` alone.
+  // Removing the `.js` extensions instead is not an option either: every
+  // workspace package compiles as `module: NodeNext`, which *requires* them
+  // (TS2835). Serving built `dist` output from these packages would fix it
+  // for any bundler, but that reverses ADR-017's deliberate raw-TS exports
+  // and `packages/ui` has no build step at all — an ADR, not an upgrade.
+  // So `dev`/`build` pass `--webpack` explicitly (apps/web/package.json);
+  // webpack remains a supported opt-out in 16, with no announced removal.
+  // Revisit when #82945 lands — then this whole block can go.
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,

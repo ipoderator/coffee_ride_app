@@ -3,3 +3,9 @@ pnpm-lock.yaml
 # drizzle-kit writes these itself (SQL migrations + journal); not Prettier's to
 # reformat, same reasoning as the lockfile above.
 **/migrations/meta/**
+
+# CR-212: Next regenerates apps/web/next-env.d.ts on every `next build`/`next
+# dev` and its own header says not to edit it. Next 16 writes the file with
+# double quotes, which `format:check` then rejects — formatting it would be
+# undone by the next build and redden CI. Excluded rather than reformatted.
+apps/web/next-env.d.ts

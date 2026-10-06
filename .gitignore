@@ -22,3 +22,12 @@ packages/db/backups/
 # live in the Design artifacts `docs/design.md` points to, and these files are
 # large binaries that would bloat history.
 references/
+
+# CR-212: Next 16 writes these itself on `next dev`
+# (node_modules/next/dist/server/lib/generate-agent-files.js) to point coding
+# agents at the installed version's own docs. Machine-generated and re-created
+# on every dev run, and their content is tied to whichever Next version is
+# installed locally — not repository content. This project's own agent
+# instructions live in .claude/ and the root CLAUDE.md.
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
