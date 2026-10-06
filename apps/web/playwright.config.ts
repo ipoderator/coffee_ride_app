@@ -44,6 +44,9 @@ const API_URL = `http://localhost:${process.env.E2E_API_PORT ?? '4000'}`;
 
 export default defineConfig({
   testDir: './e2e',
+  // CR-212: compiles every route before the first browser connects — see the
+  // file for why a first compile under a live page broke e2e on Next 16.
+  globalSetup: './e2e/warmup.setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

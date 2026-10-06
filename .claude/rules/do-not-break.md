@@ -241,3 +241,9 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   in flight. Don't "simplify" the cached promise into a boolean re-entry guard either
   — the second effect run must still subscribe to the first run's promise, or the
   screen sits on the skeleton forever.
+- `apps/web/e2e/warmup.setup.ts` (Playwright `globalSetup`) plus `next.config.ts`'s
+  `onDemandEntries` (CR-212): e2e runs on `next dev`, and under Next 16 a route's
+  first compile, landing while a browser is on the page, reloads that page — on a cold
+  CI runner it reset `critical-journeys.spec.ts` mid-journey on every retry. Don't drop
+  the warm-up or shorten `maxInactiveAge` below an e2e run's length; a spec that
+  "flakes" on the cabinet skeleton is this first, not the session.

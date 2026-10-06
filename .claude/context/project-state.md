@@ -32,6 +32,8 @@ work (details in `docs/changelog.md`):
   for `packages/types`' NodeNext `.js` imports (vercel/next.js#82945);
   eslint-config-next 16's prebuilt flat configs are imported directly, retiring
   the FlatCompat bridge. New `set-state-in-effect` rule parked at `warn` (KI-092).
+  E2E needed a route warm-up (`e2e/warmup.setup.ts`): Next 16's dev server reloads a
+  page when it compiles a route under it, which broke CI's cold runs.
 - CR-211 — `/verify-email` sent its single-use token twice: the request lived in a
   `useEffect`, and e2e serves the web app with `pnpm dev`, so React Strict Mode's
   double-invoke burned the link and rendered «Ссылка недействительна» over a

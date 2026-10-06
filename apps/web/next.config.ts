@@ -55,6 +55,11 @@ const nextConfig: NextConfig = {
   // monorepo — see `apps/web/Dockerfile`.
   output: 'standalone',
   poweredByHeader: false,
+  // CR-212: dev only. Keeps compiled pages for an hour instead of disposing
+  // them after 60 s idle (Next's default, at most 5 kept), so the routes
+  // `e2e/warmup.setup.ts` compiles stay compiled for the whole e2e run — a
+  // re-compile under a live page reloads it on Next 16 (see that file).
+  onDemandEntries: { maxInactiveAge: 60 * 60 * 1000, pagesBufferLength: 100 },
   // CR-212 (Next 16). `next/image` now *errors* on a local `src` carrying a
   // query string unless the path is listed here — in 15 the same case was only
   // a warning, so this surfaced as failing e2e specs (cover upload, the
