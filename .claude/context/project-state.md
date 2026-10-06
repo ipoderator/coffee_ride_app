@@ -87,8 +87,8 @@ coverage gate holds. The npm bumps (#8/#9/#23) depended on `ip-address@10.7.3`
 leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
 #26 (seaweedfs) still needs `pnpm smoke:docker` before merging.
 
-CR-210..CR-212 are committed; `main` was green end to end at `5a75455`
-(run `37317030807`). CR-212 supersedes Dependabot PR #22 — close it rather than
+CR-210..CR-212 are committed; `main` is green end to end at `941c555`
+(run `37425849763`, e2e 60/60, no flaky). CR-212 supersedes Dependabot PR #22 — close it rather than
 merging, its `package.json` change is a subset that breaks ESLint on its own.
 
 ## Next

@@ -22,7 +22,8 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-212 Next 16.3.8: `apps/web` pinned to `--webpack` (Turbopack has no
       `extensionAlias` for `packages/types`' `.js` imports), eslint-config-next
       imported as flat config, `set-state-in-effect` parked at `warn` (KI-092)
-      — done 2026-10-06. See docs/changelog.md
+      — done 2026-10-06; e2e route warm-up for Next 16's dev reloads, CI green
+      at `941c555`. See docs/changelog.md
 - [x] CR-211 `/verify-email` sends its single-use token exactly once — React Strict
       Mode's double-invoke burned the link and showed «Ссылка недействительна» over a
       successful verification, failing e2e `login-return.spec.ts` on `main`
