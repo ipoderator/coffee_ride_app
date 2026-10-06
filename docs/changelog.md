@@ -33,70 +33,10 @@ commit message body or the KI entry, not here — every agent re-reads these ent
 
 ---
 
-Entries before CR-198 (CR-000 through CR-197, 2026-09-09..2026-10-03) were moved
+Entries before CR-205 (CR-000 through CR-204, 2026-09-09..2026-10-03) were moved
 to `docs/changelog-archive/2026.md` (CR-000..CR-076 on 2026-09-20, CR-079..CR-114
-on 2026-09-26, CR-115..CR-170 on 2026-10-02, CR-171..CR-188 on 2026-10-03 by CR-202, CR-190..CR-197 on 2026-10-03 by CR-205),
+on 2026-09-26, CR-115..CR-170 on 2026-10-02, CR-171..CR-188 on 2026-10-03 by CR-202, CR-190..CR-197 on 2026-10-03 by CR-205, CR-198..CR-204 on 2026-10-06 by CR-213),
 per this section's own rule.
-
-## 2026-10-03 — CR-198 — A new reschedule date re-judges the time error at once
-
-Summary: owner QA report `QA_REPORT_fe0b4c2` (P3): «Перенести заезд» → keep the current date and time, give a reason, «Продолжить» → «Это текущее время старта — выберите другое.» under the time. Picking another date with the same time is already a different start, but the error stayed until the next «Продолжить»: the date picker cleared only the date's own error. The time errors «текущее время» and «уже прошло» are about the date+time pair, so a date change now re-judges them against the new pair right away (`pairError`, shared with `validate`): gone when the pair is fine, replaced when it is wrong another way (today at an hour already past → «Это время уже прошло…»). An error about the time field itself («Укажите новое время старта.») stays.
-Files: `apps/web/src/features/organizer/rides/{components/RescheduleRideCard.tsx,reschedule-ride-card.test.tsx}`, `apps/web/src/stories/RescheduleRideCard.stories.tsx` (`NewDateClearsUnchanged`, dark theme). No API, contract, schema or visual change.
-Validation: `web` typecheck + lint clean; web unit 767/767 (three new cases; two fail on the old component); Storybook `RescheduleRideCard` 7/7 with axe.
-Decisions: none.
-
-## 2026-10-03 — CR-199 — Notification times in the ride's timezone
-
-Summary: the same ride update showed 16:01 in the organizer's journal and 13:01 in «Мои заезды → Уведомления»: `NotificationList` formatted `createdAt` with `formatDate`/`formatTime`'s UTC default, while the journal (`UpdateComposer`) reads it in the ride's `startTimezone`. The card had no zone to use — `Notification.ride` was only `{ id, title }`, and the ride's zone travelled only inside `reschedule` (CR-190). `Notification.ride` gained an additive `startTimezone` (the API already selected `rides.startTimezone` for `reschedule`, so no new query or join), and the card's date and time are read in it — every notification type, same wall clock as the organizer.
-Contract: additive — `ride.startTimezone` on every item of `GET /v1/notifications/mine` and `POST /v1/notifications/:id/read` (`docs/api.md`). No schema change, no other backend behavior change.
-Files: `packages/types/src/domain/notification.ts`, `apps/api/src/modules/notifications/{notification-response.schema,notifications.service,notifications.routes.test}.ts`, `apps/web/src/features/participant/notifications/{components/NotificationList.tsx,notifications.test.tsx}`, `apps/web/src/stories/NotificationList.stories.tsx` (new — the list had no story: feed/empty/error/loading/dark), `docs/api.md`.
-Validation: web unit 771/771 (four new cases — MSK not UTC, a date that differs from the UTC date, per-ride zones, every type in one feed — all four fail on the old component); web + api + types typecheck and lint clean; api `notifications`/`registrations`/`rides` 391 passed (5 opt-in live tests skipped), the routes test now asserts `ride.startTimezone`; Storybook `NotificationList` 5/5 with axe.
-Decisions: none.
-
-## 2026-10-03 — CR-201 — More project skills and a skill routing table
-
-Summary: the owner asked which further skills the project could use, then to add them all and write down when each is called, so a run doesn't scan every skill. Eight new project skills encode procedures that kept being re-derived: `visual-baselines` (x86_64 baselines via Docker amd64 or the CI artifact — KI-077/079/084/088), `close-task` (the Context preservation protocol + three-section report in one pass), `qa-report-intake` (QA report → triaged, numbered CRs, as done for QA `13653ed`/`fe0b4c2`), `ci-triage` (failing step → known fix path), `storybook-check` (the owner's "every frontend change through Storybook" rule), `known-issue` (open/resolve a KI with verbatim archiving), `dependabot-triage` (≈20 pending Dependabot branches; majors routed to planned CRs) and `terminology-string` (Russian strings via `packages/ui/src/terminology.ts`). `.claude/CLAUDE.md`'s "Project skills" list became "Skill routing": skills by development-loop step, out-of-task situations, global skills (`simplify`, `code-review`, `engineering:debug`, `engineering:deploy-checklist`, …) and usual chains. The Stop/PreCompact hook's reminder now names `close-task`. An empty stray directory named after a failed brace expansion was removed from `.claude/skills/`.
-Contract: none (harness/docs only; no app code).
-Files: `.claude/skills/{visual-baselines,close-task,qa-report-intake,ci-triage,storybook-check,known-issue,dependabot-triage,terminology-string}/SKILL.md`, `.claude/CLAUDE.md`, `.claude/hooks/context-preservation-reminder.sh`, `.claude/context/project-state.md`, `docs/tasks.md`.
-Validation: all eight skills load in the session's skill list; Prettier clean on the changed Markdown.
-Decisions: none.
-Follow-up: `.claude/rules/testing.md` names `src/stories/a11y-known-issues.ts`, which doesn't exist yet (no axe exception so far) — `storybook-check` creates it on first use.
-
-## 2026-10-03 — CR-202 — Token economy: smaller context files, targeted reads, path-scoped rules
-
-Summary: every task re-read ~380 KB of context (project-state 94 KB, tasks 100 KB, architecture-map 76 KB, changelog 74 KB) plus ~62 KB of always-loaded rules. Now: tasks.md keeps open + 8 recent (rest verbatim in `docs/tasks-archive.md`), architecture-map is a one-line-per-module map (old verbatim in `architecture-map-archive.md`), changelog archives at ~15 entries, CLAUDE.md prescribes slice reads, and 8 of 10 rules load only for matching paths.
-Contract: none (harness/docs only).
-Files: `.claude/CLAUDE.md`, `.claude/rules/*.md` (`paths:` frontmatter; `auth.md` pointer deleted; brand color → `frontend.md`, baseline stall note → `testing.md`), `.claude/commands/{next,status,plan,review}.md`, `.claude/skills/close-task/SKILL.md`, `.claude/agents/*.md` (frontmatter), `.claude/context/architecture-map{,-archive}.md`, `docs/{tasks,tasks-archive}.md`, `docs/changelog.md` + `docs/changelog-archive/2026.md` (CR-171..CR-188 moved).
-Validation: Prettier clean; targeted-read commands run against the real files; `paths:` syntax checked against the Claude Code memory docs.
-Decisions: none.
-Follow-up: `project-state.md` (94 KB, "Current task" alone 42 KB) not yet cut to a snapshot — the rewrite was held while CR-200's uncommitted edits sit in it; draft ready, owner to confirm.
-
-## 2026-10-03 — CR-200 — Deletes ask in the app's dialog (KI-087); KI-082's record; KI-088's baseline
-
-Summary: avatar (×2), cover, GPX, stop and route-point deletes now open `ConfirmDialog` instead of `window.confirm`, as CR-195 did for ride cancellation (KI-087). KI-082's status was KI-084's text filed under it by CR-188 — corrected; the probe host stays an accepted limitation. KI-088: the stale `discovery-map-chromium-linux.png` passed within tolerance, so a temporary draft PR (#28) deleted it to make CI write the x86_64 actual, now the baseline.
-Contract: `packages/ui` terms — `deleteConfirm` → `deleteConfirmTitle`/`deleteConfirmDescription`/`deleteKeep` in `AVATAR_TERMS`, `RIDE_COVER_TERMS`, `RIDE_ROUTE_TERMS`, `STOPS_TERMS`, `ROUTE_POINT_TERMS` (every caller updated); no API change.
-Files: the six forms under `apps/web/src/features/{participant,organizer}/…` and their tests; `apps/web/e2e/{media-uploads,route-points-stops,gpx-route}.spec.ts`; stories `RideWorkspaceSections` (+4) and `AvatarUploadForm` (new); `e2e/visual-regression.spec.ts-snapshots/discovery-map-chromium-linux.png`.
-Validation: web unit 772/772; ui 246/246; web+ui typecheck/lint clean; Storybook 196/196 with axe; e2e upload/route specs 10/10 locally; CI run 37147345143: the actual only drops the expand button over the notice, 57 other e2e passed.
-Decisions: none.
-Follow-up: none — the amd64 Playwright image still stalls here (2 of 7 layers).
-
-## 2026-10-03 — CR-203 — `project-state.md` back to a snapshot
-
-Summary: CR-202's held follow-up, done once CR-200 was committed. `project-state.md` went from 94 KB (its "Current task" alone 42 KB of CR history) to a ~100-line snapshot: phase, latest CRs, area one-liners, Next, key ADRs, open KIs. The old file moved verbatim to `.claude/context/project-state-archive.md`; the "Do not break" invariants moved verbatim to `.claude/context/do-not-break.md`, which the read protocol, `/review` and `close-task` now point to.
-Contract: none (harness/docs only).
-Files: `.claude/context/{project-state,project-state-archive,do-not-break}.md`, `.claude/CLAUDE.md`, `.claude/commands/review.md`, `.claude/skills/close-task/SKILL.md`, `docs/tasks.md`, `docs/tasks-archive.md`.
-Validation: Prettier clean; CLAUDE.md's targeted-read `sed` still matches the new headings.
-Decisions: none.
-Follow-up: none.
-
-## 2026-10-03 — CR-204 — Close the two context gaps CR-202/203 opened
-
-Summary: the owner asked whether targeted reads hurt understanding. Two real gaps: a keyword grep of the "Do not break" list can miss an invariant worded differently from the task, and reading only the last 3 changelog entries misses older decisions about the area being changed. `do-not-break.md` moved to `.claude/rules/` with `paths:` on code/infra/CI, so it loads whole (~3k tokens) whenever such a file is touched; the read protocol gained a step to grep the touched files/module in the changelog and its archive.
-Contract: none (harness/docs only).
-Files: `.claude/rules/do-not-break.md` (moved from `.claude/context/`), `.claude/CLAUDE.md`, `.claude/commands/review.md`, `.claude/skills/close-task/SKILL.md`, `.claude/context/project-state.md`, `docs/tasks.md`, `docs/tasks-archive.md`.
-Validation: Prettier clean; the history grep example run against the real changelog files.
-Decisions: none.
-Follow-up: none.
 
 ## 2026-10-03 — CR-205 — Security audit fixes
 
@@ -164,3 +104,10 @@ Follow-up (second CI run, `37419608399`): `localPatterns` fixed the hard error b
 Follow-up: KI-092 — do the refactor, then raise the rule back to `error`. KI-090 partially resolves: postcss 8.4.31 → 8.5.23 clears three of its four advisories; one high remains, now from `source-map-js@1.2.1` pinned inside Next's own tree (needs ≥1.2.2), so that entry stays open. PR #22 itself should be closed in favour of this commit — its `package.json` change is a subset and would reintroduce the ESLint break.
 Follow-up (third CI run, `37421468828`, and every Dependabot rebase since `ae3b13f`): `critical-journeys.spec.ts`'s organizer journey failed every retry on the cabinet skeleton («Загрузка личного кабинета…»), each attempt at a different step. Not the session: the retry's trace shows `[Fast Refresh] rebuilding` ×3 and then a fresh document (`[HMR] connected`) mid-wizard — e2e serves `next dev`, which compiles each route on its first request, and under Next 16 (webpack) that compile ends in a full page reload while a browser is on the page. A warm local `.next` hid it; a cold worktree showed the same reload locally, just before the first click. Fix: `e2e/warmup.setup.ts` (Playwright `globalSetup`) requests every `src/app` route before any browser connects, and `next.config.ts`'s `onDemandEntries` keeps the compiled pages for the run instead of disposing them after 60 s. An uncommitted `SessionProvider` promise-cache "fix" from the previous session was not the cause and is not part of this. Files: `apps/web/e2e/warmup.setup.ts`, `apps/web/playwright.config.ts`, `apps/web/next.config.ts`. Validation: cold-`.next` worktree, `CI=1` full e2e — 48 passed, the 12 failures all local-only visual cases (missing `*-darwin.png`, the dev DB's ~212 rides); traces show no rebuild/reload outside the specs' own `page.reload()`; web lint 0 errors (28 KI-092 warnings), typecheck, Prettier clean.
 Follow-up: CI run `37425849763` on `941c555` green end to end — e2e 60 passed, none flaky, docker-smoke green. CR-212 closed.
+
+## 2026-10-06 — CR-213 — SessionProvider regression test; security audit run 1 closed out
+
+Summary: CR-212's uncommitted `SessionProvider` change (caching `getCurrentUser()` per attempt) was dropped. A new test (`session-context.test.tsx`) shows the original provider resolves under Strict Mode even when the effect re-runs before a slow response lands; `/me` is idempotent, so the extra dev request is harmless. The cabinet-skeleton CI failure was the Next 16 route reload, fixed by `e2e/warmup.setup.ts`. The test stays as regression coverage. The 2026-10-04 security audit was finished by source reading only (owner: no sub-agents; this host has no sandbox, so the run is marked `incomplete`). No confirmed vulnerability; 4 needs-validation leads (KI-093); 9 claims rejected; stale cover/avatar caching found (KI-094). Artifacts: `~/security-audit-skill/coffeeride/run-1/`. The stale `next16-handoff.md` and `security-audit-handoff.md` were removed.
+Contract: none.
+Files: `apps/web/src/lib/auth/session-context.test.tsx`, `.claude/context/known-issues.md`, `.claude/context/project-state.md`.
+Validation: new test 2/2 (also green against the unchanged provider, which is the point); eslint, Prettier, `tsc --noEmit` for web clean; both audit validators PASS (13 findings, 15 ledger units).

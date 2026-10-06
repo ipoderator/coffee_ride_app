@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-213 SessionProvider regression test (CR-212's candidate fix dropped — not
+      the cause); security audit run 1 closed out, no confirmed vulnerability
+      (KI-093 leads, KI-094 stale cover/avatar cache)
 - [x] CR-212 Next 16.3.8: `apps/web` pinned to `--webpack` (Turbopack has no
       `extensionAlias` for `packages/types`' `.js` imports), eslint-config-next
       imported as flat config, `set-state-in-effect` parked at `warn` (KI-092)

@@ -119,8 +119,11 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    changes the limit, not the mapping.
 6. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
-7. **KI-090** — the Next 16 upgrade (Dependabot #22) as its own task; clears the last
-   `pnpm audit` advisories (Next 15's pinned postcss).
+7. **KI-094** — cover/avatar images stay stale for a year after a replace (unversioned
+   URL + `immutable`); its own CR: version the URL by object key.
+8. **KI-093** — security audit run 1 (CR-213): no confirmed vulnerability; four leads
+   wait on a sandboxed measurement (GPX geometry size, image pixel ceiling) or the
+   production domain/CDN choice (draft cover cache, `__Host-` cookie).
 
 ## Important decisions
 
