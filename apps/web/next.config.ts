@@ -55,6 +55,24 @@ const nextConfig: NextConfig = {
   // monorepo — see `apps/web/Dockerfile`.
   output: 'standalone',
   poweredByHeader: false,
+  // CR-212 (Next 16). `next/image` now *errors* on a local `src` carrying a
+  // query string unless the path is listed here — in 15 the same case was only
+  // a warning, so this surfaced as failing e2e specs (cover upload, the
+  // critical-journeys publish flow) rather than at build time. The query is
+  // the cache-bust the upload forms append (`?v=${Date.now()}`) after a
+  // replace: the API-proxy path for a cover/avatar never changes (ADR-019 —
+  // the bucket stays private, images are only ever served through
+  // `/api/v1/...`), so without it the browser keeps showing the previous
+  // image. Scoped to that proxy prefix, which is the only local path this app
+  // renders images from.
+  // `search` is deliberately omitted rather than set: Next only compares it
+  // when it is defined (`matchLocalPattern` in next/dist/shared/lib), and it
+  // accepts a literal query or `''` (= none) — no wildcard — while the
+  // cache-bust value is `Date.now()`, different on every upload. Omitting it
+  // allows any query on these paths; the pathname stays constrained.
+  images: {
+    localPatterns: [{ pathname: '/api/v1/**' }],
+  },
   async headers() {
     return [{ source: '/((?!api/).*)', headers: SECURITY_HEADERS }];
   },
