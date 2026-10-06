@@ -227,9 +227,13 @@ describe('CoverImageUploadForm', () => {
     expect(getRideCoverStateMock).not.toHaveBeenCalled();
     // The frame's chip is refreshed; the preview keeps the cache-busted URL.
     expect(reread).toHaveBeenCalledTimes(1);
+    // CR-212: asserted as a plain `?v=` rather than the URL-encoded `v%3D` it
+    // used to be. The `<Image>` is `unoptimized` under Next 16, so `src` is the
+    // proxy path itself instead of `/_next/image?url=<encoded>` — the cache
+    // bust this test exists for (KI-085) is unchanged, only its encoding is.
     expect(
       screen.getByRole('img', { name: 'Обложка заезда' }).getAttribute('src'),
-    ).toContain('v%3D');
+    ).toMatch(/\/api\/v1\/rides\/ride-1\/cover\?v=\d+$/);
   });
 
   it('deletes the cover after confirmation', async () => {

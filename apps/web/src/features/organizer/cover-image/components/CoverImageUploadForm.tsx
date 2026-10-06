@@ -210,6 +210,10 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
   const preview = coverImageUrl ? (
     <div className="relative aspect-[16/9] w-full overflow-hidden">
       <Image
+        // CR-212 (Next 16): not optimized — see the same note in
+        // `RideDetailView`. The optimizer would fetch this private cover
+        // server-side without the session cookie and fail the render.
+        unoptimized
         src={apiAssetUrl(coverImageUrl)}
         alt={RIDE_COVER_TERMS.previewAlt}
         fill

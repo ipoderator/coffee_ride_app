@@ -827,6 +827,16 @@ export function RideDetailView({ rideId }: { rideId: string }) {
                 // (ADR-011) — `apiAssetUrl` adds the `/api` same-origin prefix.
                 <div className="relative h-56 w-full overflow-hidden rounded-2xl">
                   <Image
+                    // CR-212 (Next 16): not optimized. The optimizer fetches
+                    // the source itself, server-side and without the viewer's
+                    // session cookie, so a private cover (ADR-019 — served only
+                    // through the authenticated `/api/v1/...` proxy, never a
+                    // public S3 URL) comes back as a non-image and Next fails
+                    // the render outright: "The requested resource isn't a
+                    // valid image ... received null". In 15 the same fetch only
+                    // warned. Nothing is lost — the API already returns a
+                    // processed, size-bounded image (`lib/image-processing.ts`).
+                    unoptimized
                     src={apiAssetUrl(ride.coverImageUrl)}
                     alt=""
                     fill
