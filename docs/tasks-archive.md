@@ -1438,3 +1438,11 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `.claude/CLAUDE.md`. See `docs/changelog.md`.
 - [x] CR-202 Token economy: context files cut to snapshots with verbatim archives,
       targeted-read protocol, path-scoped `.claude/rules`. See `docs/changelog.md`.
+- [x] CR-200 KI-087: avatar/cover/GPX/stop/route-point deletes ask in `ConfirmDialog`,
+      not `window.confirm`; KI-082's misfiled status corrected; KI-088's baseline
+      captured from CI (temporary draft PR) — done 2026-10-03. See `docs/changelog.md`.
+- [x] CR-203 `project-state.md` cut to a ~100-line snapshot; old text verbatim in
+      `project-state-archive.md`, invariants in `do-not-break.md`. See
+      `docs/changelog.md`.
+- [x] CR-204 `do-not-break.md` as a path-scoped rule loaded whole; area history via
+      changelog grep in the read protocol. See `docs/changelog.md`.

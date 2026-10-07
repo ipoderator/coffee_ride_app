@@ -13,3 +13,23 @@ packageExtensions:
   eslint-config-next:
     peerDependencies:
       next: '*'
+# CR-214. drizzle-kit 0.31 still loads configs through the deprecated
+# @esbuild-kit/esm-loader, whose core-utils pins esbuild ^0.18 (GHSA-67mh-4wv8-2f99,
+# fixed in 0.25.0). drizzle-kit itself already depends on esbuild ^0.25.4; lift the
+# esbuild-kit copy to the same range. Drop once drizzle-kit stops using esbuild-kit.
+overrides:
+  '@esbuild-kit/core-utils>esbuild': ^0.25.4
+# CR-214 supply-chain hardening (Semgrep pnpm rules). A version must be a week old
+# before pnpm resolves it — matches Dependabot's `cooldown` so its PRs install; a
+# security fix that can't wait goes into `minimumReleaseAgeExclude`. Transitive deps
+# may only come from the registry, and a version may not lose the trust evidence
+# (provenance/trusted publishing) its predecessors had.
+minimumReleaseAge: 10080
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+# Old releases published before their maintainers adopted provenance, already pinned
+# by integrity in the lockfile (a fresh resolution fails on them otherwise). Exact
+# versions only — a newer release of either still gets the check.
+trustPolicyExclude:
+  - 'eslint-import-resolver-typescript@3.10.1'
+  - 'semver@6.3.1'

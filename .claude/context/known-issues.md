@@ -524,28 +524,6 @@ Next action: owner decision — an optional `next` on `POST /v1/auth/register`
 `apps/web/src/lib/auth/next-path.ts` (that validator would move to `packages/types`)
 and appended to the emailed link; or keep it web-only.
 
-### KI-090 — `pnpm audit` still reports Next 15's pinned postcss 8.4.31
-
-Status: open. Discovered: 2026-10-03 (CR-205).
-Problem: `pnpm audit --prod` lists 4 postcss advisories (2 high: source-map path
-traversal/file read; 2 moderate: `</style>` XSS in stringify, an incomplete fix),
-all via `apps__web>next>postcss`. Next pins `postcss` exactly at 8.4.31 in every
-15.x release (15.5.27 included); Next 16.3.7 moves to 8.5.23.
-Impact: low — postcss only runs at `next build` over the repo's own CSS; no
-user-controlled CSS or source map ever reaches it.
-Workaround: none needed at runtime; don't override Next's pin by hand.
-Next action: none for the postcss advisories — resolved, see below.
-Update 2026-10-06 (CR-212): Next 16.3.8 landed, moving postcss 8.4.31 → 8.5.23.
-Three of the four advisories are gone (both `</style>` XSS moderates and the
-source-map path-traversal high). `pnpm audit --prod` now reports exactly one
-high, and it is a different package: `source-map-js@1.2.1` via
-`apps__web>next>postcss>source-map-js` (GHSA-68fv-2mgg-jv7q, event-loop DoS
-through indexed source-map section offsets; patched in 1.2.2). Same impact
-reasoning as before — it only runs at `next build` over the repo's own CSS, no
-user-controlled source map ever reaches it — and the pin is inside Next's own
-dependency tree, so there is nothing to override by hand. Keep this open until
-a Next release bumps it.
-
 ### KI-092 — `react-hooks/set-state-in-effect` is a warning, not an error
 
 Status: open. Discovered: 2026-10-06 (CR-212, the Next 16 upgrade).
@@ -623,6 +601,21 @@ Workaround: none (a hard refresh on each viewer's side).
 Next action: own CR — version the URL with a hash of the stored object key (e.g.
 `/v1/rides/:id/cover?v=<hash>`), keeping `immutable`; send `private` for a draft ride
 (also closes KI-093 lead 3).
+
+### KI-095 — `braces` (GHSA-vfj7-8cjw-p6xm) has no patched release; one dev-only path remains
+
+Status: open. Discovered: 2026-10-07 (CR-214).
+Problem: `pnpm audit` reports one high: `braces@3.0.3` (stack-exhaustion DoS through
+deeply nested brace patterns; every version vulnerable, "patched: <0.0.0"). CR-214
+dropped the `lint-staged` path (17 uses picomatch); the remaining one is
+`apps__web>eslint-config-next>@next/eslint-plugin-next>fast-glob>micromatch>braces`.
+Every `fast-glob` release uses micromatch, so no override can remove it.
+Impact: low — dev/CI lint only, never in a runtime image; the patterns it expands are
+the repo's own ESLint globs, never user input.
+Workaround: none needed. Don't silence it with `auditConfig.ignoreGhsas` — the audit
+should keep showing it until it is really gone.
+Next action: external — a `braces`/`micromatch` fix, or `@next/eslint-plugin-next`
+dropping `fast-glob`; re-run `pnpm audit` on each Next/eslint-config-next bump (CR-208).
 
 ## Resolved
 

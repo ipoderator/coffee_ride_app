@@ -1,9 +1,13 @@
 version: 2
+# CR-214: wait a week before proposing a freshly published version (security
+# updates are exempt); pnpm's `minimumReleaseAge` enforces the same week.
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       # KI-072: minor/patch only. A major in the group (TypeScript 7 in PR #24,
@@ -25,6 +29,8 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
 
   # CR-082: 'docker' only scans a Dockerfile in the exact `directory` given,
   # no subdirectory recursion — the previous single `directory: '/'` entry
@@ -34,16 +40,22 @@ updates:
     directory: '/apps/web'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: 'docker'
     directory: '/apps/api'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: 'docker'
     directory: '/packages/db'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
 
   # 'docker-compose' is a separate ecosystem from 'docker' (GA Feb 2025) —
   # covers docker-compose.yml/docker-compose.prod.yml's `image:` references
@@ -52,3 +64,5 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7

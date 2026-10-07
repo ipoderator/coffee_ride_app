@@ -1,6 +1,13 @@
 import sharp from 'sharp';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ImageInvalidError, processImage } from './image-processing.js';
+
+// A pass-through spy, so a test can assert which inputs ever reach a libvips
+// decoder (CR-214).
+vi.mock('sharp', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('sharp')>();
+  return { default: vi.fn(actual.default) };
+});
 
 function solidJpeg(width: number, height: number): Promise<Buffer> {
   return sharp({
@@ -29,6 +36,45 @@ describe('processImage', () => {
     // sharp can decode SVG (librsvg) — this asserts the allowlist rejects it
     // even though decoding itself would succeed (ADR-019's XSS reasoning).
     await expect(processImage(svg)).rejects.toThrow(ImageInvalidError);
+  });
+
+  it('never hands a non-JPEG/PNG/WebP file to a decoder (CR-214)', async () => {
+    const gif = await sharp({
+      create: { width: 4, height: 4, channels: 3, background: '#000' },
+    })
+      .gif()
+      .toBuffer();
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    vi.mocked(sharp).mockClear();
+
+    for (const file of [gif, svg]) {
+      await expect(processImage(file)).rejects.toThrow(ImageInvalidError);
+    }
+    expect(sharp).not.toHaveBeenCalled();
+  });
+
+  it('still decodes a file whose signature passes, rejecting a corrupt one', async () => {
+    const corruptPng = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from('not really a png'),
+    ]);
+
+    await expect(processImage(corruptPng)).rejects.toThrow(
+      'The uploaded file could not be read as an image.',
+    );
+  });
+
+  it('accepts a WebP', async () => {
+    const source = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: '#888' },
+    })
+      .webp()
+      .toBuffer();
+
+    const result = await processImage(source);
+
+    expect(result.contentType).toBe('image/webp');
+    expect(result.ext).toBe('webp');
   });
 
   it('resizes an oversized image to fit within 1920x1920, preserving aspect ratio', async () => {

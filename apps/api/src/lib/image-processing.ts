@@ -23,6 +23,21 @@ const ACCEPTED_FORMATS: Record<string, { contentType: string; ext: string }> = {
 // stored image's ratio.
 const MAX_DIMENSION_PX = 1920;
 
+// CR-214: `sharp` auto-detects every format libvips can load (SVG via librsvg,
+// TIFF, HEIF, GIF, …), so without this gate untrusted bytes reached those parsers
+// before the allowlist ran (GHSA-wq5f-xc86-pv6w was a librsvg bug). A signature
+// check is only a pre-filter — the decode below still decides what the file is.
+function hasAcceptedSignature(buffer: Buffer): boolean {
+  const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isPng = buffer
+    .subarray(0, 8)
+    .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const isWebp =
+    buffer.toString('latin1', 0, 4) === 'RIFF' &&
+    buffer.toString('latin1', 8, 12) === 'WEBP';
+  return isJpeg || isPng || isWebp;
+}
+
 export class ImageInvalidError extends Error {}
 
 export interface ProcessedImage {
@@ -40,6 +55,10 @@ export interface ProcessedImage {
  * deliberate privacy side effect of the re-encode, not just a size cap.
  */
 export async function processImage(buffer: Buffer): Promise<ProcessedImage> {
+  if (!hasAcceptedSignature(buffer)) {
+    throw new ImageInvalidError('Only JPEG, PNG, or WebP images are accepted.');
+  }
+
   let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
   try {
     metadata = await sharp(buffer).metadata();

@@ -146,7 +146,10 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   `next.config.ts` skip an `images.remotePatterns` entry (CR-086/CR-097,
   ADR-019); file type is verified by actually decoding with `sharp`, never
   trusted from the client `Content-Type` header (SVG stays excluded — XSS
-  risk); don't reintroduce a direct-URL/trust-the-extension shortcut;
+  risk); don't reintroduce a direct-URL/trust-the-extension shortcut.
+  `processImage`'s JPEG/PNG/WebP signature check runs before the first `sharp`
+  call (CR-214) so no other libvips parser (librsvg, TIFF, HEIF…) ever sees an
+  upload — a pre-filter only, the decode still decides; keep it first;
 - `lib/image-processing.ts`/`lib/image-storage.ts` (relocated from
   `modules/rides/cover-image*.ts`, CR-097) are shared by `rides`, `users`,
   and `organizers` — don't move them back into one capability module, and
@@ -247,3 +250,10 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   CI runner it reset `critical-journeys.spec.ts` mid-journey on every retry. Don't drop
   the warm-up or shorten `maxInactiveAge` below an e2e run's length; a spec that
   "flakes" on the cabinet skeleton is this first, not the session.
+- `pnpm-workspace.yaml`'s supply-chain policies (CR-214): `minimumReleaseAge`
+  (7 days, matching Dependabot's `cooldown`), `blockExoticSubdeps`,
+  `trustPolicy: no-downgrade`, and workflow actions pinned by commit SHA with a
+  `# vX.Y.Z` comment.
+  A version that must land sooner goes into `minimumReleaseAgeExclude`/
+  `trustPolicyExclude` by exact name@version with a reason — don't lower or drop the
+  policy; don't put a floating `@v4` back into a workflow.

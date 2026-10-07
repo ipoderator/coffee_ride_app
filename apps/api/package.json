@@ -36,7 +36,7 @@
     "maps-core": "workspace:*",
     "resilience": "workspace:*",
     "sax": "^1.6.1",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "types": "workspace:*",
     "zod": "^4.6.2"
   },

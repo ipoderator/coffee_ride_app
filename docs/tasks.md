@@ -19,6 +19,11 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-214 Shield scan fixes: `sharp` 0.35.5 + upload signature gate,
+      `source-map-js` 1.2.2 (KI-090 closed), esbuild-kit's esbuild ^0.25.4,
+      `lint-staged` 17; actions pinned by SHA, Dependabot cooldown, pnpm
+      release-age/trust policies; `braces` unfixable upstream (KI-095) — done
+      2026-10-07. See docs/changelog.md
 - [x] CR-213 SessionProvider regression test (CR-212's candidate fix dropped — not
       the cause); security audit run 1 closed out, no confirmed vulnerability
       (KI-093 leads, KI-094 stale cover/avatar cache)
@@ -35,14 +40,6 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       configuration that boots but leaves a feature dead (empty
       `EMAIL_FROM_ADDRESS` above all), `deploy/FIRST-DEPLOY.md`, ADR-030 on
       error tracking — done 2026-10-05. See docs/changelog.md
-- [x] CR-200 KI-087: avatar/cover/GPX/stop/route-point deletes ask in `ConfirmDialog`,
-      not `window.confirm`; KI-082's misfiled status corrected; KI-088's baseline
-      captured from CI (temporary draft PR) — done 2026-10-03. See `docs/changelog.md`.
-- [x] CR-203 `project-state.md` cut to a ~100-line snapshot; old text verbatim in
-      `project-state-archive.md`, invariants in `do-not-break.md`. See
-      `docs/changelog.md`.
-- [x] CR-204 `do-not-break.md` as a path-scoped rule loaded whole; area history via
-      changelog grep in the read protocol. See `docs/changelog.md`.
 - [x] CR-205 Security audit fixes: GPX download `Content-Disposition` (Cyrillic name
       was a 500), web page security headers, single-use token race, fastify and
       transitive bumps, Dependabot alerts on. KI-090 opened. See `docs/changelog.md`.

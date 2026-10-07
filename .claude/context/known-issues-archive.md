@@ -2414,3 +2414,25 @@ progress for 10 min, stopped). A temporary draft PR (#28, `tmp/ki-088-baseline`,
 and deleted, never merged) removed only this PNG, so CI run 37147345143 wrote the x86_64
 actual; it differs from the old baseline only by the expand button no longer covering
 the notice. Committed as the new baseline.
+
+### KI-090 — `pnpm audit` still reports Next 15's pinned postcss 8.4.31
+
+Status: resolved 2026-10-07 (CR-214) — a lockfile refresh (`pnpm update -r source-map-js`) moved every copy, Next's postcss included, to 1.2.2 inside the existing `^1.2.1` range; no override needed.
+Problem: `pnpm audit --prod` lists 4 postcss advisories (2 high: source-map path
+traversal/file read; 2 moderate: `</style>` XSS in stringify, an incomplete fix),
+all via `apps__web>next>postcss`. Next pins `postcss` exactly at 8.4.31 in every
+15.x release (15.5.27 included); Next 16.3.7 moves to 8.5.23.
+Impact: low — postcss only runs at `next build` over the repo's own CSS; no
+user-controlled CSS or source map ever reaches it.
+Workaround: none needed at runtime; don't override Next's pin by hand.
+Next action: none for the postcss advisories — resolved, see below.
+Update 2026-10-06 (CR-212): Next 16.3.8 landed, moving postcss 8.4.31 → 8.5.23.
+Three of the four advisories are gone (both `</style>` XSS moderates and the
+source-map path-traversal high). `pnpm audit --prod` now reports exactly one
+high, and it is a different package: `source-map-js@1.2.1` via
+`apps__web>next>postcss>source-map-js` (GHSA-68fv-2mgg-jv7q, event-loop DoS
+through indexed source-map section offsets; patched in 1.2.2). Same impact
+reasoning as before — it only runs at `next build` over the repo's own CSS, no
+user-controlled source map ever reaches it — and the pin is inside Next's own
+dependency tree, so there is nothing to override by hand. Keep this open until
+a Next release bumps it.
