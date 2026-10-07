@@ -1,6 +1,7 @@
 version: 2
 # CR-214: wait a week before proposing a freshly published version (security
-# updates are exempt); pnpm's `minimumReleaseAge` enforces the same week.
+# updates are exempt). This is the release-age delay; pnpm's `minimumReleaseAge`
+# breaks Dependabot's own resolution (CR-215).
 updates:
   - package-ecosystem: 'npm'
     directory: '/'

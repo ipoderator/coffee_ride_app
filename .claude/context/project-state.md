@@ -30,8 +30,9 @@ work (details in `docs/changelog.md`):
 - CR-214 — Shield scan fixes: `sharp` 0.35.5 (librsvg CVE) plus a JPEG/PNG/WebP
   signature gate so no other libvips parser sees an upload; `source-map-js` 1.2.2
   (KI-090 closed); esbuild-kit's esbuild lifted to ^0.25.4; `lint-staged` 17. Supply
-  chain: actions pinned by SHA, Dependabot `cooldown` 7 d, pnpm `minimumReleaseAge`
-  7 d + `blockExoticSubdeps` + `trustPolicy: no-downgrade`. `braces` has no fix (KI-095).
+  chain: actions pinned by SHA, Dependabot `cooldown` 7 d, pnpm `blockExoticSubdeps`
+  - `trustPolicy: no-downgrade`. `braces` has no fix (KI-095). CR-215 dropped pnpm
+    `minimumReleaseAge` again — it failed every Dependabot npm job.
 - CR-212 — Next 16.3.8 (Dependabot #22, the last red check): `apps/web` stays on
   webpack via an explicit `--webpack`, because Turbopack has no `extensionAlias`
   for `packages/types`' NodeNext `.js` imports (vercel/next.js#82945);
@@ -148,4 +149,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-07 (CR-214)
+2026-10-07 (CR-215)

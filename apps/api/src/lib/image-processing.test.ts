@@ -64,6 +64,22 @@ describe('processImage', () => {
     );
   });
 
+  it('trusts the decoded format over the signature', async () => {
+    // A signature that passes but decodes as something else still fails the
+    // allowlist — the decode, not the magic bytes, decides (do-not-break).
+    const jpeg = await solidJpeg(4, 4);
+    vi.mocked(sharp).mockImplementationOnce(
+      () =>
+        ({
+          metadata: () => Promise.resolve({ format: 'gif' }),
+        }) as unknown as ReturnType<typeof sharp>,
+    );
+
+    await expect(processImage(jpeg)).rejects.toThrow(
+      'Only JPEG, PNG, or WebP images are accepted.',
+    );
+  });
+
   it('accepts a WebP', async () => {
     const source = await sharp({
       create: { width: 10, height: 10, channels: 3, background: '#888' },

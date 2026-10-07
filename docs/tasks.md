@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-215 pnpm `minimumReleaseAge` removed — Dependabot's updater re-resolves
+      the whole tree and failed every npm job on a 6-day-old `next` — done
+      2026-10-07. See docs/changelog.md
 - [x] CR-214 Shield scan fixes: `sharp` 0.35.5 + upload signature gate,
       `source-map-js` 1.2.2 (KI-090 closed), esbuild-kit's esbuild ^0.25.4,
       `lint-staged` 17; actions pinned by SHA, Dependabot cooldown, pnpm

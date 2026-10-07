@@ -250,10 +250,9 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   CI runner it reset `critical-journeys.spec.ts` mid-journey on every retry. Don't drop
   the warm-up or shorten `maxInactiveAge` below an e2e run's length; a spec that
   "flakes" on the cabinet skeleton is this first, not the session.
-- `pnpm-workspace.yaml`'s supply-chain policies (CR-214): `minimumReleaseAge`
-  (7 days, matching Dependabot's `cooldown`), `blockExoticSubdeps`,
-  `trustPolicy: no-downgrade`, and workflow actions pinned by commit SHA with a
-  `# vX.Y.Z` comment.
-  A version that must land sooner goes into `minimumReleaseAgeExclude`/
-  `trustPolicyExclude` by exact name@version with a reason — don't lower or drop the
-  policy; don't put a floating `@v4` back into a workflow.
+- `pnpm-workspace.yaml`'s supply-chain policies (CR-214): `blockExoticSubdeps`,
+  `trustPolicy: no-downgrade` (exceptions by exact name@version in
+  `trustPolicyExclude`, with a reason), Dependabot's 7-day `cooldown`, and workflow
+  actions pinned by commit SHA with a `# vX.Y.Z` comment — don't put a floating `@v4`
+  back. Don't add pnpm `minimumReleaseAge` (CR-215): Dependabot re-resolves the whole
+  tree, so a young locked version fails every npm update job, security ones included.
