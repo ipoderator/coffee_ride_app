@@ -252,7 +252,9 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   "flakes" on the cabinet skeleton is this first, not the session.
 - `pnpm-workspace.yaml`'s supply-chain policies (CR-214): `blockExoticSubdeps`,
   `trustPolicy: no-downgrade` (exceptions by exact name@version in
-  `trustPolicyExclude`, with a reason), Dependabot's 7-day `cooldown`, and workflow
-  actions pinned by commit SHA with a `# vX.Y.Z` comment — don't put a floating `@v4`
-  back. Don't add pnpm `minimumReleaseAge` (CR-215): Dependabot re-resolves the whole
-  tree, so a young locked version fails every npm update job, security ones included.
+  `trustPolicyExclude`, with a reason), Dependabot's 7-day `cooldown` on every
+  ecosystem except npm, and workflow actions pinned by commit SHA with a `# vX.Y.Z`
+  comment — don't put a floating `@v4` back. No pnpm `minimumReleaseAge` (CR-215) and
+  no `cooldown` on Dependabot's npm entry (CR-216): Dependabot runs pnpm with
+  `--config.minimum-release-age` for it, which re-checks the whole lockfile, so a
+  young locked version fails every npm update job, security ones included.

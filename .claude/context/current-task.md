@@ -1,17 +1,16 @@
-# Current task — CR-215: drop pnpm `minimumReleaseAge` — DONE
+# Current task — CR-216: no Dependabot `cooldown` for npm — DONE
 
-Source: owner, 2026-10-07 — "там что-то упало" after CR-214 was pushed (`eadf92f`).
+Source: owner, 2026-10-07 — "бот упал красным" after CR-215 (`fdd188e`); owner chose
+"remove cooldown for npm only".
 
 ## Result
 
-Three Dependabot npm update jobs failed with `ERR_PNPM_NO_MATURE_MATCHING_VERSION`
-(`next`/`eslint-config-next` 16.3.8, 6 days old): Dependabot's updater re-resolves the
-whole tree, and security updates skip `cooldown`, so they would always fail. The
-setting is removed; the Dependabot `cooldown` is the release-age delay.
-`blockExoticSubdeps`/`trustPolicy` stay. `ci` on `eadf92f` failed its coverage gate (`apps/api/src/lib/` 94.48% < 94.77%): the
-signature gate left the post-decode allowlist throw uncovered — a test now reaches it.
+The npm Dependabot job (run 37599372433) still failed: Dependabot runs
+`pnpm update … -r --config.minimum-release-age=10080` to implement `cooldown`, which
+re-checks the whole lockfile (`next`/`eslint-config-next` 16.3.8, 6 days old). The npm
+entry has no `cooldown` now; actions/docker/docker-compose keep 7 days.
 
 ## Validation
 
-Scratch-copy emulation of a Dependabot bump fails with the setting, passes without it;
-frozen install; image-processing 10/10, file at 100%; api tsc/eslint; Prettier.
+Dependabot's exact command in a scratch copy: fails with the flag, resolves without it.
+Prettier.

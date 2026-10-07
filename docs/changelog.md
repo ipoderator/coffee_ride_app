@@ -129,3 +129,12 @@ Files: `pnpm-workspace.yaml`, `.github/dependabot.yml` (comment), `apps/api/src/
 Validation: a scratch copy with the lockfile reproduces the failure on `pnpm --filter web update lucide-react@latest --lockfile-only` with the setting and passes without it; `pnpm install --frozen-lockfile`; image-processing tests 10/10 with `image-processing.ts` at 100% lines/statements; api tsc/eslint; Prettier.
 Decisions: no `minimumReleaseAge` while Dependabot manages npm updates — recorded in `do-not-break.md`.
 Follow-up: watch the next scheduled Dependabot npm run and this push's `ci` go green. Lesson: CR-214 never ran `coverage:check` locally — needs the live stack (S3/Redis flags), so CI was the first measurement.
+
+## 2026-10-07 — CR-216 — No Dependabot `cooldown` for npm
+
+Summary: After CR-215 the npm "Dependabot Updates" job still failed with the same `ERR_PNPM_NO_MATURE_MATCHING_VERSION` (`eslint-config-next` 16.3.8, 6 days old). The job log shows why: for pnpm, Dependabot implements `cooldown` as `pnpm update <dep> --lockfile-only --no-save -r --config.minimum-release-age=10080`, which re-checks the whole lockfile. With npm cooldown on, any manual or security bump younger than the window fails every npm job. The owner chose to drop `cooldown` from the npm entry only; actions/docker/docker-compose keep 7 days.
+Contract: none.
+Files: `.github/dependabot.yml`, `pnpm-workspace.yaml` (comment), `.claude/rules/do-not-break.md`, context files.
+Validation: Dependabot's exact command in a scratch copy with the lockfile — with `--config.minimum-release-age=10080`: `ERR_PNPM_NO_MATURE_MATCHING_VERSION` on `@next/swc-*` 16.3.8; without it: resolves. Prettier.
+Decisions: npm gets no release-age delay while Dependabot + pnpm behave this way. CR-215 had assumed `cooldown` was independent of pnpm's setting; it isn't.
+Follow-up: confirm this push's Dependabot npm run is green. Revisit if Dependabot starts scoping the age check to the updated dependency.

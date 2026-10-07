@@ -24,7 +24,8 @@ overrides:
 # publishing) its predecessors had. No `minimumReleaseAge`: Dependabot's updater
 # re-resolves the whole tree, so any locked version younger than the window failed
 # every npm update job — and security updates, which skip `cooldown` by design, would
-# always fail. Dependabot's `cooldown` delays version updates instead (CR-215).
+# always fail (CR-215). Dependabot's `cooldown` maps to the same pnpm flag, so npm has
+# none either (CR-216).
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 # Old releases published before their maintainers adopted provenance, already pinned

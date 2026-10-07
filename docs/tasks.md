@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-216 Dependabot `cooldown` removed from the npm entry — Dependabot runs
+      pnpm with `--config.minimum-release-age` for it (same failure as CR-215) —
+      done 2026-10-07. See docs/changelog.md
 - [x] CR-215 pnpm `minimumReleaseAge` removed — Dependabot's updater re-resolves
       the whole tree and failed every npm job on a 6-day-old `next` — done
       2026-10-07. See docs/changelog.md

@@ -1,14 +1,14 @@
 version: 2
 # CR-214: wait a week before proposing a freshly published version (security
-# updates are exempt). This is the release-age delay; pnpm's `minimumReleaseAge`
-# breaks Dependabot's own resolution (CR-215).
+# updates are exempt) — every ecosystem except npm. CR-216: for pnpm, Dependabot
+# implements `cooldown` as `pnpm update -r --config.minimum-release-age=…`, which
+# re-checks the whole lockfile, so any locked version younger than the window (a
+# manual or security bump) failed every npm job. No release-age delay for npm.
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
       interval: 'weekly'
-    cooldown:
-      default-days: 7
     open-pull-requests-limit: 5
     groups:
       # KI-072: minor/patch only. A major in the group (TypeScript 7 in PR #24,
