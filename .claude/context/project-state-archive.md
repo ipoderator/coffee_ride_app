@@ -1365,3 +1365,28 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 ## Last updated
 
 2026-10-03 (CR-189..CR-202)
+
+## Archived 2026-10-07 (CR-218) — "Current task" bullets CR-204..CR-211
+
+- CR-211 — `/verify-email` sent its single-use token twice: the request lived in a
+  `useEffect`, and e2e serves the web app with `pnpm dev`, so React Strict Mode's
+  double-invoke burned the link and rendered «Ссылка недействительна» over a
+  verification that had succeeded. The in-flight promise is now cached per token.
+  The API was correct throughout; this closes CR-209's open `login-return.spec.ts`
+  follow-up.
+- CR-210 — pre-launch configuration readiness: a warning tier below `loadEnv()`'s
+  boot refusal (`apps/api/src/preflight.ts`, `pnpm preflight`) for configuration
+  that boots but leaves a feature dead — above all an email key with no verified
+  sender; `deploy/FIRST-DEPLOY.md`; ADR-030 on error tracking.
+- CR-209 — the auth coverage gate reddened `ci` on commits that changed no code:
+  CR-205's token races covered the in-transaction guard only by chance. Two
+  deterministic tests added; baseline untouched.
+- CR-207 — `ToastProvider` clears its pending timers on unmount; an uncleared one
+  fired after jsdom teardown and failed `ci` with every test passing (predates CR-206).
+- CR-206 — the `ponytail` plugin installed globally (user-level, not in this repo); its
+  repo audit applied where risk-free: three unused `apps/web` deps dropped,
+  `formatPriceParts` inlined.
+- CR-205 — security audit fixes: GPX download header, web page security headers,
+  single-use token race, dependency bumps, Dependabot alerts on (KI-090 opened).
+- CR-204 — `do-not-break.md` became a path-scoped rule (loads whole); area history
+  via changelog grep in the read protocol.

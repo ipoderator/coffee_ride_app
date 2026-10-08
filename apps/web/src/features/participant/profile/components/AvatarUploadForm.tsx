@@ -83,10 +83,8 @@ export function AvatarUploadForm({
       const url = isReplace
         ? await replaceAvatar(file)
         : await uploadAvatar(file);
-      // Cache-bust: the path itself never changes (`/v1/users/me/avatar`), so
-      // the browser needs a fresh query param to notice a replaced image —
-      // same reasoning as `CoverImageUploadForm`.
-      setAvatarUrl(`${url}?v=${Date.now()}`);
+      // CR-217: the API's URL already carries `?v=` from the new stored key.
+      setAvatarUrl(url);
       setSuccessMessage(
         isReplace ? AVATAR_TERMS.replaceSuccess : AVATAR_TERMS.uploadSuccess,
       );

@@ -182,6 +182,11 @@ beforeAll(async () => {
     .toBuffer();
 });
 
+// CR-217: image URLs carry `?v=<16-char hash of the stored key>`.
+function versioned(path: string): RegExp {
+  return new RegExp(`^${path}\\?v=[\\w-]{16}$`);
+}
+
 describe('/v1/rides/:id/cover', () => {
   const s3Store = new Map<string, Buffer>();
 
@@ -377,7 +382,9 @@ describe('/v1/rides/:id/cover', () => {
       });
 
       expect(response.statusCode).toBe(201);
-      expect(response.json().coverImageUrl).toBe(`/v1/rides/${rideId}/cover`);
+      expect(response.json().coverImageUrl).toMatch(
+        versioned(`/v1/rides/${rideId}/cover`),
+      );
       expect(sendMock).toHaveBeenCalled();
 
       const stored = [...s3Store.values()][0]!;
@@ -393,7 +400,7 @@ describe('/v1/rides/:id/cover', () => {
         cookies: { session: rawToken },
       });
       expect(detail.json().ride.coverImageUrl).toBe(
-        `/v1/rides/${rideId}/cover`,
+        response.json().coverImageUrl,
       );
 
       await app.close();
@@ -572,7 +579,7 @@ describe('/v1/rides/:id/cover', () => {
       const app = await buildApp(testEnv);
       const { rawToken, rideId } = await registerAndLogin(app);
       const first = multipartFileBody(smallJpeg, 'cover.jpg', 'image/jpeg');
-      await app.inject({
+      const firstUpload = await app.inject({
         method: 'POST',
         url: `/v1/rides/${rideId}/cover`,
         headers: { origin: WEB_ORIGIN, 'content-type': first.contentType },
@@ -591,7 +598,13 @@ describe('/v1/rides/:id/cover', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().coverImageUrl).toBe(`/v1/rides/${rideId}/cover`);
+      expect(response.json().coverImageUrl).toMatch(
+        versioned(`/v1/rides/${rideId}/cover`),
+      );
+      // CR-217 (KI-094): a replace yields a new URL, so no cache keeps the old image.
+      expect(response.json().coverImageUrl).not.toBe(
+        firstUpload.json().coverImageUrl,
+      );
       // Old object deleted, exactly one (the new one) remains.
       expect(s3Store.size).toBe(1);
       await app.close();
@@ -648,11 +661,11 @@ describe('/v1/rides/:id/cover', () => {
   });
 
   describe('GET /v1/rides/:id/cover', () => {
-    it('lets the owner view a draft ride’s cover', async () => {
+    it('lets the owner view a draft ride’s cover, never cached as public', async () => {
       const app = await buildApp(testEnv);
       const { rawToken, rideId } = await registerAndLogin(app);
       const uploaded = multipartFileBody(smallJpeg, 'cover.jpg', 'image/jpeg');
-      await app.inject({
+      const upload = await app.inject({
         method: 'POST',
         url: `/v1/rides/${rideId}/cover`,
         headers: { origin: WEB_ORIGIN, 'content-type': uploaded.contentType },
@@ -668,8 +681,17 @@ describe('/v1/rides/:id/cover', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toBe('image/jpeg');
-      expect(response.headers['cache-control']).toBe(
-        'public, max-age=31536000, immutable',
+      // CR-217 (KI-093): a draft's cover is private, and without the current
+      // `?v=` it revalidates instead of being pinned for a year.
+      expect(response.headers['cache-control']).toBe('private, no-cache');
+
+      const current = await app.inject({
+        method: 'GET',
+        url: upload.json().coverImageUrl,
+        cookies: { session: rawToken },
+      });
+      expect(current.headers['cache-control']).toBe(
+        'private, max-age=31536000, immutable',
       );
       await app.close();
     });
@@ -701,7 +723,7 @@ describe('/v1/rides/:id/cover', () => {
       const app = await buildApp(testEnv);
       const { rawToken, rideId } = await registerAndLogin(app);
       const uploaded = multipartFileBody(smallJpeg, 'cover.jpg', 'image/jpeg');
-      await app.inject({
+      const upload = await app.inject({
         method: 'POST',
         url: `/v1/rides/${rideId}/cover`,
         headers: { origin: WEB_ORIGIN, 'content-type': uploaded.contentType },
@@ -717,10 +739,21 @@ describe('/v1/rides/:id/cover', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: `/v1/rides/${rideId}/cover`,
+        url: upload.json().coverImageUrl,
       });
 
       expect(response.statusCode).toBe(200);
+      expect(response.headers['cache-control']).toBe(
+        'public, max-age=31536000, immutable',
+      );
+
+      // CR-217: a stale or guessed version revalidates.
+      const stale = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/cover?v=stale-version-xx`,
+      });
+      expect(stale.statusCode).toBe(200);
+      expect(stale.headers['cache-control']).toBe('public, no-cache');
       await app.close();
     });
 

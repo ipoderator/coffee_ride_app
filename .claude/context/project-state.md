@@ -24,9 +24,17 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-208 (Dependabot triage) — paused; `main` is now green, so it can resume. Latest
-work (details in `docs/changelog.md`):
+CR-217 + CR-218 — security-review fixes and single-VPS deploy readiness — validated and
+committed (`.claude/settings.json` is the owner's own change, not part of it). Latest work (details in `docs/changelog.md`):
 
+- CR-218 — one VPS for app + Postgres + Redis + S3 (ADR-031):
+  `docker-compose.infra.yml` overlay, `deploy/deploy.sh`,
+  `deploy/production.env.example`; prod compose now passes the email env to `api`
+  (was missing — email dead in prod). Docker smoke on the overlay green locally,
+  incl. backup → restore.
+- CR-217 — token jobs `removeOnFail`, unawaited reset email with no queue,
+  `__Host-session`, 50 MP image cap, `?v=` key-hash cover/avatar URLs (KI-094),
+  stored route geometry capped at 5,000 points (KI-093 closed).
 - CR-214..216 — Shield scan fixes: `sharp` 0.35.5 (librsvg CVE) plus a JPEG/PNG/WebP
   signature gate so no other libvips parser sees an upload; `source-map-js` 1.2.2
   (KI-090 closed); esbuild-kit's esbuild lifted to ^0.25.4; `lint-staged` 17. Supply
@@ -42,28 +50,6 @@ work (details in `docs/changelog.md`):
   the FlatCompat bridge. New `set-state-in-effect` rule parked at `warn` (KI-092).
   E2E needed a route warm-up (`e2e/warmup.setup.ts`): Next 16's dev server reloads a
   page when it compiles a route under it, which broke CI's cold runs.
-- CR-211 — `/verify-email` sent its single-use token twice: the request lived in a
-  `useEffect`, and e2e serves the web app with `pnpm dev`, so React Strict Mode's
-  double-invoke burned the link and rendered «Ссылка недействительна» over a
-  verification that had succeeded. The in-flight promise is now cached per token.
-  The API was correct throughout; this closes CR-209's open `login-return.spec.ts`
-  follow-up.
-- CR-210 — pre-launch configuration readiness: a warning tier below `loadEnv()`'s
-  boot refusal (`apps/api/src/preflight.ts`, `pnpm preflight`) for configuration
-  that boots but leaves a feature dead — above all an email key with no verified
-  sender; `deploy/FIRST-DEPLOY.md`; ADR-030 on error tracking.
-- CR-209 — the auth coverage gate reddened `ci` on commits that changed no code:
-  CR-205's token races covered the in-transaction guard only by chance. Two
-  deterministic tests added; baseline untouched.
-- CR-207 — `ToastProvider` clears its pending timers on unmount; an uncleared one
-  fired after jsdom teardown and failed `ci` with every test passing (predates CR-206).
-- CR-206 — the `ponytail` plugin installed globally (user-level, not in this repo); its
-  repo audit applied where risk-free: three unused `apps/web` deps dropped,
-  `formatPriceParts` inlined.
-- CR-205 — security audit fixes: GPX download header, web page security headers,
-  single-use token race, dependency bumps, Dependabot alerts on (KI-090 opened).
-- CR-204 — `do-not-break.md` became a path-scoped rule (loads whole); area history
-  via changelog grep in the read protocol.
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
@@ -82,6 +68,9 @@ work (details in `docs/changelog.md`):
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-217/CR-218 — committed; first deploy to coffeeride.site in progress; after the push, watch `ci` incl. `docker-smoke` (first CI
+run of the infra overlay).
 
 CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. No
 longer blocked on `main`: both runs at `fd1819b` (CR-209) concluded `success`, so the
@@ -113,7 +102,8 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    code work): a commercial 2GIS key (KI-075); a verified Unisender Go sender in
    `EMAIL_FROM_ADDRESS`, without which password reset and email verification are dead
    ends for real users (KI-026/KI-042/KI-055) — `pnpm preflight` now warns on both;
-   then the first real deployment against `deploy/FIRST-DEPLOY.md` (KI-045).
+   then the first real deployment: `deploy/deploy.sh` on the VPS, checked against
+   `deploy/FIRST-DEPLOY.md` — only Caddy/ACME is unproven (KI-045).
 5. **KI-075's error mapping** — a separate CR the owner kept out of CR-210's scope:
    2GIS's 403 (demo-key distance, and a commercial key's own quota/licence refusals)
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
@@ -121,24 +111,20 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    changes the limit, not the mapping.
 6. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
-7. **KI-094** — cover/avatar images stay stale for a year after a replace (unversioned
-   URL + `immutable`); its own CR: version the URL by object key.
-8. **KI-093** — security audit run 1 (CR-213): no confirmed vulnerability; four leads
-   wait on a sandboxed measurement (GPX geometry size, image pixel ceiling) or the
-   production domain/CDN choice (draft cover cache, `__Host-` cookie).
 
 ## Important decisions
 
-All in `docs/decisions.md` (ADR-001..ADR-030, grep by number). Most load-bearing:
+All in `docs/decisions.md` (ADR-001..ADR-031, grep by number). Most load-bearing:
 ADR-006/013 (auth, DB sessions, single origin, no CORS), ADR-008 (modular monolith),
 ADR-009 (cabinet feature modules), ADR-010/020 (maps adapter + render layer), ADR-011
 (`/v1`, cursor pagination, RFC 9457), ADR-012 (`timestamptz` + ride timezone), ADR-016
-(`packages/resilience`), ADR-024/026 (visual direction, type scale).
+(`packages/resilience`), ADR-024/026 (visual direction, type scale), ADR-031
+(data services on the app host, `docker-compose.infra.yml`).
 
 ## Known limitations
 
-Open KIs (details: `.claude/context/known-issues.md`): KI-045 production manifest never
-run end to end; KI-055/056 Unisender and 2GIS REST unreachable from this machine;
+Open KIs (details: `.claude/context/known-issues.md`): KI-045 Caddy/ACME never run on a
+real host; KI-055/056 Unisender and 2GIS REST unreachable from this machine;
 KI-075 2GIS demo key (≤ 50 km routing); KI-057 light basemap in the dark theme; KI-082
 undocumented tile-probe host (accepted, guarded weekly); KI-095 `braces` has no
 patched release (dev-only lint path); KI-086/089 await owner
@@ -151,4 +137,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-07 (CR-216)
+2026-10-07 (CR-217, CR-218)

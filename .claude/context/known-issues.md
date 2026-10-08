@@ -327,6 +327,14 @@ treated as a backup. Next action unchanged — a real host, with this file as
 the procedure; close this issue only if every step in it passed, and record
 what failed if one did.
 
+Update 2026-10-07 (CR-218, ADR-031): Postgres, Redis and S3 now run on the same
+host from `docker-compose.infra.yml`, deployed by `deploy/deploy.sh`. The smoke
+run layers that overlay and proves the data services start healthy, the bucket
+is created, `/health` reports `db`/`redis`/`s3` all `ok`, and a `backup` dump
+restores into a fresh database. Still unverified: Caddy at runtime, ACME/TLS and
+the Caddy → web hop — only a real host with real DNS can show them
+(`deploy/FIRST-DEPLOY.md` §3).
+
 ### KI-055 — `unisender.ru` (all subdomains) fails DNS resolution from this sandbox
 
 Status: open. Discovered: 2026-09-20 (CR-100, ADR-007 session).
@@ -566,41 +574,6 @@ Next action: Node 26 — revisit once it is the active LTS and `.nvmrc`/`engines
 three Dockerfiles move together as one CR. Postgres 18 — its own CR covering the
 `pg_upgrade`/dump-restore path for the production volume, before touching the image
 tag.
-
-### KI-093 — Security audit run 1: four leads need a sandboxed measurement or a deployment fact
-
-Status: open. Discovered: 2026-10-06 (CR-213, continuing the 2026-10-04 audit).
-Problem: the audit (`~/security-audit-skill/coffeeride/run-1/`, `REPORT.md`,
-`NEEDS-VALIDATION.md`) found no confirmed vulnerability. Four leads remain without
-severity. (1) GPX geometry: no point ceiling on the read path. A 10 MiB upload holds
-~437k points, and every view of `GET /v1/rides/:id/route/geometry` re-serializes all of
-them. (2) `processImage` decodes with no pixel-dimension check, relying on sharp's
-default 268 MP limit. (3) A draft cover is sent `public, immutable`. (4) The `session`
-cookie has no `__Host-` prefix.
-Impact: unknown until measured. (1)/(2) are shared-process CPU/memory; (3)/(4) need a
-shared cache or a sibling host that the repo does not have.
-Workaround: none needed today.
-Next action: the run is `incomplete`. Sub-agents are forbidden and this macOS host has no
-sandbox, so no independent verifier or target execution ran. Validate (1)/(2) with the
-local plans in `NEEDS-VALIDATION.md` on a Linux sandbox or CI. Answer (3)/(4) when the
-production domain/CDN is chosen (KI-045). Two units (secrets redaction, chained sweep)
-were never hunted.
-
-### KI-094 — Cover and avatar images stay stale for a year after replace/delete
-
-Status: open. Discovered: 2026-10-06 (CR-213, during the security audit).
-Problem: `GET /v1/rides/:id/cover`, `/v1/users/me/avatar` and
-`/v1/organizers/:id/avatar` answer `max-age=31536000, immutable` at a URL derived from
-the id alone (`coverImageUrlPath`, `rides.service.ts:426`). The comment at
-`rides.routes.ts:816` assumes each upload gets a new URL; it does not. Only the upload
-forms append `?v=Date.now()`, so the catalogue, ride page and header keep showing the
-old image after a replace — and after a delete, until the cache expires.
-Impact: medium, product-visible — an organizer cannot fix a wrong cover for anyone
-who already saw it.
-Workaround: none (a hard refresh on each viewer's side).
-Next action: own CR — version the URL with a hash of the stored object key (e.g.
-`/v1/rides/:id/cover?v=<hash>`), keeping `immutable`; send `private` for a draft ride
-(also closes KI-093 lead 3).
 
 ### KI-095 — `braces` (GHSA-vfj7-8cjw-p6xm) has no patched release; one dev-only path remains
 

@@ -68,7 +68,8 @@ and outside the critical transaction:
   reached Redis (`NotificationQueueUnavailableError`, CR-142) — an enqueue that timed
   out may still land, so it is logged, not retried inline. A side effect whose direct
   delivery would leak information (the password-reset email's latency) stays
-  queued-only.
+  queued-only; with no queue configured at all it is sent without being awaited
+  (CR-217), so the response still never waits on the provider.
 
 This is what actually satisfies "an error in one area shouldn't take down everything" —
 not a separate deployable service.

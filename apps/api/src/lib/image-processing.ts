@@ -22,6 +22,10 @@ const ACCEPTED_FORMATS: Record<string, { contentType: string; ext: string }> = {
 // consumers crop to their own container via CSS `object-cover`, independent of the
 // stored image's ratio.
 const MAX_DIMENSION_PX = 1920;
+// CR-217 (KI-093): decoding cost scales with pixels, not bytes — a few-KB PNG can
+// declare 16k×16k. 50 MP still admits a 48 MP phone photo (8064×6048). Checked from
+// the header before any full decode, and passed to the decode itself as a backstop.
+export const MAX_INPUT_PIXELS = 50_000_000;
 
 // CR-214: `sharp` auto-detects every format libvips can load (SVG via librsvg,
 // TIFF, HEIF, GIF, …), so without this gate untrusted bytes reached those parsers
@@ -72,8 +76,11 @@ export async function processImage(buffer: Buffer): Promise<ProcessedImage> {
   if (!format) {
     throw new ImageInvalidError('Only JPEG, PNG, or WebP images are accepted.');
   }
+  if ((metadata.width ?? 0) * (metadata.height ?? 0) > MAX_INPUT_PIXELS) {
+    throw new ImageInvalidError('The image has too many pixels.');
+  }
 
-  const resized = await sharp(buffer)
+  const resized = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
     .rotate()
     .resize({
       width: MAX_DIMENSION_PX,

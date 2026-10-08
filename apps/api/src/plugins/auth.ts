@@ -1,13 +1,28 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { users } from 'db/schema';
+import type { Env } from '../env.js';
 import { validateSession } from '../modules/auth/session.js';
 
 // CR-012 (`docs/decisions.md` ADR-013, `.claude/rules/security.md`). Session
 // cookie name centralized here — the one place that both sets (auth.routes.ts)
 // and reads (this plugin) it.
-export const SESSION_COOKIE_NAME = 'session';
+//
+// CR-217 (KI-093): `__Host-` in production. A browser accepts such a cookie only
+// when it is Secure, Path=/ and has no Domain, set by this exact host — so no
+// sibling subdomain can plant or shadow the session. Dev/test keep plain
+// `session`: they run over http://, where a browser refuses a `__Host-` cookie.
+export function sessionCookieName(nodeEnv: Env['NODE_ENV']): string {
+  return nodeEnv === 'production' ? '__Host-session' : 'session';
+}
+
+export function registerSessionCookieName(app: FastifyInstance, env: Env) {
+  app.decorate('sessionCookieName', sessionCookieName(env.NODE_ENV));
+}
 
 declare module 'fastify' {
+  interface FastifyInstance {
+    sessionCookieName: string;
+  }
   interface FastifyRequest {
     // Populated only inside a route guarded by `requireAuth`; `undefined`
     // everywhere else — routes that need it must opt in via the preHandler,
@@ -28,7 +43,7 @@ export async function requireAuth(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const token = request.cookies[SESSION_COOKIE_NAME];
+  const token = request.cookies[request.server.sessionCookieName];
   if (!token) {
     return sendUnauthorized(reply, request.url);
   }
@@ -51,7 +66,7 @@ export async function requireAuth(
  * get). Distinct from `requireAuth`: no route should use both preHandlers together.
  */
 export async function resolveOptionalUser(request: FastifyRequest) {
-  const token = request.cookies[SESSION_COOKIE_NAME];
+  const token = request.cookies[request.server.sessionCookieName];
   if (!token) return;
 
   const app = request.server;

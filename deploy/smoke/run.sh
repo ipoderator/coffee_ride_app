@@ -12,12 +12,17 @@
 #
 # Also asserts `api` publishes no host port (ADR-018 §2: reachable only over
 # the Compose network). Usage: `pnpm smoke:docker` (needs a running Docker).
+#
+# CR-218 (ADR-031): runs with docker-compose.infra.yml layered in, as a deploy
+# does — so it also proves Postgres/Redis/S3 come up and `api` reaches all three
+# (`GET /health`), and that a `backup` dump restores into a fresh database.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
 COMPOSE=(docker compose
   -f docker-compose.prod.yml
+  -f docker-compose.infra.yml
   -f deploy/smoke/docker-compose.smoke.yml
   --env-file deploy/smoke/smoke.env
   --profile migrate)
@@ -38,8 +43,9 @@ trap cleanup EXIT
 echo '==> Building images (api, web, migrate)'
 "${COMPOSE[@]}" build api web migrate
 
-echo '==> Starting Postgres and applying migrations'
-"${COMPOSE[@]}" up -d --wait postgres
+echo '==> Starting Postgres, Redis and S3; creating the bucket; applying migrations'
+"${COMPOSE[@]}" up -d --wait postgres redis s3
+"${COMPOSE[@]}" run --rm s3-init
 "${COMPOSE[@]}" run --rm migrate
 
 echo '==> Starting api and web'
@@ -110,4 +116,43 @@ if ! xff_result="$("${COMPOSE[@]}" exec -T web node -e "$xff_js" 2>&1)"; then
   exit 1
 fi
 echo "OK: $xff_result"
+
+health_js="
+fetch('http://api:4000/health')
+  .then(async (res) => {
+    const body = await res.json();
+    console.log(JSON.stringify(body));
+    const d = body.dependencies;
+    process.exit(body.status === 'ok' && d.db === 'ok' && d.redis === 'ok' && d.s3 === 'ok' ? 0 : 1);
+  })
+  .catch((err) => { console.log('request error: ' + err.message); process.exit(1); });
+"
+echo '==> Checking api reaches Postgres, Redis and S3 (GET /health)'
+if ! health_result="$("${COMPOSE[@]}" exec -T web node -e "$health_js" 2>&1)"; then
+  echo "FAIL: expected every dependency ok, got: $health_result" >&2
+  exit 1
+fi
+echo "OK: $health_result"
+
+echo '==> Backing up with the backup service and restoring into a fresh database'
+"${COMPOSE[@]}" run --rm --no-deps --entrypoint /scripts/backup.sh backup
+"${COMPOSE[@]}" exec -T postgres psql -U coffee_ride -d coffee_ride -qc 'CREATE DATABASE restore_check'
+restore_out="$("${COMPOSE[@]}" run --rm --no-deps \
+  -v "$PWD/packages/db/scripts/restore.sh:/scripts/restore.sh:ro" \
+  --entrypoint sh backup -c '
+    set -eu
+    latest="$(ls -1 /backups/coffee_ride_*.dump | tail -n 1)"
+    target="${DATABASE_URL%/*}/restore_check"
+    DATABASE_URL="$target" bash /scripts/restore.sh "$latest"
+    psql "$target" -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations"
+  ' 2>&1)" || {
+  echo "FAIL: backup/restore round trip: $restore_out" >&2
+  exit 1
+}
+migrations_restored="$(printf '%s\n' "$restore_out" | tail -n 1)"
+if ! [ "$migrations_restored" -gt 0 ] 2>/dev/null; then
+  echo "FAIL: restored database has no migration history: $restore_out" >&2
+  exit 1
+fi
+echo "OK: restored $migrations_restored applied migrations from the dump"
 succeeded=1

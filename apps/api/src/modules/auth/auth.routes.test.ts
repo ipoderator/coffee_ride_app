@@ -449,6 +449,44 @@ describe('POST /v1/auth/login', () => {
     await app.close();
   });
 
+  it('names the cookie __Host-session in production and reads only that name (CR-217)', async () => {
+    // Bypasses loadEnv() on purpose: its production placeholder checks reject the
+    // local test database URL, and only the cookie behavior is under test here.
+    const prodEnv: Env = { ...testEnv, NODE_ENV: 'production' };
+    const app = await buildApp(prodEnv);
+    const { email, password } = await registerTestUser(app);
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password },
+    });
+
+    expect(login.statusCode).toBe(200);
+    const cookie = login.cookies.find((c) => c.name === '__Host-session');
+    expect(cookie).toBeDefined();
+    expect(cookie?.secure).toBe(true);
+    expect(cookie?.path).toBe('/');
+    expect(cookie?.domain).toBeUndefined();
+    expect(sessionCookie(login)).toBeUndefined();
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { '__Host-session': cookie!.value },
+    });
+    expect(me.statusCode).toBe(200);
+
+    const plainName = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: cookie!.value },
+    });
+    expect(plainName.statusCode).toBe(401);
+
+    await app.close();
+  });
+
   it('rejects a wrong password with 401 invalid_credentials', async () => {
     const app = await buildApp(testEnv);
     const { email } = await registerTestUser(app);

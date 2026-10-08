@@ -67,17 +67,25 @@ const envSchema = z.object({
   // Unisender Go is split across data centers (go1/go2) per account — this
   // must match whichever one the account was created on (shown in its
   // dashboard), not a single fixed vendor URL.
-  UNISENDER_API_URL: z
-    .string()
-    .url()
-    .default('https://go1.unisender.ru/ru/transactional/api/v1/'),
+  // CR-218: `docker-compose.prod.yml` passes every variable through, so an unset
+  // one arrives as '' — which must mean "use the default", not fail `.url()`.
+  UNISENDER_API_URL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string()
+      .url()
+      .default('https://go1.unisender.ru/ru/transactional/api/v1/'),
+  ),
   // Must be a sender address verified in the Unisender Go account — no safe
   // universal default exists (account-specific), unlike EMAIL_FROM_NAME.
   EMAIL_FROM_ADDRESS: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z.string().email().optional(),
   ),
-  EMAIL_FROM_NAME: z.string().default('Coffee Ride'),
+  EMAIL_FROM_NAME: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().default('Coffee Ride'),
+  ),
   // CR-079, ADR-030. Optional, and unset is the accepted launch
   // configuration: no error-tracking vendor is adopted, so `app.reportError`
   // (plugins/error-reporting.ts) only logs structurally and the host owns log

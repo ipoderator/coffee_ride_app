@@ -87,7 +87,8 @@ export function AvatarUploadForm({
       const url = isReplace
         ? await replaceOrganizerAvatar(file)
         : await uploadOrganizerAvatar(file);
-      setAvatarUrl(`${url}?v=${Date.now()}`);
+      // CR-217: the API's URL already carries `?v=` from the new stored key.
+      setAvatarUrl(url);
       setSuccessMessage(
         isReplace ? AVATAR_TERMS.replaceSuccess : AVATAR_TERMS.uploadSuccess,
       );

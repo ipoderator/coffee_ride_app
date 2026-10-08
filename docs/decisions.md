@@ -1480,3 +1480,44 @@ Nothing to roll back — this ratifies the current code. Adopting a vendor later
 ADR: either point `ERROR_REPORTING_WEBHOOK_URL` at an ingestion endpoint (no code
 change) or add the SDK behind `plugins/error-reporting.ts`'s existing seam, keeping
 `app.reportError` the single funnel (`.claude/rules/do-not-break.md`).
+
+## ADR-031 — Production data services on the application host, as a Compose overlay
+
+Status: Accepted (2026-10-07, owner decision, CR-218). Settles the hosting question
+ADR-018 and `docker-compose.prod.yml` left open: where Postgres, Redis and S3 run.
+
+### Context
+
+`docker-compose.prod.yml` runs Caddy, `web`, `api`, `migrate` and `backup`, and
+deliberately starts no data service: it expects `DATABASE_URL`/`REDIS_URL`/`S3_*` to
+point at instances provisioned elsewhere. Preparing the first real deploy, the owner
+chose one VPS for everything over managed Postgres/Redis/object storage — the cheapest
+setup at launch volume, and one the owner can operate alone.
+
+### Decision
+
+**Postgres 17, Redis 8 and SeaweedFS (S3) run on the same host, in a separate overlay,
+`docker-compose.infra.yml`, combined with the production file by `deploy/deploy.sh`.**
+
+- The overlay keeps `docker-compose.prod.yml` free of data services, so moving to managed
+  services later means dropping one `-f` and setting three URLs — no edit to the
+  application manifest.
+- No data service publishes a port; only `api`, `migrate` and `backup` reach them, on
+  the Compose network. Every one has a password from `.env` (Redis `requirepass`, S3
+  credentials) — the network is not the only control.
+- Their URLs are derived inside the overlay from the passwords, the same reasoning as
+  `WEB_ORIGIN` from `DOMAIN` (ADR-018): one source, no drift.
+- Redis runs with `noeviction` (an evicted BullMQ key is a lost notification), AOF on.
+- The same images as local development and CI (`postgres:17-alpine`, `redis:8-alpine`,
+  SeaweedFS 4.47 — ADR-025), so CI's `docker-smoke` job exercises this exact overlay,
+  including a backup → restore round trip.
+
+### Consequences
+
+- One host is one failure domain: a lost disk loses the database **and** its backups,
+  which live in a local volume. Off-host copies of `postgres_backups` are the operator's
+  job until a follow-up adds them (recorded in `docs/deployment.md`, not solved here).
+- Resource limits now cover the data services too (Postgres 1 GB, S3 512 MB, Redis
+  256 MB): the stack needs a host with at least 2 vCPU and 4 GB RAM.
+- No rollback concern: nothing changes for a deployment that keeps using
+  `docker-compose.prod.yml` alone with external services.

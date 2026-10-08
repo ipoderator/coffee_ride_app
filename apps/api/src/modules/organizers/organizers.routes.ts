@@ -2,6 +2,10 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  imageCacheControl,
+  imageVersionQuerySchema,
+} from '../../lib/image-url.js';
+import {
   createOrganizerProfileRequestSchema,
   updateOrganizerProfileRequestSchema,
 } from 'types';
@@ -177,19 +181,25 @@ export const organizersRoutes: FastifyPluginAsyncZod = async (app) => {
   // `rides.routes.ts`'s `GET .../cover`).
   app.get(
     '/:id/avatar',
-    { schema: { params: organizerIdParamsSchema } },
+    {
+      schema: {
+        params: organizerIdParamsSchema,
+        querystring: imageVersionQuerySchema,
+      },
+    },
     async (request, reply) => {
-      const { body, contentType } = await getOrganizerAvatarDownload(
+      const { body, contentType, objectKey } = await getOrganizerAvatarDownload(
         app.db,
         app.s3,
         request.params.id,
       );
-      // Every upload gets a fresh random S3 key (never reused, same discipline
-      // `.../cover` follows), so a long/immutable cache is safe with no
-      // cache-busting query param needed by default (ADR-019).
+      // CR-217 (KI-094): immutable only under the current `?v=`.
       return reply
         .status(200)
-        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .header(
+          'Cache-Control',
+          imageCacheControl(objectKey, request.query.v, 'public'),
+        )
         .type(contentType)
         .send(body);
     },

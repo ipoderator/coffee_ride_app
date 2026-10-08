@@ -7,6 +7,7 @@ import {
 } from 'db/schema';
 import type { DbClient } from 'db';
 import type { User } from 'types';
+import { versionedImagePath } from '../../lib/image-url.js';
 import { hashPassword, verifyPassword } from './password.js';
 import {
   EMAIL_VERIFICATION_TOKEN_TTL_MS,
@@ -52,7 +53,9 @@ export function toPublicUser(row: typeof users.$inferSelect): User {
     // CR-097 (KI-023 remainder): always `/v1/users/me/avatar` when set — this
     // type only ever describes the caller's own profile (see `User.avatarUrl`'s
     // own doc comment in `packages/types`).
-    avatarUrl: row.avatarKey ? USER_AVATAR_URL_PATH : null,
+    avatarUrl: row.avatarKey
+      ? versionedImagePath(USER_AVATAR_URL_PATH, row.avatarKey)
+      : null,
     // CR-126.
     profileVisibility: row.profileVisibility,
     distanceWeekKm: row.distanceWeekKm,

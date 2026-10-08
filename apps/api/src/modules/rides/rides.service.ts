@@ -78,6 +78,7 @@ import {
 // computed the same way `organizers.service.ts` computes `OrganizerProfile.
 // avatarUrl`, so this reuses that one function rather than a second copy.
 import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
+import { versionedImagePath } from '../../lib/image-url.js';
 import { getOrganizerJournal } from './organizer-journal.js';
 import {
   CursorError,
@@ -91,6 +92,7 @@ import {
   listRideGroupSummaries,
 } from './ride-groups.service.js';
 import { buildRoutePreview } from './route-preview.js';
+import { simplifyRouteGeometry } from './route-geometry.js';
 import {
   RouteStorageError,
   deleteGpxObject,
@@ -423,8 +425,11 @@ const ROUTE_STORAGE_UNAVAILABLE = () =>
 // computed from the ride id — never the stored S3 key, and never a direct S3
 // URL (the bucket stays private). Exported for `rides.routes.ts` to reuse when
 // building `POST`/`PATCH .../cover`'s response without re-deriving the path.
-export function coverImageUrlPath(rideId: string): string {
-  return `/v1/rides/${rideId}/cover`;
+export function coverImageUrlPath(
+  rideId: string,
+  coverImageKey: string,
+): string {
+  return versionedImagePath(`/v1/rides/${rideId}/cover`, coverImageKey);
 }
 
 export function toPublicRide(row: typeof rides.$inferSelect): Ride {
@@ -433,7 +438,9 @@ export function toPublicRide(row: typeof rides.$inferSelect): Ride {
     organizerId: row.organizerId,
     title: row.title,
     description: row.description,
-    coverImageUrl: row.coverImageKey ? coverImageUrlPath(row.id) : null,
+    coverImageUrl: row.coverImageKey
+      ? coverImageUrlPath(row.id, row.coverImageKey)
+      : null,
     bicycleType: row.bicycleType,
     startsAt: row.startsAt.toISOString(),
     startTimezone: row.startTimezone,
@@ -869,7 +876,7 @@ export async function listPublicRides(
           id: row.organizerId,
           name: row.organizerName,
           avatarUrl: row.organizerAvatarKey
-            ? organizerAvatarUrlPath(row.organizerId)
+            ? organizerAvatarUrlPath(row.organizerId, row.organizerAvatarKey)
             : null,
           rating: summary.rating,
           reviewCount: summary.reviewCount,
@@ -1209,7 +1216,7 @@ export async function getRideForViewer(
       id: row.organizerId,
       name: row.organizerName,
       avatarUrl: row.organizerAvatarKey
-        ? organizerAvatarUrlPath(row.organizerId)
+        ? organizerAvatarUrlPath(row.organizerId, row.organizerAvatarKey)
         : null,
       rating: ratingSummary.rating,
       reviewCount: ratingSummary.reviewCount,
@@ -1953,7 +1960,7 @@ export async function uploadRoute(
         distanceKm: parsed.distanceKm,
         elevationGainMeters: parsed.elevationGainMeters,
         pointCount: parsed.pointCount,
-        geometry: parsed.geometry,
+        geometry: simplifyRouteGeometry(parsed.geometry),
         preview: buildRoutePreview(parsed.geometry),
         updatedBy: userId,
       })
@@ -2037,7 +2044,7 @@ export async function replaceRoute(
       distanceKm: parsed.distanceKm,
       elevationGainMeters: parsed.elevationGainMeters,
       pointCount: parsed.pointCount,
-      geometry: parsed.geometry,
+      geometry: simplifyRouteGeometry(parsed.geometry),
       preview: buildRoutePreview(parsed.geometry),
       updatedAt: new Date(),
       updatedBy: userId,
@@ -2134,7 +2141,7 @@ export async function buildRoute(
     distanceKm: parsed.distanceKm,
     elevationGainMeters: parsed.elevationGainMeters,
     pointCount: parsed.pointCount,
-    geometry: parsed.geometry,
+    geometry: simplifyRouteGeometry(parsed.geometry),
     preview: buildRoutePreview(parsed.geometry),
     updatedBy: userId,
   };
@@ -2360,7 +2367,7 @@ export async function uploadCoverImage(
     })
     .where(eq(rides.id, rideId));
 
-  return { coverImageUrl: coverImageUrlPath(rideId) };
+  return { coverImageUrl: coverImageUrlPath(rideId, key) };
 }
 
 /**
@@ -2416,7 +2423,7 @@ export async function replaceCoverImage(
     // Best-effort — see the function's own doc comment.
   }
 
-  return { coverImageUrl: coverImageUrlPath(rideId) };
+  return { coverImageUrl: coverImageUrlPath(rideId, key) };
 }
 
 /**
@@ -2470,7 +2477,12 @@ export async function getCoverImageDownload(
   s3: S3Handle | null,
   userId: string | null,
   rideId: string,
-): Promise<{ body: Buffer; contentType: string }> {
+): Promise<{
+  body: Buffer;
+  contentType: string;
+  objectKey: string;
+  isPublic: boolean;
+}> {
   const [row] = await db
     .select({
       status: rides.status,
@@ -2500,6 +2512,9 @@ export async function getCoverImageDownload(
     return {
       body: downloaded.body,
       contentType: row.coverImageContentType ?? 'application/octet-stream',
+      objectKey: row.coverImageKey,
+      // KI-093: a draft's cover is the owner's alone — no shared cache may keep it.
+      isPublic: row.status !== 'draft',
     };
   } catch (err) {
     if (err instanceof ImageStorageError) throw COVER_STORAGE_UNAVAILABLE();

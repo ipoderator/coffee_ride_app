@@ -616,6 +616,10 @@ export async function sendVerificationEmail(
  * unavailable. A provider round trip made only for real accounts would turn
  * `/forgot-password`'s response time into an account-existence oracle; the
  * user can request another link once Redis is back.
+ *
+ * CR-217: the same oracle exists with no queue configured at all, so a
+ * Redis-less deployment sends without awaiting the provider — the response
+ * never waits on a round trip only real accounts make.
  */
 export async function sendPasswordResetEmail(
   logger: NotificationLogger,
@@ -628,8 +632,16 @@ export async function sendPasswordResetEmail(
     await enqueueOrDeliver(
       queue,
       (q) => q.add('password_reset_email', { email, resetUrl }),
-      () =>
-        sendEmail(emailProvider, email, passwordResetEmailContent(resetUrl)),
+      async () => {
+        // Reached only with no queue configured: fire and forget (CR-217).
+        void sendEmail(
+          emailProvider,
+          email,
+          passwordResetEmailContent(resetUrl),
+        ).catch((err: unknown) => {
+          logger.error({ err }, 'Failed to send password reset email');
+        });
+      },
       false,
     );
   } catch (err) {

@@ -167,8 +167,32 @@ describe('registerNotificationQueue', () => {
         attempts: expect.any(Number),
         backoff: expect.objectContaining({ type: 'exponential' }),
         removeOnComplete: true,
+        removeOnFail: 200,
       }),
     );
+  });
+
+  it('never keeps a failed token-carrying email job in Redis', async () => {
+    const app = createFakeApp();
+    const env = loadEnv({
+      ...BASE_ENV_SOURCE,
+      REDIS_URL: 'redis://localhost:6379',
+    });
+
+    registerNotificationQueue(app, env);
+    const queue = app.notificationQueue as {
+      add: (name: string, data: unknown) => Promise<void>;
+    };
+    await queue.add('verification_email', { email: 'a@b.c', verifyUrl: 'x' });
+    await queue.add('password_reset_email', { email: 'a@b.c', resetUrl: 'x' });
+
+    for (const name of ['verification_email', 'password_reset_email']) {
+      expect(queueAddMock).toHaveBeenCalledWith(
+        name,
+        expect.anything(),
+        expect.objectContaining({ removeOnComplete: true, removeOnFail: true }),
+      );
+    }
   });
 
   it('wires the worker processor to processNotificationJob with the app db', async () => {

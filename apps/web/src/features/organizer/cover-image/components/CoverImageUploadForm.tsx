@@ -136,10 +136,9 @@ export function CoverImageUploadForm({ rideId }: { rideId: string }) {
       const url = isReplace
         ? await replaceCoverImage(rideId, file)
         : await uploadCoverImage(rideId, file);
-      // Cache-bust: the server response already points at a fresh S3 key, but
-      // the browser/`next/image` may still have the old bytes cached under the
-      // same `/v1/rides/:id/cover` path from before this replace.
-      setCoverImageUrl(`${url}?v=${Date.now()}`);
+      // CR-217: the API's URL already carries `?v=` from the new stored key, so
+      // a replace changes the URL and no cache can serve the old bytes.
+      setCoverImageUrl(url);
       setSuccessMessage(
         isReplace
           ? RIDE_COVER_TERMS.replaceSuccess

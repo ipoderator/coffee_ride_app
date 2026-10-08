@@ -3,12 +3,13 @@
 # stays local development infrastructure only (see its own header comment) —
 # run with: docker compose -f docker-compose.prod.yml up -d --build
 #
-# Deliberately does NOT include Postgres, Redis, or S3/MinIO: where those run
-# in production is still an open decision (docs/architecture.md, ADR-018 "What
-# this does NOT mean"). This file assumes DATABASE_URL/REDIS_URL/S3_* already
-# point at real, reachable endpoints, populated from a real `.env` file
-# alongside this one (standard Compose `${VAR}` substitution — no extra
-# tooling).
+# Deliberately does NOT include Postgres, Redis, or S3: this file assumes
+# DATABASE_URL/REDIS_URL/S3_* already point at real, reachable endpoints,
+# populated from a real `.env` file alongside this one (standard Compose
+# `${VAR}` substitution — no extra tooling). ADR-031 (CR-218) runs them on the
+# same host through a separate overlay, `docker-compose.infra.yml`, which
+# overrides those variables — `deploy/deploy.sh` combines the two files. With
+# managed services instead, use this file alone.
 #
 # Migrations (CR-076): the `migrate` service below is gated behind the
 # `migrate` Compose profile, so a plain `docker compose up` never starts it.
@@ -25,10 +26,19 @@
 # `deploy.restart_policy` is NOT (Swarm-only, silently ignored by `docker
 # compose up`), which is why restart policy is set at the top level instead.
 
+# CR-218: bounded container logs. With no error-reporting sink (ADR-030) stdout
+# is the only record of a 500 — kept, but never allowed to fill the disk.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - '80:80'
       - '443:443'
@@ -60,6 +70,7 @@ services:
         # Guarded by deploy/smoke/run.sh (`pnpm smoke:docker`).
         API_INTERNAL_URL: http://api:4000
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
     depends_on:
@@ -75,6 +86,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       API_PORT: 4000
@@ -101,6 +113,14 @@ services:
       # env.ts's z.string().url().optional() treats an unset/empty value as
       # "not configured", the same degraded mode REDIS_URL/S3_* already use.
       ERROR_REPORTING_WEBHOOK_URL: ${ERROR_REPORTING_WEBHOOK_URL}
+      # CR-218: email (CR-100, ADR-007). Missing before — the preflight read
+      # them from `.env`, but the container never received them, so email
+      # verification and password reset were dead ends in production. Empty
+      # values fall back to env.ts's defaults/"not configured".
+      UNISENDER_API_KEY: ${UNISENDER_API_KEY}
+      UNISENDER_API_URL: ${UNISENDER_API_URL}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
     # No `ports:` — unlike `caddy`, never reachable except from `web` and
     # `caddy` over the compose network (ADR-018 §2).
     deploy:
@@ -137,6 +157,7 @@ services:
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       DATABASE_URL: ${DATABASE_URL}
       BACKUP_DIR: /backups

@@ -2,6 +2,10 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  imageCacheControl,
+  imageVersionQuerySchema,
+} from '../../lib/image-url.js';
+import {
   buildRouteRequestSchema,
   createRideRequestSchema,
   createRoutePointRequestSchema,
@@ -802,22 +806,32 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/:id/cover',
     {
-      schema: { params: rideIdParamsSchema },
+      schema: {
+        params: rideIdParamsSchema,
+        querystring: imageVersionQuerySchema,
+      },
       preHandler: resolveOptionalUser,
     },
     async (request, reply) => {
-      const { body, contentType } = await getCoverImageDownload(
-        app.db,
-        app.s3,
-        request.user?.id ?? null,
-        request.params.id,
-      );
-      // Every upload gets a fresh random S3 key (never reused, same discipline
-      // `.../route` follows), so a long/immutable cache is safe with no cache-
-      // busting query param needed (ADR-019).
+      const { body, contentType, objectKey, isPublic } =
+        await getCoverImageDownload(
+          app.db,
+          app.s3,
+          request.user?.id ?? null,
+          request.params.id,
+        );
+      // CR-217: immutable only under the current `?v=` (KI-094), and `private`
+      // while the ride is a draft only its owner may see (KI-093).
       return reply
         .status(200)
-        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .header(
+          'Cache-Control',
+          imageCacheControl(
+            objectKey,
+            request.query.v,
+            isPublic ? 'public' : 'private',
+          ),
+        )
         .type(contentType)
         .send(body);
     },

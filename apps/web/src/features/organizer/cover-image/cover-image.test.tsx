@@ -206,7 +206,7 @@ describe('CoverImageUploadForm', () => {
     const reread = vi.fn(() =>
       workspaceData({ ride: { coverImageUrl: '/v1/rides/ride-1/cover' } }),
     );
-    replaceCoverImageMock.mockResolvedValue('/v1/rides/ride-1/cover');
+    replaceCoverImageMock.mockResolvedValue('/v1/rides/ride-1/cover?v=new');
 
     render(
       <TestRideWorkspace
@@ -225,15 +225,14 @@ describe('CoverImageUploadForm', () => {
 
     expect(await screen.findByText('Обложка обновлена.')).toBeInTheDocument();
     expect(getRideCoverStateMock).not.toHaveBeenCalled();
-    // The frame's chip is refreshed; the preview keeps the cache-busted URL.
+    // The frame's chip is refreshed; the preview keeps the fresh URL.
     expect(reread).toHaveBeenCalledTimes(1);
-    // CR-212: asserted as a plain `?v=` rather than the URL-encoded `v%3D` it
-    // used to be. The `<Image>` is `unoptimized` under Next 16, so `src` is the
-    // proxy path itself instead of `/_next/image?url=<encoded>` — the cache
-    // bust this test exists for (KI-085) is unchanged, only its encoding is.
+    // CR-217: the version comes from the API's response (`?v=` from the new
+    // stored key), not a client-side timestamp. The `<Image>` is `unoptimized`
+    // under Next 16, so `src` is the proxy path itself (CR-212).
     expect(
       screen.getByRole('img', { name: 'Обложка заезда' }).getAttribute('src'),
-    ).toMatch(/\/api\/v1\/rides\/ride-1\/cover\?v=\d+$/);
+    ).toBe('/api/v1/rides/ride-1/cover?v=new');
   });
 
   it('deletes the cover after confirmation', async () => {

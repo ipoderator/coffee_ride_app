@@ -705,8 +705,8 @@ recent first: other rides with an active registration for this user, `status:
 flag as the one visibility rule here too, rather than a second concept.
 
 GET `/v1/rides/:id/riders/:registrationId/avatar` — the raw image bytes behind that
-`avatarUrl`, same `Cache-Control: private, max-age=31536000, immutable` as
-`/v1/users/me/avatar`. Same access gate as the profile route above; `404
+`avatarUrl`, same `private` caching as `/v1/users/me/avatar` (see "Image URLs and
+caching" below). Same access gate as the profile route above; `404
 avatar_not_found` if the rider has no avatar set.
 
 GET `/v1/rides/:id/waitlist` — **implemented (CR-037)**. Adds a `GET` to the existing
@@ -1005,6 +1005,24 @@ typicalPaceKmh | null, typicalDistanceKm | null, bicycleTypes[] }`, derived from
 organizer's `finished`/`cancelled` rides. `completionPercent` is `null` below 3
 closed rides; pace/distance are medians; `bicycleTypes` is the top two, never `any`.
 Not on the `GET /v1/rides` list.
+
+## Image URLs and caching (CR-217)
+
+Every cover/avatar URL the API returns — `coverImageUrl`, every `avatarUrl`, and the
+upload/replace responses above — is the documented path plus `?v=<version>`, where
+the version is a 16-character hash of the stored object key (`apps/api/src/lib/
+image-url.ts`). A replace stores a new key, so the URL changes exactly when the
+image does; the key itself never leaves the API. Clients use the URL as returned and
+never append their own cache-buster.
+
+The `GET` behind each URL accepts an optional `v` (≤ 64 chars) and sets
+`Cache-Control`:
+
+- `v` equal to the current version → `<visibility>, max-age=31536000, immutable`;
+- `v` missing, stale or guessed → `<visibility>, no-cache` (same bytes, revalidated).
+
+`<visibility>` is `public` for an organizer avatar and a published ride's cover,
+`private` for a draft ride's cover, the user's own avatar and a rider avatar.
 
 ## Health
 

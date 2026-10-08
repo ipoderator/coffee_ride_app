@@ -136,4 +136,17 @@ describe('loadEnv', () => {
       }),
     ).toThrow(/Refusing to start in production[\s\S]*RATE_LIMIT_MAX/);
   });
+
+  it('treats empty email settings as unset, falling back to their defaults (CR-218)', () => {
+    const env = loadEnv({
+      ...BASE_ENV_SOURCE,
+      UNISENDER_API_URL: '',
+      EMAIL_FROM_NAME: '',
+    });
+
+    expect(env.UNISENDER_API_URL).toBe(
+      'https://go1.unisender.ru/ru/transactional/api/v1/',
+    );
+    expect(env.EMAIL_FROM_NAME).toBe('Coffee Ride');
+  });
 });

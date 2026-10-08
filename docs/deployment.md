@@ -1,171 +1,158 @@
 # Deployment
 
-How to run Coffee Ride in production using the artifacts already in this repo:
-`apps/web/Dockerfile`, `apps/api/Dockerfile`, `packages/db/Dockerfile`,
-`docker-compose.prod.yml`, `deploy/Caddyfile` (CR-074/075/076, ADR-018). This is the
-procedure, written once these pieces existed — it has not been exercised by an actual
-`docker compose up` in any session so far (Docker's daemon is unreachable in this
-sandbox, KI-019; see `.claude/context/known-issues.md` KI-043/KI-045). Treat it as
-reviewed, not live-verified, until a real run confirms it.
+How to run Coffee Ride in production. The supported setup (ADR-031, CR-218) is **one
+host** running everything with Docker Compose:
+
+- `docker-compose.prod.yml` — Caddy (TLS, the only public entry point), `web`, `api`,
+  the one-shot `migrate` job and the `backup` loop (CR-074/075/076, ADR-018);
+- `docker-compose.infra.yml` — Postgres 17, Redis 8 and SeaweedFS (S3) on the same
+  host, no published ports, passwords from `.env`;
+- `deploy/deploy.sh` — the whole sequence: build → data services → bucket →
+  migrations → application;
+- `deploy/production.env.example` — every setting, with how to generate it.
+
+CI's `docker-smoke` job (`deploy/smoke/run.sh`) runs this exact pair of files on every
+push: builds the images, brings up Postgres/Redis/S3, applies migrations, requires
+`GET /api/v1/rides` through `web` to answer, `GET /health` to report every dependency
+`ok`, and a `backup` dump to restore into a fresh database. What no CI run can cover —
+Caddy's certificate, the real domain, real email — is in `deploy/FIRST-DEPLOY.md`.
 
 ## Prerequisites
 
-- A host with Docker Engine + Compose v2 (`docker compose`, not the standalone
-  `docker-compose` v1 binary).
-- A DNS `A`/`AAAA` record for the domain you'll deploy under, already pointing at that
-  host — Caddy's automatic TLS (ADR-018) needs this to complete its ACME challenge on
-  first boot.
-- A reachable PostgreSQL instance, a reachable Redis instance, and a reachable
-  S3-compatible object store (real S3, or a self-hosted MinIO). `docker-compose.prod.yml`
-  deliberately does not start any of these itself — where they run is an operator
-  decision ADR-018 explicitly leaves open (see its "What this does NOT mean" section).
-  Redis and S3 are optional at the application level (`apps/api/src/env.ts`,
-  `GET /health`'s `not_configured` state) but every feature that depends on them
-  (async notification delivery, GPX/route file storage) stays degraded without one.
+- A Linux host with at least **2 vCPU, 4 GB RAM, 40 GB disk** (the containers' memory
+  limits add up to ~3 GB), Docker Engine and Compose v2 (`docker compose`).
+- Ports 80 and 443 open to the internet; everything else closed (e.g. `ufw allow
+OpenSSH && ufw allow 80,443/tcp && ufw enable`). No data service publishes a port.
+- A DNS `A`/`AAAA` record for the domain, already pointing at the host — Caddy needs it
+  to pass its ACME challenge on first start. Verify from elsewhere: `dig +short <DOMAIN>`.
+- For real users: a Unisender Go account with a verified sender address (without it,
+  email verification and password reset never arrive — and publishing a ride needs a
+  verified email), and 2GIS keys if maps should work (a demo key refuses routes over
+  50 km, KI-075).
 
 ## 1. Configure `.env`
 
-Copy `.env.example` to `.env` next to `docker-compose.prod.yml` and fill in every value
-for real — `.env.example`'s own comments document what each one is for and which
-service consumes it. In particular:
-
-- `AUTH_SECRET` — generate with `openssl rand -base64 32`. `apps/api` refuses to boot in
-  production with the placeholder `change-me` value (CR-073, `env.ts`'s
-  `PRODUCTION_PLACEHOLDER_CHECKS`).
-- `DOMAIN` / `ACME_EMAIL` — the real hostname from the DNS record above, and a real
-  address for Let's Encrypt's expiry notices. `api`'s `WEB_ORIGIN` (the CSRF
-  Origin/Referer check, ADR-013) is derived from `DOMAIN` inside
-  `docker-compose.prod.yml` itself — don't set `WEB_ORIGIN` independently in `.env`, it's
-  ignored for the `api` service in this file.
-- `DATABASE_URL` / `REDIS_URL` / `S3_*` — point at the real instances from the
-  Prerequisites step. Leaving `REDIS_URL`/`S3_ENDPOINT` empty is a supported degraded
-  boot (KI-046, resolved) — `apps/api` starts fine and `GET /health` reports
-  `not_configured` for that dependency rather than `error`.
-- `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` / `MAPS_2GIS_API_KEY` — separate 2GIS keys
-  per `.claude/rules/maps.md`; the first is baked into the `web` image at build time
-  (`docker-compose.prod.yml`'s `build.args`), the second is read at runtime by `api`
-  only. Also fine to leave unset — every map surface has a documented degraded state
-  (KI-031).
-- `ERROR_REPORTING_WEBHOOK_URL` — optional, and unset is the accepted launch
-  configuration (ADR-030): no error-tracking vendor is adopted. Errors stay fully
-  visible via structured stdout logs, just not forwarded anywhere — which makes the
-  host responsible for retaining or shipping those logs, since with no sink configured
-  stdout is the only record of an error and it is lost with the container.
-
-`apps/api` validates this whole set at boot (`env.ts`) and refuses to start rather than
-run with a missing/placeholder production value — a misconfigured `.env` fails loudly
-and immediately, not as a runtime surprise later.
-
-Check the file before deploying, without booting anything:
+On the host, in the repository checkout:
 
 ```sh
-pnpm preflight --env /path/to/your/production.env
+cp deploy/production.env.example .env
+openssl rand -hex 32   # once per secret: AUTH_SECRET, POSTGRES_PASSWORD, REDIS_PASSWORD, S3_*
 ```
 
-`apps/api/scripts/preflight.ts` (CR-210) reports two tiers. An **ERROR** is a
-configuration `loadEnv()` would refuse to boot — fix it first; it exits 1. A
-**WARNING** is configuration that boots, in a deliberately supported degraded mode,
-but that leaves a user-facing feature non-functional in production — most importantly
-`UNISENDER_API_KEY` set with `EMAIL_FROM_ADDRESS` empty, which silently makes email
-verification and password reset dead ends for every real user (KI-026, KI-042).
-Warnings exit 0 on purpose: they are the operator's call, and a check that fails on an
-accepted degraded mode teaches people to ignore it. The same warnings are logged at
-`api` boot. On a first deploy, work through `deploy/FIRST-DEPLOY.md` alongside this
-document.
+Fill in every value; the file's comments say what each one is for. In particular:
 
-## 2. First boot: migrate before serving traffic
+- `DOMAIN` / `ACME_EMAIL` — `api`'s `WEB_ORIGIN` (the CSRF Origin/Referer check,
+  ADR-013) is derived from `DOMAIN` inside `docker-compose.prod.yml`; never set it
+  separately.
+- Passwords are hex on purpose: the overlay puts them into connection URLs unescaped.
+  `DATABASE_URL`/`REDIS_URL`/`S3_ENDPOINT` stay empty — the overlay derives them.
+- `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` is baked into the `web` image at build time
+  (`build.args`); changing it means rebuilding, which `deploy.sh` always does.
+- `ERROR_REPORTING_WEBHOOK_URL` — optional; unset is the accepted launch configuration
+  (ADR-030). Errors are then only in container logs, which rotate at 5 × 10 MB per
+  container.
 
-Run the one-shot migration job before starting `api`/`web` for the first time:
+`apps/api` validates the configuration at boot (`env.ts`) and refuses to start with a
+missing or placeholder production value. Configuration that boots but leaves a feature
+dead (CR-210's warning tier — above all email without a verified sender) is logged at
+boot with `"preflight":true`; `deploy.sh` prints those lines at the end. To check a
+configuration before deploying, from a development checkout:
+`pnpm preflight --env /path/to/production.env` (fill in the three URL lines first, as
+the overlay would derive them — preflight reads the file, not the overlay).
+
+## 2. Deploy
 
 ```sh
-docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
+deploy/deploy.sh
 ```
 
-This is gated behind the `migrate` Compose profile on purpose (CR-076) — it never runs
-as part of a plain `docker compose up`, and `packages/db/src/migrate.ts` wraps the
-actual migration in a session-level Postgres advisory lock so running it concurrently
-(e.g. from two release pipelines racing) is safe rather than corrupting.
+It refuses to start if a required value is empty, then:
 
-## 3. Start the application
+1. builds the `web`, `api` and `migrate` images — a failed build changes nothing that is
+   running;
+2. starts Postgres, Redis and S3 and waits until each reports healthy;
+3. creates the storage bucket (`s3-init`; a no-op when it exists);
+4. applies migrations (`migrate`, behind the `migrate` profile — never part of a plain
+   `up`, CR-076; `packages/db/src/migrate.ts` holds an advisory lock, so a concurrent
+   run is safe);
+5. starts everything else (`caddy`, `web`, `api`, `backup`) and shows `docker compose ps`.
+
+`caddy` is the only container with host ports. `api` is reachable only from `web` over
+the Compose network (ADR-018 §2): `apps/web/next.config.ts`'s `/api/v1/*` rewrite is
+the one place that routing happens, and its target is a `web` build arg (CR-134).
+
+For the rest of this document, `dc` means
+`docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml`.
+
+## 3. Verify
+
+On a first deploy, work through `deploy/FIRST-DEPLOY.md`. Every deploy:
+
+- `dc exec web wget -qO- http://api:4000/health` — read the JSON body, not the status
+  (always `200`): `db`, `redis` and `s3` must each say `ok`.
+- `https://<DOMAIN>/` loads over a valid certificate; if not, `dc logs caddy`.
+- `dc logs -f api` / `dc logs -f web` — structured JSON; each request carries a `reqId`
+  that is also the `X-Request-Id` response header (CR-079).
+
+## Updating
 
 ```sh
-docker compose -f docker-compose.prod.yml up -d --build
+git pull
+deploy/deploy.sh
 ```
 
-This builds and starts `caddy`, `web`, and `api` (the `migrate` service stays out of a
-plain `up` — see step 2). `caddy` is the only container publishing host ports (`80`/
-`443`); `api` publishes none at all and is reachable only from `web` over the internal
-Compose network (ADR-018 §2) — `apps/web/next.config.ts`'s own `/api/v1/*` rewrite is
-the one place that routing happens. Its target (`API_INTERNAL_URL=http://api:4000`) is a
-`web` **build arg**, not a runtime env var (CR-134): Next resolves rewrites at `next
-build`, so changing it means rebuilding the `web` image (`--build`), never just editing
-the container environment.
-
-Before a release, `pnpm smoke:docker` (`deploy/smoke/run.sh`, also CI's `docker-smoke`
-job) builds these same images from this same file, runs them with a throwaway Postgres
-(Caddy/backup disabled), and requires `GET /api/v1/rides` through `web` to return `200`
-and `api` to publish no host port.
-
-## 4. Verify
-
-- `curl -s https://<DOMAIN>/api/v1/../health` won't resolve through the proxy (Caddy
-  doesn't route `/api/*` — see ADR-018 §2); instead check from inside the Compose
-  network: `docker compose -f docker-compose.prod.yml exec web wget -qO- http://api:4000/health`.
-  `GET /health` always returns `200`; read the JSON body's per-dependency
-  `ok`/`error`/`not_configured` fields (CR-051) rather than the HTTP status to tell a
-  genuinely broken dependency from one that's just not configured.
-- Confirm `https://<DOMAIN>/` loads over a real certificate — Caddy's ACME issuance
-  happens automatically on first request to a hostname it doesn't have a cert for yet;
-  check `docker compose -f docker-compose.prod.yml logs caddy` if it doesn't.
-- `docker compose -f docker-compose.prod.yml logs -f api` / `... logs -f web` — both
-  emit structured (pino, JSON) logs to stdout. Every request/response pair and every
-  reported error carries a `reqId` (CR-079, `apps/api/src/lib/request-id.ts`) that also
-  appears as the `X-Request-Id` response header, so a single request can be traced
-  through the logs even across the Caddy → web → api hop.
-
-## Redeploying / updating
-
-```sh
-docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate   # only if the release adds migrations
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-Always run the `migrate` step before `up -d --build` if the release includes new
-migrations — never rely on application boot to apply them (CR-076's whole point: several
-`api` instances/replicas starting at once must never race a schema migration).
+The same script: it rebuilds, applies any new migrations before the new `api` starts,
+and recreates only containers whose image or configuration changed. Never rely on
+application boot to apply migrations.
 
 ## Rollback
 
-There is no automated down-migration step — Drizzle's generated migrations in
-`packages/db` are forward-only, and none of this repo's tooling generates or runs a
-reverse migration. Rolling back application code to a previous image is safe on its own
-(redeploy the previous tag); rolling back past a migration that changed the schema in a
-way the previous code doesn't expect needs a manually written reverse migration first —
-treat that as its own reviewed change, not a scripted rollback command.
+Drizzle migrations are forward-only. Rolling back application code alone is safe —
+check out the previous commit and run `deploy/deploy.sh`. Rolling back past a migration
+the previous code doesn't understand needs a hand-written reverse migration first,
+reviewed as its own change.
 
 ## Backups
 
-See `docs/database.md` → "Backups" for `packages/db/scripts/backup.sh`/`restore.sh` —
-not duplicated here. They're driven entirely by `DATABASE_URL`, same as this file's
-migration step, with no assumption about where Postgres runs.
+The `backup` service dumps the database (`pg_dump` custom format) into the
+`postgres_backups` volume right after start and then every `BACKUP_INTERVAL_SECONDS`
+(default 24 h), deleting dumps older than `BACKUP_RETENTION_DAYS` (default 14). CI
+restores such a dump on every run. Script details: `docs/database.md` → "Backups".
+
+The dumps live **on the same disk** as the database (ADR-031). Copy them off the host —
+for example a daily cron on the host:
+
+```sh
+docker run --rm -v coffeeride_postgres_backups:/b:ro -v /srv/offsite:/out alpine \
+  sh -c 'cp -n /b/*.dump /out/'
+```
+
+followed by `rsync`/`rclone` of `/srv/offsite` to another machine or object store. (The
+volume name is `<project>_postgres_backups`; the project defaults to the checkout's
+directory name — `docker volume ls` shows it.) Restore:
+
+```sh
+dc run --rm --no-deps -v "$PWD/packages/db/scripts/restore.sh:/restore.sh:ro" \
+  --entrypoint bash backup /restore.sh /backups/coffee_ride_<timestamp>.dump
+```
+
+Uploaded files (covers, avatars, GPX) live in the `s3_data` volume; back it up the same
+way if losing them matters.
+
+## Managed services instead
+
+To use managed Postgres/Redis/S3, drop `-f docker-compose.infra.yml` (edit the
+`COMPOSE` line in `deploy/deploy.sh` and remove its `s3-init` step), and set
+`DATABASE_URL`, `REDIS_URL` and `S3_*` in `.env` to the provider's values. Nothing in
+`docker-compose.prod.yml` changes.
 
 ## Known limitations
 
-A first deploy works through `deploy/FIRST-DEPLOY.md`, which separates what CI's
-`docker-smoke` job already proves from what has never been executed anywhere (Caddy at
-runtime, ACME/TLS, the `backup` service) and gives each a pass criterion.
-
-- None of this procedure has been exercised by an actual `docker build`/`docker compose
-up`/`docker compose run` in any session — Docker's daemon has been unreachable
-  throughout (KI-019, KI-043, KI-045). It's been reviewed against the compose/Dockerfile
-  definitions and, where possible, validated with the equivalent commands run directly
-  on the host (e.g. the migration script's own concurrency safety, CR-076).
-- Caddy's automatic TLS additionally needs a real public DNS record — unverifiable in
-  any sandbox regardless of Docker access.
+- Caddy's certificate issuance needs the real domain and host — no sandbox or CI run
+  covers it (KI-045, `deploy/FIRST-DEPLOY.md` §3).
 - Client IPs through the Caddy → web → api hop (KI-044, resolved CR-145): Caddy
-  overwrites X-Forwarded-For with the client address, Next's rewrite forwards it
-  unchanged, and `api` trusts exactly one private hop (`TRUST_PROXY_HOPS: 1` in
-  `docker-compose.prod.yml`, `apps/api/src/lib/trust-proxy.ts`) — so the per-IP rate
-  limiters key on real clients. `deploy/smoke/run.sh` checks this through the prod
-  images. Keep `api` without `ports:`; see `apps/api/src/env.ts` before changing
-  either.
+  overwrites X-Forwarded-For with the client address, Next's rewrite forwards it, and
+  `api` trusts exactly one private hop (`TRUST_PROXY_HOPS: 1`). `deploy/smoke/run.sh`
+  checks it through the prod images. Keep `api` without `ports:`; see
+  `apps/api/src/env.ts` before changing either.
+- One host is one failure domain (ADR-031): off-host backup copies are an operator task.

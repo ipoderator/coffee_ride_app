@@ -2436,3 +2436,38 @@ reasoning as before — it only runs at `next build` over the repo's own CSS, no
 user-controlled source map ever reaches it — and the pin is inside Next's own
 dependency tree, so there is nothing to override by hand. Keep this open until
 a Next release bumps it.
+
+### KI-093 — Security audit run 1: four leads need a sandboxed measurement or a deployment fact
+
+Status: resolved 2026-10-07 (CR-217) — mitigated in code rather than measured: stored route geometry capped at 5,000 points, `processImage` rejects > 50 MP from the header and sets `limitInputPixels`, a draft cover is `private`, the cookie is `__Host-session` in production; the two never-hunted units (secrets redaction, chained sweep) remain for a future audit run.
+Problem: the audit (`~/security-audit-skill/coffeeride/run-1/`, `REPORT.md`,
+`NEEDS-VALIDATION.md`) found no confirmed vulnerability. Four leads remain without
+severity. (1) GPX geometry: no point ceiling on the read path. A 10 MiB upload holds
+~437k points, and every view of `GET /v1/rides/:id/route/geometry` re-serializes all of
+them. (2) `processImage` decodes with no pixel-dimension check, relying on sharp's
+default 268 MP limit. (3) A draft cover is sent `public, immutable`. (4) The `session`
+cookie has no `__Host-` prefix.
+Impact: unknown until measured. (1)/(2) are shared-process CPU/memory; (3)/(4) need a
+shared cache or a sibling host that the repo does not have.
+Workaround: none needed today.
+Next action: the run is `incomplete`. Sub-agents are forbidden and this macOS host has no
+sandbox, so no independent verifier or target execution ran. Validate (1)/(2) with the
+local plans in `NEEDS-VALIDATION.md` on a Linux sandbox or CI. Answer (3)/(4) when the
+production domain/CDN is chosen (KI-045). Two units (secrets redaction, chained sweep)
+were never hunted.
+
+### KI-094 — Cover and avatar images stay stale for a year after replace/delete
+
+Status: resolved 2026-10-07 (CR-217) — every cover/avatar URL carries `?v=<hash of the object key>` (`lib/image-url.ts`); `immutable` only when `v` matches, else `no-cache`.
+Problem: `GET /v1/rides/:id/cover`, `/v1/users/me/avatar` and
+`/v1/organizers/:id/avatar` answer `max-age=31536000, immutable` at a URL derived from
+the id alone (`coverImageUrlPath`, `rides.service.ts:426`). The comment at
+`rides.routes.ts:816` assumes each upload gets a new URL; it does not. Only the upload
+forms append `?v=Date.now()`, so the catalogue, ride page and header keep showing the
+old image after a replace — and after a delete, until the cache expires.
+Impact: medium, product-visible — an organizer cannot fix a wrong cover for anyone
+who already saw it.
+Workaround: none (a hard refresh on each viewer's side).
+Next action: own CR — version the URL with a hash of the stored object key (e.g.
+`/v1/rides/:id/cover?v=<hash>`), keeping `immutable`; send `private` for a draft ride
+(also closes KI-093 lead 3).

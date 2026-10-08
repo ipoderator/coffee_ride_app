@@ -153,4 +153,41 @@ describe('notification producers while the queue is down (KI-071)', () => {
     expect(provider.send).not.toHaveBeenCalled();
     expect(log.error).toHaveBeenCalledTimes(1);
   });
+
+  it('does not wait on the provider for the password-reset email with no queue', async () => {
+    let finishSend!: () => void;
+    const provider = {
+      send: vi.fn(() => new Promise<void>((resolve) => (finishSend = resolve))),
+    };
+
+    await sendPasswordResetEmail(
+      logger(),
+      null,
+      provider,
+      'rider@example.com',
+      'https://example.com/reset-password?token=t',
+    );
+
+    // Resolved while the provider call is still pending.
+    expect(provider.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'rider@example.com' }),
+    );
+    finishSend();
+  });
+
+  it('logs a failed unqueued password-reset send instead of throwing', async () => {
+    const log = logger();
+    const provider = {
+      send: vi.fn(() => Promise.reject(new Error('provider down'))),
+    };
+
+    await sendPasswordResetEmail(
+      log,
+      null,
+      provider,
+      'rider@example.com',
+      'https://example.com/reset-password?token=t',
+    );
+    await vi.waitFor(() => expect(log.error).toHaveBeenCalledTimes(1));
+  });
 });

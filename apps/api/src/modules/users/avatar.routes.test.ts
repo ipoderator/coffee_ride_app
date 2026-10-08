@@ -134,6 +134,11 @@ beforeAll(async () => {
     .toBuffer();
 });
 
+// CR-217: image URLs carry `?v=<16-char hash of the stored key>`.
+function versioned(path: string): RegExp {
+  return new RegExp(`^${path}\\?v=[\\w-]{16}$`);
+}
+
 describe('/v1/users/me/avatar', () => {
   const s3Store = new Map<string, Buffer>();
 
@@ -288,7 +293,9 @@ describe('/v1/users/me/avatar', () => {
       });
 
       expect(response.statusCode).toBe(201);
-      expect(response.json().avatarUrl).toBe('/v1/users/me/avatar');
+      expect(response.json().avatarUrl).toMatch(
+        versioned('/v1/users/me/avatar'),
+      );
       expect(sendMock).toHaveBeenCalled();
 
       const stored = [...s3Store.values()][0]!;
@@ -301,7 +308,9 @@ describe('/v1/users/me/avatar', () => {
         url: '/v1/auth/me',
         cookies: { session: rawToken },
       });
-      expect(me.json().user.avatarUrl).toBe('/v1/users/me/avatar');
+      expect(me.json().user.avatarUrl).toMatch(
+        versioned('/v1/users/me/avatar'),
+      );
 
       await app.close();
     });
@@ -401,7 +410,9 @@ describe('/v1/users/me/avatar', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().avatarUrl).toBe('/v1/users/me/avatar');
+      expect(response.json().avatarUrl).toMatch(
+        versioned('/v1/users/me/avatar'),
+      );
       // Old key deleted, only the new one remains.
       expect(s3Store.size).toBe(1);
       const stored = [...s3Store.values()][0]!;

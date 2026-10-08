@@ -11,6 +11,7 @@ import type {
 } from 'types';
 import { getOrganizerRatingSummary } from '../reviews/reviews.service.js';
 import { ImageInvalidError, processImage } from '../../lib/image-processing.js';
+import { versionedImagePath } from '../../lib/image-url.js';
 import {
   ImageStorageError,
   deleteImageObject,
@@ -42,7 +43,9 @@ function toPublicOrganizerProfile(
     userId: row.userId,
     name: row.name,
     description: row.description,
-    avatarUrl: row.avatarKey ? organizerAvatarUrlPath(row.id) : null,
+    avatarUrl: row.avatarKey
+      ? organizerAvatarUrlPath(row.id, row.avatarKey)
+      : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -52,8 +55,11 @@ function toPublicOrganizerProfile(
 // identity via `RideOrganizerSummary`, unlike a `Ride`'s draft-gated cover, so
 // this path needs no viewer-visibility check the way `coverImageUrlPath`'s
 // downstream route does.
-export function organizerAvatarUrlPath(organizerId: string): string {
-  return `/v1/organizers/${organizerId}/avatar`;
+export function organizerAvatarUrlPath(
+  organizerId: string,
+  avatarKey: string,
+): string {
+  return versionedImagePath(`/v1/organizers/${organizerId}/avatar`, avatarKey);
 }
 
 const ALREADY_EXISTS = () =>
@@ -315,7 +321,7 @@ export async function uploadOrganizerAvatar(
     })
     .where(eq(organizerProfiles.id, organizerId));
 
-  return { avatarUrl: organizerAvatarUrlPath(organizerId) };
+  return { avatarUrl: organizerAvatarUrlPath(organizerId, key) };
 }
 
 /**
@@ -368,7 +374,7 @@ export async function replaceOrganizerAvatar(
     // Best-effort — see the function's own doc comment.
   }
 
-  return { avatarUrl: organizerAvatarUrlPath(organizerId) };
+  return { avatarUrl: organizerAvatarUrlPath(organizerId, key) };
 }
 
 /**
@@ -419,7 +425,7 @@ export async function getOrganizerAvatarDownload(
   db: DbClient,
   s3: S3Handle | null,
   organizerId: string,
-): Promise<{ body: Buffer; contentType: string }> {
+): Promise<{ body: Buffer; contentType: string; objectKey: string }> {
   const [row] = await db
     .select({
       avatarKey: organizerProfiles.avatarKey,
@@ -437,6 +443,7 @@ export async function getOrganizerAvatarDownload(
     return {
       body: downloaded.body,
       contentType: row.avatarContentType ?? 'application/octet-stream',
+      objectKey: row.avatarKey,
     };
   } catch (err) {
     if (err instanceof ImageStorageError) throw AVATAR_STORAGE_UNAVAILABLE();

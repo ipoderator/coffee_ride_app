@@ -138,3 +138,21 @@ Files: `.github/dependabot.yml`, `pnpm-workspace.yaml` (comment), `.claude/rules
 Validation: Dependabot's exact command in a scratch copy with the lockfile — with `--config.minimum-release-age=10080`: `ERR_PNPM_NO_MATURE_MATCHING_VERSION` on `@next/swc-*` 16.3.8; without it: resolves. Prettier.
 Decisions: npm gets no release-age delay while Dependabot + pnpm behave this way. CR-215 had assumed `cooldown` was independent of pnpm's setting; it isn't.
 Follow-up: confirm this push's Dependabot npm run is green. Revisit if Dependabot starts scoping the age check to the updated dependency.
+
+## 2026-10-07 — CR-217 — Security-review fixes
+
+Summary: `/security-review` on `12f8bf4` found nothing CRITICAL/HIGH/MEDIUM; this fixes the low findings and the KI-093/KI-094 leads. Token-carrying email jobs are `removeOnFail: true`; with no queue the reset email is sent unawaited (no timing oracle). Prod session cookie is `__Host-session`. `processImage` rejects > 50 MP before decoding. Cover/avatar URLs carry `?v=<key hash>`: `immutable` only on a match, draft cover `private`. Stored route geometry is capped at 5,000 points at every writer. Cookie rename logs everyone out once (pre-launch).
+Contract: every `coverImageUrl`/`avatarUrl` gains `?v=…`; image GETs accept `v` and vary `Cache-Control` (`docs/api.md` → "Image URLs and caching"). Web upload forms drop their `?v=Date.now()`.
+Files: `apps/api/src/{app.ts,plugins/auth.ts,lib/image-processing.ts,lib/image-url.ts}`, `modules/{auth,notifications,organizers,registrations,rides,users}/*`, `modules/rides/route-geometry.ts`, 3 web upload forms, tests, `docs/api.md`, `.claude/rules/{do-not-break,resilience}.md`.
+Validation: api 634/634 with live S3/Redis + `coverage:check` green (notifications dipped once — the reset email's direct-send callback had become unreachable; the unawaited send now lives in it); web unit + Storybook 196/196; typecheck/lint; Prettier.
+Decisions: geometry capped on write (Douglas–Peucker after a stride pre-thin), not on read; S3 keeps the original GPX.
+Follow-up: KI-093's two never-hunted audit units (secrets redaction, chained sweep). KI-093, KI-094 closed.
+
+## 2026-10-07 — CR-218 — Single-VPS deploy readiness
+
+Summary: Owner chose one VPS for app + Postgres + Redis + S3 (ADR-031). New `docker-compose.infra.yml` overlay (postgres 17, redis 8 with password/AOF/noeviction, SeaweedFS + `s3-init`, no ports, healthchecks, derived URLs) keeps `docker-compose.prod.yml` data-service-free. `deploy/deploy.sh` runs build → data services `--wait` → bucket → migrate → up and prints preflight warnings. Found and fixed: prod compose never passed the Unisender/email env to `api` (email dead in prod); empty optional email env now falls back to defaults. Log rotation on all services.
+Contract: none (deployment only).
+Files: `docker-compose.{prod,infra}.yml`, `deploy/{deploy.sh,production.env.example,FIRST-DEPLOY.md}`, `deploy/smoke/*`, `apps/api/src/env.ts`(+test), `docs/{deployment,decisions}.md`, `.claude/rules/do-not-break.md`.
+Validation: `pnpm smoke:docker` on the overlay green locally — `/health` db/redis/s3 `ok`, backup → restore of 26 migrations; `docker compose config`; env tests. Not yet run in CI.
+Decisions: ADR-031 (one host = one failure domain; off-host backup copies are an operator task).
+Follow-up: first real deploy per `deploy/FIRST-DEPLOY.md` — Caddy/ACME is the only never-executed part (KI-045).

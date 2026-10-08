@@ -6,12 +6,19 @@ repository's deployment artifacts are in two very different states of confidence
 the procedure document reads the same either way:
 
 - **Smoke-proven** — exercised on every CI run by `deploy/smoke/run.sh` (job
-  `docker-smoke`): the images build, migrations apply, `api` starts with no published
-  host port, `web` reaches `api` by service name, and the rate limiter sees real client
-  addresses through the proxy hop.
+  `docker-smoke`), which layers the same `docker-compose.infra.yml` overlay the server
+  uses (ADR-031): the images build, Postgres/Redis/S3 start healthy, the bucket is
+  created, migrations apply, `api` starts with no published host port and reports
+  `db`/`redis`/`s3` all `ok`, `web` reaches `api` by service name, the rate limiter sees
+  real client addresses through the proxy hop, and a `backup` dump restores into a fresh
+  database.
 - **Never executed** — needs a real host with real public DNS, so no sandbox or CI run
   could ever have covered it: Caddy's config at runtime, ACME/TLS issuance, the
-  Caddy → web hop, and the `backup` service.
+  Caddy → web hop, and the `backup` service's own interval loop on a long-running host.
+
+Below, `dc` means
+`docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml` (as in
+`docs/deployment.md`), run from the checkout.
 
 Work top to bottom. Each step says what to run and what counts as a pass. Nothing here
 is optional on a first deploy — the point of the list is that the never-executed parts
@@ -19,7 +26,9 @@ get looked at deliberately instead of being assumed to work because the YAML par
 
 ## 0. Before touching the host
 
-- [ ] `pnpm preflight --env /path/to/your/production.env`
+- [ ] `.env` in the checkout is filled from `deploy/production.env.example`, and
+      `pnpm preflight --env /path/to/your/production.env` passes (fill in the three URL
+      lines as the overlay would derive them — preflight reads the file, not the overlay).
 
   Reports two tiers (`apps/api/scripts/preflight.ts`). An **ERROR** means `apps/api`
   would refuse to boot — a required value is missing, malformed, or still a local-dev
@@ -42,26 +51,22 @@ get looked at deliberately instead of being assumed to work because the YAML par
   that does not resolve yet, or resolves elsewhere, produces a failed challenge and a
   rate-limited retry at Let's Encrypt — not an error message on the deploy command.
 
-- [ ] Postgres, and (if configured) Redis and the S3 store, are reachable **from this
-      host** — not just "provisioned". `docker-compose.prod.yml` starts none of them
-      (ADR-018).
+- [ ] The host has enough disk for Postgres, the S3 store and 14 days of dumps on one
+      volume set (ADR-031: one host is one failure domain), and ports 80/443 are open.
 
-## 1. Migrate before serving traffic
+## 1–2. Deploy
 
-- [ ] `docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate`
+- [ ] `deploy/deploy.sh`
 
-  Pass: exits 0. Smoke-proven — this exact service builds and applies migrations in CI.
-  Run it before `up`, every time the release adds migrations, and never rely on
-  application boot to apply them (CR-076).
+  Pass: exits 0. It builds the images, starts Postgres/Redis/S3 and waits for them to be
+  healthy, ensures the bucket, applies migrations before the application starts (never
+  on application boot, CR-076), then starts everything and prints `dc ps`. Every step but
+  the last is smoke-proven.
 
-## 2. Start
-
-- [ ] `docker compose -f docker-compose.prod.yml up -d --build`
-- [ ] `docker compose -f docker-compose.prod.yml ps` — `caddy`, `web`, `api`, `backup`
-      all `running`.
-
-  Partly smoke-proven: `api`/`web`/`migrate` are covered, `caddy` and `backup` are not
-  started in the smoke run at all.
+- [ ] `dc ps` — `postgres`, `redis`, `s3` `healthy`; `caddy`, `web`, `api`, `backup`
+      `running`. `caddy` is not started in the smoke run at all.
+- [ ] Read any `Configuration warnings from api` the script printed — they must match
+      step 0's preflight warnings and nothing else.
 
 ## 3. Caddy and TLS — never executed before this moment
 
@@ -69,7 +74,7 @@ This is the section with no prior evidence behind it. `deploy/Caddyfile` passes
 `caddy validate` (CR-145) and proxies to `web` only, never directly to `api` (ADR-018),
 but no run has ever obtained a certificate or served a request through it.
 
-- [ ] `docker compose -f docker-compose.prod.yml logs caddy` — a certificate was
+- [ ] `dc logs caddy` — a certificate was
       actually **obtained**, not merely attempted. Look for the issuance line; a started
       container is not evidence.
 - [ ] `curl -sI https://<DOMAIN>/` returns `200` over a valid certificate (no
@@ -87,16 +92,13 @@ but no run has ever obtained a certificate or served a request through it.
 `api` publishes no host port by design, so it is checked from inside the Compose network
 rather than from outside.
 
-- [ ] `docker compose -f docker-compose.prod.yml exec web wget -qO- http://api:4000/health`
+- [ ] `dc exec web wget -qO- http://api:4000/health`
 
   Read the JSON body, not the status: `GET /health` always answers `200`, and each
-  dependency reports `ok` / `error` / `not_configured` separately (CR-051). A dependency
-  you deliberately left unconfigured must read `not_configured`; one reading `error` is a
-  real failure even though the status is `200`.
-
-- [ ] Every dependency's state matches what step 0's preflight told you to expect. A
-      dependency you configured but which reports `not_configured` means the value never
-      reached the container — check `docker compose -f docker-compose.prod.yml config`.
+  dependency reports `ok` / `error` / `not_configured` separately (CR-051). With the infra
+  overlay all three are configured, so `db`, `redis` and `s3` must each read `ok`; one
+  reading `error` is a real failure even though the status is `200`, and one reading
+  `not_configured` means the value never reached the container — check `dc config`.
 
 ## 5. The one flow that cannot be verified by any check above
 
@@ -113,21 +115,22 @@ rather than from outside.
 
 ## 6. Logs and backups — the parts with no automated proof
 
-- [ ] `docker compose -f docker-compose.prod.yml logs -f api` emits structured JSON with
+- [ ] `dc logs -f api` emits structured JSON with
       a `reqId` on each request (CR-079), and the same id appears as the `X-Request-Id`
       response header.
 - [ ] The host retains or ships these logs somewhere. With
       `ERROR_REPORTING_WEBHOOK_URL` unset (ADR-030), container stdout is the **only**
       record of an unexpected 500 or a failed notification job — and it dies with the
       container.
-- [ ] The `backup` service has actually produced a backup file, and
-      `packages/db/scripts/restore.sh` has been run once against a throwaway database
-      from that file. Never executed in any session: a backup that has never been
-      restored is not a backup.
+- [ ] The `backup` service has actually produced a dump on this host:
+      `dc exec backup ls -l /backups`. The dump → restore round trip itself is
+      smoke-proven (CI restores a fresh dump into an empty database on every run); what
+      is not is this host's loop and disk.
+- [ ] Off-host copy is set up (`docs/deployment.md` → "Backups"): the dumps and the
+      `s3_data` volume live on the same disk as the data they protect (ADR-031).
 
 ## After the first successful run
 
 Update KI-045 in `.claude/context/known-issues.md` with what this run actually proved —
-particularly Caddy/ACME and `backup`, the two items that have never had evidence behind
-them. If everything in this file passed, KI-045 can be closed; if a step failed, record
+particularly Caddy/ACME, the one part that has never had evidence behind it. If everything in this file passed, KI-045 can be closed; if a step failed, record
 what failed there rather than leaving the issue's text as-is.

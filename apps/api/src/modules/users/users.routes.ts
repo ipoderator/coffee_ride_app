@@ -2,6 +2,10 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  imageCacheControl,
+  imageVersionQuerySchema,
+} from '../../lib/image-url.js';
+import {
   createBikeRequestSchema,
   listRidesQuerySchema,
   updateBikeRequestSchema,
@@ -140,23 +144,30 @@ export const usersRoutes: FastifyPluginAsyncZod = async (app) => {
 
   // Streams the raw image bytes. Authenticated, "me"-scoped — not JSON, so no
   // Zod `response` schema (same as `rides.routes.ts`'s `GET .../cover`).
-  app.get('/me/avatar', { preHandler: requireAuth }, async (request, reply) => {
-    const { body, contentType } = await getAvatarDownload(
-      app.db,
-      app.s3,
-      request.user!.id,
-    );
-    // Every upload gets a fresh random S3 key (never reused), so a long/
-    // immutable cache is safe (ADR-019's same reasoning for ride covers) — but
-    // this path never changes (it's always `/v1/users/me/avatar`), so the
-    // client must cache-bust with its own query param on replace, same as
-    // `CoverImageUploadForm` already does.
-    return reply
-      .status(200)
-      .header('Cache-Control', 'private, max-age=31536000, immutable')
-      .type(contentType)
-      .send(body);
-  });
+  app.get(
+    '/me/avatar',
+    {
+      schema: { querystring: imageVersionQuerySchema },
+      preHandler: requireAuth,
+    },
+    async (request, reply) => {
+      const { body, contentType, objectKey } = await getAvatarDownload(
+        app.db,
+        app.s3,
+        request.user!.id,
+      );
+      // CR-217 (KI-094): `avatarUrl` carries `?v=` from the stored key, so a
+      // replace yields a new URL and only that URL is cached as immutable.
+      return reply
+        .status(200)
+        .header(
+          'Cache-Control',
+          imageCacheControl(objectKey, request.query.v, 'private'),
+        )
+        .type(contentType)
+        .send(body);
+    },
+  );
 
   // CR-126 ("garage"): "me"-scoped bike CRUD, same 4-verb shape/ownership
   // discipline as the avatar routes above.

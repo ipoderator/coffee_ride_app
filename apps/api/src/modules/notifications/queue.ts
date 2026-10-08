@@ -65,6 +65,16 @@ const ENQUEUE_BREAKER_COOLDOWN_MS = 30_000;
 // Same "graceful close can hang against an unreachable Redis" reasoning as
 // `ENQUEUE_TIMEOUT_MS` — see `onClose` below.
 const CLOSE_TIMEOUT_MS = 3000;
+// CR-217: these jobs carry a raw single-use token inside their link (the database
+// only ever stores its SHA-256 hash, ADR-013), so a failed one must not stay in
+// Redis for inspection the way other jobs do.
+const TOKEN_CARRYING_JOBS: ReadonlySet<NotificationJobName> = new Set([
+  'verification_email',
+  'password_reset_email',
+]);
+// Bounded trail of failed jobs for inspection instead of an unbounded one —
+// mirrors the bounded-retry reasoning above.
+const FAILED_JOBS_KEPT = 200;
 // CR-137. The producer connection is also `app.redis`: the global rate
 // limiter runs a command on it for EVERY request, plus `/health` and the
 // per-account auth limit. With ioredis's defaults a command issued while
@@ -193,9 +203,9 @@ export function registerNotificationQueue(app: FastifyInstance, env: Env) {
             attempts: JOB_ATTEMPTS,
             backoff: { type: 'exponential', delay: JOB_BACKOFF_DELAY_MS },
             removeOnComplete: true,
-            // Keep a bounded trail of failed jobs for inspection instead of an
-            // unbounded one — mirrors the bounded-retry reasoning above.
-            removeOnFail: 200,
+            removeOnFail: TOKEN_CARRYING_JOBS.has(name)
+              ? true
+              : FAILED_JOBS_KEPT,
           }),
           ENQUEUE_TIMEOUT_MS,
           `Notification enqueue timed out after ${ENQUEUE_TIMEOUT_MS}ms.`,

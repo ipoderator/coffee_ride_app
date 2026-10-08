@@ -1446,3 +1446,27 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `docs/changelog.md`.
 - [x] CR-204 `do-not-break.md` as a path-scoped rule loaded whole; area history via
       changelog grep in the read protocol. See `docs/changelog.md`.
+- [x] CR-205 Security audit fixes: GPX download `Content-Disposition` (Cyrillic name
+      was a 500), web page security headers, single-use token race, fastify and
+      transitive bumps, Dependabot alerts on. KI-090 opened. See `docs/changelog.md`.
+- [x] CR-206 `ponytail` plugin installed globally; its whole-repo audit applied where
+      risk-free: `class-variance-authority`/`clsx`/`tailwind-merge` dropped from
+      `apps/web`, `formatPriceParts` inlined. `postgres` deliberately kept in
+      `apps/api` (bundle requires it — see `scripts/build.mjs`). Upload/replace
+      duplication left for a separate task. See `docs/changelog.md`.
+- [x] CR-207 `ToastProvider` clears its pending auto-dismiss/exit timers on unmount —
+      an uncleared timer fired `setToasts` after jsdom teardown, failing `ci` with
+      every test passing (and updating an unmounted component in the browser).
+      Predates CR-206. See `docs/changelog.md`.
+- [ ] CR-208 Dependabot triage — 13 open PRs classified; majors declined (KI-091),
+      Next 16 is its own task (KI-090). Paused behind CR-209's red `ci`; the npm
+      bumps also wait on `ip-address@10.7.3`'s quarantine (expires 2026-10-05
+      ~10:35Z). See `.claude/context/current-task.md`.
+- [x] CR-209 Deterministic tests for both single-use-token guarded UPDATEs — the
+      coverage gate failed on `main` at a markdown-only commit because CR-205's
+      concurrency races covered the in-transaction branch only by chance.
+      See `docs/changelog.md`.
+- [x] CR-210 pre-launch configuration readiness: `pnpm preflight` warns on
+      configuration that boots but leaves a feature dead (empty
+      `EMAIL_FROM_ADDRESS` above all), `deploy/FIRST-DEPLOY.md`, ADR-030 on
+      error tracking — done 2026-10-05. See docs/changelog.md

@@ -39,6 +39,14 @@ establishes a new non-obvious invariant.
   `.claude/rules/security.md`);
 - a password reset revoking every session for that user and invalidating
   every other outstanding reset token for that user (CR-060);
+- the session cookie named `__Host-session` in production (`Secure`, `Path=/`, no
+  `Domain`) and `session` elsewhere — always via `app.sessionCookieName`
+  (`plugins/auth.ts`), never a literal; a second hard-coded name makes the cookie
+  unreadable in one of the two environments (CR-217);
+- BullMQ jobs that carry a raw single-use token (`verification_email`,
+  `password_reset_email`) keep `removeOnFail: true` — a retained failed job is a
+  readable reset link in Redis (CR-217); with no queue, `/forgot-password` sends
+  unawaited so its timing does not reveal whether the email exists;
 - single-use tokens (verify-email, reset-password) claimed by a guarded
   `UPDATE … WHERE used_at IS NULL` inside the transaction whose row count is
   checked — the pre-check SELECT alone lets concurrent requests all pass (CR-205);
@@ -90,8 +98,11 @@ prod.yml`, ADR-018) — `apps/web/next.config.ts`'s rewrite is the one place
   (ADR-018) — letting it drift from `DOMAIN` would silently break the CSRF
   Origin/Referer check;
 - `docker-compose.prod.yml` staying free of Postgres/Redis/S3 service
-  definitions (ADR-018 "What this does NOT mean") — that's a still-open
-  production-hosting decision, not this file's to make;
+  definitions (ADR-018) — the single-VPS data services live only in the
+  `docker-compose.infra.yml` overlay (ADR-031), which also derives
+  `DATABASE_URL`/`REDIS_URL`/`S3_ENDPOINT`; moving to managed services means
+  dropping the overlay, not editing the prod file. The smoke run layers the same
+  overlay, so don't fork a smoke-only copy of it;
 - the `migrate` service staying behind the `migrate` Compose profile — never
   started by a plain `docker compose up`, and never wired into `apps/web`'s or
   `apps/api`'s own service definition or boot sequence (CR-076);
@@ -216,6 +227,17 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
 - `routes.preview` is written together with `routes.geometry` — every write path
   calls `buildRoutePreview` (KI-058); a new writer (seed, script, test insert) must
   too, or that ride's discovery card shows no track;
+- stored `routes.geometry` capped by `simplifyRouteGeometry` (`modules/rides/
+route-geometry.ts`, 5,000 points) at every write path, like the preview above —
+  `pointCount`/distance still come from the full track and S3 keeps the original
+  GPX (CR-217); an uncapped writer lets one upload bloat every ride response;
+- cover/avatar URLs ending `?v=<hash of the object key>` (`lib/image-url.ts`):
+  the GET handlers send `immutable` only when `v` matches the current key, else
+  `no-cache`, and a draft ride's cover is `private` (CR-217). Build image URLs
+  with `versionedImagePath`, never by hand or with `Date.now()` on the client;
+- `processImage` rejecting inputs over `MAX_INPUT_PIXELS` from the header before
+  decoding, with `limitInputPixels` on the decode too (CR-217) — the byte-size
+  cap alone does not stop a decompression bomb;
 - `TRUST_PROXY_HOPS` only on an `api` reachable solely through `web` (no `ports:`
   in `docker-compose.prod.yml`) — `lib/trust-proxy.ts` trusts private peers only,
   but the hop count still assumes exactly that chain (KI-044);

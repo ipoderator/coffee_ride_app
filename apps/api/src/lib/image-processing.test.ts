@@ -1,6 +1,11 @@
+import { crc32 } from 'node:zlib';
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
-import { ImageInvalidError, processImage } from './image-processing.js';
+import {
+  ImageInvalidError,
+  MAX_INPUT_PIXELS,
+  processImage,
+} from './image-processing.js';
 
 // A pass-through spy, so a test can assert which inputs ever reach a libvips
 // decoder (CR-214).
@@ -22,7 +27,39 @@ function solidJpeg(width: number, height: number): Promise<Buffer> {
     .toBuffer();
 }
 
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, crc]);
+}
+
+// A tiny file whose IHDR declares a huge canvas — the decompression-bomb shape.
+function pngHeaderOnly(width: number, height: number): Buffer {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // truecolor
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', Buffer.alloc(0)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
 describe('processImage', () => {
+  it('rejects an image declaring more than MAX_INPUT_PIXELS before decoding it (CR-217)', async () => {
+    const bomb = pngHeaderOnly(16_000, 16_000);
+    expect(bomb.length).toBeLessThan(100);
+    expect(16_000 * 16_000).toBeGreaterThan(MAX_INPUT_PIXELS);
+
+    await expect(processImage(bomb)).rejects.toThrow('too many pixels');
+  });
+
   it('rejects a file that cannot be decoded as an image', async () => {
     await expect(
       processImage(Buffer.from('not an image at all')),

@@ -14,6 +14,7 @@ import type {
 } from 'types';
 import { toPublicUser } from '../auth/auth.service.js';
 import { ImageInvalidError, processImage } from '../../lib/image-processing.js';
+import { versionedImagePath } from '../../lib/image-url.js';
 import {
   ImageStorageError,
   deleteImageObject,
@@ -173,7 +174,7 @@ export async function uploadAvatar(
     })
     .where(eq(users.id, userId));
 
-  return { avatarUrl: AVATAR_URL_PATH };
+  return { avatarUrl: versionedImagePath(AVATAR_URL_PATH, key) };
 }
 
 /**
@@ -225,7 +226,7 @@ export async function replaceAvatar(
     // Best-effort — see the function's own doc comment.
   }
 
-  return { avatarUrl: AVATAR_URL_PATH };
+  return { avatarUrl: versionedImagePath(AVATAR_URL_PATH, key) };
 }
 
 /**
@@ -274,7 +275,7 @@ export async function getAvatarDownload(
   db: DbClient,
   s3: S3Handle | null,
   userId: string,
-): Promise<{ body: Buffer; contentType: string }> {
+): Promise<{ body: Buffer; contentType: string; objectKey: string }> {
   const [row] = await db
     .select({
       avatarKey: users.avatarKey,
@@ -292,6 +293,7 @@ export async function getAvatarDownload(
     return {
       body: downloaded.body,
       contentType: row.avatarContentType ?? 'application/octet-stream',
+      objectKey: row.avatarKey,
     };
   } catch (err) {
     if (err instanceof ImageStorageError) throw AVATAR_STORAGE_UNAVAILABLE();

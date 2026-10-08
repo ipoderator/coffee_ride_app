@@ -138,6 +138,11 @@ beforeAll(async () => {
     .toBuffer();
 });
 
+// CR-217: image URLs carry `?v=<16-char hash of the stored key>`.
+function versioned(path: string): RegExp {
+  return new RegExp(`^${path}\\?v=[\\w-]{16}$`);
+}
+
 describe('organizer avatar', () => {
   const s3Store = new Map<string, Buffer>();
 
@@ -259,8 +264,8 @@ describe('organizer avatar', () => {
       });
 
       expect(response.statusCode).toBe(201);
-      expect(response.json().avatarUrl).toBe(
-        `/v1/organizers/${organizerId}/avatar`,
+      expect(response.json().avatarUrl).toMatch(
+        versioned(`/v1/organizers/${organizerId}/avatar`),
       );
 
       // Own profile reflects it.
@@ -269,8 +274,8 @@ describe('organizer avatar', () => {
         url: '/v1/organizers/me',
         cookies: { session: rawToken },
       });
-      expect(me.json().organizerProfile.avatarUrl).toBe(
-        `/v1/organizers/${organizerId}/avatar`,
+      expect(me.json().organizerProfile.avatarUrl).toMatch(
+        versioned(`/v1/organizers/${organizerId}/avatar`),
       );
 
       // CR-097: also embedded in `RideOrganizerSummary` via `rides.service.ts`'s
@@ -292,8 +297,8 @@ describe('organizer avatar', () => {
         url: `/v1/rides/${ride.json().ride.id}`,
         cookies: { session: rawToken },
       });
-      expect(rideDetail.json().organizer.avatarUrl).toBe(
-        `/v1/organizers/${organizerId}/avatar`,
+      expect(rideDetail.json().organizer.avatarUrl).toMatch(
+        versioned(`/v1/organizers/${organizerId}/avatar`),
       );
 
       // Publicly downloadable with no session at all.
@@ -359,8 +364,8 @@ describe('organizer avatar', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().avatarUrl).toBe(
-        `/v1/organizers/${organizerId}/avatar`,
+      expect(response.json().avatarUrl).toMatch(
+        versioned(`/v1/organizers/${organizerId}/avatar`),
       );
       expect(s3Store.size).toBe(1);
       await app.close();

@@ -59,6 +59,7 @@ import {
 } from '../notifications/notifications.service.js';
 import { getOrganizerRatingSummaries } from '../reviews/reviews.service.js';
 import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
+import { versionedImagePath } from '../../lib/image-url.js';
 import { toBike } from '../users/users.service.js';
 import {
   ImageStorageError,
@@ -776,8 +777,15 @@ async function hasActiveRegistration(
 // CR-126: `/v1/rides/:id/riders/:registrationId/avatar`'s fixed path shape — same
 // "computed from the key, not stored verbatim" precedent as `users.service.ts`'s
 // own avatar path, just ride/registration-scoped instead of "me".
-function riderAvatarUrlPath(rideId: string, registrationId: string): string {
-  return `/v1/rides/${rideId}/riders/${registrationId}/avatar`;
+function riderAvatarUrlPath(
+  rideId: string,
+  registrationId: string,
+  avatarKey: string,
+): string {
+  return versionedImagePath(
+    `/v1/rides/${rideId}/riders/${registrationId}/avatar`,
+    avatarKey,
+  );
 }
 
 /**
@@ -892,7 +900,7 @@ export async function getRiderProfile(
     displayName: resolveParticipantName(target),
     bio: target.bio,
     avatarUrl: target.avatarKey
-      ? riderAvatarUrlPath(rideId, registrationId)
+      ? riderAvatarUrlPath(rideId, registrationId, target.avatarKey)
       : null,
     bikes: bikeRows.map(toBike),
     distanceWeekKm: target.distanceWeekKm,
@@ -917,7 +925,7 @@ export async function getRiderAvatarDownload(
   viewerId: string,
   rideId: string,
   registrationId: string,
-): Promise<{ body: Buffer; contentType: string }> {
+): Promise<{ body: Buffer; contentType: string; objectKey: string }> {
   const target = await resolveRiderAccess(db, viewerId, rideId, registrationId);
   if (!target.avatarKey) {
     throw RIDER_AVATAR_NOT_FOUND();
@@ -928,6 +936,7 @@ export async function getRiderAvatarDownload(
     return {
       body: downloaded.body,
       contentType: target.avatarContentType ?? 'application/octet-stream',
+      objectKey: target.avatarKey,
     };
   } catch (err) {
     if (err instanceof ImageStorageError)
@@ -1061,7 +1070,7 @@ export async function listMyRegistrations(
             id: row.organizerId,
             name: row.organizerName,
             avatarUrl: row.organizerAvatarKey
-              ? organizerAvatarUrlPath(row.organizerId)
+              ? organizerAvatarUrlPath(row.organizerId, row.organizerAvatarKey)
               : null,
             rating: summary.rating,
             reviewCount: summary.reviewCount,

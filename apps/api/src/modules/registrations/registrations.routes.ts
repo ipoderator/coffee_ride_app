@@ -1,6 +1,10 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import {
+  imageCacheControl,
+  imageVersionQuerySchema,
+} from '../../lib/image-url.js';
+import {
   createRegistrationRequestSchema,
   joinWaitlistRequestSchema,
   listRidesQuerySchema,
@@ -490,9 +494,15 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
   // `response` schema.
   app.get(
     '/:id/riders/:registrationId/avatar',
-    { schema: { params: riderParamsSchema }, preHandler: requireAuth },
+    {
+      schema: {
+        params: riderParamsSchema,
+        querystring: imageVersionQuerySchema,
+      },
+      preHandler: requireAuth,
+    },
     async (request, reply) => {
-      const { body, contentType } = await getRiderAvatarDownload(
+      const { body, contentType, objectKey } = await getRiderAvatarDownload(
         app.db,
         app.s3,
         request.user!.id,
@@ -501,7 +511,10 @@ export const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
       );
       return reply
         .status(200)
-        .header('Cache-Control', 'private, max-age=31536000, immutable')
+        .header(
+          'Cache-Control',
+          imageCacheControl(objectKey, request.query.v, 'private'),
+        )
         .type(contentType)
         .send(body);
     },

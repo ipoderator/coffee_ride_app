@@ -10,6 +10,7 @@ import {
 import type { Env } from './env.js';
 import { generateRequestId } from './lib/request-id.js';
 import { createTrustProxy } from './lib/trust-proxy.js';
+import { registerSessionCookieName } from './plugins/auth.js';
 import { registerDb } from './plugins/db.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerErrorReporting } from './plugins/error-reporting.js';
@@ -101,6 +102,7 @@ export async function buildApp(env: Env) {
   // (`plugins/auth.ts`) — so no `secret` option (Fastify's signed-cookie
   // support) is needed here.
   await app.register(cookie);
+  registerSessionCookieName(app, env);
 
   // Lenient global default; auth routes override it with a stricter
   // per-route tier via `config.rateLimit` (`.claude/rules/security.md`).

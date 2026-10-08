@@ -19,6 +19,15 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-218 Single-VPS deploy readiness (ADR-031): `docker-compose.infra.yml`
+      overlay (Postgres/Redis/SeaweedFS), `deploy/deploy.sh`,
+      `deploy/production.env.example`, email env passed to `api`, log rotation;
+      Docker smoke on the overlay incl. backup → restore — done 2026-10-07.
+      See docs/changelog.md
+- [x] CR-217 Security-review fixes: token jobs `removeOnFail`, unawaited reset
+      email without a queue, `__Host-session`, image pixel cap, versioned
+      cover/avatar URLs (KI-094, KI-093 closed), stored route geometry capped at
+      5,000 points — done 2026-10-07. See docs/changelog.md
 - [x] CR-216 Dependabot `cooldown` removed from the npm entry — Dependabot runs
       pnpm with `--config.minimum-release-age` for it (same failure as CR-215) —
       done 2026-10-07. See docs/changelog.md
@@ -42,27 +51,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       Mode's double-invoke burned the link and showed «Ссылка недействительна» over a
       successful verification, failing e2e `login-return.spec.ts` on `main`
       — done 2026-10-05. See docs/changelog.md
-- [x] CR-210 pre-launch configuration readiness: `pnpm preflight` warns on
-      configuration that boots but leaves a feature dead (empty
-      `EMAIL_FROM_ADDRESS` above all), `deploy/FIRST-DEPLOY.md`, ADR-030 on
-      error tracking — done 2026-10-05. See docs/changelog.md
-- [x] CR-205 Security audit fixes: GPX download `Content-Disposition` (Cyrillic name
-      was a 500), web page security headers, single-use token race, fastify and
-      transitive bumps, Dependabot alerts on. KI-090 opened. See `docs/changelog.md`.
-- [x] CR-206 `ponytail` plugin installed globally; its whole-repo audit applied where
-      risk-free: `class-variance-authority`/`clsx`/`tailwind-merge` dropped from
-      `apps/web`, `formatPriceParts` inlined. `postgres` deliberately kept in
-      `apps/api` (bundle requires it — see `scripts/build.mjs`). Upload/replace
-      duplication left for a separate task. See `docs/changelog.md`.
-- [x] CR-207 `ToastProvider` clears its pending auto-dismiss/exit timers on unmount —
-      an uncleared timer fired `setToasts` after jsdom teardown, failing `ci` with
-      every test passing (and updating an unmounted component in the browser).
-      Predates CR-206. See `docs/changelog.md`.
-- [ ] CR-208 Dependabot triage — 13 open PRs classified; majors declined (KI-091),
-      Next 16 is its own task (KI-090). Paused behind CR-209's red `ci`; the npm
-      bumps also wait on `ip-address@10.7.3`'s quarantine (expires 2026-10-05
-      ~10:35Z). See `.claude/context/current-task.md`.
-- [x] CR-209 Deterministic tests for both single-use-token guarded UPDATEs — the
-      coverage gate failed on `main` at a markdown-only commit because CR-205's
-      concurrency races covered the in-transaction branch only by chance.
-      See `docs/changelog.md`.

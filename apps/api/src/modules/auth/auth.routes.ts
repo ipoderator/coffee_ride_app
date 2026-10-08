@@ -10,7 +10,7 @@ import {
 } from 'types';
 import type { Env } from '../../env.js';
 import { isAccountRateLimited } from '../../lib/account-rate-limit.js';
-import { requireAuth, SESSION_COOKIE_NAME } from '../../plugins/auth.js';
+import { requireAuth } from '../../plugins/auth.js';
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -244,7 +244,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
 
       const session = await createSession(app.db, user.id);
 
-      reply.setCookie(SESSION_COOKIE_NAME, session.token, {
+      reply.setCookie(app.sessionCookieName, session.token, {
         httpOnly: true,
         // Plain HTTP in local dev (ADR-013 / this ticket's requirements) —
         // `Secure` would silently drop the cookie over http://localhost.
@@ -312,14 +312,14 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
   );
 
   app.post('/logout', { preHandler: requireAuth }, async (request, reply) => {
-    const token = request.cookies[SESSION_COOKIE_NAME];
+    const token = request.cookies[request.server.sessionCookieName];
     // `requireAuth` already 401s when the cookie is missing/invalid, so a
     // valid raw token is guaranteed to be present here.
     if (token) {
       await revokeSession(app.db, token);
     }
 
-    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+    reply.clearCookie(app.sessionCookieName, { path: '/' });
     return reply.status(204).send();
   });
 

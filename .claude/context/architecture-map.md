@@ -31,6 +31,7 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   `error-reporting` (`app.reportError`).
 - `lib/`: `cursor` (pagination), `account-rate-limit`, `race-timeout`, `request-id`,
   `trust-proxy`, `read-upload`/`image-processing`/`image-storage` (sharp, S3),
+  `image-url` (`?v=` key-hash URLs + Cache-Control for covers/avatars),
   `graceful-shutdown`, `content-disposition` (safe attachment header), `email/`
   (provider interface + Unisender).
 - `modules/<capability>/` = `*.routes.ts` (thin) → `*.service.ts` (rules, authz,
@@ -41,7 +42,8 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   - `organizers` — `OrganizerProfile`, rating aggregate, avatar.
   - `rides` — CRUD + lifecycle, reschedule, discovery list (`phase`, bbox, filters),
     detail; `ride-groups.*` (ADR-022); `gpx.ts` (SAX parse), `route-storage.ts` (S3 via
-    `callWithResilience`), `route-preview.ts`, `organizer-journal.ts`; stops, route
+    `callWithResilience`), `route-preview.ts`, `route-geometry.ts` (stored-geometry
+    cap), `organizer-journal.ts`; stops, route
     points, cover, requirements, contacts.
   - `registrations` — register/cancel/change group (row lock, capacity, duplicates,
     idempotent repeat), waitlist + FIFO promotion, participants/riders lists, finish
@@ -99,7 +101,9 @@ participants|updates` — the six-tab workspace «Управление заез�
   (SeaweedFS, ADR-025). Dev DB may be native Homebrew Postgres — check `.env`.
 - Production: `apps/{web,api}/Dockerfile`, `packages/db/Dockerfile`,
   `docker-compose.prod.yml` (caddy → web → api, `migrate` profile, `backup`),
-  `deploy/Caddyfile`, `deploy/smoke/` (`pnpm smoke:docker`). Procedure:
+  `docker-compose.infra.yml` (single-VPS Postgres/Redis/S3 overlay, ADR-031),
+  `deploy/deploy.sh` + `deploy/production.env.example`, `deploy/Caddyfile`,
+  `deploy/smoke/` (`pnpm smoke:docker`, layers the overlay). Procedure:
   `docs/deployment.md`.
 - CI: `.github/workflows/ci.yml` (`ci`, `docker-smoke`), `load-test.yml` (k6),
   `maps-contract.yml` (weekly 2GIS contract).
