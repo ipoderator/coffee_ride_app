@@ -63,7 +63,11 @@ export function zonedTimeToUtcIso(
   timeZone: string,
 ): string {
   const probe = new Date(`${localDateTimeValue}Z`);
-  const offsetMinutes = timeZoneOffsetMinutes(probe, timeZone);
+  const firstGuess =
+    probe.getTime() - timeZoneOffsetMinutes(probe, timeZone) * 60_000;
+  // The second pass: the offset at the first guess itself, which differs from
+  // the probe's only when a zone's offset changes between the two instants.
+  const offsetMinutes = timeZoneOffsetMinutes(new Date(firstGuess), timeZone);
   return new Date(probe.getTime() - offsetMinutes * 60_000).toISOString();
 }
 

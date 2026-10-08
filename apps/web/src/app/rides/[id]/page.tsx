@@ -1,6 +1,43 @@
-import { BACK_LINK_TERMS } from 'ui';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { BACK_LINK_TERMS, SITE_META_TERMS } from 'ui';
 import { BackLink } from '@/components/site/BackLink';
 import { RideDetailView } from '@/features/participant/ride-detail/components/RideDetailView';
+import { lookupRide } from '@/lib/rides/server-ride';
+import { SITE_OPEN_GRAPH } from '@/lib/site/site-meta';
+
+const DESCRIPTION_MAX_LENGTH = 160;
+
+/** QA live audit 2026-10-08, item 7: the ride's own title, description and
+ * canonical URL for search results and link previews. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const lookup = await lookupRide(id);
+  if (lookup.kind !== 'found') return {};
+  const { ride } = lookup;
+  const title = SITE_META_TERMS.rideTitle(ride.title);
+  const description = ride.description
+    ? ride.description.slice(0, DESCRIPTION_MAX_LENGTH)
+    : SITE_META_TERMS.description;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/rides/${ride.id}` },
+    // A draft is visible to its organizer only — never in a search index.
+    robots: ride.status === 'draft' ? { index: false } : undefined,
+    openGraph: {
+      ...SITE_OPEN_GRAPH,
+      title,
+      description,
+      url: `/rides/${ride.id}`,
+    },
+    twitter: { card: 'summary', title, description },
+  };
+}
 
 // `/rides/[id]` (`docs/design.md` §8 "Ride detail", CR-023). Deliberately NOT under
 // `app/organizer/` or `app/me/` — no `CabinetShell`, no auth gate. `GET /v1/rides/:id`
@@ -21,6 +58,10 @@ export default async function RideDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // QA live audit 2026-10-08, item 4: a real HTTP 404, not a soft one. Only
+  // a definite `404` from the API — a timeout or an error still renders the
+  // page, whose client fetch has its own retry/error states.
+  if ((await lookupRide(id)).kind === 'not_found') notFound();
   return (
     <main className="mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6">
       {/* CR-109: `/rides/[id]` is the app's most-shared URL, so its visitor is

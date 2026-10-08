@@ -28,6 +28,59 @@ describe('zonedTimeToUtcIso', () => {
   });
 });
 
+// QA live audit 2026-10-08, item 1: the wizard's date + time + zone → instant
+// edges — the start's day must not drift when its UTC instant crosses midnight.
+describe('zonedTimeToUtcIso — day, year and zone edges', () => {
+  it('keeps an early-morning Moscow start on its own day (previous UTC day)', () => {
+    expect(zonedTimeToUtcIso('2026-10-09T00:30', 'Europe/Moscow')).toBe(
+      '2026-10-08T21:30:00.000Z',
+    );
+  });
+
+  it('keeps a late-evening Kaliningrad start on the same UTC day', () => {
+    expect(zonedTimeToUtcIso('2026-10-09T23:30', 'Europe/Kaliningrad')).toBe(
+      '2026-10-09T21:30:00.000Z',
+    );
+  });
+
+  it('crosses the year boundary for a New Year start in Kamchatka (UTC+12)', () => {
+    expect(zonedTimeToUtcIso('2027-01-01T00:00', 'Asia/Kamchatka')).toBe(
+      '2026-12-31T12:00:00.000Z',
+    );
+  });
+
+  it('gives the same wall-clock time a different instant in another zone', () => {
+    const moscow = zonedTimeToUtcIso('2026-10-09T08:00', 'Europe/Moscow');
+    const vladivostok = zonedTimeToUtcIso(
+      '2026-10-09T08:00',
+      'Asia/Vladivostok',
+    );
+    expect(moscow).toBe('2026-10-09T05:00:00.000Z');
+    expect(vladivostok).toBe('2026-10-08T22:00:00.000Z');
+    expect(utcIsoToZonedLocalInput(moscow, 'Europe/Moscow')).toBe(
+      '2026-10-09T08:00',
+    );
+    expect(utcIsoToZonedLocalInput(vladivostok, 'Asia/Vladivostok')).toBe(
+      '2026-10-09T08:00',
+    );
+  });
+
+  it('resolves the offset at the result, not the probe, on a DST change day', () => {
+    // 2027-03-14: New York switches to EDT (UTC−4) at 07:00Z; 05:00 local is
+    // already EDT, while the first probe (05:00Z) still reads EST (UTC−5).
+    expect(zonedTimeToUtcIso('2027-03-14T05:00', 'America/New_York')).toBe(
+      '2027-03-14T09:00:00.000Z',
+    );
+  });
+
+  it('does not depend on the browser zone', () => {
+    // The process zone is whatever the runner has; the result is fixed.
+    expect(zonedTimeToUtcIso('2026-10-09T08:00', 'Europe/Moscow')).toBe(
+      '2026-10-09T05:00:00.000Z',
+    );
+  });
+});
+
 describe('utcIsoToZonedLocalInput', () => {
   it('converts a UTC instant back to Moscow (UTC+3) local wall-clock time', () => {
     expect(

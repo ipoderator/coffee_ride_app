@@ -344,6 +344,32 @@ export const SITE_HEADER_TERMS = {
  * link, which browser history does not: someone who opened `/rides/<id>` from
  * a shared URL has nothing to go back *to*.
  */
+// QA live audit 2026-10-08, items 4–5: the app's own 404 (`app/not-found.tsx`,
+// `app/rides/[id]/not-found.tsx`) — Next's default was English and unstyled.
+export const NOT_FOUND_TERMS = {
+  pageTitle: 'Страница не найдена',
+  pageDescription:
+    'Возможно, ссылка устарела или в адресе опечатка. Свежие заезды — в каталоге.',
+  toDiscovery: 'Вернуться к заездам',
+  metaTitle: 'Страница не найдена — Coffee Ride',
+} as const;
+
+// QA live audit 2026-10-08, item 6: names for the map SDK's own controls,
+// handed to the adapter at `apps/web`'s map composition point.
+export const MAP_CONTROL_TERMS = {
+  zoomIn: 'Увеличить масштаб',
+  zoomOut: 'Уменьшить масштаб',
+  attribution: '2ГИС — условия использования карты',
+} as const;
+
+// QA live audit 2026-10-08, item 7: share/search metadata (`app/layout.tsx`).
+export const SITE_META_TERMS = {
+  siteName: 'Coffee Ride',
+  description:
+    'Платформа для поиска, организации и участия в групповых велозаездах.',
+  rideTitle: (title: string) => `${title} — Coffee Ride`,
+} as const;
+
 export const BACK_LINK_TERMS = {
   toDiscovery: 'Все заезды',
   toOrganizerRides: 'К моим заездам',
@@ -2060,6 +2086,9 @@ export const RIDE_TICKET_TERMS = {
   queueHint: 'Освободится место — запишем по порядку.',
   waitlistNote: 'Пришлём уведомление, если место освободится',
   waitlistedTitle: 'Вы в списке ожидания',
+  // QA live audit 2026-10-08, item 2: the registered viewer's own chip — not
+  // the ride's «Список ожидания» once the last seat is theirs.
+  registeredStatus: 'Место подтверждено',
   waitlistedHint:
     'Освободится место — запишем автоматически и пришлём уведомление.',
   countdown: (value: string) => `До старта ${value}`,

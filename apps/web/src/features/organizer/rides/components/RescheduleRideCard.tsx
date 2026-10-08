@@ -11,7 +11,7 @@ import {
   formatRideStartLine,
   formatTimeZoneHint,
   FormField,
-  Input,
+  TimeInput,
   RIDE_RESCHEDULE_TERMS,
   Textarea,
 } from 'ui';
@@ -81,6 +81,7 @@ export function RescheduleRideCard({
   const [isOpen, setIsOpen] = useState(false);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const timeRef = useRef<HTMLInputElement>(null);
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -168,20 +169,24 @@ export function RescheduleRideCard({
   }
 
   function validate(): Pending | null {
+    // What the field shows, not what React last heard (`TimeInput`).
+    const liveTime = timeRef.current?.value ?? time;
+    setTime(liveTime);
+    const liveCandidate = toCandidate(date, liveTime);
     const next: FieldErrors = {};
     if (!date) next.date = T.dateRequired;
-    if (!time) next.time = T.timeRequired;
+    if (!liveTime) next.time = T.timeRequired;
     const trimmed = reason.trim();
     if (!trimmed) next.reason = T.reasonRequired;
     else if (trimmed.length > REASON_MAX_LENGTH) next.reason = T.reasonTooLong;
     if (!next.date && !next.time) {
-      const pair = pairError(candidate);
+      const pair = pairError(liveCandidate);
       if (pair) next.time = pair;
     }
     setErrors(next);
-    if (Object.keys(next).length > 0 || !candidate) return null;
+    if (Object.keys(next).length > 0 || !liveCandidate) return null;
     const parsed = rescheduleRideRequestSchema.safeParse({
-      startsAt: candidate,
+      startsAt: liveCandidate,
       reason: trimmed,
     });
     return parsed.success ? parsed.data : null;
@@ -344,11 +349,11 @@ export function RescheduleRideCard({
               hint={T.timeZoneNote(zoneHint)}
               error={errors.time}
             >
-              <Input
-                type="time"
+              <TimeInput
+                ref={timeRef}
                 value={time}
-                onChange={(event) => {
-                  setTime(event.target.value);
+                onValueChange={(value) => {
+                  setTime(value);
                   clearError('time');
                 }}
                 disabled={isSubmitting}

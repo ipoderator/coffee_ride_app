@@ -43,7 +43,9 @@ Fill in every value; the file's comments say what each one is for. In particular
 
 - `DOMAIN` / `ACME_EMAIL` — `api`'s `WEB_ORIGIN` (the CSRF Origin/Referer check,
   ADR-013) is derived from `DOMAIN` inside `docker-compose.prod.yml`; never set it
-  separately.
+  separately. So is `web`'s `SITE_URL` (`https://${DOMAIN}`, a build arg — canonical/
+  Open Graph URLs, `robots.txt`, `sitemap.xml`, CR-226): a changed `DOMAIN` needs a
+  `web` rebuild, not just a restart.
 - Passwords are hex on purpose: the overlay puts them into connection URLs unescaped.
   `DATABASE_URL`/`REDIS_URL`/`S3_ENDPOINT` stay empty — the overlay derives them.
 - `NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY` is baked into the `web` image at build time

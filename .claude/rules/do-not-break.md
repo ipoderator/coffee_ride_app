@@ -53,6 +53,19 @@ establishes a new non-obvious invariant.
 - `apps/web/next.config.ts`'s `headers()` (frame-ancestors/X-Frame-Options,
   nosniff, Referrer-Policy, HSTS) and `poweredByHeader: false`, excluding
   `/api/*`, whose headers stay helmet's (CR-205);
+- the pages' CSP and Permissions-Policy live in `apps/web/src/lib/security/headers.ts`
+  (CR-226), built from a browser inventory: no `'unsafe-eval'` outside dev, 2GIS only
+  as `mapgl.2gis.com` (script) and `*.2gis.com` (connect/img), `blob:` workers. A new
+  external origin is added there after checking a real page for
+  `securitypolicyviolation`, never by loosening `default-src`. Zod runs `jitless` in
+  browsers (`packages/types/src/zod-config.ts`) — dropping it brings back a CSP
+  violation on every page;
+- the ride forms' start time is a `TimeInput` read through its ref at save
+  (CR-221) — a controlled `<input type="time">` saved a stale state value over what the
+  field showed (QA live audit, 08:00 → 12:12);
+- `/rides/[id]` calls `notFound()` only on the API's definite 404 (`lookupRide`), with
+  no `loading.tsx`/`<Suspense>` above the page — streaming would turn the 404 back into a
+  200 (CR-224, KI-096);
 - `@fastify/helmet`'s CSP staying `upgrade-insecure-requests`-free (this app
   doesn't terminate TLS itself — that directive would break `/docs` over
   local `http://`) and `frame-ancestors`/`X-Frame-Options` staying

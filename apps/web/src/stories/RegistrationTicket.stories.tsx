@@ -2,12 +2,15 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import type { Registration } from 'types';
-import { Button, RIDE_STATUS_TERMS } from 'ui';
+import { Button, RIDE_STATUS_TERMS, RIDE_TICKET_TERMS } from 'ui';
 import {
   RegistrationTicket,
   type RegistrationTicketProps,
 } from '@/features/participant/ride-detail/components/RegistrationTicket';
-import type { TicketState } from '@/features/participant/ride-detail/lib/ticket-state';
+import {
+  ticketStatusTerm,
+  type TicketState,
+} from '@/features/participant/ride-detail/lib/ticket-state';
 
 // The ride page's registration card (CR-151/CR-155). CR-170: a state change
 // after mount is shown, not swapped — the frame colour eases over and the
@@ -80,6 +83,27 @@ export const Registered: Story = {
     registrationsCount: 13,
     viewerRegistration: registration,
     viewerStartNumber: 13,
+  },
+};
+
+/** QA live audit 2026-10-08, item 2: the last seat is the viewer's — the
+ * chip says their seat is confirmed, not the ride's «Список ожидания». */
+export const RegisteredOnFullRide: Story = {
+  args: {
+    state: 'registered',
+    statusTerm: ticketStatusTerm('registered', 'registration_open', 0),
+    participantLimit: 1,
+    registrationsCount: 1,
+    viewerRegistration: registration,
+    viewerStartNumber: 1,
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText(RIDE_TICKET_TERMS.registeredStatus),
+    ).toBeVisible();
+    await expect(
+      canvas.queryByText(RIDE_TICKET_TERMS.waitlistLabel),
+    ).toBeNull();
   },
 };
 

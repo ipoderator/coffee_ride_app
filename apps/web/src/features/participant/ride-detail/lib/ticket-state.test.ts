@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { posterStatusTerm, seatsLeftOf, ticketStateOf } from './ticket-state';
+import {
+  posterStatusTerm,
+  seatsLeftOf,
+  ticketStateOf,
+  ticketStatusTerm,
+} from './ticket-state';
 
 const base = { isRegistered: false, isWaitlisted: false };
 
@@ -68,5 +73,68 @@ describe('posterStatusTerm / seatsLeftOf', () => {
   it('never goes below zero and is null without a limit', () => {
     expect(seatsLeftOf(10, 12)).toBe(0);
     expect(seatsLeftOf(null, 12)).toBeNull();
+  });
+});
+
+// QA live audit 2026-10-08, item 2: a registered viewer on a full ride (their
+// own registration or a waitlist promotion took the last seat) read «Список
+// ожидания» on their own ticket.
+describe('ticketStatusTerm', () => {
+  it('shows a confirmed seat to a registered viewer on a full ride', () => {
+    const state = ticketStateOf({
+      rideStatus: 'registration_open',
+      seatsLeft: 0,
+      isRegistered: true,
+      isWaitlisted: false,
+    });
+    expect(ticketStatusTerm(state, 'registration_open', 0)).toEqual({
+      label: 'Место подтверждено',
+      tone: 'success',
+    });
+  });
+
+  it('shows a confirmed seat with seats left and once registration closes', () => {
+    expect(ticketStatusTerm('registered', 'registration_open', 5).label).toBe(
+      'Место подтверждено',
+    );
+    expect(ticketStatusTerm('registered', 'registration_closed', 0).label).toBe(
+      'Место подтверждено',
+    );
+  });
+
+  it('shows the ride under way or over to a registered viewer', () => {
+    expect(ticketStatusTerm('registered', 'started', 0)).toEqual(
+      posterStatusTerm('started', 0),
+    );
+    expect(ticketStatusTerm('registered', 'finished', 0)).toEqual(
+      posterStatusTerm('finished', 0),
+    );
+  });
+
+  it('keeps the queue for a waitlisted viewer, even when a seat just freed up', () => {
+    expect(ticketStatusTerm('waitlisted', 'registration_open', 0)).toEqual({
+      label: 'Список ожидания',
+      tone: 'info',
+    });
+    expect(ticketStatusTerm('waitlisted', 'registration_open', 1).label).toBe(
+      'Список ожидания',
+    );
+  });
+
+  it("leaves every other face on the ride's own chip", () => {
+    for (const [state, rideStatus, seatsLeft] of [
+      ['full', 'registration_open', 0],
+      ['few', 'registration_open', 2],
+      ['open', 'registration_open', 10],
+      ['closed', 'registration_closed', 3],
+      ['notOpen', 'published', 3],
+      ['started', 'started', 3],
+      ['finished', 'finished', 3],
+      ['cancelled', 'cancelled', 0],
+    ] as const) {
+      expect(ticketStatusTerm(state, rideStatus, seatsLeft)).toEqual(
+        posterStatusTerm(rideStatus, seatsLeft),
+      );
+    }
   });
 });

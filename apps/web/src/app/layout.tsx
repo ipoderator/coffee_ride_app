@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import Script from 'next/script';
-import { ToastProvider } from 'ui';
+import { SITE_META_TERMS, ToastProvider } from 'ui';
 import { AppHeader } from '@/components/site/AppHeader';
 import { BottomTabBar } from '@/components/site/BottomTabBar';
 import { SiteChrome } from '@/components/site/SiteChrome';
@@ -9,6 +9,8 @@ import { filterEnabled } from '@/lib/cabinet/feature-flags';
 import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
 import { PARTICIPANT_NAV_ITEMS } from '@/lib/cabinet/participant-nav';
 import { SessionProvider } from '@/lib/auth/session-context';
+import { SITE_OPEN_GRAPH } from '@/lib/site/site-meta';
+import { siteUrl } from '@/lib/site/site-url';
 import { THEME_INIT_SCRIPT } from '@/lib/theme/theme';
 import './globals.css';
 
@@ -82,10 +84,23 @@ const sofiaSansExtraCondensed = localFont({
   display: 'swap',
 });
 
+// QA live audit 2026-10-08, item 7: `metadataBase` turns every page's
+// relative canonical/Open Graph URL into the public one; link previews get the
+// site name and description.
 export const metadata: Metadata = {
-  title: 'Coffee Ride',
-  description:
-    'Платформа для поиска, организации и участия в групповых велозаездах.',
+  metadataBase: siteUrl(),
+  title: SITE_META_TERMS.siteName,
+  description: SITE_META_TERMS.description,
+  openGraph: {
+    ...SITE_OPEN_GRAPH,
+    title: SITE_META_TERMS.siteName,
+    description: SITE_META_TERMS.description,
+  },
+  twitter: {
+    card: 'summary',
+    title: SITE_META_TERMS.siteName,
+    description: SITE_META_TERMS.description,
+  },
 };
 
 export default function RootLayout({

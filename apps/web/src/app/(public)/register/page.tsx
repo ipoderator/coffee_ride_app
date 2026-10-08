@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
 import { RegisterForm } from '@/features/auth/register/components/RegisterForm';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { NO_INDEX } from '@/lib/site/site-meta';
 
 export const metadata: Metadata = {
   title: 'Регистрация — Coffee Ride',
+  // QA live audit 2026-10-08, item 7: not a page to land on from search.
+  robots: NO_INDEX,
 };
 
 // First real screen (CR-011). One `<h1>` per page (docs/design.md §12).

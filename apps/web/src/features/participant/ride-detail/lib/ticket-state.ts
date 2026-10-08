@@ -1,5 +1,10 @@
 import type { RideStatus } from 'types';
-import { RIDE_DISCOVERY_TERMS, RIDE_STATUS_TERMS, type StatusTone } from 'ui';
+import {
+  RIDE_DISCOVERY_TERMS,
+  RIDE_STATUS_TERMS,
+  RIDE_TICKET_TERMS,
+  type StatusTone,
+} from 'ui';
 
 /** Three or fewer seats left reads as «Мало мест» — the discovery card's
  * threshold, duplicated rather than imported across feature modules
@@ -80,4 +85,30 @@ export function posterStatusTerm(
     }
   }
   return RIDE_STATUS_TERMS[rideStatus];
+}
+
+/**
+ * The ticket's status chip (QA live audit 2026-10-08, item 2). The viewer's
+ * own place wins over the ride's seats, the same rule as `ticketStateOf`: a
+ * registered viewer on a full ride holds a confirmed seat, not a place in
+ * «Список ожидания» — the seats figure on the card already says the ride is
+ * full. Once the ride is under way or over, its progress is the news.
+ */
+export function ticketStatusTerm(
+  state: TicketState,
+  rideStatus: RideStatus,
+  seatsLeft: number | null,
+): { label: string; tone: StatusTone } {
+  if (
+    state === 'registered' &&
+    rideStatus !== 'started' &&
+    rideStatus !== 'finished'
+  ) {
+    return { label: RIDE_TICKET_TERMS.registeredStatus, tone: 'success' };
+  }
+  if (state === 'waitlisted') {
+    return { label: RIDE_TICKET_TERMS.waitlistLabel, tone: 'info' };
+  }
+  if (state === 'registered') return RIDE_STATUS_TERMS[rideStatus];
+  return posterStatusTerm(rideStatus, seatsLeft);
 }

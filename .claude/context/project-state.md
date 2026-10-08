@@ -24,40 +24,24 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-219 — **coffeeride.site is live** (2026-10-08): first production deploy on the VPS
-(`/opt/deployments/coffee-ride`, `docs/deployment.md` → "Production host"), Caddy/ACME
-proven, `www.` → 301. Email is off until a verified Unisender sender is set
-(`EMAIL_FROM_ADDRESS` empty in the server `.env`). Latest work (details in
-`docs/changelog.md`):
+CR-221..CR-226 — fixes for the live QA audit of coffeeride.site
+(`QA_LIVE_AUDIT_coffeeride.site_2026-10-08.md`, owner's folder), on branch
+`experiments`, **local only — not committed, not deployed**:
 
-- CR-220 — `AUTH_SKIP_EMAIL_VERIFICATION` (test deploys only): new accounts start
-  verified, no email; preflight warns while on. Committed; deploy below.
-- CR-219 — deploy per `deploy/FIRST-DEPLOY.md`: §1–4 and §6 passed; §5 (email) and
-  the off-host backup copy remain (KI-045).
+- CR-221 (P1) — start time saved as shown: `ui` `TimeInput` (browser-owned field,
+  read through a ref at save) in create/edit/reschedule; the 12:12 was a DOM/state
+  split, not the API.
+- CR-222 — the registered viewer's ticket chip «Место подтверждено» (`ticketStatusTerm`).
+- CR-223 — the cabinet gate carries `?next=` through sign-in.
+- CR-224 — `/rides/[id]` asks the API server-side, real 404 (body client-rendered,
+  KI-096); branded `app/not-found.tsx`.
+- CR-225 — MapGL zoom/attribution controls named and 44×44 (`maps-2gis/control-a11y.ts`).
+- CR-226 — robots/sitemap/OG/canonical/noindex (`SITE_URL`), full page CSP +
+  Permissions-Policy, Zod `jitless` in browsers (KI-097: scripts keep `'unsafe-inline'`).
 
-- CR-218 — one VPS for app + Postgres + Redis + S3 (ADR-031):
-  `docker-compose.infra.yml` overlay, `deploy/deploy.sh`,
-  `deploy/production.env.example`; prod compose now passes the email env to `api`
-  (was missing — email dead in prod). Docker smoke on the overlay green locally,
-  incl. backup → restore.
-- CR-217 — token jobs `removeOnFail`, unawaited reset email with no queue,
-  `__Host-session`, 50 MP image cap, `?v=` key-hash cover/avatar URLs (KI-094),
-  stored route geometry capped at 5,000 points (KI-093 closed).
-- CR-214..216 — Shield scan fixes: `sharp` 0.35.5 (librsvg CVE) plus a JPEG/PNG/WebP
-  signature gate so no other libvips parser sees an upload; `source-map-js` 1.2.2
-  (KI-090 closed); esbuild-kit's esbuild lifted to ^0.25.4; `lint-staged` 17. Supply
-  chain: actions pinned by SHA, pnpm `blockExoticSubdeps` and
-  `trustPolicy: no-downgrade`, Dependabot `cooldown` 7 d except npm. No pnpm
-  `minimumReleaseAge` and no npm `cooldown` (Dependabot maps cooldown to that pnpm
-  flag, which re-checks the whole lockfile and failed every npm job). `braces` has
-  no fix (KI-095).
-- CR-212 — Next 16.3.8 (Dependabot #22, the last red check): `apps/web` stays on
-  webpack via an explicit `--webpack`, because Turbopack has no `extensionAlias`
-  for `packages/types`' NodeNext `.js` imports (vercel/next.js#82945);
-  eslint-config-next 16's prebuilt flat configs are imported directly, retiring
-  the FlatCompat bridge. New `set-state-in-effect` rule parked at `warn` (KI-092).
-  E2E needed a route warm-up (`e2e/warmup.setup.ts`): Next 16's dev server reloads a
-  page when it compiles a route under it, which broke CI's cold runs.
+Before this: CR-219 — **coffeeride.site is live** (VPS `/opt/deployments/coffee-ride`,
+`docs/deployment.md` → "Production host"); CR-220 — `AUTH_SKIP_EMAIL_VERIFICATION` on
+there (test deploy only). Email off until a verified Unisender sender is set.
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
@@ -77,18 +61,16 @@ proven, `www.` → 301. Email is off until a verified Unisender sender is set
 
 ## In progress
 
-CR-217/CR-218/CR-219 — committed and pushed; CI green at `1f741cf` (incl. the first
-`docker-smoke` on the infra overlay).
+CR-221..CR-226 — validated locally (see changelog), awaiting the owner's review/commit
+on `experiments`; deploying needs `SITE_URL` built in (prod compose derives it from
+`DOMAIN`) and a production smoke check. Visual baselines not re-run (Docker amd64).
 
-CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. No
-longer blocked on `main`: both runs at `fd1819b` (CR-209) concluded `success`, so the
-coverage gate holds. The npm bumps (#8/#9/#23) depended on `ip-address@10.7.3`
-leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
-#26 (seaweedfs) still needs `pnpm smoke:docker` before merging.
+CR-220 — the one-off `UPDATE users SET email_verified = true` for accounts made before
+the switch is left to the owner.
 
-CR-210..CR-212 are committed; `main` is green end to end at `941c555`
-(run `37425849763`, e2e 60/60, no flaky). CR-212 supersedes Dependabot PR #22 — close it rather than
-merging, its `package.json` change is a subset that breaks ESLint on its own.
+CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet;
+#26 (seaweedfs) still needs `pnpm smoke:docker` before merging. CR-212 supersedes
+Dependabot PR #22 — close it rather than merging.
 
 ## Next
 
@@ -145,4 +127,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-08 (CR-219)
+2026-10-08 (CR-226)

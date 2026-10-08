@@ -1390,3 +1390,57 @@ registrations.service.ts`, ADR-023) is the one place the rider-profile/
   single-use token race, dependency bumps, Dependabot alerts on (KI-090 opened).
 - CR-204 — `do-not-break.md` became a path-scoped rule (loads whole); area history
   via changelog grep in the read protocol.
+
+## Condensed from project-state.md on 2026-10-08 (CR-226)
+
+## Current task
+
+CR-219 — **coffeeride.site is live** (2026-10-08): first production deploy on the VPS
+(`/opt/deployments/coffee-ride`, `docs/deployment.md` → "Production host"), Caddy/ACME
+proven, `www.` → 301. Email is off until a verified Unisender sender is set
+(`EMAIL_FROM_ADDRESS` empty in the server `.env`). Latest work (details in
+`docs/changelog.md`):
+
+- CR-220 — `AUTH_SKIP_EMAIL_VERIFICATION` (test deploys only): new accounts start
+  verified, no email; preflight warns while on. Committed; deploy below.
+- CR-219 — deploy per `deploy/FIRST-DEPLOY.md`: §1–4 and §6 passed; §5 (email) and
+  the off-host backup copy remain (KI-045).
+
+- CR-218 — one VPS for app + Postgres + Redis + S3 (ADR-031):
+  `docker-compose.infra.yml` overlay, `deploy/deploy.sh`,
+  `deploy/production.env.example`; prod compose now passes the email env to `api`
+  (was missing — email dead in prod). Docker smoke on the overlay green locally,
+  incl. backup → restore.
+- CR-217 — token jobs `removeOnFail`, unawaited reset email with no queue,
+  `__Host-session`, 50 MP image cap, `?v=` key-hash cover/avatar URLs (KI-094),
+  stored route geometry capped at 5,000 points (KI-093 closed).
+- CR-214..216 — Shield scan fixes: `sharp` 0.35.5 (librsvg CVE) plus a JPEG/PNG/WebP
+  signature gate so no other libvips parser sees an upload; `source-map-js` 1.2.2
+  (KI-090 closed); esbuild-kit's esbuild lifted to ^0.25.4; `lint-staged` 17. Supply
+  chain: actions pinned by SHA, pnpm `blockExoticSubdeps` and
+  `trustPolicy: no-downgrade`, Dependabot `cooldown` 7 d except npm. No pnpm
+  `minimumReleaseAge` and no npm `cooldown` (Dependabot maps cooldown to that pnpm
+  flag, which re-checks the whole lockfile and failed every npm job). `braces` has
+  no fix (KI-095).
+- CR-212 — Next 16.3.8 (Dependabot #22, the last red check): `apps/web` stays on
+  webpack via an explicit `--webpack`, because Turbopack has no `extensionAlias`
+  for `packages/types`' NodeNext `.js` imports (vercel/next.js#82945);
+  eslint-config-next 16's prebuilt flat configs are imported directly, retiring
+  the FlatCompat bridge. New `set-state-in-effect` rule parked at `warn` (KI-092).
+  E2E needed a route warm-up (`e2e/warmup.setup.ts`): Next 16's dev server reloads a
+  page when it compiles a route under it, which broke CI's cold runs.
+
+## In progress
+
+CR-217/CR-218/CR-219 — committed and pushed; CI green at `1f741cf` (incl. the first
+`docker-smoke` on the infra overlay).
+
+CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. No
+longer blocked on `main`: both runs at `fd1819b` (CR-209) concluded `success`, so the
+coverage gate holds. The npm bumps (#8/#9/#23) depended on `ip-address@10.7.3`
+leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
+#26 (seaweedfs) still needs `pnpm smoke:docker` before merging.
+
+CR-210..CR-212 are committed; `main` is green end to end at `941c555`
+(run `37425849763`, e2e 60/60, no flaky). CR-212 supersedes Dependabot PR #22 — close it rather than
+merging, its `package.json` change is a subset that breaks ESLint on its own.

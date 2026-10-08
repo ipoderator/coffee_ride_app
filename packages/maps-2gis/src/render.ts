@@ -9,11 +9,15 @@ import type {
   MapRenderOptions,
 } from 'maps-core';
 import { FATAL_MAP_ERRORS, watchBasemap } from './basemap-watch.js';
+import { labelMapControls, type MapControlLabels } from './control-a11y.js';
 
 export interface TwoGisMapRendererConfig {
   /** Public MapGL key (`NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY`). Never the
    * server-side Geocoder/Directions key (`MAPS_2GIS_API_KEY`) — CR-071. */
   apiKey: string;
+  /** QA live audit 2026-10-08: names for MapGL's zoom buttons and 2GIS
+   * link (`./control-a11y.ts`). Omitted, the SDK's controls stay as drawn. */
+  controlLabels?: MapControlLabels;
 }
 
 // MapGL's own coordinate convention is [longitude, latitude] (confirmed
@@ -347,6 +351,10 @@ export function create2GisMapRenderer(
           : {}),
       });
 
+      const stopLabellingControls = config.controlLabels
+        ? labelMapControls(options.container, config.controlLabels)
+        : null;
+
       // CR-185: a map that exists but never draws its basemap is reported,
       // not left blank (`./basemap-watch.ts` has what MapGL does and doesn't
       // tell us).
@@ -669,6 +677,7 @@ export function create2GisMapRenderer(
         },
         destroy() {
           basemap?.stop();
+          stopLabellingControls?.();
           resizeObserver?.disconnect();
           if (containerGeneration.get(options.container) === generation) {
             containerGeneration.delete(options.container);

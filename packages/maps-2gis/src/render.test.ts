@@ -828,3 +828,35 @@ describe('linePrefix (CR-171)', () => {
     expect(linePrefix(line, 1)).toBe(line);
   });
 });
+
+// QA live audit 2026-10-08, item 6: the composition point's labels reach the
+// SDK's controls, and stop being watched with the map.
+describe('controlLabels', () => {
+  it('labels the controls in the container and stops watching on destroy', async () => {
+    const observed: Array<{ disconnect: ReturnType<typeof vi.fn> }> = [];
+    vi.stubGlobal(
+      'MutationObserver',
+      class {
+        disconnect = vi.fn();
+        constructor() {
+          observed.push(this);
+        }
+        observe() {}
+      },
+    );
+    const querySelectorAll = vi.fn(() => []);
+    const renderer = create2GisMapRenderer({
+      apiKey: 'test-key',
+      controlLabels: { zoomIn: 'in', zoomOut: 'out', attribution: 'logo' },
+    });
+    const handle = await renderer.render({
+      container: { querySelectorAll } as unknown as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+    });
+    expect(querySelectorAll).toHaveBeenCalledWith('button');
+    expect(observed).toHaveLength(1);
+    handle.destroy();
+    expect(observed[0]!.disconnect).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+});

@@ -1,9 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   REGISTRATION_ACTION_TERMS,
   RIDE_DETAIL_REGISTRATION_TERMS,
   RIDE_DETAIL_TERMS,
   RIDE_PAGE_TERMS,
+  RIDE_TICKET_TERMS,
 } from 'ui';
 import {
   createOrganizerProfile,
@@ -18,6 +19,18 @@ import {
   newIsolatedRequest,
   newSignedInActor,
 } from './helpers/ui';
+
+// QA live audit 2026-10-08, item 2: on a full ride the registered viewer's
+// own ticket read «Список ожидания» — the ride's chip, not theirs.
+async function expectConfirmedSeatChip(page: Page) {
+  const ticket = page.getByTestId('ride-ticket');
+  await expect(
+    ticket.getByText(RIDE_TICKET_TERMS.registeredStatus, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    ticket.getByText(RIDE_TICKET_TERMS.waitlistLabel, { exact: true }),
+  ).toHaveCount(0);
+}
 
 // CR-135. Cancelling a registration on a full ride promotes the *first*
 // waitlisted rider (CR-036, same locked transaction as the cancel) — the
@@ -54,6 +67,8 @@ test('cancelling a registration promotes the first waitlisted rider', async ({
       name: RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle,
     }),
   ).toBeVisible();
+  // Direct registration took the only seat: the ride is full, the seat is theirs.
+  await expectConfirmedSeatChip(page);
   await page
     .getByRole('button', { name: REGISTRATION_ACTION_TERMS.cancel })
     .click();
@@ -78,6 +93,8 @@ test('cancelling a registration promotes the first waitlisted rider', async ({
       name: RIDE_DETAIL_REGISTRATION_TERMS.registeredTitle,
     }),
   ).toBeVisible();
+  // Promoted from the waitlist onto the full ride: the same confirmed seat.
+  await expectConfirmedSeatChip(first.page);
 
   await second.page.goto(`/rides/${rideId}`);
   await expect(

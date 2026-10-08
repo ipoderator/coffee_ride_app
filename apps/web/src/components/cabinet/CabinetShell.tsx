@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { CABINET_TERMS, ErrorState, Skeleton } from 'ui';
 import { CurrentUserContext } from '@/lib/auth/current-user-context';
+import { loginHref } from '@/lib/auth/next-path';
 import { useSession } from '@/lib/auth/session-context';
 import type {
   CabinetNavBadgeCounts,
@@ -15,7 +16,7 @@ import { CabinetSidebar } from './CabinetSidebar';
 
 /**
  * Session gate for every `/me/*` and `/organizer/*` screen. Redirects to
- * `/login` when nobody is signed in — never renders protected content first —
+ * `/login?next=<this page>` when nobody is signed in — never renders protected content first —
  * and provides the resolved user to nested pages via context so they don't
  * each re-fetch it (`@/lib/auth/current-user-context`).
  *
@@ -54,8 +55,13 @@ export function CabinetShell({
   const router = useRouter();
   const { status, user } = useSession();
 
+  // QA live audit 2026-10-08, item 3: the protected page goes along as
+  // `?next=` (CR-141's validated return target), so signing in lands back on
+  // it rather than on `/me`.
   useEffect(() => {
-    if (status === 'anonymous') router.replace('/login');
+    if (status !== 'anonymous') return;
+    const { pathname, search, hash } = window.location;
+    router.replace(loginHref(`${pathname}${search}${hash}`));
   }, [status, router]);
 
   // `anonymous` keeps showing the skeleton rather than falling through to the

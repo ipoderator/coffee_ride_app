@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
 import { RESET_PASSWORD_TERMS } from 'ui';
 import { ResetPasswordForm } from '@/features/auth/reset-password/components/ResetPasswordForm';
+import { NO_INDEX } from '@/lib/site/site-meta';
 
 export const metadata: Metadata = {
   title: 'Новый пароль — Coffee Ride',
+  // QA live audit 2026-10-08, item 7: not a page to land on from search.
+  robots: NO_INDEX,
 };
 
 // `/reset-password` (CR-099, closes KI-042's screen gap). One `<h1>` per

@@ -3,6 +3,7 @@
 // The two API *contract* shapes ADR-011 fixed before any endpoint existed
 // (CR-007), plus the first domain type + auth contract, landing alongside
 // `packages/db`'s first table (CR-011).
+import './zod-config.js';
 export * from './api/problem.js';
 export * from './api/pagination.js';
 export * from './api/auth.js';

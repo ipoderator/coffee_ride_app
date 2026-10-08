@@ -48,6 +48,11 @@ ARG API_INTERNAL_URL
 RUN test -n "$API_INTERNAL_URL" \
     || (echo 'API_INTERNAL_URL build arg is required (e.g. http://api:4000)' >&2 && exit 1)
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
+# QA live audit 2026-10-08, item 7: the public origin for canonical/Open Graph
+# URLs, robots.txt and the sitemap — baked into the static pages here. Unset →
+# `http://localhost:3000` (`src/lib/site/site-url.ts`).
+ARG SITE_URL
+ENV SITE_URL=$SITE_URL
 ENV NODE_ENV=production
 RUN pnpm --filter web build
 
@@ -63,6 +68,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# QA live audit 2026-10-08, items 4/7: server code reads these at request time
+# too — `/rides/[id]` asks the API whether the ride exists (a real 404) and
+# the sitemap lists its rides. The rewrite above still comes from the build.
+ARG API_INTERNAL_URL
+ARG SITE_URL
+ENV API_INTERNAL_URL=$API_INTERNAL_URL
+ENV SITE_URL=$SITE_URL
 
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static

@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   BICYCLE_TYPE_TERMS,
   DIFFICULTY_LEVEL_TERMS,
+  MAP_CONTROL_TERMS,
   METRIC_TERMS,
+  NOT_FOUND_TERMS,
   ORGANIZER_JOURNAL_TERMS,
   ORGANIZER_TERMS,
   REGISTRATION_ACTION_TERMS,
   RIDE_SERVICE_TERMS,
   RIDE_STATUS_TERMS,
+  RIDE_TICKET_TERMS,
+  SITE_META_TERMS,
   RIDE_CONTACT_VALUE_ERRORS,
   UI_TERMS,
   VALIDATION_TERMS,
@@ -265,5 +269,27 @@ describe('VALIDATION_TERMS (KI-085)', () => {
     expect(RIDE_CONTACT_VALUE_ERRORS.telegram).toContain('@coffee_ride');
     // CR-194: the picker says «Почта»; account forms say «email».
     expect(RIDE_CONTACT_VALUE_ERRORS.email).toBe(VALIDATION_TERMS.contactEmail);
+  });
+});
+
+describe('QA live audit 2026-10-08 terms', () => {
+  it('names the 404 page and its way back in Russian', () => {
+    expect(NOT_FOUND_TERMS.pageTitle).toBe('Страница не найдена');
+    expect(NOT_FOUND_TERMS.toDiscovery).toBe('Вернуться к заездам');
+  });
+
+  it('builds a ride page title with the site name', () => {
+    expect(SITE_META_TERMS.rideTitle('Ночной Гравел')).toBe(
+      'Ночной Гравел — Coffee Ride',
+    );
+  });
+
+  it('names the map zoom buttons', () => {
+    expect(MAP_CONTROL_TERMS.zoomIn).toBe('Увеличить масштаб');
+    expect(MAP_CONTROL_TERMS.zoomOut).toBe('Уменьшить масштаб');
+  });
+
+  it("labels the registered viewer's own ticket chip", () => {
+    expect(RIDE_TICKET_TERMS.registeredStatus).toBe('Место подтверждено');
   });
 });

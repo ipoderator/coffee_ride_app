@@ -61,19 +61,23 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   `(public)/login|register`, `/verify-email`, `/forgot-password`, `/reset-password`,
   `/me` (+ `profile`, `rides`, `notifications`), `/organizer` (+ `profile`,
   `participants`, `updates`, `rides`, `rides/new`, `rides/[id]/edit|route|cover|groups|
-participants|updates` — the six-tab workspace «Управление заездом»).
+participants|updates` — the six-tab workspace «Управление заездом»); `not-found.tsx`
+  (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226).
 - `features/{auth,organizer,participant}/<feature>/` — ADR-009 modules (`components/`,
   `api.ts`, tests); organizer: activity, cover-image, groups, live-rides, overview,
   participants, profile, rides, route, updates; participant: discovery, my-rides,
   notifications, organizer-entry, profile, ride-detail, rider-profile.
-- `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink),
+- `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink,
+  NotFoundPanel),
   `components/cabinet/` (CabinetShell, CabinetSidebar, CabinetSectionTabs,
   OrganizerCabinetFrame, …).
 - `lib/`: `cabinet/` (nav + widget registries, feature flags, ride workspace sections,
   readiness), `auth/` (session context, `next-path` safe redirects, resend button),
   `api/` (errors, asset URLs, current user), `forms/` (Russian field errors + guard
   test), `datetime/zoned-time`, `maps/create-map-renderer.ts` (only `maps-2gis`
-  import), `rides/`, `organizer/`, `motion/`, `theme/`.
+  import), `rides/` (+ `server-ride.ts`: server-side ride lookup for the 404, CR-224),
+  `site/` (`SITE_URL`, shared metadata), `security/headers.ts` (page CSP +
+  Permissions-Policy, read by `next.config.ts`), `organizer/`, `motion/`, `theme/`.
 - `stories/` — Storybook (CR-158), fixtures in `stories/fixtures.ts`.
 - `e2e/` — one spec per journey, `helpers/{api-fixtures,ui,db-fixtures,mock}.ts`,
   `*.spec.ts-snapshots/` visual baselines (x86_64 Linux only).
@@ -85,13 +89,15 @@ participants|updates` — the six-tab workspace «Управление заез�
   registration, waitlist-entry, ride-update, notification, review, bike); migrations
   `migrations/0000`–`0025`; `migrate.ts` (advisory lock), `seed-demo.ts`,
   `scripts/backup.sh|restore.sh`.
-- `types` — Zod contracts `src/api/*`, domain enums/types `src/domain/*`.
+- `types` — Zod contracts `src/api/*`, domain enums/types `src/domain/*`; `zod-config.ts`
+  (browser-only `jitless`, CR-226).
 - `ui` — tokens (`tokens.css`, ADR-024), `format.ts` (Russian numbers/dates/units),
-  `terminology.ts` (every user-visible string), components (Button, Input, Dialog/
+  `terminology.ts` (every user-visible string), components (Button, Input, TimeInput, Dialog/
   ConfirmDialog, MetricTile, StatusBadge, EmptyState, ErrorState, Skeleton, …).
 - `maps-core` — `MapProvider` + render-layer interfaces (`/server` export omits render).
 - `maps-2gis` — REST provider (`provider.ts`, `http.ts` with breaker), `render.ts`
-  (`@2gis/mapgl`, browser-only), `basemap-watch.ts`, `shape.ts`.
+  (`@2gis/mapgl`, browser-only), `basemap-watch.ts`, `control-a11y.ts` (names/sizes
+  MapGL's own controls, CR-225), `shape.ts`.
 - `resilience` — `callWithResilience`, `CircuitBreaker` (ADR-016).
 - `config` — shared ESLint/TS/Vitest coverage config.
 

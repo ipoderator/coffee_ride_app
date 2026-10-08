@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import {
   RideContactFields,
   rideContactFromResponse,
@@ -23,6 +23,7 @@ import {
   RIDE_WORKSPACE_TERMS,
   RUSSIAN_TIMEZONE_OPTIONS,
   Textarea,
+  TimeInput,
   useToast,
 } from 'ui';
 import {
@@ -157,6 +158,7 @@ function DraftRideForm({
   const { showToast } = useToast();
   const headingId = useId();
   const [form, setForm] = useState<FormState>(() => toFormState(data.ride));
+  const startTimeRef = useRef<HTMLInputElement>(null);
   const [requirementsText, setRequirementsText] = useState(() =>
     data.requirements.join('\n'),
   );
@@ -180,14 +182,16 @@ function DraftRideForm({
     event.preventDefault();
     if (isPending) return;
 
-    if (!form.startDate || !form.startTime) {
+    // What the field shows, not what React last heard (`TimeInput`).
+    const startTime = startTimeRef.current?.value ?? form.startTime;
+    setForm((current) => ({ ...current, startTime }));
+
+    if (!form.startDate || !startTime) {
       setFieldErrors({
         startDate: form.startDate
           ? undefined
           : RIDE_CREATE_TERMS.startDateRequired,
-        startTime: form.startTime
-          ? undefined
-          : RIDE_CREATE_TERMS.startTimeRequired,
+        startTime: startTime ? undefined : RIDE_CREATE_TERMS.startTimeRequired,
       });
       return;
     }
@@ -197,7 +201,7 @@ function DraftRideForm({
       description: form.description.trim() ? form.description.trim() : null,
       bicycleType: form.bicycleType,
       startsAt: zonedTimeToUtcIso(
-        `${form.startDate}T${form.startTime}`,
+        `${form.startDate}T${startTime}`,
         form.startTimezone,
       ),
       startTimezone: form.startTimezone,
@@ -430,12 +434,10 @@ function DraftRideForm({
               label={RIDE_CREATE_TERMS.startTimeLabel}
               error={fieldErrors.startTime}
             >
-              <Input
-                type="time"
+              <TimeInput
+                ref={startTimeRef}
                 value={form.startTime}
-                onChange={(event) =>
-                  setForm({ ...form, startTime: event.target.value })
-                }
+                onValueChange={(startTime) => setForm({ ...form, startTime })}
                 disabled={isPending}
               />
             </FormField>

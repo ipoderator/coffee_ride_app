@@ -20,7 +20,6 @@ import type {
 import {
   Avatar,
   BICYCLE_TYPE_TERMS,
-  Card,
   cn,
   DifficultyScale,
   ErrorState,
@@ -58,6 +57,7 @@ import {
   useToast,
   type MetricParts,
 } from 'ui';
+import { NotFoundPanel } from '@/components/site/NotFoundPanel';
 import { apiAssetUrl } from '@/lib/api/asset-url';
 import {
   ApiError,
@@ -68,7 +68,7 @@ import {
 import { downloadIcs } from '../lib/calendar';
 import { buildRouteTrack } from '../lib/route-track';
 import {
-  posterStatusTerm,
+  ticketStatusTerm,
   seatsLeftOf,
   ticketStateOf,
   type TicketState,
@@ -418,16 +418,14 @@ export function RideDetailView({ rideId }: { rideId: string }) {
     );
   }
 
+  // QA live audit 2026-10-08, item 4: the page's `h1`, the same face as the
+  // server's 404 — reached when the ride disappears after the page loaded.
   if (status === 'not-found') {
     return (
-      <Card className="flex flex-col items-center gap-3 py-8 text-center">
-        <p className="text-body-sm font-medium text-text">
-          {RIDE_DETAIL_TERMS.notFoundTitle}
-        </p>
-        <p className="max-w-sm text-body-sm text-text-secondary">
-          {RIDE_DETAIL_TERMS.notFoundDescription}
-        </p>
-      </Card>
+      <NotFoundPanel
+        title={RIDE_DETAIL_TERMS.notFoundTitle}
+        description={RIDE_DETAIL_TERMS.notFoundDescription}
+      />
     );
   }
 
@@ -747,7 +745,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             rideId={rideId}
             rideStatus={ride.status}
             state={ticketState}
-            statusTerm={posterStatusTerm(ride.status, seatsLeft)}
+            statusTerm={ticketStatusTerm(ticketState, ride.status, seatsLeft)}
             participantLimit={ride.participantLimit}
             registrationsCount={registrationsCount}
             waitlistCount={waitlistCount}

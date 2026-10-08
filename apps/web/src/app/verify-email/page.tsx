@@ -2,9 +2,12 @@ import type { Metadata } from 'next';
 import { VERIFY_EMAIL_TERMS } from 'ui';
 import { VerifyEmailStatus } from '@/features/auth/verify-email/components/VerifyEmailStatus';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { NO_INDEX } from '@/lib/site/site-meta';
 
 export const metadata: Metadata = {
   title: 'Подтверждение email — Coffee Ride',
+  // QA live audit 2026-10-08, item 7: not a page to land on from search.
+  robots: NO_INDEX,
 };
 
 // `/verify-email` (CR-099, closes KI-026's screen gap). The register

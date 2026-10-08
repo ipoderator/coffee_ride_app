@@ -1,10 +1,11 @@
-import type { InputHTMLAttributes } from 'react';
+import type { ComponentProps } from 'react';
 import { cn } from '../lib/cn';
 
 // Meant to be used inside `FormField`, which wires `id`/`aria-describedby`/
 // `aria-invalid` onto whatever control it wraps — this component itself only
 // needs to render those attributes and look right, not manage them.
-export type InputProps = InputHTMLAttributes<HTMLInputElement>;
+// `ComponentProps` (React 19) carries `ref` too — `TimeInput` needs it.
+export type InputProps = ComponentProps<'input'>;
 
 export function Input({ className, ...props }: InputProps) {
   return (

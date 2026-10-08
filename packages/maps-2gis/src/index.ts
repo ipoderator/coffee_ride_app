@@ -5,6 +5,7 @@
 // monorepo allowed to import `@2gis/mapgl`, the real MapGL JS SDK, and it's
 // browser-only (never reachable from `apps/api`).
 export * from './config.js';
+export type { MapControlLabels } from './control-a11y.js';
 export * from './errors.js';
 export * from './provider.js';
 export * from './render.js';

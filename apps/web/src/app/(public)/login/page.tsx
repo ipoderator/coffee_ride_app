@@ -2,9 +2,12 @@ import type { Metadata } from 'next';
 import { AUTH_TERMS } from 'ui';
 import { LoginForm } from '@/features/auth/login/components/LoginForm';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { NO_INDEX } from '@/lib/site/site-meta';
 
 export const metadata: Metadata = {
   title: 'Вход — Coffee Ride',
+  // QA live audit 2026-10-08, item 7: not a page to land on from search.
+  robots: NO_INDEX,
 };
 
 // CR-013: the login screen CR-012 shipped the API for but not the UI

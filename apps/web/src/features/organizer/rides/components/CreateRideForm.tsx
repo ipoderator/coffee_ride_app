@@ -27,6 +27,7 @@ import {
   RUSSIAN_TIMEZONE_OPTIONS,
   Skeleton,
   Textarea,
+  TimeInput,
   cn,
   formatTime,
 } from 'ui';
@@ -148,6 +149,7 @@ export function CreateRideForm({
   const [bicycleType, setBicycleType] = useState<BicycleType>('gravel');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
+  const startTimeRef = useRef<HTMLInputElement>(null);
   const [startTimezone, setStartTimezone] = useState(DEFAULT_TIMEZONE);
   const [difficulty, setDifficulty] = useState('');
   const [description, setDescription] = useState('');
@@ -215,11 +217,14 @@ export function CreateRideForm({
     // button doesn't stop an Enter-key resubmit before React re-renders.
     if (isPending) return;
 
+    // What the field shows, not what React last heard (`TimeInput`).
+    const time = startTimeRef.current?.value ?? startTime;
+    setStartTime(time);
+
     const clientErrors: FieldErrors = {};
     if (!startDate)
       clientErrors.startDate = RIDE_CREATE_TERMS.startDateRequired;
-    if (!startTime)
-      clientErrors.startTime = RIDE_CREATE_TERMS.startTimeRequired;
+    if (!time) clientErrors.startTime = RIDE_CREATE_TERMS.startTimeRequired;
     if (Object.keys(clientErrors).length > 0) {
       setFieldErrors(clientErrors);
       setFormError(null);
@@ -230,7 +235,7 @@ export function CreateRideForm({
     const payload = {
       title: title.trim(),
       bicycleType,
-      startsAt: zonedTimeToUtcIso(`${startDate}T${startTime}`, startTimezone),
+      startsAt: zonedTimeToUtcIso(`${startDate}T${time}`, startTimezone),
       startTimezone,
       description: description.trim() || null,
       difficulty: difficulty ? (Number(difficulty) as DifficultyLevel) : null,
@@ -435,11 +440,11 @@ export function CreateRideForm({
                 ))}
               </select>
             </div>
-            <Input
+            <TimeInput
+              ref={startTimeRef}
               id="ride-start-time"
-              type="time"
               value={startTime}
-              onChange={(event) => setStartTime(event.target.value)}
+              onValueChange={setStartTime}
               disabled={isPending}
               aria-invalid={Boolean(fieldErrors.startTime)}
               aria-describedby={

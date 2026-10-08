@@ -63,7 +63,7 @@ describe('CabinetShell', () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('redirects to /login on an unauthenticated session, without rendering children', async () => {
+  it('redirects to /login with this page as `next` on an unauthenticated session, without rendering children', async () => {
     getCurrentUserMock.mockRejectedValue(
       new ApiError({
         type: 'https://coffee-ride.example/errors/unauthorized',
@@ -75,9 +75,16 @@ describe('CabinetShell', () => {
       }),
     );
 
+    // QA live audit 2026-10-08, item 3: the deep link survives sign-in.
+    window.history.replaceState(null, '', '/organizer/rides/new?ride=abc');
     renderShell();
 
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/login'));
+    await waitFor(() =>
+      expect(replaceMock).toHaveBeenCalledWith(
+        `/login?next=${encodeURIComponent('/organizer/rides/new?ride=abc')}`,
+      ),
+    );
+    window.history.replaceState(null, '', '/');
     expect(screen.queryByText('Содержимое кабинета')).not.toBeInTheDocument();
   });
 

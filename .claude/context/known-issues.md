@@ -600,6 +600,34 @@ should keep showing it until it is really gone.
 Next action: external — a `braces`/`micromatch` fix, or `@next/eslint-plugin-next`
 dropping `fast-glob`; re-run `pnpm audit` on each Next/eslint-config-next bump (CR-208).
 
+### KI-096 — A missing ride's 404 body is rendered on the client
+
+Status: open. Discovered: 2026-10-08 (CR-224).
+Problem: `/rides/[id]` answers a real HTTP 404 (`notFound()` after `lookupRide`), but
+Next 16 serves `notFound()` thrown from a page as an empty HTML shell + RSC payload
+(`<template data-next-error-message="NEXT_HTTP_ERROR_FALLBACK;404">`); the root layout,
+`h1` «Заезд не найден» and the CTA appear after hydration. Checked on `next dev` and
+a production build. An unknown URL (`app/not-found.tsx`) is fully server-rendered.
+Impact: low — status and `noindex` are right, JS clients/crawlers see the `h1`
+(e2e `not-found.spec.ts`); a no-JS client sees a blank 404.
+Workaround: none needed. A `<Suspense>` around the page would start streaming and turn
+the status back into 200 — don't.
+Next action: if it matters, Next's documented route — a `proxy.ts` check that rewrites
+a missing ride to a not-found route — at the cost of an API call per ride request.
+
+### KI-097 — Page CSP keeps `'unsafe-inline'` for scripts
+
+Status: open. Discovered: 2026-10-08 (CR-226, QA live audit item 8).
+Problem: `lib/security/headers.ts` restricts every origin, but scripts allow
+`'unsafe-inline'`: Next's per-page inline bootstrap (`self.__next_f.push`) and the
+theme init script need a per-request nonce, which makes every page dynamic (the
+discovery page is statically prerendered today).
+Impact: an injected inline `<script>` would still run; external scripts, connections,
+frames, forms and framing are blocked.
+Workaround: none. Keep new inline scripts out of the app.
+Next action: an ADR on nonce CSP via `proxy.ts` (all pages dynamic) vs. the status quo;
+re-inventory 2GIS hosts on any MapGL upgrade (`*.2gis.com`, `blob:` workers).
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

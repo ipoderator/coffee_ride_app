@@ -1,5 +1,6 @@
 import { create2GisMapRenderer } from 'maps-2gis';
 import type { MapRenderer } from 'maps-core';
+import { MAP_CONTROL_TERMS } from 'ui';
 
 // The one composition point (`.claude/rules/architecture.md`: "one
 // composition point ... to wire the concrete adapter behind the
@@ -16,5 +17,7 @@ export function createMapRenderer(): MapRenderer | null {
   if (!apiKey) {
     return null;
   }
-  return create2GisMapRenderer({ apiKey });
+  // QA live audit 2026-10-08, item 6: the SDK's zoom buttons and logo link
+  // get Russian accessible names here, once, for every map in the app.
+  return create2GisMapRenderer({ apiKey, controlLabels: MAP_CONTROL_TERMS });
 }

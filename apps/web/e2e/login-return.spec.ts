@@ -153,3 +153,23 @@ test('the verification page drops an external `next`', async ({ page }) => {
     page.getByRole('link', { name: VERIFY_EMAIL_TERMS.loginLink }),
   ).toHaveAttribute('href', '/login');
 });
+
+// QA live audit 2026-10-08, item 3: a guest opening a protected cabinet page
+// was sent to a bare `/login` and, signed in, landed on `/me`.
+test('a guest sent to sign in from a cabinet page returns to it', async ({
+  page,
+}) => {
+  const request = await newIsolatedRequest();
+  const account = await registerAndVerify(request);
+  await request.dispose();
+
+  await page.goto('/me/rides?tab=history');
+  await expect(page).toHaveURL(
+    `/login?next=${encodeURIComponent('/me/rides?tab=history')}`,
+  );
+
+  await page.getByLabel(AUTH_TERMS.emailLabel).fill(account.email);
+  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(account.password);
+  await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
+  await expect(page).toHaveURL('/me/rides?tab=history');
+});
