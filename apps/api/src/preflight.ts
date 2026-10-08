@@ -85,6 +85,18 @@ const CHECKS: ReadonlyArray<PreflightCheck> = [
       'Set UNISENDER_API_KEY and EMAIL_FROM_ADDRESS together (ADR-007), or accept that both flows stay dev-only.',
   },
   {
+    // CR-220: a deliberate test-deploy relaxation, reported so it never stays
+    // on unnoticed once real users arrive.
+    keys: ['AUTH_SKIP_EMAIL_VERIFICATION'],
+    applies: (env) => env.AUTH_SKIP_EMAIL_VERIFICATION,
+    problem:
+      'AUTH_SKIP_EMAIL_VERIFICATION is on, so new accounts are created already verified.',
+    consequence:
+      'Anyone can register with an address they do not own and immediately create an organizer profile and publish rides.',
+    action:
+      'Acceptable for a test deploy only. Unset it once an email provider is configured.',
+  },
+  {
     keys: ['MAPS_2GIS_API_KEY'],
     applies: (env) => env.MAPS_2GIS_API_KEY === undefined,
     problem:

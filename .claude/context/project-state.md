@@ -30,6 +30,8 @@ proven, `www.` → 301. Email is off until a verified Unisender sender is set
 (`EMAIL_FROM_ADDRESS` empty in the server `.env`). Latest work (details in
 `docs/changelog.md`):
 
+- CR-220 — `AUTH_SKIP_EMAIL_VERIFICATION` (test deploys only): new accounts start
+  verified, no email; preflight warns while on. Committed; deploy below.
 - CR-219 — deploy per `deploy/FIRST-DEPLOY.md`: §1–4 and §6 passed; §5 (email) and
   the off-host backup copy remain (KI-045).
 

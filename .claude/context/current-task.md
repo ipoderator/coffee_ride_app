@@ -1,36 +1,28 @@
-# Current task — CR-219 first production deploy to coffeeride.site — DONE
+# Current task — CR-220 skip email verification on the test deploy — COMMITTED
 
-Source: owner, 2026-10-08 — "нужно залить проект на мой сервер и там его развернуть"
-(server 72.56.110.108, domain coffeeride.site). Owner choices: commit + push, then
-git clone on the server; keys from the dev `.env`.
+Source: owner, 2026-10-08 — "в продакшене нужно убрать подтверждение по email, так как
+это только тестовый деплой на сервер".
 
-## Steps done
+## Goal
 
-- CR-217/218 committed as `1f741cf` and pushed; CI `ci` + `docker-smoke` green.
-- `deploy/Caddyfile`: `www.{$DOMAIN}` → 301 to the bare domain (`c43ce63`);
-  `caddy validate` on the server.
-- Access: root SSH is disabled; `gleb` + key `~/.ssh/hermes-server`, passwordless
-  sudo. fail2ban banned this machine after one failed key attempt (owner whitelisted).
-- Server: cloned to `/opt/deployments/coffee-ride` (host convention, see
-  `/opt/deployments/README.md`); `.env` (600, root) with generated hex secrets,
-  2GIS demo + Unisender keys from the dev `.env`, `ACME_EMAIL=admin@coffeeride.site`,
-  `EMAIL_FROM_ADDRESS` empty. Old Sept-27 verification stack in `/opt/coffee-ride`
-  stopped (`down`, volumes kept). ufw: 80/tcp, 443/tcp, 443/udp opened.
-- `deploy/deploy.sh` exit 0.
+Production (coffeeride.site, test deploy, no verified Unisender sender) lets a new
+account act as organizer without confirming email.
 
-## Validation (FIRST-DEPLOY)
+## Approach
 
-- §2: 7 services up; postgres/redis/s3 healthy. Warnings: email sender empty,
-  error webhook empty (both expected).
-- §3: Caddy "certificate obtained successfully" for coffeeride.site and www;
-  `curl` without `-k`: `/` 200, www 301, http 308, `/api/v1/rides` 200.
-  Headless browser: `/`, `/login` — 0 console errors, 0 failed requests.
-- §4: `/health` db/redis/s3 `ok`.
-- §6: `X-Request-Id` = api `reqId`; real client IP in api logs; first dump in
-  `/backups`.
-- Not done: §5 email flow (no verified sender); off-host backup copy.
+Env switch `AUTH_SKIP_EMAIL_VERIFICATION` (default off, allowed in production, preflight
+warning while on). `registerUser` creates the user verified, no token; `/register` sends
+no email. Web success card: «Подтверждать почту не нужно — можно сразу войти.» The
+`emailVerified` gates (organizer profile, ride publish) are untouched.
 
-## Final result
+## Validation
 
-coffeeride.site live. KI-045 narrowed to §5 + off-host backups. Context closed
-(changelog CR-219, tasks, project-state, deployment.md "Production host").
+- api: env/preflight/auth suites 79 passed (TEST_DATABASE_URL docker 127.0.0.1).
+- web: register 16 passed; storybook EmailVerification 8 passed (play + axe).
+- typecheck + lint api/web/ui green. Full `coverage:check` not run (needs live stack).
+
+## Remaining (needs owner approval — outward-facing)
+
+- commit + push; on the server: `AUTH_SKIP_EMAIL_VERIFICATION=true` in `.env`,
+  `git pull && deploy/deploy.sh`; one-off `UPDATE users SET email_verified = true`
+  for accounts registered before the switch.

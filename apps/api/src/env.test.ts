@@ -149,4 +149,19 @@ describe('loadEnv', () => {
     );
     expect(env.EMAIL_FROM_NAME).toBe('Coffee Ride');
   });
+
+  it('keeps email verification on unless AUTH_SKIP_EMAIL_VERIFICATION is exactly true (CR-220)', () => {
+    expect(loadEnv(BASE_ENV_SOURCE).AUTH_SKIP_EMAIL_VERIFICATION).toBe(false);
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, AUTH_SKIP_EMAIL_VERIFICATION: '' })
+        .AUTH_SKIP_EMAIL_VERIFICATION,
+    ).toBe(false);
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, AUTH_SKIP_EMAIL_VERIFICATION: 'true' })
+        .AUTH_SKIP_EMAIL_VERIFICATION,
+    ).toBe(true);
+    expect(() =>
+      loadEnv({ ...BASE_ENV_SOURCE, AUTH_SKIP_EMAIL_VERIFICATION: 'yes' }),
+    ).toThrow(/Invalid environment configuration/);
+  });
 });

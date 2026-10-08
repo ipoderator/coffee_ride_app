@@ -257,6 +257,37 @@ describe('RegisterForm', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not ask to check the inbox when the account is created already verified (CR-220)', async () => {
+    registerAccountMock.mockResolvedValue({
+      user: {
+        id: '1',
+        email: 'rider@example.com',
+        emailVerified: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        displayName: null,
+        firstName: null,
+        lastName: null,
+        phone: null,
+        bio: null,
+        avatarUrl: null,
+        profileVisibility: 'co_participants',
+        distanceWeekKm: null,
+        distanceMonthKm: null,
+        distanceYearKm: null,
+      },
+    });
+
+    render(<RegisterForm />);
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(
+      await screen.findByText(
+        'Подтверждать почту не нужно — можно сразу войти.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Проверьте почту/)).not.toBeInTheDocument();
+  });
+
   // CR-141 (KI-064): registering doesn't sign in, so `next` is handed on to
   // /login — from the form and from the success card.
   it('keeps `next` on the links to /login', async () => {

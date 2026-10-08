@@ -72,8 +72,9 @@ const USER_AVATAR_URL_PATH = '/v1/users/me/avatar';
 export interface RegisterResult {
   user: User;
   // Raw token, never persisted — the route layer decides whether/how to expose
-  // it (dev-only response field, per this ticket's scope boundaries).
-  verificationToken: string;
+  // it (dev-only response field, per this ticket's scope boundaries). `null`
+  // when the account was created already verified (CR-220).
+  verificationToken: string | null;
 }
 
 /**
@@ -87,6 +88,9 @@ export async function registerUser(
   db: DbClient,
   email: string,
   password: string,
+  // CR-220: `AUTH_SKIP_EMAIL_VERIFICATION` — the account starts verified and
+  // gets no token, so there is nothing to email.
+  { skipEmailVerification = false }: { skipEmailVerification?: boolean } = {},
 ): Promise<RegisterResult> {
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -105,25 +109,29 @@ export async function registerUser(
   }
 
   const passwordHash = await hashPassword(password);
-  const rawToken = generateVerificationToken();
-  const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS);
+  const rawToken = skipEmailVerification ? null : generateVerificationToken();
 
   try {
     const user = await db.transaction(async (tx) => {
       const [inserted] = await tx
         .insert(users)
-        .values({ email: normalizedEmail, passwordHash })
+        .values({
+          email: normalizedEmail,
+          passwordHash,
+          emailVerified: skipEmailVerification,
+        })
         .returning();
       if (!inserted) {
         throw new Error('User insert returned no row.');
       }
 
-      await tx.insert(emailVerificationTokens).values({
-        userId: inserted.id,
-        tokenHash,
-        expiresAt,
-      });
+      if (rawToken) {
+        await tx.insert(emailVerificationTokens).values({
+          userId: inserted.id,
+          tokenHash: hashToken(rawToken),
+          expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
+        });
+      }
 
       return inserted;
     });

@@ -51,6 +51,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [verificationUrl, setVerificationUrl] = useState<string | undefined>();
+  const [emailVerified, setEmailVerified] = useState(false);
   const [succeeded, setSucceeded] = useState(false);
 
   if (succeeded) {
@@ -62,7 +63,9 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
       <Card role="status" aria-live="polite">
         <h2 className="text-h2 text-text">{AUTH_TERMS.registerSuccessTitle}</h2>
         <p className="mt-2 text-text-secondary">
-          {AUTH_TERMS.registerSuccessBody}
+          {emailVerified
+            ? AUTH_TERMS.registerSuccessBodyVerified
+            : AUTH_TERMS.registerSuccessBody}
         </p>
         {verifyEmailPath && (
           <p className="mt-4 rounded-lg border border-border bg-surface p-3 text-body-sm text-text-secondary">
@@ -114,6 +117,7 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
     try {
       const response = await registerAccount(parsed.data);
       setVerificationUrl(response.verificationUrl);
+      setEmailVerified(response.user.emailVerified);
       setSucceeded(true);
     } catch (error) {
       if (error instanceof ApiError) {

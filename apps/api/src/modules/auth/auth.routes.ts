@@ -139,13 +139,19 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         app.db,
         request.body.email,
         request.body.password,
+        { skipEmailVerification: env.AUTH_SKIP_EMAIL_VERIFICATION },
       );
+
+      const body: { user: typeof user; verificationUrl?: string } = { user };
+      // CR-220: the account is already verified — no link, no email.
+      if (verificationToken === null) {
+        return reply.status(201).send(body);
+      }
 
       // Dev-only convenience, unchanged by CR-100/ADR-007: never populated in
       // production, never logged — the raw API path here, not the real
       // `/verify-email` web page `apps/web`'s `RegisterForm` links to
       // (CR-099); kept for the direct-POST live-check/manual QA path.
-      const body: { user: typeof user; verificationUrl?: string } = { user };
       if (env.NODE_ENV !== 'production') {
         body.verificationUrl = `/v1/auth/verify-email?token=${verificationToken}`;
       }

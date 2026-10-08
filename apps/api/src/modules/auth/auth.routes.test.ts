@@ -110,6 +110,30 @@ describe('POST /v1/auth/register', () => {
     await app.close();
   });
 
+  it('creates the account already verified, with no token, when AUTH_SKIP_EMAIL_VERIFICATION is on (CR-220)', async () => {
+    const app = await buildApp({
+      ...testEnv,
+      AUTH_SKIP_EMAIL_VERIFICATION: true,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/register',
+      payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.user.emailVerified).toBe(true);
+    expect(body.verificationUrl).toBeUndefined();
+    const tokens = await app.db.execute(
+      sql`SELECT 1 FROM email_verification_tokens WHERE user_id = ${body.user.id}`,
+    );
+    expect(tokens).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('rejects a duplicate email with 409', async () => {
     const app = await buildApp(testEnv);
     const email = uniqueEmail();

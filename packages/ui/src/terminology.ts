@@ -204,6 +204,9 @@ export const AUTH_TERMS = {
   registerSuccessTitle: 'Аккаунт создан',
   registerSuccessBody:
     'Проверьте почту, чтобы подтвердить адрес и активировать аккаунт.',
+  // CR-220: the API created the account already verified (test deploy).
+  registerSuccessBodyVerified:
+    'Подтверждать почту не нужно — можно сразу войти.',
   registerSuccessDevNote:
     'Только для этого окружения — ссылка для подтверждения:',
   // CR-141: the success card's own way on — signing in right away works

@@ -41,6 +41,12 @@ describe('runPreflight', () => {
     expect(findings[0]?.consequence).toMatch(/password reset/i);
   });
 
+  it('reports skipped email verification while it is on (CR-220)', () => {
+    expect(
+      keysOf({ ...FULLY_CONFIGURED, AUTH_SKIP_EMAIL_VERIFICATION: 'true' }),
+    ).toEqual(['AUTH_SKIP_EMAIL_VERIFICATION']);
+  });
+
   it('reports a sender address with no email key', () => {
     const findings = runPreflight(
       loadEnv({ ...FULLY_CONFIGURED, UNISENDER_API_KEY: '' }),

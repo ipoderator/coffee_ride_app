@@ -165,3 +165,11 @@ Files: `deploy/Caddyfile`, `docs/deployment.md` ("Production host"), context fil
 Validation: `caddy validate`; FIRST-DEPLOY §1–4, §6: all 7 services up, postgres/redis/s3 healthy; `/health` db/redis/s3 `ok`; `curl` without `-k`: `/` 200, `www` 301, http 308, `/api/v1/rides` 200; headless browser `/`, `/login` — 0 console errors, 0 failed requests; `X-Request-Id` = api `reqId`, real client IP in api logs; first backup dump present.
 Decisions: host convention `/opt/deployments/<project>`; root SSH stays disabled (deploy as `gleb` + sudo).
 Follow-up: §5 email flow fails by construction until `EMAIL_FROM_ADDRESS` is a verified Unisender sender; off-host backup copy not set up; KI-045 narrowed to these.
+
+## 2026-10-08 — CR-220 — Skip email verification on the test deploy
+
+Summary: Owner: production is a test deploy without a mail sender, so email verification must go. New env `AUTH_SKIP_EMAIL_VERIFICATION` (`true`/`false`, default off, allowed in production): `registerUser` inserts the user with `emailVerified = true` and no token; `/register` sends no email and no dev link. Preflight warns while it is on. The register success card says no inbox step is needed.
+Contract: none (`emailVerified` was already in the response).
+Files: `apps/api/src/{env,preflight}.ts`(+tests), `modules/auth/auth.{service,routes}.ts`(+test), `RegisterForm.tsx`(+test, story), `terminology.ts`, `docker-compose.prod.yml`, `deploy/production.env.example`, `docs/deployment.md`.
+Validation: api env/preflight/auth 79 passed; web register 16; storybook EmailVerification 8 (axe); typecheck + lint api/web/ui.
+Follow-up: accounts registered before the switch stay unverified — one-off `UPDATE users SET email_verified = true` on the server; unset the flag before real users.

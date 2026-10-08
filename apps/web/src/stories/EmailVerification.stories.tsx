@@ -52,7 +52,7 @@ function problem(status: number, code: string) {
   );
 }
 
-function stub(verify: 'ok' | 'expired') {
+function stub(verify: 'ok' | 'expired', { registerVerified = false } = {}) {
   return () => {
     const original = globalThis.fetch;
 
@@ -64,11 +64,14 @@ function stub(verify: 'ok' | 'expired') {
         return problem(401, 'unauthorized');
       }
       if (url.pathname === '/api/v1/auth/register') {
+        // CR-220: AUTH_SKIP_EMAIL_VERIFICATION — verified, no link.
         return json(
-          {
-            user: { ...USER, emailVerified: false },
-            verificationUrl: '/v1/auth/verify-email?token=tok-1',
-          },
+          registerVerified
+            ? { user: USER }
+            : {
+                user: { ...USER, emailVerified: false },
+                verificationUrl: '/v1/auth/verify-email?token=tok-1',
+              },
           201,
         );
       }
@@ -131,6 +134,37 @@ export const RegisterSucceeded: Story = {
 
 export const RegisterSucceededDark: Story = {
   ...RegisterSucceeded,
+  globals: { theme: 'dark' },
+};
+
+/** Test deploy (CR-220): the account is already verified — no inbox step. */
+export const RegisterSucceededVerified: Story = {
+  beforeEach: stub('ok', { registerVerified: true }),
+  render: () => <RegisterForm next={NEXT} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(
+      canvas.getByLabelText(AUTH_TERMS.emailLabel),
+      'rider@example.com',
+    );
+    await userEvent.type(
+      canvas.getByLabelText(AUTH_TERMS.passwordLabel),
+      'a-strong-password-123',
+    );
+    await userEvent.click(
+      canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
+    );
+
+    await expect(
+      await canvas.findByText(AUTH_TERMS.registerSuccessBodyVerified),
+    ).toBeVisible();
+    await expect(
+      canvas.queryByText(AUTH_TERMS.registerSuccessDevNote, { exact: false }),
+    ).toBeNull();
+  },
+};
+
+export const RegisterSucceededVerifiedDark: Story = {
+  ...RegisterSucceededVerified,
   globals: { theme: 'dark' },
 };
 

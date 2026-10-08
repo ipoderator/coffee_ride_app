@@ -19,6 +19,8 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-220 Test-deploy switch `AUTH_SKIP_EMAIL_VERIFICATION`: new accounts
+      start verified, no email — done 2026-10-08. See docs/changelog.md
 - [x] CR-219 First production deploy: coffeeride.site live on the VPS
       (`/opt/deployments/coffee-ride`), Let's Encrypt via Caddy, `www.` → 301 —
       done 2026-10-08. See docs/changelog.md

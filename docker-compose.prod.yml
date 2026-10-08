@@ -121,6 +121,9 @@ services:
       UNISENDER_API_URL: ${UNISENDER_API_URL}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
+      # CR-220: test-deploy switch — `true` skips email verification
+      # (apps/api/src/env.ts). Empty/unset keeps it on.
+      AUTH_SKIP_EMAIL_VERIFICATION: ${AUTH_SKIP_EMAIL_VERIFICATION:-}
     # No `ports:` — unlike `caddy`, never reachable except from `web` and
     # `caddy` over the compose network (ADR-018 §2).
     deploy:

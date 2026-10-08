@@ -127,6 +127,18 @@ const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.coerce.number().int().min(0).max(5).optional(),
   ),
+  // CR-220: test-deploy switch. `true` creates every new account with
+  // `emailVerified` already set — no token, no email — so the verified-email
+  // gates (organizer profile, ride publish) pass without a mail provider.
+  // Unlike the rate-limit overrides it is allowed in production (a test deploy
+  // is exactly where it is needed); the preflight warns while it is on.
+  AUTH_SKIP_EMAIL_VERIFICATION: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;

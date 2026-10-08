@@ -115,6 +115,11 @@ address after a single failed key attempt — fix the key before retrying. Updat
 there with `sudo git pull && sudo deploy/deploy.sh`. The same host runs other
 stacks (beszel, a Hermes audit stack); keep the `coffee-ride` compose project name.
 
+While this host is a test deploy with no verified email sender, its `.env` sets
+`AUTH_SKIP_EMAIL_VERIFICATION=true` (CR-220): new accounts are created already
+verified, so publishing a ride needs no email. The API logs a preflight warning
+while it is on; unset it (and configure `EMAIL_FROM_ADDRESS`) before real users.
+
 ## Rollback
 
 Drizzle migrations are forward-only. Rolling back application code alone is safe —
