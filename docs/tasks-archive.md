@@ -1470,3 +1470,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       configuration that boots but leaves a feature dead (empty
       `EMAIL_FROM_ADDRESS` above all), `deploy/FIRST-DEPLOY.md`, ADR-030 on
       error tracking — done 2026-10-05. See docs/changelog.md
+- [x] CR-211 `/verify-email` sends its single-use token exactly once — React Strict
+      Mode's double-invoke burned the link and showed «Ссылка недействительна» over a
+      successful verification, failing e2e `login-return.spec.ts` on `main`
+      — done 2026-10-05. See docs/changelog.md

@@ -24,8 +24,14 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-217 + CR-218 — security-review fixes and single-VPS deploy readiness — validated and
-committed (`.claude/settings.json` is the owner's own change, not part of it). Latest work (details in `docs/changelog.md`):
+CR-219 — **coffeeride.site is live** (2026-10-08): first production deploy on the VPS
+(`/opt/deployments/coffee-ride`, `docs/deployment.md` → "Production host"), Caddy/ACME
+proven, `www.` → 301. Email is off until a verified Unisender sender is set
+(`EMAIL_FROM_ADDRESS` empty in the server `.env`). Latest work (details in
+`docs/changelog.md`):
+
+- CR-219 — deploy per `deploy/FIRST-DEPLOY.md`: §1–4 and §6 passed; §5 (email) and
+  the off-host backup copy remain (KI-045).
 
 - CR-218 — one VPS for app + Postgres + Redis + S3 (ADR-031):
   `docker-compose.infra.yml` overlay, `deploy/deploy.sh`,
@@ -69,8 +75,8 @@ committed (`.claude/settings.json` is the owner's own change, not part of it). L
 
 ## In progress
 
-CR-217/CR-218 — committed; first deploy to coffeeride.site in progress; after the push, watch `ci` incl. `docker-smoke` (first CI
-run of the infra overlay).
+CR-217/CR-218/CR-219 — committed and pushed; CI green at `1f741cf` (incl. the first
+`docker-smoke` on the infra overlay).
 
 CR-208 — 13 Dependabot PRs classified, 8 safe ones rebased, none merged yet. No
 longer blocked on `main`: both runs at `fd1819b` (CR-209) concluded `success`, so the
@@ -102,8 +108,8 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    code work): a commercial 2GIS key (KI-075); a verified Unisender Go sender in
    `EMAIL_FROM_ADDRESS`, without which password reset and email verification are dead
    ends for real users (KI-026/KI-042/KI-055) — `pnpm preflight` now warns on both;
-   then the first real deployment: `deploy/deploy.sh` on the VPS, checked against
-   `deploy/FIRST-DEPLOY.md` — only Caddy/ACME is unproven (KI-045).
+   the site is deployed (CR-219) — after setting the sender, edit the server `.env`,
+   re-run `deploy/deploy.sh` and finish FIRST-DEPLOY §5; set up off-host backups (KI-045).
 5. **KI-075's error mapping** — a separate CR the owner kept out of CR-210's scope:
    2GIS's 403 (demo-key distance, and a commercial key's own quota/licence refusals)
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
@@ -137,4 +143,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-07 (CR-217, CR-218)
+2026-10-08 (CR-219)

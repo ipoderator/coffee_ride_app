@@ -105,6 +105,16 @@ The same script: it rebuilds, applies any new migrations before the new `api` st
 and recreates only containers whose image or configuration changed. Never rely on
 application boot to apply migrations.
 
+## Production host (CR-219)
+
+`coffeeride.site` (and `www.` → 301) runs on the VPS `72.56.110.108` from
+`/opt/deployments/coffee-ride` (the host's convention: one directory per project
+under `/opt/deployments/`). The checkout and `.env` (mode 600) are root-owned.
+SSH as `gleb` (passwordless sudo); root login is disabled, and fail2ban bans an
+address after a single failed key attempt — fix the key before retrying. Update
+there with `sudo git pull && sudo deploy/deploy.sh`. The same host runs other
+stacks (beszel, a Hermes audit stack); keep the `coffee-ride` compose project name.
+
 ## Rollback
 
 Drizzle migrations are forward-only. Rolling back application code alone is safe —

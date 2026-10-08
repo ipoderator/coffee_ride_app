@@ -156,3 +156,12 @@ Files: `docker-compose.{prod,infra}.yml`, `deploy/{deploy.sh,production.env.exam
 Validation: `pnpm smoke:docker` on the overlay green locally — `/health` db/redis/s3 `ok`, backup → restore of 26 migrations; `docker compose config`; env tests. Not yet run in CI.
 Decisions: ADR-031 (one host = one failure domain; off-host backup copies are an operator task).
 Follow-up: first real deploy per `deploy/FIRST-DEPLOY.md` — Caddy/ACME is the only never-executed part (KI-045).
+
+## 2026-10-08 — CR-219 — First production deploy to coffeeride.site
+
+Summary: CR-217/218 committed (`1f741cf`, CI green incl. `docker-smoke`), cloned to `/opt/deployments/coffee-ride` on the VPS, `.env` generated (hex secrets; 2GIS demo + Unisender keys from the dev `.env`; `ACME_EMAIL=admin@coffeeride.site`), `deploy/deploy.sh` exit 0. Caddy obtained Let's Encrypt certificates for `coffeeride.site` and `www.` (new 301 to the bare domain, `c43ce63`). The old Sept-27 verification stack in `/opt/coffee-ride` was stopped (volumes kept); ufw opened 80/443.
+Contract: none.
+Files: `deploy/Caddyfile`, `docs/deployment.md` ("Production host"), context files.
+Validation: `caddy validate`; FIRST-DEPLOY §1–4, §6: all 7 services up, postgres/redis/s3 healthy; `/health` db/redis/s3 `ok`; `curl` without `-k`: `/` 200, `www` 301, http 308, `/api/v1/rides` 200; headless browser `/`, `/login` — 0 console errors, 0 failed requests; `X-Request-Id` = api `reqId`, real client IP in api logs; first backup dump present.
+Decisions: host convention `/opt/deployments/<project>`; root SSH stays disabled (deploy as `gleb` + sudo).
+Follow-up: §5 email flow fails by construction until `EMAIL_FROM_ADDRESS` is a verified Unisender sender; off-host backup copy not set up; KI-045 narrowed to these.

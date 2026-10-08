@@ -335,6 +335,16 @@ restores into a fresh database. Still unverified: Caddy at runtime, ACME/TLS and
 the Caddy → web hop — only a real host with real DNS can show them
 (`deploy/FIRST-DEPLOY.md` §3).
 
+Update 2026-10-08 (CR-219): first real deploy to `coffeeride.site` passed
+FIRST-DEPLOY §1–4 and §6's checks — Caddy obtained Let's Encrypt certificates
+(logged "certificate obtained successfully" for the domain and `www.`), `curl`
+without `-k` returns 200 over a valid chain, the Caddy → web → api hop serves
+`/api/v1/rides`, `/health` reports all `ok`, the `backup` loop wrote its first dump,
+`X-Request-Id` matches the api `reqId`. Still open: §5 (register + verify + reset by
+real email) — fails by construction until `EMAIL_FROM_ADDRESS` is a verified
+Unisender sender (KI-026/KI-042); and the off-host backup copy (§6). Close this
+issue once both are done.
+
 ### KI-055 — `unisender.ru` (all subdomains) fails DNS resolution from this sandbox
 
 Status: open. Discovered: 2026-09-20 (CR-100, ADR-007 session).

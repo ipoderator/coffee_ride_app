@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-219 First production deploy: coffeeride.site live on the VPS
+      (`/opt/deployments/coffee-ride`), Let's Encrypt via Caddy, `www.` → 301 —
+      done 2026-10-08. See docs/changelog.md
 - [x] CR-218 Single-VPS deploy readiness (ADR-031): `docker-compose.infra.yml`
       overlay (Postgres/Redis/SeaweedFS), `deploy/deploy.sh`,
       `deploy/production.env.example`, email env passed to `api`, log rotation;
@@ -47,7 +50,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       imported as flat config, `set-state-in-effect` parked at `warn` (KI-092)
       — done 2026-10-06; e2e route warm-up for Next 16's dev reloads, CI green
       at `941c555`. See docs/changelog.md
-- [x] CR-211 `/verify-email` sends its single-use token exactly once — React Strict
-      Mode's double-invoke burned the link and showed «Ссылка недействительна» over a
-      successful verification, failing e2e `login-return.spec.ts` on `main`
-      — done 2026-10-05. See docs/changelog.md
