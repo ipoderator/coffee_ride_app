@@ -14,3 +14,10 @@
 {$DOMAIN} {
 	reverse_proxy web:3000
 }
+
+# CR-219: `www.` is a permanent redirect to the bare domain, so one canonical
+# origin matches the API's CSRF check (https://${DOMAIN}). Needs its own DNS
+# record; without one Caddy only logs a failed ACME attempt for it.
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
