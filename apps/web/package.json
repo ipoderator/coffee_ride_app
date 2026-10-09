@@ -16,7 +16,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "lucide-react": "^1.45.0",
+    "lucide-react": "^1.52.0",
     "maps-2gis": "workspace:*",
     "maps-core": "workspace:*",
     "next": "^16.3.8",
