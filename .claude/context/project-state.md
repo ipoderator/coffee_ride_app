@@ -24,24 +24,16 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-221..CR-226 — fixes for the live QA audit of coffeeride.site
-(`QA_LIVE_AUDIT_coffeeride.site_2026-10-08.md`, owner's folder), on branch
-`experiments`, **local only — not committed, not deployed**:
+CR-227 — transactional email links go straight to the site (`track_links`/`track_read`
+off in the Unisender provider) and a refused send logs Unisender's code/message.
+Production email is live on Unisender Go (paid tariff, `noreply@coffeeride.site`, go2);
+its link-tracking domain `links.coffeeride.site` does not resolve (Unisender's NS
+answer REFUSED), which is why tracking is off. Prod keeps
+`AUTH_SKIP_EMAIL_VERIFICATION=true` until the owner confirms a live verify link.
 
-- CR-221 (P1) — start time saved as shown: `ui` `TimeInput` (browser-owned field,
-  read through a ref at save) in create/edit/reschedule; the 12:12 was a DOM/state
-  split, not the API.
-- CR-222 — the registered viewer's ticket chip «Место подтверждено» (`ticketStatusTerm`).
-- CR-223 — the cabinet gate carries `?next=` through sign-in.
-- CR-224 — `/rides/[id]` asks the API server-side, real 404 (body client-rendered,
-  KI-096); branded `app/not-found.tsx`.
-- CR-225 — MapGL zoom/attribution controls named and 44×44 (`maps-2gis/control-a11y.ts`).
-- CR-226 — robots/sitemap/OG/canonical/noindex (`SITE_URL`), full page CSP +
-  Permissions-Policy, Zod `jitless` in browsers (KI-097: scripts keep `'unsafe-inline'`).
-
-Before this: CR-219 — **coffeeride.site is live** (VPS `/opt/deployments/coffee-ride`,
-`docs/deployment.md` → "Production host"); CR-220 — `AUTH_SKIP_EMAIL_VERIFICATION` on
-there (test deploy only). Email off until a verified Unisender sender is set.
+Before this: CR-221..CR-226 — live QA audit fixes, deployed (`c082a79`); CR-219 —
+**coffeeride.site is live** (VPS `/opt/deployments/coffee-ride`, `docs/deployment.md`
+→ "Production host").
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 

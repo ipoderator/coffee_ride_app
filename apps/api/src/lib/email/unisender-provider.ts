@@ -22,6 +22,12 @@ const TIMEOUT_MS = 8000;
 const BREAKER_FAILURE_THRESHOLD = 5;
 const BREAKER_COOLDOWN_MS = 30_000;
 
+// Unisender's error text can quote a recipient address; this message ends up
+// in the logs, which must not carry contact data (`.claude/rules/security.md`).
+function redactEmails(text: string): string {
+  return text.replace(/[^\s'"<>,;]+@[^\s'"<>,;]+/g, '<email>');
+}
+
 export interface UnisenderConfig {
   apiKey: string;
   apiUrl: string;
@@ -34,6 +40,10 @@ export interface UnisenderConfig {
 interface UnisenderSendResponse {
   status: string;
   failed_emails?: Record<string, string>;
+  // Present on `status: "error"` (e.g. 229 — no link-tracking domain, 903 —
+  // tariff limits the recipients); the only clue to why a send was refused.
+  code?: number;
+  message?: string;
 }
 
 /**
@@ -62,10 +72,14 @@ export class UnisenderEmailProvider implements EmailProvider {
       });
     } catch (error) {
       if (error instanceof ResilienceError) {
+        // The cause carries Unisender's own refusal (sendOnce below); the
+        // ResilienceError's message alone is generic.
+        const detail =
+          error.cause instanceof Error ? error.cause.message : error.message;
         throw new EmailDeliveryError(
           error.code === 'circuit_open'
             ? 'Email delivery is temporarily unavailable (circuit open).'
-            : `Email delivery failed: ${error.message}`,
+            : `Email delivery failed: ${detail}`,
         );
       }
       throw error;
@@ -89,6 +103,12 @@ export class UnisenderEmailProvider implements EmailProvider {
           subject: message.subject,
           body: { html: message.html, plaintext: message.text },
           recipients: [{ email: message.to }],
+          // CR-227: every email this app sends carries a one-time token link
+          // (verify-email, password reset). Tracking would rewrite it through
+          // the account's link-tracking domain — a third-party redirector the
+          // token must not pass, and a dead link whenever that domain's DNS is.
+          track_links: 0,
+          track_read: 0,
         },
       }),
       signal,
@@ -103,7 +123,9 @@ export class UnisenderEmailProvider implements EmailProvider {
 
     if (!response.ok || body?.status !== 'success') {
       throw new Error(
-        `Unisender responded ${response.status} with status "${body?.status ?? 'unknown'}".`,
+        `Unisender responded ${response.status} with status "${body?.status ?? 'unknown'}"` +
+          (body?.code !== undefined ? ` (code ${body.code})` : '') +
+          (body?.message ? `: ${redactEmails(body.message)}` : '.'),
       );
     }
 

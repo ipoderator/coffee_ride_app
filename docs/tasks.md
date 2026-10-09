@@ -19,6 +19,8 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-227 Transactional email links untracked (direct to the site) + Unisender
+      refusal code/message in logs — done 2026-10-09
 - [x] CR-221 Start time saved as shown: `ui` `TimeInput` read at save in create/edit/
       reschedule; zoned-time second pass (QA live audit 2026-10-08 item 1, P1) — done
       2026-10-08. See docs/changelog.md

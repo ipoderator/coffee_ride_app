@@ -61,7 +61,29 @@ describe('UnisenderEmailProvider', () => {
       subject: message.subject,
       body: { html: message.html, plaintext: message.text },
       recipients: [{ email: message.to }],
+      track_links: 0,
+      track_read: 0,
     });
+  });
+
+  it("puts Unisender's error code and message into the EmailDeliveryError, emails redacted", async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        status: 'error',
+        code: 903,
+        message: "Only 'checked' emails allowed: 'rider@example.com'.",
+      }),
+    });
+
+    const provider = new UnisenderEmailProvider(config);
+    const error = await provider.send(message).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(EmailDeliveryError);
+    expect((error as Error).message).toBe(
+      `Email delivery failed: Unisender responded 403 with status "error" (code 903): Only 'checked' emails allowed: '<email>'.`,
+    );
+    expect((error as Error).message).not.toContain(config.apiKey);
   });
 
   it('throws EmailDeliveryError on a non-2xx response', async () => {

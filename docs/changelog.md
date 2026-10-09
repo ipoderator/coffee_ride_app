@@ -108,3 +108,10 @@ Files: `app/{robots,sitemap,layout}.ts(x)`, `lib/site/*`, `lib/security/headers.
 Validation: unit seo/page/site-url/headers 22 passed; prod build + standalone on :3100: 0 CSP violations on map/ride/404/login, map renders, canonical `https://coffeeride.site`; full e2e 55 passed.
 Decisions: scripts keep `'unsafe-inline'` — a nonce makes every page dynamic (KI-097).
 Follow-up: KI-097; no `manifest.webmanifest` (needs icon set + theme colours).
+
+## 2026-10-09 — CR-227 — Direct links in transactional email; Unisender refusals logged
+
+Summary: Production email went live on Unisender Go (paid tariff; sender domain + DKIM confirmed, link-tracking domain `links.coffeeride.site` added because send.json refuses with code 229 without one). That domain's NS delegation answers REFUSED, so every rewritten verify/reset link was dead. The provider now sends `track_links: 0, track_read: 0` — links go straight to the site and single-use tokens never pass a third-party redirector. A refused send now logs Unisender's `code`/`message` (emails redacted) instead of the generic "Operation failed after retries.".
+Files: `apps/api/src/lib/email/unisender-provider.ts`(+test).
+Validation: email unit tests 6 passed; api typecheck/lint/prettier clean; file coverage up (branches 78.6 → 80 %).
+Follow-up: prod still runs `AUTH_SKIP_EMAIL_VERIFICATION=true` until the owner checks a live verify link.
