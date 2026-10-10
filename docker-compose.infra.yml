@@ -105,8 +105,9 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # One-shot: creates the bucket. Safe to re-run — creating an existing bucket is
-  # reported and ignored, and the container still exits 0.
+  # One-shot: creates the bucket. Safe to re-run — since SeaweedFS 4.48 `weed
+  # shell` exits non-zero on "already exists", so that one error counts as
+  # success here; any other failure still fails the deploy.
   s3-init:
     image: ghcr.io/chrislusf/seaweedfs:4.48
     restart: 'no'
@@ -118,7 +119,11 @@ services:
     entrypoint:
       - sh
       - -c
-      - echo "s3.bucket.create -name $$S3_BUCKET" | weed shell -master=s3:9333
+      - |
+        out=$$(echo "s3.bucket.create -name $$S3_BUCKET" | weed shell -master=s3:9333 2>&1)
+        status=$$?
+        echo "$$out"
+        [ "$$status" -eq 0 ] || case "$$out" in *'already exists'*) ;; *) exit 1 ;; esac
 
   api:
     environment:
