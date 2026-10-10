@@ -106,3 +106,10 @@ Follow-up: `21st review` does not exist in the installed `21st` CLI — replaced
 ## 2026-10-10 — Dependabot triage — eight updates merged
 
 Summary: Merged after a rebase onto main and green CI each: #26 SeaweedFS 4.48, #29 upload-artifact 7, #30 setup-node 7, #31 pnpm/action-setup 6, #32 checkout 7 (majors: node24 runtime + runner ≥ 2.327.1 only, inputs unchanged), #9 zod 4.6.5, #8 tailwind-merge 3.7, #34 @aws-sdk/client-s3 3.1146, #35 lucide-react 1.52, #38 dev group (15: vitest 5.0.3, vite 8.3.3, storybook 10.6.1, turbo 2.11.7, eslint-config-next 16.4.0…). #35's first red run was a one-off `route-builder.test.tsx` failure (passed 3/3 locally) and a Docker Hub 429; reruns green. Still open by decision: Node 26 #19–#21, Postgres 18 #15 (KI-091); alert #18 `braces` has no patched release (KI-095). Not yet deployed to production.
+
+## 2026-10-10 — CR-233 — `s3-init` idempotent again on SeaweedFS 4.48
+
+Summary: The first prod deploy after #26 (SeaweedFS 4.47 → 4.48) stopped at `deploy/deploy.sh`'s bucket step: 4.48's `weed shell` exits non-zero on `error: bucket … already exists`, so `s3-init` was no longer a no-op and migrations/app roll never ran (the old `web`/`api` kept serving; `/health` ok). `s3-init` in `docker-compose.infra.yml` and `docker-compose.yml` now treats that one error as success; any other failure still exits 1. CI's docker-smoke always starts with an empty bucket, so it could not catch this.
+Files: `docker-compose.infra.yml`, `docker-compose.yml`.
+Validation: the rendered script against a throwaway SeaweedFS 4.48 (isolated network on the prod host): new bucket → 0, existing → 0, invalid name → 1.
+Follow-up: none.

@@ -83,8 +83,9 @@ services:
   # CR-129 (KI-015): a fresh `s3_data` volume has no bucket, so `/health`
   # reported `s3: "error"` and every upload showed «Загрузка недоступна» until
   # someone created it by hand. One-shot: waits for `s3` to be healthy,
-  # creates `.env.example`'s `S3_BUCKET` (`s3.bucket.create` is a no-op on an
-  # existing bucket), exits 0. Same image as `s3`, so no extra image to pin.
+  # creates `.env.example`'s `S3_BUCKET` (since SeaweedFS 4.48 `weed shell`
+  # exits non-zero on an existing bucket — that one error counts as success),
+  # exits 0. Same image as `s3`, so no extra image to pin.
   # Runs with a plain `docker compose up -d`; after `up -d s3` alone, add
   # `s3-init`.
   s3-init:
@@ -95,7 +96,11 @@ services:
     entrypoint:
       - sh
       - -c
-      - echo 's3.bucket.create -name coffee-ride' | weed shell -master=s3:9333
+      - |
+        out=$$(echo 's3.bucket.create -name coffee-ride' | weed shell -master=s3:9333 2>&1)
+        status=$$?
+        echo "$$out"
+        [ "$$status" -eq 0 ] || case "$$out" in *'already exists'*) ;; *) exit 1 ;; esac
     restart: 'no'
 
 volumes:
