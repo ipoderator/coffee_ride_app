@@ -14,6 +14,7 @@ import {
   rideUpdatesRoutes,
 } from '../modules/notifications/notifications.routes.js';
 import { reviewsRoutes } from '../modules/reviews/reviews.routes.js';
+import { adminRoutes } from '../modules/admin/admin.routes.js';
 import { registerCsrf } from '../plugins/csrf.js';
 
 // Versioned root (ADR-011): every product endpoint lives under /v1. Future
@@ -56,4 +57,6 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   // (`.claude/rules/architecture.md`), sharing the `/rides` prefix like
   // `registrationsRoutes`/`rideUpdatesRoutes` above.
   await app.register(reviewsRoutes, { prefix: '/rides' });
+  // CR-229 (ADR-032): every route inside runs requireAuth + requireAdmin.
+  await app.register(adminRoutes, { prefix: '/admin', env: opts.env });
 };

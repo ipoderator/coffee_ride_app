@@ -201,6 +201,11 @@ const rideDetailResponseSchema = z.object({
       rescheduledAt: z.string(),
     })
     .nullable(),
+  // CR-231: additive, owner-only — see `GetRideResponse.moderation`.
+  moderation: z
+    .object({ hiddenAt: z.string(), reason: z.string() })
+    .nullable()
+    .optional(),
 });
 // CR-190: `POST /:id/reschedule` — the moved ride plus the update that records it.
 const rescheduleRideResponseSchema = z.object({

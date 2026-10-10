@@ -33,92 +33,75 @@ commit message body or the KI entry, not here — every agent re-reads these ent
 
 ---
 
-Entries before CR-219 (CR-000 through CR-218, 2026-09-09..2026-10-07) were moved
+Entries before CR-228 (CR-000 through CR-227, 2026-09-09..2026-10-09) were moved
 to `docs/changelog-archive/2026.md` (CR-000..CR-076 on 2026-09-20, CR-079..CR-114
-on 2026-09-26, CR-115..CR-170 on 2026-10-02, CR-171..CR-188 on 2026-10-03 by CR-202, CR-190..CR-197 on 2026-10-03 by CR-205, CR-198..CR-204 on 2026-10-06 by CR-213, CR-205..CR-218 on 2026-10-08 by CR-226),
+on 2026-09-26, CR-115..CR-170 on 2026-10-02, CR-171..CR-188 on 2026-10-03 by CR-202, CR-190..CR-197 on 2026-10-03 by CR-205, CR-198..CR-204 on 2026-10-06 by CR-213, CR-205..CR-218 on 2026-10-08 by CR-226, CR-219..CR-227 on 2026-10-10 by CR-232),
 per this section's own rule.
 
-## 2026-10-08 — CR-219 — First production deploy to coffeeride.site
+## 2026-10-10 — CR-228..CR-230 — Admin capability, `/v1/admin/*` and moderation enforcement
 
-Summary: CR-217/218 committed (`1f741cf`, CI green incl. `docker-smoke`), cloned to `/opt/deployments/coffee-ride` on the VPS, `.env` generated (hex secrets; 2GIS demo + Unisender keys from the dev `.env`; `ACME_EMAIL=admin@coffeeride.site`), `deploy/deploy.sh` exit 0. Caddy obtained Let's Encrypt certificates for `coffeeride.site` and `www.` (new 301 to the bare domain, `c43ce63`). The old Sept-27 verification stack in `/opt/coffee-ride` was stopped (volumes kept); ufw opened 80/443.
+Summary: ADR-032. Admin = a `platform_admins` row granted only by `pnpm --filter db admin:grant|revoke|list`; `requireAdmin` (DB read per request, 404 to non-admins) guards every `/v1/admin/*` route. Endpoints: overview, users (verify email, resend, log out everywhere, block/unblock), rides (hide/unhide, cancel via the organizer path), reviews (hide/unhide), append-only action log. Block deletes sessions and makes login answer `403 account_blocked` after the password; a hidden ride is a draft to non-owners (`isRidePublic`); a hidden review leaves lists and rating.
+Contract: new `/v1/admin/*` (docs/api.md → Admin); `POST /v1/auth/login` `403 account_blocked`; `packages/types` `api/admin.ts`. Migration `0026_admin_panel` (`platform_admins`, `admin_actions`, `users.blocked_*`, `rides/reviews.hidden_*`).
+Files: `packages/db` (schema, migration, `admin-cli.ts`), `apps/api` `modules/admin/*`, `plugins/auth.ts`, `modules/{auth,rides,registrations,reviews}`.
+Validation: api admin+auth+rides+registrations+reviews+organizers 469 passed; `plugins/auth.test.ts` 2; api/db/types typecheck + lint clean.
+Decisions: no step-up auth yet (owner); manual moderation only.
+Follow-up: local branch `feat/admin-panel` only — not merged, not deployed.
+
+## 2026-10-10 — CR-231 — `/admin` web section; organizer sees why a ride is hidden
+
+Summary: `/admin` in apps/web (ADR-009 modules `features/admin/{overview,users,rides,reviews,actions}`, registry `lib/admin/admin-nav.ts`, shared `components/admin/*`). The layout asks `GET /v1/admin/me` server-side: non-admin → real 404, API down → error, admin → `CabinetShell` sidebar; `noindex`, `/admin` in robots disallow. Reason dialog for block/hide/cancel; API codes mapped to Russian, `detail` never shown. Login shows «Аккаунт заблокирован администратором.». `GET /v1/rides/:id` gives the owner `moderation { hiddenAt, reason }`, shown as a Notice in the ride workspace.
+Contract: additive owner-only `GetRideResponse.moderation`; `RIDE_WORKSPACE_TERMS.hiddenByAdmin*`.
+Files: `apps/web/src/{app/admin,features/admin,components/admin,lib/admin}/**`, `LoginForm.tsx`, `RideWorkspace.tsx`, 5 admin stories + 3 stories elsewhere; `apps/api` rides detail.
+Validation: web unit 82 files/857 tests; Storybook 34 files/240 (axe); api admin+rides routes 110; coverage gate green with live Redis/S3 (web 82.33 % lines, baseline raised); `/admin` checked in a browser on the dev stack (block → login 403).
+Decisions: card-first lists (no tables, no horizontal scroll at 320 px); filters are local state, not URL params.
+Follow-up: no link to `/admin` in the header — the admin opens it by URL.
+
+## 2026-10-10 — CR-232 (item 1) — `admin:grant` requires a confirmed email
+
+Summary: `grantAdmin` (`packages/db/src/admin-grants.ts`) returns `email_not_verified` for an account whose `users.emailVerified` is false, writing no `platform_admins`/`admin_actions` row; the CLI prints why on stderr and exits 1 (as for `user_not_found`). Grant-time only — existing admins keep access, no runtime check, migration untouched. CLI messages/exit codes moved to `admin-cli-messages.ts` (unit-tested).
+Files: `packages/db/src/{admin-grants,admin-cli,admin-cli-messages}.ts`, db vitest coverage include, `apps/api` admin suite, `docs/deployment.md`, `docs/database.md`.
+Validation: db 16 tests + typecheck/lint; api admin + `plugins/auth` 21; api typecheck/lint; db coverage 97.61 % lines (baseline raised).
+
+## 2026-10-10 — CR-232 (item 2) — Admin reason dialogs name their record
+
+Summary: block / hide ride / cancel ride / hide review dialogs show the target under the description — account email; ride title; review author, rating and a 140-character excerpt (`ADMIN_TERMS.reviewExcerpt`, «Без текста» when empty). It sits inside the dialog's `aria-describedby`, values `wrap-anywhere`. `ui` `Dialog`: `description` accepts a ReactNode (additive) and the panel scrolls vertically on short screens (it was clipped). Reason rules unchanged.
+Files: `packages/ui` `Dialog.tsx`, `terminology.ts`; `apps/web` `AdminReasonDialog.tsx` (required `subject`), admin rides/reviews/user card, tests, 3 admin story files; web coverage excludes `src/stories/**`.
+Validation: web unit 859, Storybook 34 files/244 (axe); ui 262; typecheck/lint clean; coverage gate green, web/ui baselines raised; 320/390 px measured in Chromium — no horizontal scroll.
+
+## 2026-10-10 — CR-232 (item 3) — Reason hint says who will read the reason
+
+Summary: `AdminReasonDialog` takes a required `reasonHint`. Ride hide → `ADMIN_TERMS.reasonHintOrganizerVisible` (the organizer sees the reason via `GET /v1/rides/:id` → `moderation`, and it is logged); block, ride cancel, review hide → `reasonHintLogOnly` (admin log only — checked: none of these reasons leaves the admin API). The old `reasonHint` («Её увидите только вы…») is removed.
+Files: `packages/ui` `terminology.ts` (+test); `apps/web` `AdminReasonDialog.tsx`, admin rides/reviews/user card, their tests and stories.
+Validation: admin unit 29, admin stories 25 (axe), ui 263; typecheck/lint/prettier clean; coverage gate green.
+
+## 2026-10-10 — CR-232 (item 4) — Mobile section tabs reveal the active tab
+
+Summary: `CabinetSectionTabs` (shared by the organizer and admin cabinets) scrolls its own row on mount and on every pathname change so the `aria-current` tab is fully visible — the least distance, via the row's `scrollTo`, never `scrollIntoView` (the page stays put). Instant on first render; smooth afterwards unless `prefers-reduced-motion: reduce`.
+Files: `apps/web` `components/cabinet/CabinetSectionTabs.tsx` (+ new test), `stories/CabinetSectionTabs.stories.tsx` (new — the component had no story).
+Validation: web unit 863, Storybook 35 files/248 (axe); e2e `mobile-cabinets.spec.ts` 6/6; dev stack at 320/390 px: `/admin/reviews`, `/admin/actions`, `/organizer/profile` direct and by link — active tab visible, `window.scrollX/Y` 0; coverage gate green, web baseline raised.
+
+## 2026-10-10 — CR-232 (item 5) — Admin list filters in the URL
+
+Summary: supersedes CR-231's "filters are local state". `/admin/users?q=&filter=`, `/admin/rides?q=&status=&visibility=`, `/admin/reviews?visibility=` — the URL is the only copy: `useAdminUrlFilters` derives filters from `useSearchParams` and a change is a native `history.pushState` (no server round trip; back/forward re-sync). Unknown values fall back to defaults; defaults are omitted from the URL. Search still runs on Enter/«Найти» only; the field follows `q` on back/forward. A user card keeps the list's filters in `?from=`, re-parsed server-side into the back link.
+Files: `apps/web` `lib/admin/{url-filters,use-admin-url-filters}.ts`, `features/admin/{users,rides,reviews}/filters.ts`, the three lists, `AdminSearchForm`, `app/admin/users/[id]/page.tsx` (+ test), `AdminUserCard` `backHref`; `test-support/next-navigation.ts`; stories `ListFilteredFromUrl`, `FilteredFromUrl`, `HiddenFromUrl`.
+Validation: web unit 876, Storybook 35/251 (axe), `next build --webpack` (scratch copy), dev-stack check of reload/junk/Enter/back/forward/card round trip; coverage gate green, web baseline raised.
+
+## 2026-10-10 — CR-232 (item 6) — Overview links and refresh; log filters
+
+Summary: «Обзор» — unverified/blocked users, hidden rides, hidden reviews link to their URL filters (`lib/admin/list-links.ts`; names carry the section); «Обновить» re-reads the overview in place, «Обновлено …» shows the last successful answer (with seconds), a failed refresh keeps data + time. «Журнал» — target-type and action selects in the URL (`?targetType=&action=`), actions narrow to the type, a mismatched pair drops the action; a deleted target shows `Запись удалена · ID <targetId>`. Log stays append-only.
+Contract: additive `GET /v1/admin/actions?action=` (docs/api.md).
+Files: `packages/types` admin schema; `apps/api` `admin-actions.service.ts` (+ tests); `packages/ui` terminology; `apps/web` overview, actions (`filters.ts`, api, log), `AdminActionList`, `lib/admin/{list-links,format}.ts`, stories.
+Validation: api admin 21 (filter, 400, no DELETE/PATCH/PUT); web unit 883, Storybook 35/254 (axe); ui 264; typecheck/lint/prettier clean; coverage green, web baseline raised; dev stack 390 px.
+Note: api tests share the docker DB with the dev API here (no native Postgres on ::1) — two api runs in CR-232 emptied dev data; re-seeded with `seed:demo --no-routes`.
+
+## 2026-10-10 — CR-232 (item 7) — Admin validation sweep and review fixes
+
+Summary: full check of the admin section, then fixes for the confirmed review findings. `/admin/users/<not a uuid>` → not-found page before any request (was a retryable 400 «loadError»; shared `lib/uuid.ts` `isUuid`, also used by `server-ride.ts`). Admin api.ts encode ids in paths. `adminRequest` turns a non-problem error body (proxy HTML, empty 500) into an `ApiError` with its status (`unexpected_response`). A reason dialog can't be dismissed while its action is in flight. `bg-raised` (no such utility) → `bg-bg-raised` / overview hover `bg-surface`.
 Contract: none.
-Files: `deploy/Caddyfile`, `docs/deployment.md` ("Production host"), context files.
-Validation: `caddy validate`; FIRST-DEPLOY §1–4, §6: all 7 services up, postgres/redis/s3 healthy; `/health` db/redis/s3 `ok`; `curl` without `-k`: `/` 200, `www` 301, http 308, `/api/v1/rides` 200; headless browser `/`, `/login` — 0 console errors, 0 failed requests; `X-Request-Id` = api `reqId`, real client IP in api logs; first backup dump present.
-Decisions: host convention `/opt/deployments/<project>`; root SSH stays disabled (deploy as `gleb` + sudo).
-Follow-up: §5 email flow fails by construction until `EMAIL_FROM_ADDRESS` is a verified Unisender sender; off-host backup copy not set up; KI-045 narrowed to these.
-
-## 2026-10-08 — CR-220 — Skip email verification on the test deploy
-
-Summary: Owner: production is a test deploy without a mail sender, so email verification must go. New env `AUTH_SKIP_EMAIL_VERIFICATION` (`true`/`false`, default off, allowed in production): `registerUser` inserts the user with `emailVerified = true` and no token; `/register` sends no email and no dev link. Preflight warns while it is on. The register success card says no inbox step is needed.
-Contract: none (`emailVerified` was already in the response).
-Files: `apps/api/src/{env,preflight}.ts`(+tests), `modules/auth/auth.{service,routes}.ts`(+test), `RegisterForm.tsx`(+test, story), `terminology.ts`, `docker-compose.prod.yml`, `deploy/production.env.example`, `docs/deployment.md`.
-Validation: api env/preflight/auth 79 passed; web register 16; storybook EmailVerification 8 (axe); typecheck + lint api/web/ui.
-Follow-up: accounts registered before the switch stay unverified — one-off `UPDATE users SET email_verified = true` on the server; unset the flag before real users.
-
-## 2026-10-08 — CR-221 — Start time saved as shown (QA live audit item 1, P1)
-
-Summary: The wizard saved «12:12» for a start shown as «08:00»: the controlled `<input type="time">` held a value React never heard about (a native picker/tool changing it without an `input` event); picking the GPX re-rendered the form over it and the save sent the stale state. New `ui` `TimeInput` (browser-owned field, React writes it only when `value` changes); create, edit and reschedule read it through a ref at save. `zonedTimeToUtcIso` now does its documented second offset pass.
-Contract: `ui` — new `TimeInput`; `InputProps` is `ComponentProps<'input'>` (adds `ref`, additive).
-Files: `packages/ui/src/components/{TimeInput,Input}.tsx`, `CreateRideForm`, `EditRideForm`, `RescheduleRideCard`, `lib/datetime/zoned-time.ts`, `e2e/ride-start-time.spec.ts`, `stories/TimeInput.stories.tsx`.
-Validation: e2e `ride-start-time` 2 passed (the desync case reproduced 12:12 before the fix); `zoned-time` 14 (day/year edges, zone change, DST second pass — fails one-pass); `TimeInput` 5; storybook 28.
-Decisions: server/DB path verified clean (no API change); the QA report's 12:12 is the DOM/state split, reproduced in the e2e by setting the field without an event.
-Follow-up: none.
-
-## 2026-10-08 — CR-222 — Registered ticket no longer reads «Список ожидания» (item 2, P2)
-
-Summary: The ticket chip was the ride's seat status (`posterStatusTerm`), so the holder of the last seat — directly or by waitlist promotion — saw «Список ожидания». New `ticketStatusTerm`: registered → «Место подтверждено» (success) until the ride starts, then the ride's progress; waitlisted → «Список ожидания»; every other face unchanged.
-Contract: `ui` — `RIDE_TICKET_TERMS.registeredStatus`.
-Files: `ride-detail/lib/ticket-state.ts`(+test), `RideDetailView.tsx`, `terminology.ts`, `e2e/registration-waitlist.spec.ts`, `RegistrationTicket.stories.tsx`.
-Validation: ticket-state 30 (all ten faces); e2e registration-waitlist 1 passed (direct + promoted chips); storybook `RegisteredOnFullRide`.
+Files: `apps/web` `lib/{uuid,admin/client}.ts`, `lib/rides/server-ride.ts`, `app/admin/users/[id]/page.tsx`, `features/admin/{users,rides,reviews}/api.ts`, `components/admin/AdminReasonDialog.tsx`, `AdminOverview.tsx`; tests in `admin-lib`, users, page.
+Validation: api admin/auth/rides/reviews/registrations 455 (+6 live skipped) on a separate `coffee_ride_test` DB (dev data kept); full coverage with live Redis/S3 — api 661/0 skipped, gate green, web baseline raised; web unit 886, Storybook 35/254 (axe), ui 264, db 16; typecheck/lint/prettier clean; negative checks (fix reverted → new test fails); Playwright on the dev stack 320/390/1280 × light/dark, 7 pages: 200, no horizontal scroll, 0 console errors, active mobile tab, filters after back, disposable block/unblock (login 403 → 200).
 Decisions: none.
-Follow-up: none.
-
-## 2026-10-08 — CR-223 — Cabinet sign-in returns to the deep link (item 3, P2)
-
-Summary: `CabinetShell` sent a guest to a bare `/login`; it now replaces to `loginHref(<path+query+hash>)` — CR-141's validated `next` — so `/me*`/`/organizer*` deep links survive sign-in.
-Contract: none.
-Files: `components/cabinet/CabinetShell.tsx`(+test), `e2e/login-return.spec.ts`.
-Validation: CabinetShell + login 20 passed; e2e login-return 4 passed (new: `/me/rides?tab=history` → login → back).
-Decisions: none.
-Follow-up: the ~2 s skeleton before the redirect (audit UX note) would need a server-side gate — not done.
-
-## 2026-10-08 — CR-224 — Real 404 for a missing ride, branded 404 page (items 4–5, P2)
-
-Summary: `/rides/[id]` answered 200 and said «не найден» only client-side. The page now asks `apps/api` server-to-server (`lib/rides/server-ride.ts`: UUID guard, 3 s timeout, the viewer's cookie + `X-Forwarded-For` forwarded, `react.cache`) and calls `notFound()` on its 404 only. New `app/not-found.tsx` and `rides/[id]/not-found.tsx` share `NotFoundPanel` (Russian `h1`, «Вернуться к заездам»), also used by `RideDetailView`'s own not-found state.
-Contract: `ui` — `NOT_FOUND_TERMS`; web runner image gets `API_INTERNAL_URL` at runtime.
-Files: `app/rides/[id]/{page,not-found}.tsx`, `app/not-found.tsx`, `components/site/NotFoundPanel.tsx`, `lib/rides/server-ride.ts`(+test), `apps/web/Dockerfile`, `e2e/not-found.spec.ts`.
-Validation: e2e not-found 4 passed (missing/malformed → 404 + h1, unknown URL, draft 404 to a guest / 200 to its owner); unit 5+5; prod build checked on :3100.
-Decisions: a timeout/5xx still renders the page (client states) — only a definite 404 is a 404.
-Follow-up: KI-096 — the 404 body is client-rendered (Next 16 SSR shell for `notFound()` in a page).
-
-## 2026-10-08 — CR-225 — Named, 44 px 2GIS map controls (item 6, P2)
-
-Summary: MapGL's zoom buttons (32×32, icon only) and 2GIS link had no accessible name. `maps-2gis/control-a11y.ts` finds them by shape (hashed SDK classes) — the one parent with two unnamed buttons, zoom-in first; the `2gis` link — names them and sizes the buttons 44×44 via inline style, re-applied by a `childList` MutationObserver disconnected on `destroy()`. Labels come from `MAP_CONTROL_TERMS` at the composition point (`TwoGisMapRendererConfig.controlLabels`).
-Contract: `maps-2gis` config `controlLabels?` (additive; `maps-core` unchanged); `ui` — `MAP_CONTROL_TERMS`.
-Files: `packages/maps-2gis/src/{control-a11y,render,index}.ts`(+tests), `lib/maps/create-map-renderer.ts`, `terminology.ts`.
-Validation: maps-2gis 79 passed; live map: a11y tree «Увеличить масштаб»/«Уменьшить масштаб»/link, both 44×44, screenshot checked.
-Decisions: no SDK option exists for labels, so the adapter post-processes its own DOM — the only package allowed to know MapGL's markup.
-Follow-up: a MapGL update changing the control markup would silently drop the labels — checked by eye only.
-
-## 2026-10-08 — CR-226 — SEO files, share metadata, full page CSP (items 7–8, P3)
-
-Summary: `robots.ts` (cabinets/API disallowed, sitemap link), `sitemap.ts` (catalog + upcoming public rides, hourly), `metadataBase`/Open Graph/Twitter in the layout, canonical on `/` and each ride, ride title/description metadata, `noindex` on the five auth pages and drafts. Page CSP is now a full allowlist from a browser inventory (self + `mapgl.2gis.com` script, `*.2gis.com` connect/img, `blob:` workers; `'unsafe-eval'`/`ws:` dev only) plus `Permissions-Policy`. Zod's eval probe is off in browsers (`jitless`) so prod pages raise no CSP violation.
-Contract: new env `SITE_URL` (`https://${DOMAIN}` build arg in prod compose, runner env); `turbo.json` build/dev env.
-Files: `app/{robots,sitemap,layout}.ts(x)`, `lib/site/*`, `lib/security/headers.ts`(+test), `next.config.ts`, auth pages, `packages/types/src/zod-config.ts`, `Dockerfile`, `docker-compose.prod.yml`, `turbo.json`.
-Validation: unit seo/page/site-url/headers 22 passed; prod build + standalone on :3100: 0 CSP violations on map/ride/404/login, map renders, canonical `https://coffeeride.site`; full e2e 55 passed.
-Decisions: scripts keep `'unsafe-inline'` — a nonce makes every page dynamic (KI-097).
-Follow-up: KI-097; no `manifest.webmanifest` (needs icon set + theme colours).
-
-## 2026-10-09 — CR-227 — Direct links in transactional email; Unisender refusals logged
-
-Summary: Production email went live on Unisender Go (paid tariff; sender domain + DKIM confirmed, link-tracking domain `links.coffeeride.site` added because send.json refuses with code 229 without one). That domain's NS delegation answers REFUSED, so every rewritten verify/reset link was dead. The provider now sends `track_links: 0, track_read: 0` — links go straight to the site and single-use tokens never pass a third-party redirector. A refused send now logs Unisender's `code`/`message` (emails redacted) instead of the generic "Operation failed after retries.".
-Files: `apps/api/src/lib/email/unisender-provider.ts`(+test).
-Validation: email unit tests 6 passed; api typecheck/lint/prettier clean; file coverage up (branches 78.6 → 80 %).
-Follow-up: prod still runs `AUTH_SKIP_EMAIL_VERIFICATION=true` until the owner checks a live verify link.
-
-## 2026-10-09 — CR-227 follow-up — Production email verified live; KI-026/042/055 closed
-
-Summary: Corrects CR-227's follow-up: after deploying `08815f4`, `AUTH_SKIP_EMAIL_VERIFICATION` was emptied on the VPS — verification is required again. The owner completed forgot-password → emailed direct link → reset → login on coffeeride.site; a verify-email link from a production email had confirmed an account earlier the same day. KI-026, KI-042, KI-055 moved to the archive. CI on `08815f4`: success.
+Follow-up: `21st review` does not exist in the installed `21st` CLI — replaced by `/code-review`; open findings in project-state "Next".
 
 ## 2026-10-10 — Dependabot triage — eight updates merged
 

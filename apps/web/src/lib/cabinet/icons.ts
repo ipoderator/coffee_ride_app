@@ -4,7 +4,9 @@ import {
   CircleUser,
   House,
   ImageIcon,
+  MessageSquareText,
   Route,
+  ScrollText,
   Send,
   Ticket,
   Users,
@@ -36,6 +38,9 @@ export const CABINET_ICONS = {
   // Группы — the last one from line-md, not lucide; see `AccountAddIcon`).
   Route,
   ImageIcon,
+  // CR-231: the admin section's «Отзывы» and «Журнал».
+  MessageSquareText,
+  ScrollText,
   AccountAdd: AccountAddIcon,
 } satisfies Record<string, CabinetIcon>;
 

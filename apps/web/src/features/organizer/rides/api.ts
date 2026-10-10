@@ -121,6 +121,7 @@ type EditableRide = Pick<
       | 'attendanceSummary'
       | 'registrationsCount'
       | 'lastReschedule'
+      | 'moderation'
       | 'route'
       | 'stops'
       | 'routePoints'

@@ -93,6 +93,7 @@ import {
 } from './ride-groups.service.js';
 import { buildRoutePreview } from './route-preview.js';
 import { simplifyRouteGeometry } from './route-geometry.js';
+import { isRidePublic } from './ride-visibility.js';
 import {
   RouteStorageError,
   deleteGpxObject,
@@ -742,6 +743,8 @@ export async function listPublicRides(
     query.startsFrom !== undefined ? new Date(query.startsFrom) : null;
   const conditions = [
     ne(rides.status, 'draft'),
+    // CR-230 (ADR-032): an admin-hidden ride is never listed.
+    isNull(rides.hiddenAt),
     gte(rides.startsAt, startsFrom && startsFrom > now ? startsFrom : now),
   ];
   if (query.startsTo !== undefined) {
@@ -1040,7 +1043,7 @@ export async function getRideForViewer(
   }
 
   const isOwner = userId !== null && row.organizerUserId === userId;
-  if (!isOwner && row.ride.status === 'draft') {
+  if (!isOwner && !isRidePublic(row.ride)) {
     throw RIDE_NOT_FOUND();
   }
 
@@ -1242,6 +1245,15 @@ export async function getRideForViewer(
     requirements,
     rescheduleCount: reschedules.count,
     lastReschedule: reschedules.last,
+    // CR-231 (ADR-032): the organizer learns why the admin hid the ride; nobody
+    // else reaches a hidden ride at all (`isRidePublic` above).
+    moderation:
+      isOwner && row.ride.hiddenAt
+        ? {
+            hiddenAt: row.ride.hiddenAt.toISOString(),
+            reason: row.ride.hiddenReason ?? '',
+          }
+        : null,
   };
 }
 
@@ -1673,33 +1685,93 @@ export async function cancelRide(
   }
 
   const [existing] = await db
-    .select({ status: rides.status })
+    .select({ id: rides.id })
     .from(rides)
     .where(and(eq(rides.id, rideId), eq(rides.organizerId, organizerProfileId)))
     .limit(1);
   if (!existing) {
     throw RIDE_NOT_FOUND();
   }
-  if (
-    !CANCELLABLE_STATUSES.includes(
-      existing.status as (typeof CANCELLABLE_STATUSES)[number],
-    )
-  ) {
-    throw RIDE_NOT_CANCELLABLE();
-  }
 
-  const [updated] = await db
-    .update(rides)
-    .set({ status: 'cancelled', updatedAt: new Date(), updatedBy: userId })
-    .where(eq(rides.id, rideId))
-    .returning();
-  if (!updated) {
-    throw new Error('Ride update returned no row.');
-  }
+  return commitRideCancellation(db, logger, queue, userId, rideId);
+}
+
+type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+
+/**
+ * CR-230 (ADR-032): the cancellation itself, shared by the organizer path above and
+ * the admin one (`modules/admin`), which resolve *who may* cancel differently. The
+ * status guard is part of the UPDATE, so two concurrent cancels cannot both pass a
+ * stale pre-check. `inTransaction` lets the admin path write its `admin_actions` row
+ * in the same transaction as the status change. Participant notifications fan out
+ * only after the commit (`.claude/rules/resilience.md`).
+ */
+export async function commitRideCancellation(
+  db: DbClient,
+  logger: NotificationLogger,
+  queue: NotificationQueue | null,
+  actorUserId: string,
+  rideId: string,
+  inTransaction?: (tx: DbTransaction) => Promise<void>,
+): Promise<Ride> {
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(rides)
+      .set({
+        status: 'cancelled',
+        updatedAt: new Date(),
+        updatedBy: actorUserId,
+      })
+      .where(
+        and(
+          eq(rides.id, rideId),
+          inArray(rides.status, [...CANCELLABLE_STATUSES]),
+        ),
+      )
+      .returning();
+    if (!row) {
+      const [exists] = await tx
+        .select({ id: rides.id })
+        .from(rides)
+        .where(eq(rides.id, rideId))
+        .limit(1);
+      throw exists ? RIDE_NOT_CANCELLABLE() : RIDE_NOT_FOUND();
+    }
+    await inTransaction?.(tx);
+    return row;
+  });
 
   await notifyRideCancelled(db, logger, queue, rideId);
 
   return toPublicRide(updated);
+}
+
+/**
+ * CR-230 (ADR-032): an admin hides (`reason`) or unhides (`null`) a ride. Returns
+ * `false` when the ride does not exist or is already in that state, so the caller
+ * writes its audit row only for a real change.
+ */
+export async function setRideHidden(
+  tx: DbTransaction,
+  rideId: string,
+  actorUserId: string,
+  reason: string | null,
+): Promise<boolean> {
+  const changed = await tx
+    .update(rides)
+    .set(
+      reason === null
+        ? { hiddenAt: null, hiddenBy: null, hiddenReason: null }
+        : { hiddenAt: new Date(), hiddenBy: actorUserId, hiddenReason: reason },
+    )
+    .where(
+      and(
+        eq(rides.id, rideId),
+        reason === null ? isNotNull(rides.hiddenAt) : isNull(rides.hiddenAt),
+      ),
+    )
+    .returning({ id: rides.id });
+  return changed.length > 0;
 }
 
 // CR-190: the statuses in which a ride is published and has not started — the
@@ -2244,6 +2316,7 @@ export async function getRouteDownload(
   const [row] = await db
     .select({
       status: rides.status,
+      hiddenAt: rides.hiddenAt,
       organizerUserId: organizerProfiles.userId,
     })
     .from(rides)
@@ -2255,7 +2328,7 @@ export async function getRouteDownload(
   }
 
   const isOwner = userId !== null && row.organizerUserId === userId;
-  if (!isOwner && row.status === 'draft') {
+  if (!isOwner && !isRidePublic(row)) {
     throw RIDE_NOT_FOUND();
   }
 
@@ -2292,6 +2365,7 @@ export async function getRouteGeometry(
   const [row] = await db
     .select({
       status: rides.status,
+      hiddenAt: rides.hiddenAt,
       organizerUserId: organizerProfiles.userId,
     })
     .from(rides)
@@ -2303,7 +2377,7 @@ export async function getRouteGeometry(
   }
 
   const isOwner = userId !== null && row.organizerUserId === userId;
-  if (!isOwner && row.status === 'draft') {
+  if (!isOwner && !isRidePublic(row)) {
     throw RIDE_NOT_FOUND();
   }
 
@@ -2486,6 +2560,7 @@ export async function getCoverImageDownload(
   const [row] = await db
     .select({
       status: rides.status,
+      hiddenAt: rides.hiddenAt,
       organizerUserId: organizerProfiles.userId,
       coverImageKey: rides.coverImageKey,
       coverImageContentType: rides.coverImageContentType,
@@ -2499,7 +2574,7 @@ export async function getCoverImageDownload(
   }
 
   const isOwner = userId !== null && row.organizerUserId === userId;
-  if (!isOwner && row.status === 'draft') {
+  if (!isOwner && !isRidePublic(row)) {
     throw RIDE_NOT_FOUND();
   }
 
@@ -2514,7 +2589,8 @@ export async function getCoverImageDownload(
       contentType: row.coverImageContentType ?? 'application/octet-stream',
       objectKey: row.coverImageKey,
       // KI-093: a draft's cover is the owner's alone — no shared cache may keep it.
-      isPublic: row.status !== 'draft',
+      // CR-230: nor may a hidden ride's.
+      isPublic: isRidePublic(row),
     };
   } catch (err) {
     if (err instanceof ImageStorageError) throw COVER_STORAGE_UNAVAILABLE();

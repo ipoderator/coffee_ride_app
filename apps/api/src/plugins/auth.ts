@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { users } from 'db/schema';
+import { eq } from 'drizzle-orm';
+import { platformAdmins, users } from 'db/schema';
 import type { Env } from '../env.js';
 import { validateSession } from '../modules/auth/session.js';
 
@@ -75,6 +76,40 @@ export async function resolveOptionalUser(request: FastifyRequest) {
 
   request.user = validated.user;
   request.sessionId = validated.sessionId;
+}
+
+/**
+ * CR-229 (ADR-032): `preHandler` for `/v1/admin/*`, always after
+ * {@link requireAuth}. Reads `platform_admins` on every request — no session flag,
+ * no cache — so revoking the capability from the host CLI takes effect on the very
+ * next request. A signed-in non-admin gets the same `404 not_found` body as an
+ * unknown route: the admin section's existence is never confirmed to them.
+ */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const userId = request.user?.id;
+  if (userId) {
+    const [row] = await request.server.db
+      .select({ userId: platformAdmins.userId })
+      .from(platformAdmins)
+      .where(eq(platformAdmins.userId, userId))
+      .limit(1);
+    if (row) return;
+  }
+
+  return reply
+    .status(404)
+    .type('application/problem+json')
+    .send({
+      type: 'https://coffee-ride.example/errors/not_found',
+      title: 'Not Found',
+      status: 404,
+      detail: `No route matches ${request.method} ${request.url}.`,
+      instance: request.url,
+      code: 'not_found',
+    });
 }
 
 function sendUnauthorized(reply: FastifyReply, instance: string) {

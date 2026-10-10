@@ -122,6 +122,29 @@ While this host is a test deploy with no verified email sender, its `.env` sets
 verified, so publishing a ride needs no email. The API logs a preflight warning
 while it is on; unset it (and configure `EMAIL_FROM_ADDRESS`) before real users.
 
+## Admin access (ADR-032)
+
+`/admin` opens only for a user with a `platform_admins` row, granted from the host —
+never over HTTP. After the deploy that applies migration `0026`, with the account
+already registered **and its email confirmed** (CR-232 — the CLI refuses an
+unconfirmed account):
+
+```sh
+cd /opt/deployments/coffee-ride
+sudo docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml --env-file .env \
+  --profile migrate run --rm migrate pnpm --filter db admin:grant <email>
+```
+
+`admin:revoke <email>` takes the right away (on the next request); `admin:list` shows
+who has it. Grants and revokes appear in the admin action log.
+
+`admin:grant` exits non-zero, writing nothing, when there is no such user (`No user
+with this email.`) or the email is not confirmed (`This user has not confirmed their
+email — admin capability not granted…`): confirm it from the verification email and
+run the command again. A repeat grant to an existing admin prints `already an admin —
+nothing changed` and exits 0. The check applies only at grant time — an admin granted
+earlier keeps access.
+
 ## Rollback
 
 Drizzle migrations are forward-only. Rolling back application code alone is safe —

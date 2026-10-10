@@ -26,6 +26,7 @@ export type RideWorkspaceData = Pick<
   | 'requirements'
   | 'contact'
   | 'lastReschedule'
+  | 'moderation'
 > & {
   /** Newest sent update: `null` = none yet, `undefined` = couldn't be read. */
   latestUpdate: RideUpdate | null | undefined;

@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { cache } from 'react';
 import type { GetRideResponse } from 'types';
 import { API_INTERNAL_URL } from '@/lib/site/site-url';
+import { isUuid } from '@/lib/uuid';
 
 // QA live audit 2026-10-08, item 4: `/rides/[id]` answered `200` for a ride
 // that does not exist and said so only after the client's own fetch — a
@@ -20,9 +21,6 @@ import { API_INTERNAL_URL } from '@/lib/site/site-url';
 // own loading/error states.
 const LOOKUP_TIMEOUT_MS = 3_000;
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export type ServerRideLookup =
   | { kind: 'found'; ride: GetRideResponse['ride'] }
   | { kind: 'not_found' }
@@ -32,7 +30,7 @@ export type ServerRideLookup =
 export const lookupRide = cache(
   async (id: string): Promise<ServerRideLookup> => {
     // `GET /v1/rides/:id` rejects a non-UUID with `400`; no ride can live there.
-    if (!UUID_PATTERN.test(id)) return { kind: 'not_found' };
+    if (!isUuid(id)) return { kind: 'not_found' };
 
     const incoming = await headers();
     const forwarded: Record<string, string> = { accept: 'application/json' };

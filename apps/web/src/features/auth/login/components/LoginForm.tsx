@@ -75,6 +75,10 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
           // pointing at "email" or "password" specifically would itself leak
           // which one was wrong (`.claude/rules/security.md`).
           setFormError(AUTH_TERMS.invalidCredentials);
+        } else if (error.problem.code === 'account_blocked') {
+          // CR-231 (ADR-032): the API says so only after the password
+          // verified, so naming the block leaks nothing to a stranger.
+          setFormError(AUTH_TERMS.accountBlocked);
         } else if (
           error.problem.code === 'validation_error' &&
           error.problem.errors

@@ -41,8 +41,8 @@ registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
   same never-store-the-raw-value pattern as `EmailVerificationToken`),
   `createdAt`, `expiresAt` (30-day lifetime, rolling — extended at most once
   per day on use, not on every request), `lastUsedAt`, `revokedAt` (nullable;
-  part of ADR-013's fixed column list, unused by any CR-012 code path — no
-  admin "block" feature exists yet). Logout hard-deletes the row rather than
+  part of ADR-013's fixed column list, still unused — CR-230's admin block
+  deletes the rows instead and `validateSession` refuses a blocked user). Logout hard-deletes the row rather than
   setting `revokedAt`. Also not one of the fixed domain entities — an auth
   implementation detail.
 - OrganizerProfile — public organizer data linked to User (CR-014): `id`,
@@ -225,6 +225,21 @@ WHERE isActive` enforces "at most one active bike per user" at the DB
   computed via a join, not a denormalized column) is exposed as additive
   `rating`/`reviewCount` fields on `RideOrganizerSummary` (`GET /v1/rides`,
   `GET /v1/rides/:id`) and on `GET`/`POST`/`PATCH /v1/organizers/me`.
+- PlatformAdmin (`platform_admins`, CR-228, ADR-032) — the admin capability as an
+  attached row, like OrganizerProfile: `userId` (PK, FK → User, cascade delete),
+  `grantedAt`. Written only by the host CLI (`pnpm --filter db admin:grant|admin:revoke
+<email>`), never over HTTP; `admin:grant` requires `users.emailVerified` (CR-232). Not a domain entity — an access-control detail.
+- AdminAction (`admin_actions`, CR-228) — append-only log: `id`, `adminUserId` (FK →
+  User, `set null`; null for a CLI grant/revoke), `action` (pg enum of the twelve
+  admin actions), `targetType` (`user`/`ride`/`review`) + `targetId` (no FK — the log
+  outlives its target), `reason` (nullable, CHECK not blank), `createdAt`. Indexed by
+  `(createdAt, id)` and `(targetType, targetId)`. Written in the same transaction as
+  the change it records; no endpoint edits or deletes a row.
+- Soft moderation columns (CR-228): `users.blocked_at/blocked_by/block_reason`,
+  `rides.hidden_at/hidden_by/hidden_reason`, `reviews.hidden_at/hidden_by/
+hidden_reason` — each `*_by` FK → User (`set null`), each trio with a CHECK
+  "set ⇔ reason present". A hidden ride keeps its `status`, so unhiding restores it
+  exactly; a hidden review still blocks a second review by the same author.
 
 Important invariants:
 

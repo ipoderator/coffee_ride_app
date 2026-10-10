@@ -3,6 +3,9 @@
 // enums, the UI maps through here. Do not invent synonyms per screen.
 
 import type {
+  AdminActionType,
+  AdminDependencyStatus,
+  AdminUserFilter,
   BicycleType,
   DifficultyLevel,
   RideContactType,
@@ -218,6 +221,8 @@ export const AUTH_TERMS = {
   loginSubmit: 'Войти',
   loginSubmitPending: 'Вход…',
   invalidCredentials: 'Неверный email или пароль.',
+  // CR-230 (ADR-032): only after the password verified (`403 account_blocked`).
+  accountBlocked: 'Аккаунт заблокирован администратором.',
   loginLink: 'Уже есть аккаунт? Войти',
   registerLink: 'Нет аккаунта? Зарегистрироваться',
   forgotPasswordLink: 'Забыли пароль?',
@@ -875,6 +880,11 @@ export const RIDE_WORKSPACE_TERMS = {
   participantsAction: (count: number): string => `Участники · ${count}`,
   writeAction: 'Написать участникам',
   loadError: 'Не удалось загрузить заезд. Попробуйте ещё раз.',
+  // CR-231 (ADR-032): only the organizer still sees a ride an admin has hidden.
+  hiddenByAdminTitle: 'Заезд скрыт администратором',
+  hiddenByAdminBody:
+    'Участники его не видят: заезда нет в каталоге, его страница недоступна, записаться нельзя.',
+  hiddenByAdminReason: (reason: string): string => `Причина: ${reason}`,
   overviewTitle: {
     draft: 'Перед публикацией',
     published: 'Перед стартом',
@@ -2366,3 +2376,238 @@ export const RIDE_RESCHEDULE_TERMS = {
 } as const;
 
 // ----------------------------- end CR-190 -----------------------------------
+
+/**
+ * CR-231 (ADR-032): the admin section `/admin` — one platform admin, the owner.
+ * Lists, cards and the action log; every reason the admin types is shown only to
+ * the admin (the log), never to the user.
+ */
+const ADMIN_ACTION_LABELS: Record<AdminActionType, string> = {
+  admin_granted: 'Выданы права администратора',
+  admin_revoked: 'Отозваны права администратора',
+  user_email_verified: 'Почта подтверждена вручную',
+  user_verification_resent: 'Письмо с подтверждением отправлено',
+  user_sessions_revoked: 'Все сессии завершены',
+  user_blocked: 'Пользователь заблокирован',
+  user_unblocked: 'Пользователь разблокирован',
+  ride_hidden: 'Заезд скрыт',
+  ride_unhidden: 'Заезд снова виден',
+  ride_cancelled: 'Заезд отменён',
+  review_hidden: 'Отзыв скрыт',
+  review_unhidden: 'Отзыв снова виден',
+};
+
+const ADMIN_SERVICE_STATUS: Record<
+  AdminDependencyStatus,
+  { label: string; tone: 'success' | 'danger' | 'neutral' }
+> = {
+  ok: { label: 'Работает', tone: 'success' },
+  error: { label: 'Ошибка', tone: 'danger' },
+  not_configured: { label: 'Не настроен', tone: 'neutral' },
+};
+
+const ADMIN_USER_FILTERS: Record<AdminUserFilter, string> = {
+  all: 'Все',
+  unverified: 'Без подтверждения',
+  blocked: 'Заблокированные',
+  organizers: 'Организаторы',
+};
+
+export const ADMIN_TERMS = {
+  sectionTitle: 'Администрирование',
+  sectionsLabel: 'Разделы администрирования',
+  nav: {
+    overview: 'Обзор',
+    users: 'Пользователи',
+    rides: 'Заезды',
+    reviews: 'Отзывы',
+    actions: 'Журнал',
+  },
+  accessCheckFailed:
+    'Не удалось проверить доступ к администрированию. Обновите страницу.',
+  loadError: 'Не удалось загрузить данные.',
+  retry: 'Повторить',
+  loadMore: 'Показать ещё',
+  loadMoreError: 'Не удалось загрузить продолжение списка.',
+  actionError: 'Не удалось выполнить действие. Попробуйте ещё раз.',
+  cancel: 'Отмена',
+  search: 'Найти',
+  reasonLine: (reason: string): string => `Причина: ${reason}`,
+
+  // Обзор
+  overviewTitle: 'Обзор платформы',
+  overviewUsers: 'Пользователи',
+  usersTotal: 'Всего',
+  usersNew: 'Новых за 7 дней',
+  usersUnverified: 'Без подтверждённой почты',
+  usersBlocked: 'Заблокированы',
+  organizersTotal: 'Организаторов',
+  overviewRides: 'Заезды',
+  ridesHidden: 'Скрыты',
+  ridesUpcoming: 'Стартуют в ближайшие 7 дней',
+  overviewRegistrations: 'Записи на заезды',
+  registrationsActive: 'Активных',
+  registrationsNew: 'Новых за 7 дней',
+  overviewReviews: 'Отзывы',
+  reviewsTotal: 'Всего',
+  reviewsHidden: 'Скрыты',
+  servicesTitle: 'Сервисы',
+  services: {
+    database: 'База данных',
+    redis: 'Очередь и кэш (Redis)',
+    s3: 'Хранилище файлов (S3)',
+    email: 'Почта',
+    maps: 'Карты 2GIS',
+  },
+  serviceStatus: ADMIN_SERVICE_STATUS,
+  // CR-232: the overview is read on demand; the time is the last answer that came back.
+  servicesRefresh: 'Обновить',
+  servicesUpdatedAt: (time: string): string => `Обновлено ${time}`,
+  servicesRefreshFailed: 'Не удалось обновить — показаны данные на время выше.',
+  /** A counter that opens the list filtered to exactly those records; the
+   * section keeps «Скрыты» for rides and for reviews apart. */
+  metricOpenList: (section: string, label: string, value: string): string =>
+    `${section}, ${label.toLocaleLowerCase('ru')}: ${value}. Открыть список`,
+
+  // Пользователи
+  usersTitle: 'Пользователи',
+  searchUsersLabel: 'Поиск по email или имени',
+  userFilterLegend: 'Показать',
+  userFilters: ADMIN_USER_FILTERS,
+  usersEmpty: 'Никого не нашлось',
+  emptyHint: 'Измените поиск или фильтр.',
+  columnUser: 'Пользователь',
+  columnRegistered: 'Регистрация',
+  columnEmail: 'Почта',
+  columnStatus: 'Статус',
+  emailVerified: 'Подтверждена',
+  emailUnverified: 'Не подтверждена',
+  badgeOrganizer: 'Организатор',
+  badgeAdmin: 'Администратор',
+  badgeBlocked: 'Заблокирован',
+  noDisplayName: 'Имя не указано',
+
+  // Карточка пользователя
+  backToUsers: 'Все пользователи',
+  userNotFound: 'Такого пользователя нет.',
+  factRegistered: 'Зарегистрирован',
+  factEmail: 'Почта',
+  factOrganizer: 'Профиль организатора',
+  factSessions: 'Активных сессий',
+  factRides: 'Заездов организовано',
+  factRegistrations: 'Активных записей',
+  factReviews: 'Отзывов оставлено',
+  noOrganizer: 'Нет',
+  blockedTitle: 'Пользователь заблокирован',
+  verifyEmail: 'Подтвердить почту',
+  verifyEmailDone: 'Почта подтверждена.',
+  resendVerification: 'Отправить письмо ещё раз',
+  resendVerificationDone: 'Письмо с подтверждением отправлено.',
+  revokeSessions: 'Завершить все сессии',
+  revokeSessionsTitle: 'Завершить все сессии?',
+  revokeSessionsDescription:
+    'Пользователь выйдет на всех устройствах и сможет снова войти со своим паролем.',
+  revokeSessionsDone: (count: number): string =>
+    count === 0 ? 'Активных сессий не было.' : `Завершено сессий: ${count}.`,
+  block: 'Заблокировать',
+  blockTitle: 'Заблокировать пользователя',
+  blockDescription:
+    'Все сессии завершатся сразу, войти снова не получится. Блокировку можно снять.',
+  blockDone: 'Пользователь заблокирован.',
+  // CR-232: the record a reason dialog acts on, named inside the dialog.
+  subjectAccount: 'Аккаунт',
+  subjectRide: 'Заезд',
+  subjectAuthor: 'Автор',
+  subjectReviewText: 'Текст отзыва',
+  unblock: 'Разблокировать',
+  unblockTitle: 'Разблокировать пользователя?',
+  unblockDescription: 'Пользователь снова сможет войти со своим паролем.',
+  unblockDone: 'Пользователь разблокирован.',
+  adminCannotBeBlocked:
+    'Администратора нельзя заблокировать из панели — сначала отзовите права на сервере.',
+  historyTitle: 'История действий',
+  historyEmpty: 'Действий с этой записью ещё не было.',
+
+  // Причина действия
+  reasonLabel: 'Причина',
+  // CR-232: who sees the reason depends on the action — never promise privacy
+  // where the organizer reads it (`GET /v1/rides/:id` → `moderation`).
+  reasonHintOrganizerVisible:
+    'Причину увидит организатор заезда, она сохранится в журнале действий. До 500 символов.',
+  reasonHintLogOnly:
+    'Причина сохранится в журнале действий администратора. До 500 символов.',
+  reasonRequired: 'Укажите причину.',
+
+  // Заезды
+  ridesTitle: 'Заезды',
+  searchRidesLabel: 'Поиск по названию',
+  rideStatusLabel: 'Статус',
+  anyStatus: 'Любой статус',
+  visibilityLegend: 'Видимость',
+  visibility: { all: 'Все', visible: 'Видимые', hidden: 'Скрытые' },
+  ridesEmpty: 'Заездов не нашлось',
+  columnRide: 'Заезд',
+  columnOrganizer: 'Организатор',
+  columnStart: 'Старт',
+  columnRegistrations: 'Записей',
+  columnActions: 'Действия',
+  badgeHidden: 'Скрыт',
+  hideRide: 'Скрыть',
+  hideRideTitle: 'Скрыть заезд',
+  hideRideDescription:
+    'Заезд пропадёт из каталога и со своей страницы для всех, кроме организатора; записаться будет нельзя. Скрытие можно отменить.',
+  hideRideDone: 'Заезд скрыт.',
+  unhide: 'Вернуть',
+  unhideRideDone: 'Заезд снова виден.',
+  cancelRide: 'Отменить',
+  cancelRideTitle: 'Отменить заезд',
+  cancelRideDescription:
+    'Статус сменится на «Отменён», записавшиеся получат уведомление. Отмену нельзя откатить.',
+  cancelRideDone: 'Заезд отменён, участники получат уведомление.',
+  rideNotCancellable: 'Этот заезд уже нельзя отменить.',
+
+  // Отзывы
+  reviewsTitle: 'Отзывы',
+  reviewsEmpty: 'Отзывов не нашлось',
+  ratingLabel: (rating: number): string => `Оценка ${rating} из 5`,
+  noComment: 'Без текста',
+  reviewOnRide: (title: string): string => `К заезду «${title}»`,
+  hideReview: 'Скрыть',
+  hideReviewTitle: 'Скрыть отзыв',
+  hideReviewDescription:
+    'Отзыв пропадёт со страницы заезда и перестанет учитываться в рейтинге организатора. Скрытие можно отменить.',
+  hideReviewDone: 'Отзыв скрыт.',
+  unhideReviewDone: 'Отзыв снова виден.',
+  /** CR-232: the start of a review for the hide dialog — whitespace collapsed,
+   * cut at a code point (never mid-emoji) with `…`; «Без текста» when empty. */
+  reviewExcerpt: (comment: string | null, maxLength = 140): string => {
+    const text = (comment ?? '').replace(/\s+/g, ' ').trim();
+    if (!text) return 'Без текста';
+    const chars = Array.from(text);
+    return chars.length <= maxLength
+      ? text
+      : `${chars
+          .slice(0, maxLength - 1)
+          .join('')
+          .trimEnd()}…`;
+  },
+
+  // Журнал
+  actionsTitle: 'Журнал действий',
+  actionsEmpty: 'Действий пока не было',
+  actionLabels: ADMIN_ACTION_LABELS,
+  /** CR-232: a deleted target keeps its id, so two such rows stay distinct
+   * (replaces the bare «Запись удалена»). */
+  targetMissingWithId: (id: string): string => `Запись удалена · ID ${id}`,
+  actorCli: 'Сервер (командная строка)',
+  actionsFilterTarget: 'Объект',
+  actionsFilterAction: 'Действие',
+  targetTypeFilters: {
+    any: 'Любой',
+    user: 'Пользователи',
+    ride: 'Заезды',
+    review: 'Отзывы',
+  },
+  anyAction: 'Любое',
+  actionsEmptyFiltered: 'Таких действий не нашлось',
+} as const;

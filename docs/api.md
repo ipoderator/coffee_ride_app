@@ -1006,6 +1006,44 @@ organizer's `finished`/`cancelled` rides. `completionPercent` is `null` below 3
 closed rides; pace/distance are medians; `bicycleTypes` is the top two, never `any`.
 Not on the `GET /v1/rides` list.
 
+## Admin (CR-228..CR-231, ADR-032)
+
+Every `/v1/admin/*` route runs `requireAuth` then `requireAdmin` (one hook on the
+whole prefix): `401` without a session, and a signed-in user without a
+`platform_admins` row gets the unknown-route `404 not_found`. The capability is read
+from the DB on every request. Mutations are POST (CSRF Origin check applies), act as
+`request.user`, and write an `admin_actions` row in the same transaction. Lists are
+cursor-paginated, newest first.
+
+- GET `/v1/admin/me` → `{ admin: { userId, email } }` — the web `/admin` gate.
+- GET `/v1/admin/overview` → `{ overview }`: user/organizer/ride/registration/review
+  counts and dependency states (`ok`/`error`/`not_configured`).
+- GET `/v1/admin/users?q=&filter=all|unverified|blocked|organizers` and
+  GET `/v1/admin/users/:id` (`404 not_found`) → card with counts; never a password
+  hash, session token, phone or emergency data.
+- POST `/v1/admin/users/:id/verify-email` → `{ user }`; `.../resend-verification` →
+  `204`; `.../revoke-sessions` → `{ revoked }`; `.../block` (body `{ reason }`, 1-500
+  chars; deletes every session; `409 cannot_block_admin`) and `.../unblock` → `{ user }`.
+- GET `/v1/admin/rides?q=&status=&visibility=all|visible|hidden` (drafts included);
+  POST `/v1/admin/rides/:id/hide` (`{ reason }`, `409 ride_already_hidden`),
+  `.../unhide`, `.../cancel` (`{ reason }`, the organizer cancel path with participant
+  notifications; `409 ride_not_cancellable`) → `{ ride }`.
+- GET `/v1/admin/reviews?visibility=`; POST `/v1/admin/reviews/:id/hide` (`{ reason }`)
+  and `.../unhide` → `{ review }`.
+- GET `/v1/admin/actions?targetType=&targetId=&action=` → the append-only log with
+  the target's current label and the acting admin (`null` for a host-CLI
+  grant/revoke). `action` (one of the twelve log actions, CR-232) combines with the
+  other filters; an unknown value is `400 validation_error`. Read-only — the log has
+  no update or delete endpoint.
+
+Effects elsewhere: a blocked user's sessions stop validating and `POST
+/v1/auth/login` answers `403 account_blocked` — only after the password verified, so
+it reveals nothing to someone without it. A hidden ride answers like a draft to
+everyone but its organizer (`isRidePublic`: detail, route, cover, riders,
+registration, waitlist, discovery, sitemap); `GET /v1/rides/:id` gives the owner an
+additive `moderation: { hiddenAt, reason } | null` (CR-231). A hidden review leaves
+every list and the organizer rating.
+
 ## Image URLs and caching (CR-217)
 
 Every cover/avatar URL the API returns — `coverImageUrl`, every `avatarUrl`, and the

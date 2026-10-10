@@ -4,17 +4,17 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 92.68,
-        "statements": 91.69,
-        "functions": 96.31,
-        "branches": 81.59
+        "lines": 93.42,
+        "statements": 92.41,
+        "functions": 96.92,
+        "branches": 82.69
       },
       "scopes": {
         "src/modules/auth/": {
-          "lines": 95.59,
-          "statements": 95.06,
-          "functions": 97.36,
-          "branches": 80.64
+          "lines": 96.03,
+          "statements": 95.21,
+          "functions": 97.72,
+          "branches": 85.22
         },
         "src/modules/registrations/": {
           "lines": 93.85,
@@ -23,10 +23,10 @@
           "branches": 85.78
         },
         "src/modules/rides/": {
-          "lines": 94.34,
-          "statements": 92.94,
-          "functions": 99.48,
-          "branches": 84.8
+          "lines": 94.62,
+          "statements": 93.32,
+          "functions": 99.51,
+          "branches": 85.38
         },
         "src/modules/organizers/": {
           "lines": 83.21,
@@ -41,53 +41,53 @@
           "branches": 64.51
         },
         "src/modules/notifications/": {
-          "lines": 88.2,
-          "statements": 87.67,
-          "functions": 98.3,
-          "branches": 71.79
+          "lines": 88.37,
+          "statements": 87.83,
+          "functions": 98.33,
+          "branches": 72.5
         },
         "src/modules/reviews/": {
-          "lines": 86.07,
-          "statements": 85.18,
-          "functions": 87.5,
-          "branches": 63.63
+          "lines": 86.41,
+          "statements": 85.54,
+          "functions": 88.23,
+          "branches": 66.66
         },
         "src/plugins/": {
-          "lines": 95.29,
-          "statements": 94.56,
+          "lines": 95.6,
+          "statements": 94.94,
           "functions": 100,
-          "branches": 88.88
+          "branches": 89.74
         },
         "src/lib/": {
-          "lines": 94.77,
-          "statements": 94.48,
-          "functions": 94.44,
-          "branches": 87.32
+          "lines": 95.45,
+          "statements": 95.15,
+          "functions": 95.45,
+          "branches": 87.36
         }
       }
     },
     "apps/web": {
       "total": {
-        "lines": 81.05,
-        "statements": 79.32,
-        "functions": 77.92,
-        "branches": 79.8
+        "lines": 83.81,
+        "statements": 82.18,
+        "functions": 81.45,
+        "branches": 81.89
       }
     },
     "packages/ui": {
       "total": {
         "lines": 100,
-        "statements": 99.57,
+        "statements": 99.6,
         "functions": 100,
-        "branches": 93.49
+        "branches": 93.69
       }
     },
     "packages/maps-2gis": {
       "total": {
-        "lines": 99.45,
-        "statements": 98.27,
-        "functions": 98.36,
-        "branches": 90.87
+        "lines": 99.5,
+        "statements": 98.41,
+        "functions": 98.55,
+        "branches": 91.44
       }
     },
     "packages/resilience": {
@@ -100,8 +100,8 @@
     },
     "packages/db": {
       "total": {
-        "lines": 97.43,
-        "statements": 97.67,
+        "lines": 97.61,
+        "statements": 97.82,
         "functions": 100,
         "branches": 96.87
       }

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'types';
+import { AUTH_TERMS } from 'ui';
 import { CabinetShell } from '@/components/cabinet/CabinetShell';
 import { getCurrentUser } from '@/lib/api/current-user';
 import { SessionProvider } from '@/lib/auth/session-context';
@@ -275,6 +276,27 @@ describe('LoginForm', () => {
       'aria-invalid',
       'true',
     );
+  });
+
+  it('says the account is blocked once the API refuses a correct password', async () => {
+    loginMock.mockRejectedValue(
+      new ApiError({
+        type: 'https://coffee-ride.example/errors/account_blocked',
+        title: 'Forbidden',
+        status: 403,
+        detail: 'This account is blocked.',
+        instance: '/v1/auth/login',
+        code: 'account_blocked',
+      }),
+    );
+
+    renderForm();
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      AUTH_TERMS.accountBlocked,
+    );
+    expect(screen.queryByText('This account is blocked.')).toBeNull();
   });
 
   it('shows a generic error for an unmapped server failure', async () => {

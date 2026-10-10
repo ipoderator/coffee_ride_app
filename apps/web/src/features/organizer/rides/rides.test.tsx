@@ -7,7 +7,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ride, RouteSummary } from 'types';
-import { ToastProvider } from 'ui';
+import { RIDE_WORKSPACE_TERMS, ToastProvider } from 'ui';
 import { CreateRideForm } from './components/CreateRideForm';
 import { RidesList } from './components/RidesList';
 import { EditRideForm as EditRideTab } from './components/EditRideForm';
@@ -639,6 +639,42 @@ describe('EditRideForm', () => {
     expect(
       screen.queryByRole('button', { name: 'Сохранить' }),
     ).not.toBeInTheDocument();
+  });
+
+  // CR-231 (ADR-032): the organizer is the one person who still sees a ride an
+  // admin hid — and is told why.
+  it('tells the organizer an admin hid the ride, with the reason', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+      moderation: { hiddenAt: '2026-10-10T08:00:00.000Z', reason: 'Реклама' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    expect(
+      await screen.findByText(RIDE_WORKSPACE_TERMS.hiddenByAdminTitle),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(RIDE_WORKSPACE_TERMS.hiddenByAdminReason('Реклама')),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no moderation notice for a ride nobody hid', async () => {
+    getRideMock.mockResolvedValue({
+      ride: baseRide,
+      isOwner: true,
+      requirements: [],
+      moderation: null,
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+
+    expect(await screen.findByDisplayValue(baseRide.title)).toBeInTheDocument();
+    expect(
+      screen.queryByText(RIDE_WORKSPACE_TERMS.hiddenByAdminTitle),
+    ).toBeNull();
   });
 
   it('prefills the form from the loaded ride, including the local start time', async () => {

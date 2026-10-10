@@ -38,7 +38,9 @@ export default defineConfig({
     },
   },
   test: {
-    coverage: coverageConfig(),
+    // CR-232: Storybook fixtures/helpers run in the `storybook` project, never in
+    // `unit` — measured here they only read as 0 % app code.
+    coverage: coverageConfig({ exclude: ['src/stories/**'] }),
     projects: [
       {
         extends: true,

@@ -27,3 +27,4 @@ export * from './waitlist-entry.js';
 export * from './ride-update.js';
 export * from './notification.js';
 export * from './review.js';
+export * from './admin.js';
