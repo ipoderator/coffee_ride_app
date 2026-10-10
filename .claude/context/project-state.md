@@ -24,8 +24,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-228..CR-232 — admin panel P0 (ADR-032), validated and merged into `main`
-(2026-10-10, together with the Dependabot triage updates). Admin = `platform_admins`
+CR-228..CR-232 — admin panel P0 (ADR-032), merged into `main` and deployed to
+coffeeride.site (`c01a61f`, 2026-10-10, with the Dependabot triage updates; migration
+`0026` applied; admin granted to the owner's account). CR-233 (PR #40) keeps `s3-init`
+idempotent on SeaweedFS 4.48 — until it is merged, `deploy/deploy.sh` stops at the
+bucket step on the VPS. Admin = `platform_admins`
 row from the host CLI; `/v1/admin/*` behind `requireAdmin`; `/admin` section in
 apps/web (Обзор, Пользователи, Заезды, Отзывы, Журнал); block/hide/cancel enforced
 across auth, rides, registrations, reviews; the organizer sees why a ride is hidden

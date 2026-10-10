@@ -112,4 +112,5 @@ Summary: Merged after a rebase onto main and green CI each: #26 SeaweedFS 4.48, 
 Summary: The first prod deploy after #26 (SeaweedFS 4.47 → 4.48) stopped at `deploy/deploy.sh`'s bucket step: 4.48's `weed shell` exits non-zero on `error: bucket … already exists`, so `s3-init` was no longer a no-op and migrations/app roll never ran (the old `web`/`api` kept serving; `/health` ok). `s3-init` in `docker-compose.infra.yml` and `docker-compose.yml` now treats that one error as success; any other failure still exits 1. CI's docker-smoke always starts with an empty bucket, so it could not catch this.
 Files: `docker-compose.infra.yml`, `docker-compose.yml`.
 Validation: the rendered script against a throwaway SeaweedFS 4.48 (isolated network on the prod host): new bucket → 0, existing → 0, invalid name → 1.
+Deploy: `c01a61f` (admin panel) went out by running `deploy.sh`'s remaining steps by hand without `s3-init` (bucket confirmed present): build, migrate (`0026` applied, 27 migrations), app roll; `/health` db/redis/s3 ok; `admin:grant` for the owner's account. Anonymous `/admin` → 404, `/api/v1/admin/me` → 401.
 Follow-up: none.
