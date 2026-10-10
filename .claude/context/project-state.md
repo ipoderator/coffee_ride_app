@@ -28,8 +28,8 @@ CR-227 — transactional email links go straight to the site (`track_links`/`tra
 off in the Unisender provider) and a refused send logs Unisender's code/message.
 Production email is live on Unisender Go (paid tariff, `noreply@coffeeride.site`, go2);
 its link-tracking domain `links.coffeeride.site` does not resolve (Unisender's NS
-answer REFUSED), which is why tracking is off. Prod keeps
-`AUTH_SKIP_EMAIL_VERIFICATION=true` until the owner confirms a live verify link.
+answer REFUSED), which is why tracking is off. Verification is
+required again on prod; the owner completed a live password reset (KI-026/042/055 closed).
 
 Before this: CR-221..CR-226 — live QA audit fixes, deployed (`c082a79`); CR-219 —
 **coffeeride.site is live** (VPS `/opt/deployments/coffee-ride`, `docs/deployment.md`
@@ -81,11 +81,8 @@ differ from a ride's own review list); splitting `rides.service.ts`/
 3. **CR-148 full run** — `pnpm seed:demo` with routes, once 2GIS REST is reachable
    from this machine (KI-056); the seed could also fill requirements.
 4. **Before launch, owner-side** (CR-210 prepared the repository for each; none is
-   code work): a commercial 2GIS key (KI-075); a verified Unisender Go sender in
-   `EMAIL_FROM_ADDRESS`, without which password reset and email verification are dead
-   ends for real users (KI-026/KI-042/KI-055) — `pnpm preflight` now warns on both;
-   the site is deployed (CR-219) — after setting the sender, edit the server `.env`,
-   re-run `deploy/deploy.sh` and finish FIRST-DEPLOY §5; set up off-host backups (KI-045).
+   code work): a commercial 2GIS key (KI-075); off-host backups (KI-045). Email is
+   done (CR-227 — verification required again, reset verified live).
 5. **KI-075's error mapping** — a separate CR the owner kept out of CR-210's scope:
    2GIS's 403 (demo-key distance, and a commercial key's own quota/licence refusals)
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис

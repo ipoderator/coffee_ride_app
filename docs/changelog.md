@@ -115,3 +115,11 @@ Summary: Production email went live on Unisender Go (paid tariff; sender domain 
 Files: `apps/api/src/lib/email/unisender-provider.ts`(+test).
 Validation: email unit tests 6 passed; api typecheck/lint/prettier clean; file coverage up (branches 78.6 → 80 %).
 Follow-up: prod still runs `AUTH_SKIP_EMAIL_VERIFICATION=true` until the owner checks a live verify link.
+
+## 2026-10-09 — CR-227 follow-up — Production email verified live; KI-026/042/055 closed
+
+Summary: Corrects CR-227's follow-up: after deploying `08815f4`, `AUTH_SKIP_EMAIL_VERIFICATION` was emptied on the VPS — verification is required again. The owner completed forgot-password → emailed direct link → reset → login on coffeeride.site; a verify-email link from a production email had confirmed an account earlier the same day. KI-026, KI-042, KI-055 moved to the archive. CI on `08815f4`: success.
+
+## 2026-10-10 — Dependabot triage — eight updates merged
+
+Summary: Merged after a rebase onto main and green CI each: #26 SeaweedFS 4.48, #29 upload-artifact 7, #30 setup-node 7, #31 pnpm/action-setup 6, #32 checkout 7 (majors: node24 runtime + runner ≥ 2.327.1 only, inputs unchanged), #9 zod 4.6.5, #8 tailwind-merge 3.7, #34 @aws-sdk/client-s3 3.1146, #35 lucide-react 1.52, #38 dev group (15: vitest 5.0.3, vite 8.3.3, storybook 10.6.1, turbo 2.11.7, eslint-config-next 16.4.0…). #35's first red run was a one-off `route-builder.test.tsx` failure (passed 3/3 locally) and a Docker Hub 429; reruns green. Still open by decision: Node 26 #19–#21, Postgres 18 #15 (KI-091); alert #18 `braces` has no patched release (KI-095). Not yet deployed to production.

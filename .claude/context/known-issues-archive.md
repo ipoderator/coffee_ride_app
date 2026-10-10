@@ -2471,3 +2471,213 @@ Workaround: none (a hard refresh on each viewer's side).
 Next action: own CR — version the URL with a hash of the stored object key (e.g.
 `/v1/rides/:id/cover?v=<hash>`), keeping `immutable`; send `private` for a draft ride
 (also closes KI-093 lead 3).
+
+### KI-026 — No verify-email web screen exists, and two organizer actions now hard-depend on it
+
+Status: resolved 2026-10-09 (CR-227) — production email is live (Unisender Go, direct links); a real verify-email link from a production email confirmed an account on coffeeride.site.
+"not a clickable page ... but enough for the live-check/manual QA path via a
+direct POST"). Widened: 2026-09-14 (CR-019) — a second organizer action now
+gates on the same unreachable-from-the-UI state.
+Problem: `docs/design.md` §8 lists `/verify-email` under "Auth flows" with a
+note pointing at CR-059/CR-060, but CR-059's UI half was never built — only
+`POST /v1/auth/verify-email` (the API call a real screen would make) exists.
+An organizer with an unverified email today has no in-app way to complete
+verification at all. `POST /v1/organizers/me` (CR-014) already 403s
+`email_verification_required` for such a caller; CR-019 (this session) adds
+`POST /v1/rides/:id/publish` as a second endpoint with the identical gate —
+both now show a correct, worded banner in `apps/web`, but neither can link
+anywhere that actually resolves the problem.
+Impact: medium and growing — a real organizer who registers, skips the dev-
+only `verificationUrl` response field (production never returns it; real
+email delivery is ADR-007, still Pending), and later tries to create an
+organizer profile or publish a ride hits a dead end with no recovery path in
+the UI.
+Workaround: manual — call `POST /v1/auth/verify-email` directly (curl/API
+client) with the token from `POST /v1/auth/register`'s dev-only
+`verificationUrl` field, same as this session's and CR-011's own live checks
+already do.
+Next action: CR-059's own remaining scope was narrowed to "gate organizer
+publish" and is now closed by CR-019 — the actual `/verify-email` screen has
+no ticket number of its own in `docs/tasks.md`. Needs one added (same
+"real gap, add a ticket" discipline as KI-024/KI-025) before or alongside
+ADR-007's real email delivery, since a screen with no email pointing at it is
+only marginally more useful than today's curl workaround.
+Update 2026-09-20 (CR-099, a user-run QA pass against a live browser): the
+real `/verify-email` page now exists (`app/verify-email/page.tsx` +
+`features/auth/verify-email`), reads `?token=` and calls `POST /v1/auth/
+verify-email` on mount. The register success screen's dev-only note was
+itself misleading before this — it rendered the raw API path
+(`/v1/auth/verify-email?token=...`, a POST-only route) as if it were a
+clickable link, which 404'd when followed; it now links to the real
+`/verify-email?token=...` web page instead. Live-verified end to end in a
+real browser against the real running stack: register → click the rendered
+link → "Email подтверждён". This closes the dev/QA-path half of this issue.
+Still narrowed, not fully resolved: in production, `verificationUrl` is
+never returned (ADR-007's real email delivery is still Pending), so a real
+organizer still has no way to ever reach this screen with a valid token —
+the screen existing doesn't by itself close that half. Next action unchanged
+until ADR-007 lands.
+Update 2026-09-20 (CR-100, ADR-007 now Accepted): real email delivery now
+exists — `POST /v1/auth/register` sends (or enqueues) a verification email
+via Unisender Go alongside the unchanged dev-only `verificationUrl` field.
+Still not fully resolved, for two independent reasons: (1) the user hasn't
+yet configured `EMAIL_FROM_ADDRESS` (no sender is verified in their
+Unisender Go account) — until then `app.emailProvider` stays `null` and the
+producer silently no-ops, unchanged from before this session; (2)
+`unisender.ru`/`go1.unisender.ru` fail DNS resolution (`SERVFAIL`) from
+inside this sandbox specifically (confirmed via `nslookup` — not a blanket
+`.ru` block, `ya.ru` resolves fine) — a real send has never actually been
+exercised live, only against mocked `fetch` in `unisender-provider.test.ts`.
+Next action: user sets `EMAIL_FROM_ADDRESS` to a real verified sender, then
+the first session with real network access to `unisender.ru` should send
+one real email end to end (register → check inbox → click link) before
+this is trusted as more than "the adapter's request shape is correct."
+Update 2026-10-01 (CR-168): a second, independent gap was found here that
+every prior update had missed — and it was code-side, not config-side.
+`POST /v1/auth/register` issued the **only** verification token a user would
+ever get; no resend endpoint existed anywhere in the repo (confirmed by
+`grep -rni resend` over `apps/api/src`, `apps/web/src`, `packages/ui/src`,
+`docs/api.md` — the single hit was `notifications.service.ts`'s own comment
+naming the gap: "there is no resend endpoint, so a dropped email would leave
+the account unverifiable"). So even with `EMAIL_FROM_ADDRESS` configured and
+delivery working, a 24h token expiry, a spam-filtered email, or a closed tab
+left the account permanently unverifiable — `/register` answers `409
+email_already_registered`, so re-registering was not a way out, and both
+`POST /v1/organizers/me` and `POST /v1/rides/:id/publish` stay 403 forever.
+The UI copy had been promising a resend that did not exist
+(`VERIFY_EMAIL_TERMS.invalidOrExpired`: «Запросите новую при следующем
+входе» — nothing at login did this; `ORGANIZER_TERMS.
+emailVerificationRequired`: «Ссылка ... была отправлена при регистрации» —
+a statement, not an action). CR-168 adds `POST /v1/auth/resend-verification`
+(session-authenticated, bodyless, sweeps outstanding tokens, rate-limited on
+both tiers) and surfaces it as `ResendVerificationButton` on all three
+dead-end surfaces (`/verify-email`'s error states, `/organizer/profile`'s
+banner, ride-edit's publish banner), with the two misleading strings fixed.
+Live-verified in a real browser against the running stack: register → log in
+unverified → open a stale `/verify-email?token=` link → «Отправить письмо
+повторно» → «Письмо отправлено…», and the same button on the organizer
+profile's 403 banner; separately verified over HTTP that a resend
+invalidates the previous link (`verification_token_already_used`) and that a
+resend-issued token verifies the account (`emailVerified: true`).
+Next action: unchanged and now the only remaining half — user sets
+`EMAIL_FROM_ADDRESS` to a verified sender and one real send is exercised
+from a network that can resolve `unisender.ru` (KI-055). Until then the
+resend button issues a valid token and the producer no-ops, exactly as
+`register`'s has since CR-100.
+Update 2026-10-05 (CR-210): the half-configured state is no longer silent.
+`pnpm preflight` (`apps/api/src/preflight.ts`) reports an
+`UNISENDER_API_KEY` set with an empty `EMAIL_FROM_ADDRESS` as a warning
+naming this exact consequence, and `apps/api` logs the same warning at boot
+— previously `plugins/email.ts`'s all-or-nothing gate absorbed it into
+`app.emailProvider = null` with nothing anywhere saying so. `deploy/
+FIRST-DEPLOY.md` §5 makes completing a real verification against a real
+mailbox a required first-deploy check. Next action unchanged: the owner sets
+a verified sender; the gap itself is config-side and unchanged.
+
+### KI-042 — No `/forgot-password`/`/reset-password` web screens; the reset token is never exposed over HTTP, even in dev
+
+Status: resolved 2026-10-09 (CR-227) — production email is live; the owner completed forgot-password → emailed link → reset → login on coffeeride.site (18:53 UTC).
+Problem: `docs/design.md`'s Auth-flows row names `/forgot-password`/
+`/reset-password` but no CR before this one built either the API or the
+screens — same gap shape as KI-026 (`/verify-email`). CR-060 shipped the API
+mechanics only (`POST /v1/auth/forgot-password`, `POST
+/v1/auth/reset-password`). Unlike `/verify-email` (whose `register` response
+carries a dev-only `verificationUrl`), this endpoint's response must stay
+byte-identical whether or not the email exists
+(`.claude/rules/security.md` — no account enumeration), so no dev-only token
+field exists anywhere on `forgot-password`, in any environment. A real
+organizer/participant who forgets their password today has no way to
+actually complete a reset without a real email-delivery channel (ADR-007,
+still Pending).
+Impact: medium — password reset is unusable end to end for a real user in
+this environment (no email delivery, no web screen), though the underlying
+mechanics (issue/validate/consume token, revoke sessions) are fully built and
+tested.
+Workaround: manual/test-only — call `requestPasswordReset(db, email)`
+directly from the service layer (as `auth.routes.test.ts` does) to obtain
+the raw token, then `POST /v1/auth/reset-password` with it via curl/API
+client. No production-safe workaround exists, by design.
+Next action: needs its own ticket (same "real gap, add a ticket" discipline
+as KI-024/KI-025/KI-026) for the `/forgot-password`/`/reset-password` web
+screens, and depends on ADR-007's real email delivery landing before a real
+user could ever discover their own reset token — a web screen alone doesn't
+close this gap without a delivery channel behind it.
+Update 2026-09-20 (CR-099, a user-run QA pass against a live browser): both
+`/forgot-password` and `/reset-password` screens now exist (`app/
+forgot-password/page.tsx`, `app/reset-password/page.tsx` +
+`features/auth/{forgot-password,reset-password}`). Live-verified
+`/forgot-password` end to end against the real running stack (generic
+success state shown regardless of account existence, per
+`.claude/rules/security.md`); `/reset-password`'s missing-token state
+live-verified, its token-present path covered by
+`reset-password.test.tsx` against the same three server error codes
+(`invalid_reset_token`/`reset_token_already_used`/`reset_token_expired`)
+`auth.routes.test.ts` already exercises server-side (no dev-only token
+field exists to fetch one through a real browser — by design, unchanged).
+Still narrowed, not fully resolved: this closes the "no screens" half only
+— "the reset token is never exposed over HTTP, even in dev" is unchanged
+and deliberately so, and a real user still cannot discover their own token
+without ADR-007's real email delivery landing. Next action unchanged.
+Update 2026-09-20 (CR-100, ADR-007 now Accepted): `POST /v1/auth/
+forgot-password` now sends (or enqueues) a real reset email via Unisender
+Go when the account exists — the route's response stays byte-identical
+`204` either way, so this adds no enumeration surface. Same two open
+reasons as KI-026's identical update: no `EMAIL_FROM_ADDRESS` configured
+yet (`app.emailProvider` stays `null`, producer no-ops), and this sandbox
+can't resolve `unisender.ru` (`nslookup` confirms `SERVFAIL`) to exercise a
+real send. Next action: same as KI-026's — configure a verified sender,
+then verify one real send from an environment with real network access.
+Update 2026-10-01 (CR-168): checked against KI-026's newly-found resend gap
+and this issue does not share it. Password reset is already self-service
+end to end: `/forgot-password` can be requested again at any time, by anyone,
+with no token or prior state needed, and each request issues a fresh token —
+there is no equivalent of "the one token you'll ever get." The only thing
+standing between a real user and a completed reset here is delivery, which is
+the `EMAIL_FROM_ADDRESS`/KI-055 half above. Deliberately not given a resend
+button: `/forgot-password` _is_ the resend, and adding a second
+session-authenticated path would be meaningless (a user who can log in does
+not need a password reset). Next action unchanged.
+Update 2026-10-05 (CR-210): the delivery gap is now reported rather than
+silent — see KI-026's CR-210 update; the same preflight warning covers this
+issue, since both flows share `app.emailProvider`. `deploy/FIRST-DEPLOY.md`
+§5 makes completing a real password reset from an emailed link a required
+first-deploy check, so this cannot be missed at launch the way a passing
+health check would let it be. Next action unchanged.
+
+### KI-055 — `unisender.ru` (all subdomains) fails DNS resolution from this sandbox
+
+Status: resolved 2026-10-09 (CR-227) — verified from production instead of this sandbox: Unisender Go sends from the VPS, password reset completed end to end by the owner.
+Problem: `nslookup go1.unisender.ru`/`go2.unisender.ru` both return
+`SERVFAIL` from this sandbox's resolver — not a blanket `.ru` TLD block
+(`nslookup ya.ru` resolves normally to real addresses), specific to this
+one vendor's domain. `WebFetch` against `godocs.unisender.ru` (API docs)
+failed identically (`ENOTFOUND`) earlier the same session, before any code
+existed to blame — confirming this is a standing environment/network
+constraint, not a bug in `lib/email/unisender-provider.ts`.
+Impact: medium — blocks live end-to-end verification of the real Unisender
+Go integration (CR-100) in this specific sandbox. Zero impact on
+correctness confidence otherwise: the adapter's request shape was verified
+against the real `django-anymail` Unisender Go backend source (not
+guessed), and `unisender-provider.test.ts` exercises its parsing/error-
+normalization logic against mocked `fetch` responses matching that verified
+shape.
+Workaround: none needed for development — the adapter degrades identically
+whether Unisender is unconfigured (`app.emailProvider === null`) or
+configured-but-unreachable-from-here; either way every producer no-ops
+without throwing (`.claude/rules/resilience.md`).
+Next action: the first session with real network access to `unisender.ru`
+(the user's own machine, CI, or production) should send one real
+verification/reset email end to end (register or forgot-password → check a
+real inbox → click the link) once `EMAIL_FROM_ADDRESS` is configured to a
+sender verified in the Unisender Go account — see KI-026/KI-042's matching
+"Next action."
+Update 2026-10-01: still `SERVFAIL` from this machine (resolver `10.12.0.1`,
+VPN), and `.env`'s `EMAIL_FROM_ADDRESS` is still empty — both on the owner's
+side; KI-026/KI-042's remaining halves wait on them.
+Update 2026-10-05 (CR-210): unchanged as an environment constraint — not
+re-probed this session, since the owner elected to perform the real send
+themselves from a machine with access. What changed is that the missing
+`EMAIL_FROM_ADDRESS` half is now surfaced by `pnpm preflight` and by an
+`api` boot warning instead of being absorbed silently, and
+`deploy/FIRST-DEPLOY.md` §5 requires one real end-to-end send before the
+deploy is considered done.
