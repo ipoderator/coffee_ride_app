@@ -224,8 +224,12 @@ describe('AdminReviewsList', () => {
     expect(
       await within(dialog).findByText(ADMIN_TERMS.actionError),
     ).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // The error commits before Dialog's passive effect swaps the in-flight
+    // `ignoreClose` back for `onClose` — retry Escape until it is rebound.
+    await waitFor(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
 
     fireEvent.click(screen.getByRole('button', { name: ADMIN_TERMS.unhide }));
     expect(
