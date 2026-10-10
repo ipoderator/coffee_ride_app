@@ -22,7 +22,7 @@ describe('robots.txt', () => {
       rules: {
         userAgent: '*',
         allow: '/',
-        disallow: ['/me', '/organizer', '/api/'],
+        disallow: ['/me', '/organizer', '/admin', '/api/'],
       },
       sitemap: 'https://coffeeride.site/sitemap.xml',
     });

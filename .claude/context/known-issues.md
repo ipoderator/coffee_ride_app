@@ -422,3 +422,16 @@ re-inventory 2GIS hosts on any MapGL upgrade (`*.2gis.com`, `blob:` workers).
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this
 file's own Archiving rule — this section had grown to ~1050 lines of closed issues.
+
+### KI-098 — `/admin/users/<not a uuid>` shows the not-found page with HTTP 200
+
+Status: open. Discovered: 2026-10-10 (CR-232 item 7).
+Problem: the page calls `notFound()` for a malformed id (`app/admin/users/[id]/page.tsx`,
+`isUuid`), and the body is the site's «Страница не найдена» (`noindex, nofollow`),
+but on `next dev` the response status is 200 — the admin layout's shell has already
+streamed when the page throws. `/rides/abc` (no layout awaiting a fetch above it) is a
+real 404; non-admins still get the layout gate's real 404 on any `/admin/*` URL.
+Impact: low — admin-only, noindex, no API request is made with the bad id; an unknown
+valid uuid keeps CR-231's client-side «Пользователь не найден» (200 by design).
+Workaround: none needed. Not checked on a production build.
+Next action: if a real status matters, move the check into the layout or `proxy.ts`.

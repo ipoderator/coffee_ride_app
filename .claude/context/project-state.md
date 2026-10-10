@@ -24,21 +24,20 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-227 — transactional email links go straight to the site (`track_links`/`track_read`
-off in the Unisender provider) and a refused send logs Unisender's code/message.
-Production email is live on Unisender Go (paid tariff, `noreply@coffeeride.site`, go2);
-its link-tracking domain `links.coffeeride.site` does not resolve (Unisender's NS
-answer REFUSED), which is why tracking is off. Verification is
-required again on prod; the owner completed a live password reset (KI-026/042/055 closed).
+CR-228..CR-232 — admin panel P0 (ADR-032), validated and merged into `main`
+(2026-10-10, together with the Dependabot triage updates). Admin = `platform_admins`
+row from the host CLI; `/v1/admin/*` behind `requireAdmin`; `/admin` section in
+apps/web (Обзор, Пользователи, Заезды, Отзывы, Журнал); block/hide/cancel enforced
+across auth, rides, registrations, reviews; the organizer sees why a ride is hidden
+(`GET /v1/rides/:id` → owner-only `moderation`).
 
-Before this: CR-221..CR-226 — live QA audit fixes, deployed (`c082a79`); CR-219 —
-**coffeeride.site is live** (VPS `/opt/deployments/coffee-ride`, `docs/deployment.md`
-→ "Production host").
+Before this: CR-227 — production email live on Unisender Go, verification required
+again; CR-219 — **coffeeride.site is live** (`docs/deployment.md` → "Production host").
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
 - **Stack/infra:** pnpm + Turborepo, Node 24 LTS; Next.js 15 / React 19 / Tailwind v4;
-  Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0025`); Redis
+  Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0026`); Redis
   (BullMQ notifications, rate limits); S3 — SeaweedFS locally/CI (ADR-025); 2GIS via
   `maps-core`/`maps-2gis` (ADR-010/020). Production: Docker images for web/api/migrate,
   `docker-compose.prod.yml` + Caddy (ADR-018), smoke-tested in CI (`docker-smoke`)
@@ -52,6 +51,15 @@ Before this: CR-221..CR-226 — live QA audit fixes, deployed (`c082a79`); CR-21
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-232 items 1–7 (`admin:grant` requires a confirmed email; reason dialogs name
+their record and say who reads the reason; mobile section tabs reveal the active
+tab; list filters in the URL; overview links/refresh and log filters; item 7 — full
+validation sweep + review fixes) done on the same branch. Open review findings
+(not fixed, item 7): see "Next" 0.
+CR-228..CR-231 — awaiting the owner's review and an explicit request to commit; then
+merge/deploy is the owner's call. On deploy: run migration `0026`, then
+`admin:grant <owner email>` via the `migrate` image (`docs/deployment.md` → "Admin access").
 
 CR-221..CR-226 — validated locally (see changelog), awaiting the owner's review/commit
 on `experiments`; deploying needs `SITE_URL` built in (prod compose derives it from
@@ -72,6 +80,15 @@ organizer page / `GET /v1/organizers/:id/reviews` (declined — the header ratin
 differ from a ride's own review list); splitting `rides.service.ts`/
 `registrations.service.ts` (not now).
 
+0. **Admin follow-ups from CR-232 item 7's review** (owner call before fixing):
+   an admin's «Завершить все сессии» on their own card ends their own session and
+   the next click shows a generic error (`AdminUserCard.tsx`); the users list shows
+   «Без имени» where the card shows first + last name (list items carry no names —
+   additive API field); hide/unhide keeps the row in a list filtered to the old state
+   (deliberate: in-place undo); `CANCELLABLE` in `AdminRidesList.tsx` mirrors the API's
+   set by hand; `server-admin.ts` duplicates `server-ride.ts`'s forwarded headers;
+   `/admin/users/<bad id>` renders the not-found page with HTTP 200 (admin-only,
+   noindex; non-admins still get 404 — KI-098).
 1. **KI-089** — owner decision: carry `next` into the emailed verification link
    (optional `next` on `POST /v1/auth/register`) or keep CR-197 web-only. CR-190
    follow-ups: no e2e journey for the reschedule, no email (in-app only).
@@ -116,4 +133,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-08 (CR-226)
+2026-10-10 (CR-232 item 7)

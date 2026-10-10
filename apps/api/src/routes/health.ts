@@ -91,6 +91,20 @@ async function checkS3(s3: S3Handle | null): Promise<DependencyStatus> {
   }
 }
 
+/**
+ * The three dependency checks behind `GET /health`, run together. CR-229: also
+ * the admin overview's `dependencies` block (`modules/admin`), so both report the
+ * same thing the same way.
+ */
+export async function checkDependencies(app: FastifyInstance) {
+  const [db, redis, s3] = await Promise.all([
+    checkDb(app.db),
+    checkRedis(app.redis),
+    checkS3(app.s3),
+  ]);
+  return { db, redis, s3 };
+}
+
 // This is a bootstrap-only stub: no DB/Redis/S3 dependency checks. CR-051
 // ("Health check endpoint reporting DB/Redis/S3 status") replaces the handler
 // body with real checks — same route, same unversioned contract position,
@@ -106,11 +120,7 @@ export async function healthRoutes(app: FastifyInstance) {
       },
     },
     async () => {
-      const [db, redis, s3] = await Promise.all([
-        checkDb(app.db),
-        checkRedis(app.redis),
-        checkS3(app.s3),
-      ]);
+      const { db, redis, s3 } = await checkDependencies(app);
 
       const status =
         db === 'error' || redis === 'error' || s3 === 'error'

@@ -6,10 +6,15 @@ export default defineConfig({
   test: {
     ...nodeLibraryVitestConfig().test,
     coverage: coverageConfig({
-      // Scripts run by hand (migrate, seed) and the schema have no unit tests;
-      // only the seed's testable steps and the migrations-folder resolver are
-      // measured.
-      include: ['src/seed-demo-finish.ts', 'src/migrations-folder.ts'],
+      // Scripts run by hand (migrate, seed, admin CLI) and the schema have no unit
+      // tests; only the seed's testable steps, the migrations-folder resolver and the
+      // admin CLI's messages are measured. `admin-grants.ts` is covered by apps/api's
+      // admin suite against real Postgres.
+      include: [
+        'src/seed-demo-finish.ts',
+        'src/migrations-folder.ts',
+        'src/admin-cli-messages.ts',
+      ],
     }),
   },
 });

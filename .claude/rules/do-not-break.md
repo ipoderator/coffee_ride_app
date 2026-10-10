@@ -285,6 +285,17 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   CI runner it reset `critical-journeys.spec.ts` mid-journey on every retry. Don't drop
   the warm-up or shorten `maxInactiveAge` below an e2e run's length; a spec that
   "flakes" on the cabinet skeleton is this first, not the session.
+- `requireAdmin` on every `/v1/admin` route (one `preHandler` hook on the prefix, the
+  capability read from `platform_admins` per request, `404` to non-admins); admin
+  rights granted only by the host CLI; every admin mutation writes its `admin_actions`
+  row in the same transaction (ADR-032). `isRidePublic` (`modules/rides/ride-visibility.ts`)
+  is the single non-owner visibility rule — a new non-owner ride read calls it rather
+  than re-checking `status`. `app/admin/layout.tsx` calls `notFound()` with no
+  `loading.tsx` above it (same streaming trap as `/rides/[id]`). Admin list filters
+  live only in the URL (CR-232); `lib/admin/url-filters.ts` and
+  `features/admin/users/filters.ts` stay free of `'use client'` — the server
+  `/admin/users/[id]` page calls them to build its back link (a client module there
+  is a 500 that jsdom cannot show).
 - `pnpm-workspace.yaml`'s supply-chain policies (CR-214): `blockExoticSubdeps`,
   `trustPolicy: no-downgrade` (exceptions by exact name@version in
   `trustPolicyExclude`, with a reason), Dependabot's 7-day `cooldown` on every

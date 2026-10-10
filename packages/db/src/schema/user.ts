@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   check,
   integer,
@@ -83,6 +84,15 @@ export const users = pgTable(
     distanceWeekKm: integer('distance_week_km'),
     distanceMonthKm: integer('distance_month_km'),
     distanceYearKm: integer('distance_year_km'),
+    // CR-228 (ADR-032): an admin block. Set → every session is gone (deleted in the
+    // same transaction), `validateSession` refuses the user and login answers the
+    // generic invalid-credentials error. `blockedBy` is `set null` like
+    // `rides.updatedBy`: the block outlives the admin's account.
+    blockedAt: timestamp('blocked_at', { withTimezone: true }),
+    blockedBy: uuid('blocked_by').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
+    blockReason: text('block_reason'),
     // ADR-012: every timestamp column is `timestamptz`, never bare `timestamp`.
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -108,6 +118,11 @@ export const users = pgTable(
     check(
       'users_distance_year_km_range',
       sql`${table.distanceYearKm} is null or (${table.distanceYearKm} >= 0 and ${table.distanceYearKm} <= 100000)`,
+    ),
+    // CR-228: a block always carries its reason, and an unblocked row keeps none.
+    check(
+      'users_block_reason_with_block',
+      sql`(${table.blockedAt} is null) = (${table.blockReason} is null)`,
     ),
   ],
 );

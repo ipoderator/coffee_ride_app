@@ -41,6 +41,14 @@ export const reviews = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // CR-228 (ADR-032): admin moderation. A hidden review is left out of every list
+    // and of the organizer rating aggregate; the row stays (it still blocks a second
+    // review by the same user — the unique index below is unaffected).
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenBy: uuid('hidden_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    hiddenReason: text('hidden_reason'),
   },
   (table) => [
     // `.claude/rules/database.md`: one review per (ride, user) — enforced at the DB
@@ -54,5 +62,10 @@ export const reviews = pgTable(
       table.userId,
     ),
     check('reviews_rating_range', sql`${table.rating} between 1 and 5`),
+    // CR-228: a hide always carries its reason, and a visible row keeps none.
+    check(
+      'reviews_hidden_reason_with_hide',
+      sql`(${table.hiddenAt} is null) = (${table.hiddenReason} is null)`,
+    ),
   ],
 );

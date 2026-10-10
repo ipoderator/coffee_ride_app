@@ -223,6 +223,40 @@ export const LoginEmpty: Story = {
   },
 };
 
+/** CR-231 (ADR-032): a blocked account learns it only after a correct password. */
+export const LoginAccountBlocked: Story = {
+  parameters: { nextjs: { appDirectory: true } },
+  beforeEach: stubApi(
+    (url, init) =>
+      signedOut(url, init) ??
+      (url.pathname === '/api/v1/auth/login'
+        ? problem(403, 'account_blocked')
+        : undefined),
+  ),
+  render: () => (
+    <SessionProvider>
+      <LoginForm />
+    </SessionProvider>
+  ),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.type(
+      canvas.getByLabelText(AUTH_TERMS.emailLabel),
+      'rider@example.com',
+    );
+    await userEvent.type(
+      canvas.getByLabelText(AUTH_TERMS.passwordLabel),
+      'a-strong-password-123',
+    );
+    await userEvent.click(
+      canvas.getByRole('button', { name: AUTH_TERMS.loginSubmit }),
+    );
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      AUTH_TERMS.accountBlocked,
+    );
+    await expectNoEnglish(canvasElement);
+  },
+};
+
 export const ForgotPasswordInvalidEmail: Story = {
   render: () => <ForgotPasswordForm />,
   play: async ({ canvas, canvasElement, userEvent }) => {

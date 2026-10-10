@@ -25,11 +25,17 @@ import { cn } from '../lib/cn';
 // never runs during a server render where a caller's initial `open` state is `true`
 // (every real call site in this codebase initializes it `false`); `document` would be
 // undefined server-side otherwise.
+//
+// CR-232: `description` may be rich content (a string stays the common case) — the
+// admin reason dialog puts the record it acts on there, so the target is part of the
+// dialog's accessible description, not just visible text below it. Hence a `<div>`.
+// The panel scrolls vertically (`max-h-full overflow-y-auto`) when that content
+// outgrows a short phone screen, instead of being cut off above and below.
 export interface DialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  description?: string;
+  description?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
 }
@@ -89,7 +95,8 @@ export function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'relative w-full max-w-sm rounded-xl border border-border bg-surface p-6',
+          'relative max-h-full w-full max-w-sm overflow-y-auto rounded-xl border',
+          'border-border bg-surface p-6',
           'shadow-overlay focus-visible:outline focus-visible:outline-2',
           'focus-visible:outline-offset-2 focus-visible:outline-primary',
         )}
@@ -98,9 +105,12 @@ export function Dialog({
           {title}
         </p>
         {description ? (
-          <p id={descriptionId} className="mt-2 text-body text-text-secondary">
+          <div
+            id={descriptionId}
+            className="mt-2 text-body text-text-secondary"
+          >
             {description}
-          </p>
+          </div>
         ) : null}
         {children}
         {footer ? (

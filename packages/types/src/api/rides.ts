@@ -217,6 +217,16 @@ export interface GetRideResponse {
   // old one); `lastReschedule` — the latest move, `null` if never moved.
   rescheduleCount: number;
   lastReschedule: RideReschedule | null;
+  // CR-231 (ADR-032): additive, owner-only. Set when an admin has hidden the ride —
+  // only its organizer still reaches it then, and this says why. `null` for an
+  // unhidden ride; never sent with a value to anyone but the owner. Optional so
+  // older fixtures/clients that predate it stay valid.
+  moderation?: RideModeration | null;
+}
+
+export interface RideModeration {
+  hiddenAt: string;
+  reason: string;
 }
 
 // CR-155: `RideRequirement` limits, shared by the request schema and the

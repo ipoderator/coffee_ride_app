@@ -1521,3 +1521,70 @@ setup at launch volume, and one the owner can operate alone.
   256 MB): the stack needs a host with at least 2 vCPU and 4 GB RAM.
 - No rollback concern: nothing changes for a deployment that keeps using
   `docker-compose.prod.yml` alone with external services.
+
+## ADR-032 — Platform admin: a capability row, an `/admin` section of the existing apps, an append-only action log
+
+Status: Accepted (2026-10-09, owner decision, CR-228). Local branch only until the owner
+decides to ship it.
+
+### Context
+
+Production runs on one VPS; the owner manages it through SSH and `psql` alone: the
+CR-220 one-off `UPDATE users SET email_verified`, no way to hide a spam ride or an
+abusive review, no way to stop an account. The owner asked for an admin panel and fixed
+its scope: one admin (the owner) with every right, manual moderation only (no user
+reports), no step-up authentication for now, P0 = overview, users, rides, reviews,
+action log.
+
+### Decision
+
+1. **Admin is a capability row, not a role.** `platform_admins(user_id)` makes a `User`
+   an admin, the same "capability = attached row" shape as `OrganizerProfile`
+   (ADR-006). No roles inside it — the owner is the only admin. Granted and revoked
+   **only from the host CLI** (`pnpm --filter db admin:grant|admin:revoke|admin:list`,
+   `packages/db/src/admin-cli.ts`; in production through the `migrate` image), never
+   over HTTP. `requireAdmin` (`apps/api/src/plugins/auth.ts`) reads the table on every
+   request — no session flag or cache — so a revoke takes effect on the next request.
+2. **`/v1/admin/*` is a capability module in `apps/api`** (`modules/admin/`), behind
+   `requireAuth` + `requireAdmin`. A signed-in non-admin gets `404 not_found`, the
+   same body as an unknown route, so the section's existence is not confirmed.
+   `/v1/admin/users/:id` is the one bare-user-id route in the API: the do-not-break
+   rule "no `GET /v1/users/:id`" stays true for everyone who is not an admin, and the
+   admin read never returns a password hash, session token, phone or any emergency
+   data. Its lists and counts are a read model that queries the tables directly;
+   every mutation goes through the owning module's function (`auth.service.ts`'s
+   `setUserBlocked`/`markEmailVerified`, `session.ts`'s `revokeAllSessions`,
+   `rides.service.ts`'s `setRideHidden`/`commitRideCancellation`, `reviews.service.ts`'s
+   `setReviewHidden`) — ride cancellation shares the organizer path's guarded update
+   and participant notifications.
+3. **The web side is a section of `apps/web`, not a separate app.** `/admin` (layout
+   checks `GET /v1/admin/me` server-side and calls `notFound()` otherwise), features
+   under `features/admin/*` (ADR-009). One origin, no CORS (ADR-013/018); a second
+   admin origin would reopen ADR-018's proxy question for no gain at this size.
+4. **Every admin mutation writes an `admin_actions` row** (who, action, target type +
+   id, reason, when) in the same transaction as the change. Append-only: no endpoint
+   updates or deletes a row. The row never copies participant data — it names the
+   target by id. CLI grants/revokes are logged with a null admin.
+5. **Moderation is soft and reversible**, by columns, never by deleting data:
+   - `users.blocked_at/by/block_reason` — blocking deletes every session in the same
+     transaction, `validateSession` refuses a blocked user, login answers
+     `403 account_blocked` (only after the password verified, so it reveals nothing to
+     someone without the password);
+   - `rides.hidden_at/by/hidden_reason` — a hidden ride is treated like a draft for
+     everyone but its organizer (discovery, detail, sitemap, route/GPX, cover,
+     riders, registration and waitlist all 404); the organizer still sees it, with the
+     reason. Independent of `status`, so unhiding restores it exactly;
+   - `reviews.hidden_at/by/hidden_reason` — left out of every list and of the
+     organizer rating; the row keeps blocking a second review by the same author.
+     Each pair carries a CHECK: hidden/blocked ⇔ reason present.
+
+### Consequences
+
+- No 2FA/step-up: an admin session is an ordinary 30-day session. Acceptable while the
+  owner is the only admin; revisit (TOTP or recent-auth for destructive actions)
+  before a second admin is granted.
+- New admin actions need a migration (`admin_action_type` is a Postgres enum).
+- Rollback: the migration is additive (two tables, nullable columns, CHECKs that every
+  existing row satisfies); dropping the feature means dropping the module and
+  leaving the columns null.
+- No admin link in the site header: the section is reached at `/admin` directly.

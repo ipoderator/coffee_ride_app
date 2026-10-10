@@ -18,6 +18,7 @@ export * from './api/reviews.js';
 export * from './api/media.js';
 export * from './api/bikes.js';
 export * from './api/rider-profile.js';
+export * from './api/admin.js';
 export * from './domain/user.js';
 export * from './domain/bike.js';
 export * from './domain/organizer-profile.js';

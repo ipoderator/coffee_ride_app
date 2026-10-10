@@ -148,6 +148,15 @@ export const rides = pgTable(
     updatedBy: uuid('updated_by').references(() => users.id, {
       onDelete: 'set null',
     }),
+    // CR-228 (ADR-032): admin moderation. A hidden ride is gone from discovery,
+    // detail, the sitemap and registration for everyone but its own organizer (who
+    // sees why). Independent of `status` — unhiding restores the ride exactly as it
+    // was. `hiddenBy` is `set null` like `updatedBy` above.
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenBy: uuid('hidden_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    hiddenReason: text('hidden_reason'),
   },
   (table) => [
     // Every nullable numeric field's lower bound, plus difficulty's 1-5 range —
@@ -212,5 +221,10 @@ export const rides = pgTable(
     // (`rides.service.ts`'s `listPublicRides`) — the plain-range-query half of the
     // decision, not a spatial (GiST) index.
     index('rides_start_lat_lng_idx').on(table.startLat, table.startLng),
+    // CR-228: a hide always carries its reason, and a visible row keeps none.
+    check(
+      'rides_hidden_reason_with_hide',
+      sql`(${table.hiddenAt} is null) = (${table.hiddenReason} is null)`,
+    ),
   ],
 );

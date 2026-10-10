@@ -85,6 +85,9 @@ export async function validateSession(
 
   if (!row) return null;
   if (row.session.revokedAt) return null;
+  // CR-230 (ADR-032): blocking deletes every session in the same transaction; this
+  // also refuses one that could be created by a request racing that transaction.
+  if (row.user.blockedAt) return null;
   if (row.session.expiresAt.getTime() <= now.getTime()) return null;
 
   if (
@@ -119,4 +122,21 @@ export async function revokeSession(
     .where(eq(sessions.tokenHash, tokenHash))
     .returning({ id: sessions.id });
   return deleted.length > 0;
+}
+
+/**
+ * CR-230 (ADR-032): deletes every session of a user — an admin's "log out
+ * everywhere" and part of a block. Same hard-delete semantics as {@link
+ * revokeSession} (ADR-013 §1). Takes a transaction or the client, so a block can
+ * delete the sessions in the same transaction that sets `blocked_at`.
+ */
+export async function revokeAllSessions(
+  db: Pick<DbClient, 'delete'>,
+  userId: string,
+): Promise<number> {
+  const deleted = await db
+    .delete(sessions)
+    .where(eq(sessions.userId, userId))
+    .returning({ id: sessions.id });
+  return deleted.length;
 }

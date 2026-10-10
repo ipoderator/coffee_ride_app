@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { registrations, reviews, rides, users } from 'db/schema';
 import type { DbClient } from 'db';
 import type {
@@ -225,7 +225,8 @@ export async function listRideReviews(
   }
 
   const limit = clampLimit(query.limit);
-  const conditions = [eq(reviews.rideId, rideId)];
+  // CR-230 (ADR-032): an admin-hidden review is never listed.
+  const conditions = [eq(reviews.rideId, rideId), isNull(reviews.hiddenAt)];
   if (query.cursor) {
     let cursorKey;
     try {
@@ -293,7 +294,10 @@ export async function getOrganizerRatingSummary(
     })
     .from(reviews)
     .innerJoin(rides, eq(reviews.rideId, rides.id))
-    .where(eq(rides.organizerId, organizerProfileId));
+    // CR-230 (ADR-032): a hidden review no longer counts toward the rating.
+    .where(
+      and(eq(rides.organizerId, organizerProfileId), isNull(reviews.hiddenAt)),
+    );
 
   const reviewCount = row?.reviewCount ?? 0;
   return {
@@ -326,7 +330,7 @@ export async function getOrganizerRatingSummaries(
     })
     .from(reviews)
     .innerJoin(rides, eq(reviews.rideId, rides.id))
-    .where(inArray(rides.organizerId, uniqueIds))
+    .where(and(inArray(rides.organizerId, uniqueIds), isNull(reviews.hiddenAt)))
     .groupBy(rides.organizerId);
 
   for (const row of rows) {
@@ -336,4 +340,36 @@ export async function getOrganizerRatingSummaries(
     });
   }
   return summaries;
+}
+
+type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+
+/**
+ * CR-230 (ADR-032): an admin hides (`reason`) or unhides (`null`) a review. Returns
+ * `false` when the review does not exist or is already in that state, so the caller
+ * writes its audit row only for a real change.
+ */
+export async function setReviewHidden(
+  tx: DbTransaction,
+  reviewId: string,
+  actorUserId: string,
+  reason: string | null,
+): Promise<boolean> {
+  const changed = await tx
+    .update(reviews)
+    .set(
+      reason === null
+        ? { hiddenAt: null, hiddenBy: null, hiddenReason: null }
+        : { hiddenAt: new Date(), hiddenBy: actorUserId, hiddenReason: reason },
+    )
+    .where(
+      and(
+        eq(reviews.id, reviewId),
+        reason === null
+          ? isNotNull(reviews.hiddenAt)
+          : isNull(reviews.hiddenAt),
+      ),
+    )
+    .returning({ id: reviews.id });
+  return changed.length > 0;
 }

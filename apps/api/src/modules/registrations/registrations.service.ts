@@ -61,6 +61,7 @@ import { getOrganizerRatingSummaries } from '../reviews/reviews.service.js';
 import { organizerAvatarUrlPath } from '../organizers/organizers.service.js';
 import { versionedImagePath } from '../../lib/image-url.js';
 import { toBike } from '../users/users.service.js';
+import { isRidePublic } from '../rides/ride-visibility.js';
 import {
   ImageStorageError,
   downloadImageObject,
@@ -363,6 +364,7 @@ async function resolveVisibleRideStatus(
   const [row] = await db
     .select({
       status: rides.status,
+      hiddenAt: rides.hiddenAt,
       participantsVisible: rides.participantsVisible,
       organizerUserId: organizerProfiles.userId,
     })
@@ -374,7 +376,7 @@ async function resolveVisibleRideStatus(
     throw RIDE_NOT_FOUND();
   }
   const isOwner = row.organizerUserId === userId;
-  if (!isOwner && row.status === 'draft') {
+  if (!isOwner && !isRidePublic(row)) {
     throw RIDE_NOT_FOUND();
   }
   return row;

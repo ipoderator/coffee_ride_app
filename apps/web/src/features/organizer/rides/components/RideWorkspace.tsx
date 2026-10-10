@@ -1,5 +1,6 @@
 'use client';
 
+import { EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import {
   useCallback,
@@ -18,6 +19,7 @@ import {
   ErrorState,
   FINISH_CHECKIN_TERMS,
   formatRideStartLine,
+  Notice,
   RIDE_EDIT_TERMS,
   RIDE_LIST_TERMS,
   RIDE_STATUS_TERMS,
@@ -80,6 +82,8 @@ async function readWorkspace(
     contact: response.contact,
     // CR-190: absent from an older API response — never moved.
     lastReschedule: response.lastReschedule ?? null,
+    // CR-231: set only while an admin keeps the ride hidden.
+    moderation: response.moderation ?? null,
     latestUpdate,
   };
 }
@@ -353,6 +357,20 @@ export function RideWorkspace({
                 : RIDE_WORKSPACE_TERMS.eyebrow}
             </p>
           </div>
+
+          {data.moderation && (
+            <Notice
+              title={RIDE_WORKSPACE_TERMS.hiddenByAdminTitle}
+              icon={<EyeOff className="size-4" />}
+            >
+              <p>{RIDE_WORKSPACE_TERMS.hiddenByAdminBody}</p>
+              <p className="break-words">
+                {RIDE_WORKSPACE_TERMS.hiddenByAdminReason(
+                  data.moderation.reason,
+                )}
+              </p>
+            </Notice>
+          )}
 
           {actions}
 

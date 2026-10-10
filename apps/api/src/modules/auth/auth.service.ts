@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import {
   emailVerificationTokens,
   passwordResetTokens,
@@ -9,6 +9,7 @@ import type { DbClient } from 'db';
 import type { User } from 'types';
 import { versionedImagePath } from '../../lib/image-url.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { revokeAllSessions } from './session.js';
 import {
   EMAIL_VERIFICATION_TOKEN_TTL_MS,
   PASSWORD_RESET_TOKEN_TTL_MS,
@@ -354,6 +355,16 @@ export async function loginUser(
   if (!valid) {
     throw INVALID_CREDENTIALS();
   }
+  // CR-230 (ADR-032): only after the password verified — telling a blocked account
+  // apart reveals nothing to someone who doesn't already hold its password.
+  if (row.blockedAt) {
+    throw new AuthServiceError(
+      'account_blocked',
+      403,
+      'Account blocked',
+      'This account has been blocked by an administrator.',
+    );
+  }
 
   return toPublicUser(row);
 }
@@ -502,4 +513,75 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     (error as { code?: string }).code === '23505'
   );
+}
+
+type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+
+/**
+ * CR-230 (ADR-032): an admin blocks (`reason`) or unblocks (`null`) a user. A block
+ * deletes every session in the same transaction, so it takes effect on the user's
+ * next request (`.claude/rules/security.md`); `validateSession` and
+ * {@link loginUser} refuse the account from then on. Returns `false` when the user
+ * does not exist or is already in that state.
+ */
+export async function setUserBlocked(
+  tx: DbTransaction,
+  userId: string,
+  actorUserId: string,
+  reason: string | null,
+): Promise<boolean> {
+  const changed = await tx
+    .update(users)
+    .set(
+      reason === null
+        ? { blockedAt: null, blockedBy: null, blockReason: null }
+        : {
+            blockedAt: new Date(),
+            blockedBy: actorUserId,
+            blockReason: reason,
+          },
+    )
+    .where(
+      and(
+        eq(users.id, userId),
+        reason === null ? isNotNull(users.blockedAt) : isNull(users.blockedAt),
+      ),
+    )
+    .returning({ id: users.id });
+  if (changed.length === 0) return false;
+
+  if (reason !== null) {
+    await revokeAllSessions(tx, userId);
+  }
+  return true;
+}
+
+/**
+ * CR-230 (ADR-032): an admin confirms a user's email by hand (what CR-220's one-off
+ * SQL did). Consumes every outstanding verification link in the same transaction —
+ * a link mailed earlier has nothing left to do. Returns `false` when the user does
+ * not exist or is already verified.
+ */
+export async function markEmailVerified(
+  tx: DbTransaction,
+  userId: string,
+): Promise<boolean> {
+  const now = new Date();
+  const changed = await tx
+    .update(users)
+    .set({ emailVerified: true, updatedAt: now })
+    .where(and(eq(users.id, userId), eq(users.emailVerified, false)))
+    .returning({ id: users.id });
+  if (changed.length === 0) return false;
+
+  await tx
+    .update(emailVerificationTokens)
+    .set({ usedAt: now })
+    .where(
+      and(
+        eq(emailVerificationTokens.userId, userId),
+        isNull(emailVerificationTokens.usedAt),
+      ),
+    );
+  return true;
 }

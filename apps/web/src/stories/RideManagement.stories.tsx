@@ -46,6 +46,37 @@ const FIVE = ['Анна К.', 'Илья В.', 'Мария Р.', 'Дмитрий 
   (name, index) => participant(`reg-${index}`, name),
 );
 
+/** CR-231 (ADR-032): an admin hid the ride — only its organizer still sees it,
+ * with the reason. */
+export const HiddenByAdmin: Story = {
+  beforeEach: stubWorkspace({
+    ride: { status: 'registration_open' },
+    detail: {
+      moderation: {
+        hiddenAt: '2026-10-10T08:00:00.000Z',
+        reason: 'Реклама стороннего магазина в описании',
+      },
+    },
+  }),
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByText(RIDE_WORKSPACE_TERMS.hiddenByAdminTitle),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByText(
+        RIDE_WORKSPACE_TERMS.hiddenByAdminReason(
+          'Реклама стороннего магазина в описании',
+        ),
+      ),
+    ).toBeInTheDocument();
+  },
+};
+
+export const HiddenByAdminDark: Story = {
+  ...HiddenByAdmin,
+  globals: { theme: 'dark' },
+};
+
 /** Draft: the «Перед публикацией» checklist above the full form. */
 export const Draft: Story = {
   beforeEach: stubWorkspace({ ride: { status: 'draft' } }),

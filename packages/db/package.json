@@ -7,7 +7,8 @@
   "types": "./src/client.ts",
   "exports": {
     ".": "./src/client.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./admin-grants": "./src/admin-grants.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -18,6 +19,9 @@
     "db:backup": "bash scripts/backup.sh",
     "db:restore": "bash scripts/restore.sh",
     "seed:demo": "tsx src/seed-demo.ts",
+    "admin:grant": "tsx src/admin-cli.ts grant",
+    "admin:revoke": "tsx src/admin-cli.ts revoke",
+    "admin:list": "tsx src/admin-cli.ts list",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

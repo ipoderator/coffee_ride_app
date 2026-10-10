@@ -1502,3 +1502,22 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       imported as flat config, `set-state-in-effect` parked at `warn` (KI-092)
       — done 2026-10-06; e2e route warm-up for Next 16's dev reloads, CI green
       at `941c555`. See docs/changelog.md
+- [x] CR-219 First production deploy: coffeeride.site live on the VPS
+      (`/opt/deployments/coffee-ride`), Let's Encrypt via Caddy, `www.` → 301 —
+      done 2026-10-08. See docs/changelog.md
+- [x] CR-227 Transactional email links untracked (direct to the site) + Unisender
+      refusal code/message in logs — done 2026-10-09
+- [x] CR-221 Start time saved as shown: `ui` `TimeInput` read at save in create/edit/
+      reschedule; zoned-time second pass (QA live audit 2026-10-08 item 1, P1) — done
+      2026-10-08. See docs/changelog.md
+- [x] CR-222 Registered ticket chip «Место подтверждено», not «Список ожидания»
+      (item 2) — done 2026-10-08
+- [x] CR-223 Cabinet auth gate carries `?next=` back after sign-in (item 3) — done
+      2026-10-08
+- [x] CR-224 Real HTTP 404 for a missing ride + branded `not-found.tsx` (items 4–5;
+      KI-096) — done 2026-10-08
+- [x] CR-225 2GIS zoom/attribution controls named, 44×44 (item 6) — done 2026-10-08
+- [x] CR-226 robots/sitemap/OG/canonical/noindex, full page CSP + Permissions-Policy
+      (items 7–8; KI-097) — done 2026-10-08
+- [x] CR-220 Test-deploy switch `AUTH_SKIP_EMAIL_VERIFICATION`: new accounts
+      start verified, no email — done 2026-10-08. See docs/changelog.md

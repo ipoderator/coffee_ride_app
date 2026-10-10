@@ -25,7 +25,7 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   (`scripts/preflight.ts` = `pnpm preflight`, also logged at boot — CR-210);
   `routes/v1.ts` mounts modules under `/v1`; `routes/health.ts` —
   unversioned `/health` (DB/Redis/S3, always 200).
-- `plugins/`: `auth` (session → `request.user`), `csrf` (Origin/Referer on unsafe
+- `plugins/`: `auth` (session → `request.user`; `requireAdmin`, ADR-032), `csrf` (Origin/Referer on unsafe
   methods), `db`, `s3`, `email` (Unisender or null), `maps` (`app.mapProvider` or null),
   `openapi` (`/docs`), `security-headers` (helmet), `error-handler` (RFC 9457),
   `error-reporting` (`app.reportError`).
@@ -51,6 +51,10 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   - `notifications` — inbox, ride updates fan-out; `queue.ts` (BullMQ; direct insert
     only when the job never reached Redis).
   - `reviews` — create (gated on confirmed finish) + list.
+  - `admin` — `/v1/admin/*` (ADR-032): overview, users (verify, resend, log out,
+    block), rides (hide, cancel via the organizer path), reviews (hide), action log;
+    every mutation writes `admin_actions` in its transaction. `rides/ride-visibility.ts`
+    `isRidePublic` is the one non-owner visibility rule.
 - Tests: `*.test.ts` beside code; DB via `test-support/test-database-url.ts`
   (`TEST_DATABASE_URL`, disposable names only); `degraded-dependencies.test.ts`;
   `*.live.test.ts` behind `RUN_LIVE_*`.
@@ -61,21 +65,27 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   `(public)/login|register`, `/verify-email`, `/forgot-password`, `/reset-password`,
   `/me` (+ `profile`, `rides`, `notifications`), `/organizer` (+ `profile`,
   `participants`, `updates`, `rides`, `rides/new`, `rides/[id]/edit|route|cover|groups|
-participants|updates` — the six-tab workspace «Управление заездом»); `not-found.tsx`
+participants|updates` — the six-tab workspace «Управление заездом»), `/admin` (+ `users`,
+  `users/[id]`, `rides`, `reviews`, `actions`; layout 404s non-admins via
+  `lib/admin/server-admin.ts`, ADR-032); `not-found.tsx`
   (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226).
-- `features/{auth,organizer,participant}/<feature>/` — ADR-009 modules (`components/`,
-  `api.ts`, tests); organizer: activity, cover-image, groups, live-rides, overview,
+- `features/{auth,organizer,participant,admin}/<feature>/` — ADR-009 modules (`components/`,
+  `api.ts`, tests); admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
   participants, profile, rides, route, updates; participant: discovery, my-rides,
   notifications, organizer-entry, profile, ride-detail, rider-profile.
 - `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink,
   NotFoundPanel),
   `components/cabinet/` (CabinetShell, CabinetSidebar, CabinetSectionTabs,
-  OrganizerCabinetFrame, …).
-- `lib/`: `cabinet/` (nav + widget registries, feature flags, ride workspace sections,
+  OrganizerCabinetFrame, …), `components/admin/` (reason dialog, list body, action list,
+  search form, select).
+- `lib/`: `admin/` (client, nav registry, `use-admin-list`, server gate, error map,
+  URL filters — pure `url-filters` + client `use-admin-url-filters`, CR-232),
+  `cabinet/` (nav + widget registries, feature flags, ride workspace sections,
   readiness), `auth/` (session context, `next-path` safe redirects, resend button),
   `api/` (errors, asset URLs, current user), `forms/` (Russian field errors + guard
   test), `datetime/zoned-time`, `maps/create-map-renderer.ts` (only `maps-2gis`
   import), `rides/` (+ `server-ride.ts`: server-side ride lookup for the 404, CR-224),
+  `uuid.ts` (`isUuid` — route-param pre-check before an API call, CR-232),
   `site/` (`SITE_URL`, shared metadata), `security/headers.ts` (page CSP +
   Permissions-Policy, read by `next.config.ts`), `organizer/`, `motion/`, `theme/`.
 - `stories/` — Storybook (CR-158), fixtures in `stories/fixtures.ts`.
@@ -86,8 +96,9 @@ participants|updates` — the six-tab workspace «Управление заез�
 
 - `db` — Drizzle schema `src/schema/*.ts` (one file per entity: user, session, tokens,
   organizer-profile, ride, route, stop, route-point, ride-group, ride-requirement,
-  registration, waitlist-entry, ride-update, notification, review, bike); migrations
-  `migrations/0000`–`0025`; `migrate.ts` (advisory lock), `seed-demo.ts`,
+  registration, waitlist-entry, ride-update, notification, review, bike, admin); migrations
+  `migrations/0000`–`0026`; `migrate.ts` (advisory lock), `seed-demo.ts`, `admin-cli.ts`
+  (`admin:grant|revoke|list`),
   `scripts/backup.sh|restore.sh`.
 - `types` — Zod contracts `src/api/*`, domain enums/types `src/domain/*`; `zod-config.ts`
   (browser-only `jitless`, CR-226).
