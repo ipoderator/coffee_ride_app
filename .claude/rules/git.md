@@ -12,6 +12,10 @@ Never commit to `main` directly. Every task:
 3. is merged (squash) only after every check on the PR is green;
 4. reaches production only from `main`, after the merge — never deploy a branch.
 
+GitHub enforces it (branch protection on `main`, 2026-10-12): a PR is required, checks
+`ci` and `docker-smoke` must pass, admins included, no force pushes or deletion. A
+direct push to `main` is rejected — don't try to work around it.
+
 Before commit:
 
 - inspect `git status`;
