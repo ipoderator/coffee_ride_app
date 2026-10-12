@@ -24,7 +24,8 @@ import { cn } from '../lib/cn';
 /**
  * Styling + semantics for one item inside a {@link NavMenu}. The consumer
  * applies it to its own element (`next/link`'s `Link`, an `<a>`, a `<button>`)
- * and adds `role="menuitem"` — `packages/ui` stays router-agnostic, and a
+ * and adds `role="menuitem"` (or `menuitemradio` + `aria-checked` for one
+ * choice out of several) — `packages/ui` stays router-agnostic, and a
  * shared constant keeps the several call sites from drifting.
  */
 export const NAV_MENU_ITEM_CLASSNAME =
@@ -45,8 +46,13 @@ export interface NavMenuProps {
   label: string;
   /** Optional leading icon for the trigger, already sized by the caller. */
   icon?: ReactNode;
-  /** `role="menuitem"` elements — see {@link NAV_MENU_ITEM_CLASSNAME}. */
+  /** `role="menuitem"`/`"menuitemradio"` elements — see
+   * {@link NAV_MENU_ITEM_CLASSNAME}. */
   children: ReactNode;
+  /** CR-243: non-interactive content above the items (whose account this
+   * is). Rendered outside `role="menu"` — a menu may own only items, groups
+   * and separators — and linked to it as its description. */
+  header?: ReactNode;
   /** Marks the trigger as the current section. Styling only: the real
    * `aria-current` belongs on the active item inside the menu. */
   active?: boolean;
@@ -63,12 +69,14 @@ export interface NavMenuProps {
   className?: string;
 }
 
-const MENU_ITEM_SELECTOR = '[role="menuitem"]:not([aria-disabled="true"])';
+const MENU_ITEM_SELECTOR =
+  ':is([role="menuitem"], [role="menuitemradio"]):not([aria-disabled="true"])';
 
 export function NavMenu({
   label,
   icon,
   children,
+  header,
   active = false,
   labelHidden = false,
   hideChevron = false,
@@ -77,6 +85,7 @@ export function NavMenu({
 }: NavMenuProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const headerId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -206,19 +215,28 @@ export function NavMenu({
         )}
       </button>
       {open && (
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="menu"
-          aria-label={label}
-          onKeyDown={handleMenuKeyDown}
-          // Every item in this menu navigates, so any activation inside it
-          // should also dismiss it — one delegated handler instead of asking
-          // each consumer to remember an `onClick`.
-          onClick={() => close(false)}
-          className="absolute right-0 z-20 mt-1 flex min-w-56 flex-col gap-0.5 rounded-lg border border-border bg-bg-raised p-1 shadow-overlay"
-        >
-          {children}
+        <div className="absolute right-0 z-20 mt-1 flex max-w-[calc(100vw-2rem)] min-w-56 flex-col rounded-lg border border-border bg-bg-raised p-1 shadow-overlay">
+          {header && (
+            <>
+              <div id={headerId}>{header}</div>
+              <div aria-hidden="true" className="my-0.5 h-px bg-border" />
+            </>
+          )}
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            aria-label={label}
+            aria-describedby={header ? headerId : undefined}
+            onKeyDown={handleMenuKeyDown}
+            // Every item in this menu navigates, so any activation inside it
+            // should also dismiss it — one delegated handler instead of asking
+            // each consumer to remember an `onClick`.
+            onClick={() => close(false)}
+            className="flex flex-col gap-0.5"
+          >
+            {children}
+          </div>
         </div>
       )}
     </div>

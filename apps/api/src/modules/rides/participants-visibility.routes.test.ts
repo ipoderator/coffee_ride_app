@@ -168,6 +168,22 @@ describe('PUT /v1/rides/:id/participants-visibility', () => {
     });
     expect(riders.json().code).toBe('riders_hidden');
 
+    // CR-238: hidden from the public only — the ride's own organizer still
+    // gets the list (production QA: counts over an empty list).
+    const own = await app.inject({
+      method: 'GET',
+      url: `/v1/rides/${rideId}/riders`,
+      cookies: { session: organizerToken },
+    });
+    expect(own.statusCode).toBe(200);
+    expect(own.json().items).toHaveLength(1);
+    const stranger = await app.inject({
+      method: 'GET',
+      url: `/v1/rides/${rideId}/riders`,
+      cookies: { session: await registerAndLoginUser(app) },
+    });
+    expect(stranger.json().code).toBe('riders_hidden');
+
     const show = await setVisibility(app, rideId, organizerToken, {
       participantsVisible: true,
     });

@@ -178,10 +178,15 @@ function DraftRideForm({
   // CR-157 (same as step 1): no picking a start day that has already passed.
   const [todayLocal] = useState(todayLocalYmd);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (isPending) return;
+  // One save or publish at a time. A ref, not `isPending`/`isPublishing`: a
+  // double click lands both clicks before either state change renders.
+  const busyRef = useRef(false);
+  const isBusy = isPending || isPublishing;
 
+  /** Validates the form as shown and saves it (`PATCH`). Shows what failed on
+   * the fields or the form and returns whether the draft now holds what the
+   * form shows. Shared by «Сохранить» and «Опубликовать». */
+  async function saveForm(): Promise<boolean> {
     // What the field shows, not what React last heard (`TimeInput`).
     const startTime = startTimeRef.current?.value ?? form.startTime;
     setForm((current) => ({ ...current, startTime }));
@@ -193,7 +198,7 @@ function DraftRideForm({
           : RIDE_CREATE_TERMS.startDateRequired,
         startTime: startTime ? undefined : RIDE_CREATE_TERMS.startTimeRequired,
       });
-      return;
+      return false;
     }
 
     const payload = {
@@ -233,13 +238,11 @@ function DraftRideForm({
       }
       setFieldErrors(nextErrors);
       setFormError(null);
-      return;
+      return false;
     }
 
     setFieldErrors({});
     setFormError(null);
-    setSuccessMessage(null);
-    setIsPending(true);
 
     try {
       const response = await updateRide(rideId, parsed.data);
@@ -247,7 +250,7 @@ function DraftRideForm({
       applyRide(response.ride);
       setForm(toFormState(response.ride));
       setRequirementsText(response.requirements.join('\n'));
-      setSuccessMessage(RIDE_EDIT_TERMS.saveSuccess);
+      return true;
     } catch (error) {
       if (
         error instanceof ApiError &&
@@ -266,29 +269,69 @@ function DraftRideForm({
       } else {
         setFormError(RIDE_EDIT_TERMS.loadError);
       }
-    } finally {
-      setIsPending(false);
+      return false;
     }
   }
 
-  /** CR-192: a ride without a route is allowed, but the route can never be
-   * added after publishing — ask first. With a route: straight through. */
-  function requestPublish() {
-    if (isPublishing) return;
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setSuccessMessage(null);
+    setIsPending(true);
+    try {
+      if (await saveForm()) setSuccessMessage(RIDE_EDIT_TERMS.saveSuccess);
+    } finally {
+      setIsPending(false);
+      busyRef.current = false;
+    }
+  }
+
+  /** CR-235: publishes what the form shows — saves it first, and a form that
+   * does not validate or save is not published (it used to publish the last
+   * save and drop the edits). CR-192: a ride without a route is allowed, but
+   * the route can never be added after publishing — after the save, ask
+   * first. With a route: straight through. */
+  async function requestPublish() {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setSuccessMessage(null);
+    setPublishVerificationRequired(false);
+    setIsPublishing(true);
+
+    let saved = false;
+    try {
+      saved = await saveForm();
+    } finally {
+      if (!saved) {
+        setIsPublishing(false);
+        busyRef.current = false;
+      }
+    }
+    if (!saved) return;
     if (data.route === null) {
+      // Dismissing the question leaves the draft saved — say so.
+      setSuccessMessage(RIDE_EDIT_TERMS.saveSuccess);
+      setIsPublishing(false);
+      busyRef.current = false;
       setPublishWithoutRouteOpen(true);
       return;
     }
-    void handlePublish();
+    await publish();
   }
 
-  /** CR-019: publishes what is saved. On success the workspace shows the
-   * result line and remounts this tab as the published overview. CR-192: from
-   * the wizard it leaves for the ordinary workspace instead — the creation
-   * steps are done — with a toast, which survives the navigation. */
-  async function handlePublish() {
-    if (isPublishing) return;
+  function confirmPublishWithoutRoute() {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    void publish();
+  }
 
+  /** CR-019: publishes what is saved; the caller holds `busyRef`. On success
+   * the workspace shows the result line and remounts this tab as the
+   * published overview. CR-192: from the wizard it leaves for the ordinary
+   * workspace instead — the creation steps are done — with a toast, which
+   * survives the navigation. */
+  async function publish() {
     setFormError(null);
     setSuccessMessage(null);
     setPublishVerificationRequired(false);
@@ -298,8 +341,8 @@ function DraftRideForm({
       const response = await publishRide(rideId);
       if (wizard) {
         showToast(RIDE_EDIT_TERMS.publishSuccess);
-        // `isPublishing` stays on: the form shows «Публикация…» until the new
-        // page replaces it, so no second publish can start.
+        // `isPublishing` (and `busyRef`) stay on: the form shows «Публикация…»
+        // until the new page replaces it, so no second publish can start.
         router.replace(`/organizer/rides/${encodeURIComponent(rideId)}/edit`);
         return;
       }
@@ -316,6 +359,7 @@ function DraftRideForm({
         setFormError(RIDE_EDIT_TERMS.loadError);
       }
       setIsPublishing(false);
+      busyRef.current = false;
     }
   }
 
@@ -357,7 +401,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, title: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -372,7 +416,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, description: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -385,7 +429,7 @@ function DraftRideForm({
             <Textarea
               value={requirementsText}
               onChange={(event) => setRequirementsText(event.target.value)}
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -402,7 +446,7 @@ function DraftRideForm({
                   bicycleType: event.target.value as BicycleType,
                 })
               }
-              disabled={isPending}
+              disabled={isBusy}
               className={selectClassName(Boolean(fieldErrors.bicycleType))}
             >
               {BICYCLE_TYPES.map((type) => (
@@ -425,7 +469,7 @@ function DraftRideForm({
                 value={form.startDate}
                 onChange={(startDate) => setForm({ ...form, startDate })}
                 min={todayLocal}
-                disabled={isPending}
+                disabled={isBusy}
               />
             </FormField>
 
@@ -438,7 +482,7 @@ function DraftRideForm({
                 ref={startTimeRef}
                 value={form.startTime}
                 onValueChange={(startTime) => setForm({ ...form, startTime })}
-                disabled={isPending}
+                disabled={isBusy}
               />
             </FormField>
           </div>
@@ -453,7 +497,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, startTimezone: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
               className={selectClassName(Boolean(fieldErrors.startTimezone))}
             >
               {RUSSIAN_TIMEZONE_OPTIONS.map((option) => (
@@ -478,7 +522,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, startLat: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -496,7 +540,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, startLng: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -512,7 +556,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, participantLimit: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -528,7 +572,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, priceRub: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -545,7 +589,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, distanceKm: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -561,7 +605,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, elevationGainMeters: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -578,7 +622,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, paceKmh: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -594,7 +638,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, durationMinutes: event.target.value })
               }
-              disabled={isPending}
+              disabled={isBusy}
             />
           </FormField>
 
@@ -614,7 +658,7 @@ function DraftRideForm({
                       : (Number(event.target.value) as DifficultyLevel),
                 })
               }
-              disabled={isPending}
+              disabled={isBusy}
               className={selectClassName(Boolean(fieldErrors.difficulty))}
             >
               <option value="">{RIDE_EDIT_TERMS.difficultyNotSet}</option>
@@ -637,7 +681,7 @@ function DraftRideForm({
               onChange={(event) =>
                 setForm({ ...form, participantsVisible: event.target.checked })
               }
-              disabled={isPending}
+              disabled={isBusy}
               className="size-5 rounded border-[1.5px] border-frame accent-primary disabled:cursor-not-allowed disabled:opacity-60"
             />
           </FormField>
@@ -652,7 +696,7 @@ function DraftRideForm({
               idPrefix="ride-edit"
               value={contact}
               onChange={setContact}
-              disabled={isPending}
+              disabled={isBusy}
               error={fieldErrors.contact}
               hint={RIDE_EDIT_TERMS.contactHint}
             />
@@ -683,14 +727,20 @@ function DraftRideForm({
           )}
 
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" isLoading={isPending} className="self-start">
+            <Button
+              type="submit"
+              isLoading={isPending}
+              disabled={isPublishing}
+              className="self-start"
+            >
               {isPending ? RIDE_EDIT_TERMS.savePending : RIDE_EDIT_TERMS.save}
             </Button>
             <Button
               type="button"
               variant="secondary"
               isLoading={isPublishing}
-              onClick={requestPublish}
+              disabled={isPending}
+              onClick={() => void requestPublish()}
               className="self-start"
             >
               {isPublishing
@@ -706,7 +756,7 @@ function DraftRideForm({
         onClose={() => {
           if (!isPublishing) setPublishWithoutRouteOpen(false);
         }}
-        onConfirm={() => void handlePublish()}
+        onConfirm={confirmPublishWithoutRoute}
         isConfirming={isPublishing}
         routeHref={
           wizard

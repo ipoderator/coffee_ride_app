@@ -79,8 +79,8 @@ const base: RegistrationTicketProps = {
   priceRub: null,
   startPointLabel: 'Парк Горького',
   footer: null,
-  onChange: () => {},
-  onWaitlistChange: () => {},
+  onChange: async () => {},
+  onWaitlistChange: async () => {},
 };
 
 const meta = {

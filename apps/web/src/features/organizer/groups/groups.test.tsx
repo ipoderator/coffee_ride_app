@@ -359,6 +359,55 @@ describe('GroupsEditor — server errors', () => {
     ).toBeInTheDocument();
   });
 
+  // CR-243 (production QA): a group someone else already removed — the list
+  // resyncs, and the workspace's «N из 6» chip must follow it.
+  it('re-reads the workspace too when a conflict resyncs the list', async () => {
+    const reread = vi.fn(() => workspaceData({ groups: [SLOW] }));
+    listRideGroupsMock.mockResolvedValueOnce(listResponse([SLOW, FAST]));
+    listRideGroupsMock.mockResolvedValue(listResponse([SLOW]));
+    render(
+      <TestRideWorkspace data={workspaceData()} reread={reread}>
+        <GroupsEditor rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+    deleteRideGroupMock.mockRejectedValue(problem('group_not_found', 404));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Удалить группу «Группа 2»' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Удалить группу' }),
+    );
+
+    await waitFor(() => expect(reread).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Удалить группу «Группа 2»' }),
+      ).toBeNull(),
+    );
+  });
+
+  it('re-reads the workspace even when the list re-read fails', async () => {
+    const reread = vi.fn(() => workspaceData());
+    listRideGroupsMock.mockResolvedValueOnce(listResponse([SLOW]));
+    listRideGroupsMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    createRideGroupMock.mockResolvedValue(FAST);
+    render(
+      <TestRideWorkspace data={workspaceData()} reread={reread}>
+        <GroupsEditor rideId="ride-1" />
+      </TestRideWorkspace>,
+    );
+    await screen.findByText('Группа 1');
+    const form = openAddForm();
+    fireEvent.change(within(form).getByLabelText(/Средняя скорость/), {
+      target: { value: '30' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Добавить' }));
+
+    await waitFor(() => expect(createRideGroupMock).toHaveBeenCalled());
+    await waitFor(() => expect(reread).toHaveBeenCalled());
+  });
+
   it('switches to read-only on ride_groups_not_editable', async () => {
     await renderEditor();
     const form = openAddForm();

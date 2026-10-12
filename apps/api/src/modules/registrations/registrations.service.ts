@@ -179,8 +179,8 @@ const WAITLIST_ENTRY_NOT_FOUND = () =>
   );
 
 // CR-125: the organizer turned off `Ride.participantsVisible` — applies to every
-// caller, including the ride's own organizer (they have `listParticipants` for
-// management). `403`, not `404`: the ride itself is visible, only its rider list
+// caller except the ride's own organizer (CR-238: the setting hides the list from
+// the public only; `resolveRiderAccess` lets them through since CR-149). `403`, not `404`: the ride itself is visible, only its rider list
 // is hidden — a distinct, machine-readable code so the client can show "the
 // organizer hid this" instead of a generic error (`.claude/rules/backend.md`).
 const RIDERS_HIDDEN = () =>
@@ -687,7 +687,8 @@ export async function listWaitlist(
  * `GetRideResponse.registrationsCount`). Same visibility as `GET /v1/rides/:id`:
  * `404 ride_not_found` for a non-existent ride or someone else's `draft`.
  * CR-125: `403 riders_hidden` when the organizer has turned off
- * `Ride.participantsVisible` — checked for every caller, no organizer bypass.
+ * `Ride.participantsVisible` — for every caller but the ride's own organizer
+ * (CR-238: on `/rides/[id]` they saw the counts over an empty, «hidden» list).
  *
  * Deliberately narrower than the organizer's {@link listParticipants}: display name
  * (CR-125: `firstName`/`lastName` when set, else the free-text `displayName`) and
@@ -704,7 +705,7 @@ export async function listRiders(
   query: ListRidesQuery,
 ): Promise<ListRideRidersResponse> {
   const ride = await resolveVisibleRideStatus(db, userId, rideId);
-  if (!ride.participantsVisible) {
+  if (!ride.participantsVisible && ride.organizerUserId !== userId) {
     throw RIDERS_HIDDEN();
   }
 

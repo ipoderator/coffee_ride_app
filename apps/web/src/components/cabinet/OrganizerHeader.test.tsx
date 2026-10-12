@@ -73,13 +73,32 @@ describe('OrganizerHeader (CR-132)', () => {
 
     expect(screen.getByText('Тестовый Организатор')).toBeInTheDocument();
     expect(screen.getByText('org@example.com')).toBeInTheDocument();
+    // CR-243: the account heading is not content of the menu itself (a menu
+    // owns only items) — it describes it instead.
+    const menu = screen.getByRole('menu');
+    expect(menu).not.toContainElement(screen.getByText('org@example.com'));
+    expect(menu).toHaveAccessibleDescription(
+      'Тестовый Организатор org@example.com',
+    );
     expect(
       screen.getByRole('menuitem', { name: 'Все заезды' }),
     ).toHaveAttribute('href', '/');
     expect(
       screen.getByRole('menuitem', { name: 'Кабинет участника' }),
     ).toHaveAttribute('href', '/me');
-    expect(screen.getByRole('menuitem', { name: 'Тёмная' })).toBeTruthy();
+    // CR-243: one choice out of three — radio items, the current one checked.
+    const options = screen.getAllByRole('menuitemradio');
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Системная',
+      'Светлая',
+      'Тёмная',
+    ]);
+    expect(
+      options.filter(
+        (option) => option.getAttribute('aria-checked') === 'true',
+      ),
+    ).toHaveLength(1);
+    expect(screen.queryByRole('menuitem', { name: 'Тёмная' })).toBeNull();
   });
 
   it('signs out to the login page', async () => {

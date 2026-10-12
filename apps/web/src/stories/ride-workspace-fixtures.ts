@@ -106,6 +106,8 @@ export interface WorkspaceStub {
   waitlist?: RideParticipantSummary[];
   /** Every `/rides/ride-1` read fails (the workspace's error state). */
   failRide?: boolean;
+  /** The draft form's save (`PATCH /rides/ride-1`) fails (CR-235). */
+  failSave?: boolean;
   /**
    * CR-189: finish marks stick — `PUT .../attendance` changes the stubbed
    * participants, `POST .../finish` the ride's status, and the ride read
@@ -149,6 +151,9 @@ export function stubWorkspace(stub: WorkspaceStub = {}) {
       const base = `/api/v1/rides/${RIDE_ID}`;
       if (pathname === base) {
         if (stub.failRide) return json({ code: 'internal' }, 500);
+        if (stub.failSave && init?.method === 'PATCH') {
+          return json({ code: 'internal' }, 500);
+        }
         return json({
           ride,
           isOwner: true,

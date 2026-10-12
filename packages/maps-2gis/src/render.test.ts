@@ -255,6 +255,69 @@ describe('fitBounds', () => {
     expect(mapFitBounds).not.toHaveBeenCalled();
     expect(mapSetCenter).not.toHaveBeenCalled();
   });
+
+  // CR-243 (production QA: `fitBounds` with invalid bounds).
+  it('drops NaN and out-of-range points instead of fitting a NaN box', async () => {
+    const handle = await renderHandle();
+    handle.fitBounds([
+      { lat: 55.7, lng: 37.5 },
+      { lat: Number.NaN, lng: 37.6 },
+      { lat: 95, lng: 37.6 },
+      { lat: 55.9, lng: 37.8 },
+    ]);
+    expect(mapFitBounds).toHaveBeenCalledWith(
+      { northEast: [37.8, 55.9], southWest: [37.5, 55.7] },
+      expect.anything(),
+    );
+
+    mapFitBounds.mockClear();
+    handle.fitBounds([{ lat: Number.NaN, lng: Number.POSITIVE_INFINITY }]);
+    expect(mapFitBounds).not.toHaveBeenCalled();
+    expect(mapSetCenter).not.toHaveBeenCalled();
+  });
+
+  it('waits while the container is hidden, then fits once it has a size', async () => {
+    let onResize: (() => void) | null = null;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          onResize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const container = { clientWidth: 0, clientHeight: 0 };
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    const handle = await renderer.render({
+      container: container as unknown as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+    });
+    handle.fitBounds(twoPoints, { padding: 40 });
+    expect(mapFitBounds).not.toHaveBeenCalled();
+
+    container.clientWidth = 390;
+    container.clientHeight = 300;
+    onResize!();
+
+    expect(mapFitBounds).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('shrinks the padding on a container too small for it', async () => {
+    const renderer = create2GisMapRenderer({ apiKey: 'test-key' });
+    const handle = await renderer.render({
+      container: { clientWidth: 300, clientHeight: 100 } as HTMLElement,
+      center: { lat: 55.75, lng: 37.61 },
+    });
+    handle.fitBounds(twoPoints, { padding: 48 });
+    // (100 − 32) / 2 = 34: a 32px box stays between the paddings.
+    expect(mapFitBounds).toHaveBeenCalledWith(expect.anything(), {
+      padding: { top: 34, right: 34, bottom: 34, left: 34 },
+      maxZoom: expect.any(Number),
+    });
+  });
 });
 
 describe('panTo (CR-170)', () => {

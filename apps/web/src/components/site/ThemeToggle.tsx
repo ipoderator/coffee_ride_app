@@ -65,7 +65,9 @@ export function useThemePreference(): [
   return [preference, choose];
 }
 
-/** The three theme options as `role="menuitem"` buttons, for any `NavMenu`. */
+/** The three theme options as `role="menuitemradio"` buttons, for any
+ * `NavMenu` — one choice out of three, so the current one is
+ * `aria-checked`, not `aria-current` (CR-243). */
 export function ThemeMenuItems({
   preference,
   onChoose,
@@ -79,8 +81,8 @@ export function ThemeMenuItems({
         <button
           key={option}
           type="button"
-          role="menuitem"
-          aria-current={option === preference ? 'true' : undefined}
+          role="menuitemradio"
+          aria-checked={option === preference}
           onClick={() => onChoose(option)}
           className={cn(
             NAV_MENU_ITEM_CLASSNAME,

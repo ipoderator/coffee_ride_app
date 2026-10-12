@@ -8,6 +8,42 @@ human/agent-readable long-term memory of "what happened, in what order, and why.
 
 Newest entries at the bottom.
 
+## 2026-10-12 — CR-240 — `AppHeader` phone menu is a modal layer
+
+Summary: production browser QA item 6. The below-`lg` panel was a bare disclosure: Escape did nothing, focus stayed on the toggle, the page behind stayed in the Tab order and the accessibility tree, a tap outside didn't close it, and widening past the breakpoint left it "open". Now opening moves focus to the first item and makes everything outside the header `inert` (`lib/site/inert-outside.ts`); Escape closes it and returns focus to the toggle; a tap outside or reaching `lg` closes it and restores the page.
+Contract: none.
+Files: `apps/web/src/components/site/{AppHeader.tsx,AppHeader.test.tsx}`, new `apps/web/src/lib/site/inert-outside.ts`, `apps/web/src/stories/AppHeader.stories.tsx`.
+Validation: see CR-243.
+Decisions: the header itself stays live (toggle, theme control); `inert` attribute, not property (jsdom).
+Follow-up: none.
+
+## 2026-10-12 — CR-241 — No sideways overflow at 320–1023 px
+
+Summary: production browser QA item 7, Playwright audit at 320/390/768/989/1024. The filter chips and the cabinet section tabs scroll sideways with a hidden scrollbar: the filters faded a fixed right 15 % (last chip and a focused one stayed washed out), the tabs were cut hard. Shared `lib/site/scroll-row.ts` fades only an edge that hides content and scrolls a focused child clear of it. `AppHeader`'s full bar needed ~1000 px but started at `md` (768–1023 overflowed by up to 257 px): it now starts at `lg`, the account email truncates (full in the menu header). `OrganizerHeader`'s wordmark is 22 px below `sm` (320 px overflowed by 9 px).
+Contract: `ui` `NavMenu` gains optional `header` (CR-243).
+Files: `apps/web/src/lib/site/scroll-row.ts`, `apps/web/src/components/{site/AppHeader,cabinet/{CabinetSectionTabs,OrganizerHeader}}.tsx`, `apps/web/src/features/participant/discovery/components/DiscoveryFilters.tsx`, tests, `apps/web/e2e/mobile-cabinets.spec.ts`, `docs/design.md`.
+Validation: see CR-243.
+Decisions: hamburger + panel below `lg` (was `md`); the bottom tab bar still hides at `md`.
+Follow-up: mobile `visual-regression` baselines (discovery, organizer dashboard) need a refresh from CI.
+
+## 2026-10-12 — CR-242 — «Поделиться» and `.ics` say what happened
+
+Summary: production browser QA item 8. Share used only `navigator.share`, else the async clipboard (absent outside a secure context, refused in some webviews); any failure showed «Не удалось скопировать ссылку.» as a _success_ toast with no way to get the link, and a failed share sheet never fell back. Now: share sheet → clipboard → legacy `execCommand('copy')` → `ShareLinkDialog` with the link for a manual copy (and a retry); closing the sheet stays silent. «Добавить в календарь» toasts success or a danger-toned failure, revokes the blob URL after 30 s instead of synchronously, and falls back to a `data:` URL without `download` support.
+Contract: `RIDE_POSTER_TERMS.shareManual*`, `RIDE_PAGE_TERMS.calendarDownloaded/calendarFailed`.
+Files: `apps/web/src/features/participant/ride-detail/{lib/{share,calendar}.ts,components/{RideDetailView,ShareLinkDialog}.tsx,ride-detail.test.tsx}`, `packages/ui/src/terminology.ts`, stories `ShareLinkDialog`, `RideDetailView`.
+Validation: see CR-243.
+Decisions: no toast after a completed share sheet — the OS sheet is its own feedback.
+Follow-up: none.
+
+## 2026-10-12 — CR-243 — Small QA items: group counter, `fitBounds`, menu semantics, focus
+
+Summary: production browser QA item 9. Group chip «N из 6»: `GroupsEditor`'s conflict paths resynced the list only (repro: delete a group removed in another tab → chip 3 over 2 groups) and a failed list re-read skipped the workspace's; both now re-read together and `RideWorkspace.refresh` applies only the latest reply. `maps-2gis` `applyFit` drops NaN/out-of-range points, waits while the container is 0×0 and clamps padding to the map. `NavMenu` `header` slot takes `OrganizerHeader`'s account heading out of `role="menu"`; theme options are `menuitemradio` + `aria-checked`. `RescheduleRideCard`'s form heading no longer suppresses its focus ring.
+Contract: `ui` `NavMenu` optional `header`; `menuitemradio` items navigable.
+Files: `apps/web/src/features/organizer/{groups/components/GroupsEditor.tsx,rides/components/{RideWorkspace,RescheduleRideCard}.tsx}`, `packages/maps-2gis/src/render.ts`, `packages/ui/src/components/NavMenu.tsx`, `apps/web/src/components/{site/ThemeToggle,cabinet/OrganizerHeader}.tsx`, tests, stories `NavMenu`, `OrganizerHeader`.
+Validation (CR-240..243): web 929/929, ui 272/272, maps-2gis 82/82 (+6 live skipped); `coverage:check` passes (web +0.4–0.9 pp; maps-2gis +0.05 st); 20 new/changed tests fail on `HEAD` sources; tsc/eslint (0 errors)/prettier clean; Storybook 288/293 — the 5 known failures (`AdminOverview` ×3, `CabinetSectionTabs` Admin Last Tab ×2, same on the `HEAD` component); e2e themes/mobile-cabinets/critical-journeys/ride-lifecycle/pace-groups 25 passed except the 2 `themes` darwin-baseline checks (no darwin snapshots by design); Playwright audit + keyboard runs in the local app at 320/390/768/989/1024/1280.
+Decisions: the `fitBounds` hardening lives in the adapter, not in each map caller.
+Follow-up: refresh mobile visual baselines from the CI artifact.
+
 ## Archiving (keep this file cheap to read)
 
 When this file exceeds ~15 entries, move all but the most recent ~8 into
@@ -33,87 +69,10 @@ commit message body or the KI entry, not here — every agent re-reads these ent
 
 ---
 
-Entries before CR-228 (CR-000 through CR-227, 2026-09-09..2026-10-09) were moved
+Entries before CR-234 (CR-000 through CR-233, 2026-09-09..2026-10-10) were moved
 to `docs/changelog-archive/2026.md` (CR-000..CR-076 on 2026-09-20, CR-079..CR-114
-on 2026-09-26, CR-115..CR-170 on 2026-10-02, CR-171..CR-188 on 2026-10-03 by CR-202, CR-190..CR-197 on 2026-10-03 by CR-205, CR-198..CR-204 on 2026-10-06 by CR-213, CR-205..CR-218 on 2026-10-08 by CR-226, CR-219..CR-227 on 2026-10-10 by CR-232),
+on 2026-09-26, CR-115..CR-170 on 2026-10-02, CR-171..CR-188 on 2026-10-03 by CR-202, CR-190..CR-197 on 2026-10-03 by CR-205, CR-198..CR-204 on 2026-10-06 by CR-213, CR-205..CR-218 on 2026-10-08 by CR-226, CR-219..CR-227 on 2026-10-10 by CR-232, CR-228..CR-233 on 2026-10-12 by CR-239),
 per this section's own rule.
-
-## 2026-10-10 — CR-228..CR-230 — Admin capability, `/v1/admin/*` and moderation enforcement
-
-Summary: ADR-032. Admin = a `platform_admins` row granted only by `pnpm --filter db admin:grant|revoke|list`; `requireAdmin` (DB read per request, 404 to non-admins) guards every `/v1/admin/*` route. Endpoints: overview, users (verify email, resend, log out everywhere, block/unblock), rides (hide/unhide, cancel via the organizer path), reviews (hide/unhide), append-only action log. Block deletes sessions and makes login answer `403 account_blocked` after the password; a hidden ride is a draft to non-owners (`isRidePublic`); a hidden review leaves lists and rating.
-Contract: new `/v1/admin/*` (docs/api.md → Admin); `POST /v1/auth/login` `403 account_blocked`; `packages/types` `api/admin.ts`. Migration `0026_admin_panel` (`platform_admins`, `admin_actions`, `users.blocked_*`, `rides/reviews.hidden_*`).
-Files: `packages/db` (schema, migration, `admin-cli.ts`), `apps/api` `modules/admin/*`, `plugins/auth.ts`, `modules/{auth,rides,registrations,reviews}`.
-Validation: api admin+auth+rides+registrations+reviews+organizers 469 passed; `plugins/auth.test.ts` 2; api/db/types typecheck + lint clean.
-Decisions: no step-up auth yet (owner); manual moderation only.
-Follow-up: local branch `feat/admin-panel` only — not merged, not deployed.
-
-## 2026-10-10 — CR-231 — `/admin` web section; organizer sees why a ride is hidden
-
-Summary: `/admin` in apps/web (ADR-009 modules `features/admin/{overview,users,rides,reviews,actions}`, registry `lib/admin/admin-nav.ts`, shared `components/admin/*`). The layout asks `GET /v1/admin/me` server-side: non-admin → real 404, API down → error, admin → `CabinetShell` sidebar; `noindex`, `/admin` in robots disallow. Reason dialog for block/hide/cancel; API codes mapped to Russian, `detail` never shown. Login shows «Аккаунт заблокирован администратором.». `GET /v1/rides/:id` gives the owner `moderation { hiddenAt, reason }`, shown as a Notice in the ride workspace.
-Contract: additive owner-only `GetRideResponse.moderation`; `RIDE_WORKSPACE_TERMS.hiddenByAdmin*`.
-Files: `apps/web/src/{app/admin,features/admin,components/admin,lib/admin}/**`, `LoginForm.tsx`, `RideWorkspace.tsx`, 5 admin stories + 3 stories elsewhere; `apps/api` rides detail.
-Validation: web unit 82 files/857 tests; Storybook 34 files/240 (axe); api admin+rides routes 110; coverage gate green with live Redis/S3 (web 82.33 % lines, baseline raised); `/admin` checked in a browser on the dev stack (block → login 403).
-Decisions: card-first lists (no tables, no horizontal scroll at 320 px); filters are local state, not URL params.
-Follow-up: no link to `/admin` in the header — the admin opens it by URL.
-
-## 2026-10-10 — CR-232 (item 1) — `admin:grant` requires a confirmed email
-
-Summary: `grantAdmin` (`packages/db/src/admin-grants.ts`) returns `email_not_verified` for an account whose `users.emailVerified` is false, writing no `platform_admins`/`admin_actions` row; the CLI prints why on stderr and exits 1 (as for `user_not_found`). Grant-time only — existing admins keep access, no runtime check, migration untouched. CLI messages/exit codes moved to `admin-cli-messages.ts` (unit-tested).
-Files: `packages/db/src/{admin-grants,admin-cli,admin-cli-messages}.ts`, db vitest coverage include, `apps/api` admin suite, `docs/deployment.md`, `docs/database.md`.
-Validation: db 16 tests + typecheck/lint; api admin + `plugins/auth` 21; api typecheck/lint; db coverage 97.61 % lines (baseline raised).
-
-## 2026-10-10 — CR-232 (item 2) — Admin reason dialogs name their record
-
-Summary: block / hide ride / cancel ride / hide review dialogs show the target under the description — account email; ride title; review author, rating and a 140-character excerpt (`ADMIN_TERMS.reviewExcerpt`, «Без текста» when empty). It sits inside the dialog's `aria-describedby`, values `wrap-anywhere`. `ui` `Dialog`: `description` accepts a ReactNode (additive) and the panel scrolls vertically on short screens (it was clipped). Reason rules unchanged.
-Files: `packages/ui` `Dialog.tsx`, `terminology.ts`; `apps/web` `AdminReasonDialog.tsx` (required `subject`), admin rides/reviews/user card, tests, 3 admin story files; web coverage excludes `src/stories/**`.
-Validation: web unit 859, Storybook 34 files/244 (axe); ui 262; typecheck/lint clean; coverage gate green, web/ui baselines raised; 320/390 px measured in Chromium — no horizontal scroll.
-
-## 2026-10-10 — CR-232 (item 3) — Reason hint says who will read the reason
-
-Summary: `AdminReasonDialog` takes a required `reasonHint`. Ride hide → `ADMIN_TERMS.reasonHintOrganizerVisible` (the organizer sees the reason via `GET /v1/rides/:id` → `moderation`, and it is logged); block, ride cancel, review hide → `reasonHintLogOnly` (admin log only — checked: none of these reasons leaves the admin API). The old `reasonHint` («Её увидите только вы…») is removed.
-Files: `packages/ui` `terminology.ts` (+test); `apps/web` `AdminReasonDialog.tsx`, admin rides/reviews/user card, their tests and stories.
-Validation: admin unit 29, admin stories 25 (axe), ui 263; typecheck/lint/prettier clean; coverage gate green.
-
-## 2026-10-10 — CR-232 (item 4) — Mobile section tabs reveal the active tab
-
-Summary: `CabinetSectionTabs` (shared by the organizer and admin cabinets) scrolls its own row on mount and on every pathname change so the `aria-current` tab is fully visible — the least distance, via the row's `scrollTo`, never `scrollIntoView` (the page stays put). Instant on first render; smooth afterwards unless `prefers-reduced-motion: reduce`.
-Files: `apps/web` `components/cabinet/CabinetSectionTabs.tsx` (+ new test), `stories/CabinetSectionTabs.stories.tsx` (new — the component had no story).
-Validation: web unit 863, Storybook 35 files/248 (axe); e2e `mobile-cabinets.spec.ts` 6/6; dev stack at 320/390 px: `/admin/reviews`, `/admin/actions`, `/organizer/profile` direct and by link — active tab visible, `window.scrollX/Y` 0; coverage gate green, web baseline raised.
-
-## 2026-10-10 — CR-232 (item 5) — Admin list filters in the URL
-
-Summary: supersedes CR-231's "filters are local state". `/admin/users?q=&filter=`, `/admin/rides?q=&status=&visibility=`, `/admin/reviews?visibility=` — the URL is the only copy: `useAdminUrlFilters` derives filters from `useSearchParams` and a change is a native `history.pushState` (no server round trip; back/forward re-sync). Unknown values fall back to defaults; defaults are omitted from the URL. Search still runs on Enter/«Найти» only; the field follows `q` on back/forward. A user card keeps the list's filters in `?from=`, re-parsed server-side into the back link.
-Files: `apps/web` `lib/admin/{url-filters,use-admin-url-filters}.ts`, `features/admin/{users,rides,reviews}/filters.ts`, the three lists, `AdminSearchForm`, `app/admin/users/[id]/page.tsx` (+ test), `AdminUserCard` `backHref`; `test-support/next-navigation.ts`; stories `ListFilteredFromUrl`, `FilteredFromUrl`, `HiddenFromUrl`.
-Validation: web unit 876, Storybook 35/251 (axe), `next build --webpack` (scratch copy), dev-stack check of reload/junk/Enter/back/forward/card round trip; coverage gate green, web baseline raised.
-
-## 2026-10-10 — CR-232 (item 6) — Overview links and refresh; log filters
-
-Summary: «Обзор» — unverified/blocked users, hidden rides, hidden reviews link to their URL filters (`lib/admin/list-links.ts`; names carry the section); «Обновить» re-reads the overview in place, «Обновлено …» shows the last successful answer (with seconds), a failed refresh keeps data + time. «Журнал» — target-type and action selects in the URL (`?targetType=&action=`), actions narrow to the type, a mismatched pair drops the action; a deleted target shows `Запись удалена · ID <targetId>`. Log stays append-only.
-Contract: additive `GET /v1/admin/actions?action=` (docs/api.md).
-Files: `packages/types` admin schema; `apps/api` `admin-actions.service.ts` (+ tests); `packages/ui` terminology; `apps/web` overview, actions (`filters.ts`, api, log), `AdminActionList`, `lib/admin/{list-links,format}.ts`, stories.
-Validation: api admin 21 (filter, 400, no DELETE/PATCH/PUT); web unit 883, Storybook 35/254 (axe); ui 264; typecheck/lint/prettier clean; coverage green, web baseline raised; dev stack 390 px.
-Note: api tests share the docker DB with the dev API here (no native Postgres on ::1) — two api runs in CR-232 emptied dev data; re-seeded with `seed:demo --no-routes`.
-
-## 2026-10-10 — CR-232 (item 7) — Admin validation sweep and review fixes
-
-Summary: full check of the admin section, then fixes for the confirmed review findings. `/admin/users/<not a uuid>` → not-found page before any request (was a retryable 400 «loadError»; shared `lib/uuid.ts` `isUuid`, also used by `server-ride.ts`). Admin api.ts encode ids in paths. `adminRequest` turns a non-problem error body (proxy HTML, empty 500) into an `ApiError` with its status (`unexpected_response`). A reason dialog can't be dismissed while its action is in flight. `bg-raised` (no such utility) → `bg-bg-raised` / overview hover `bg-surface`.
-Contract: none.
-Files: `apps/web` `lib/{uuid,admin/client}.ts`, `lib/rides/server-ride.ts`, `app/admin/users/[id]/page.tsx`, `features/admin/{users,rides,reviews}/api.ts`, `components/admin/AdminReasonDialog.tsx`, `AdminOverview.tsx`; tests in `admin-lib`, users, page.
-Validation: api admin/auth/rides/reviews/registrations 455 (+6 live skipped) on a separate `coffee_ride_test` DB (dev data kept); full coverage with live Redis/S3 — api 661/0 skipped, gate green, web baseline raised; web unit 886, Storybook 35/254 (axe), ui 264, db 16; typecheck/lint/prettier clean; negative checks (fix reverted → new test fails); Playwright on the dev stack 320/390/1280 × light/dark, 7 pages: 200, no horizontal scroll, 0 console errors, active mobile tab, filters after back, disposable block/unblock (login 403 → 200).
-Decisions: none.
-Follow-up: `21st review` does not exist in the installed `21st` CLI — replaced by `/code-review`; open findings in project-state "Next".
-
-## 2026-10-10 — Dependabot triage — eight updates merged
-
-Summary: Merged after a rebase onto main and green CI each: #26 SeaweedFS 4.48, #29 upload-artifact 7, #30 setup-node 7, #31 pnpm/action-setup 6, #32 checkout 7 (majors: node24 runtime + runner ≥ 2.327.1 only, inputs unchanged), #9 zod 4.6.5, #8 tailwind-merge 3.7, #34 @aws-sdk/client-s3 3.1146, #35 lucide-react 1.52, #38 dev group (15: vitest 5.0.3, vite 8.3.3, storybook 10.6.1, turbo 2.11.7, eslint-config-next 16.4.0…). #35's first red run was a one-off `route-builder.test.tsx` failure (passed 3/3 locally) and a Docker Hub 429; reruns green. Still open by decision: Node 26 #19–#21, Postgres 18 #15 (KI-091); alert #18 `braces` has no patched release (KI-095). Not yet deployed to production.
-
-## 2026-10-10 — CR-233 — `s3-init` idempotent again on SeaweedFS 4.48
-
-Summary: The first prod deploy after #26 (SeaweedFS 4.47 → 4.48) stopped at `deploy/deploy.sh`'s bucket step: 4.48's `weed shell` exits non-zero on `error: bucket … already exists`, so `s3-init` was no longer a no-op and migrations/app roll never ran (the old `web`/`api` kept serving; `/health` ok). `s3-init` in `docker-compose.infra.yml` and `docker-compose.yml` now treats that one error as success; any other failure still exits 1. CI's docker-smoke always starts with an empty bucket, so it could not catch this.
-Files: `docker-compose.infra.yml`, `docker-compose.yml`.
-Validation: the rendered script against a throwaway SeaweedFS 4.48 (isolated network on the prod host): new bucket → 0, existing → 0, invalid name → 1.
-Deploy: `c01a61f` (admin panel) went out by running `deploy.sh`'s remaining steps by hand without `s3-init` (bucket confirmed present): build, migrate (`0026` applied, 27 migrations), app roll; `/health` db/redis/s3 ok; `admin:grant` for the owner's account. Anonymous `/admin` → 404, `/api/v1/admin/me` → 401.
-Follow-up: none.
 
 ## 2026-10-11 — CR-234 — «Синхронизировать со Strava»: finish backed by a Strava ride
 
@@ -136,3 +95,48 @@ Validation: stories 3/3, site unit 21/21, web typecheck/lint.
 Deploy: `542f27c` on coffeeride.site via `deploy/deploy.sh` after green CI on `main` (ci incl. e2e + visual baselines, docker-smoke): migration `0027` applied (28 total, `registrations.strava_*` present), `/health` db/redis/s3 ok, home 200. Strava stays off on prod (`GET /v1/strava/status` → `available:false`) until `STRAVA_CLIENT_ID/SECRET` are in the VPS `.env` and the Strava app's callback domain is `coffeeride.site`.
 CI: the first `main` run (`f60bab5`) failed on a race in `route-builder.test.tsx` (asserted the polyline before the re-render that draws it); `542f27c` waits for the line.
 Process: owner asked for branch → PR → `main` → prod; `rules/git.md` "Branch flow", `commit-push` step 8, GitHub branch protection on `main` (PR + `ci`/`docker-smoke` required, admins included) — PR #41.
+
+## 2026-10-12 — CR-235 — «Опубликовать» saves the draft form first (P0)
+
+Summary: production browser QA (reproduced locally, prod untouched): the draft form's «Опубликовать» called `publishRide` directly, so a ride went out as last saved and unsaved edits were lost. `requestPublish` now runs the same validation + `PATCH` as «Сохранить» (`saveForm()`) and publishes only after it succeeds; without a route it saves, then asks (dismissing leaves a saved draft, «Изменения сохранены.»). One `busyRef` guards save/publish: a double click = one save + one publish; fields lock meanwhile.
+Contract: none (web only; no API/types/ui/terminology change).
+Files: `apps/web/src/features/organizer/rides/{components/EditRideForm.tsx,rides.test.tsx}`, `apps/web/src/stories/{RideManagement.stories.tsx,ride-workspace-fixtures.ts}`, `.claude/rules/do-not-break.md`.
+Validation: `rides.test.tsx` 90/90 (6 new, all fail on the old component); web unit 910/910 with coverage above baseline (lines 84.06/84, branches 82.0/81.95); `tsc`, eslint, prettier clean; e2e `critical-journeys` + `ride-lifecycle` 7/7 on the local stack; Storybook RideManagement/RideWorkspaceSections 36/36 with axe (new `DraftPublishSaveFails`), full suite 257/262 — the 5 failures are the pre-existing AdminOverview/CabinetSectionTabs axe findings; local UI via Playwright: edit+publish, double click, empty title, failed save (500), dismissed dialog.
+Decisions: save before the no-route question, so validation errors show before it and a dismissed question still keeps the edits.
+Follow-up: a failed save shows the generic «Не удалось загрузить заезд…» (pre-existing wording for save errors).
+
+## 2026-10-12 — CR-236 — Create form: adjacent-month days, stale field errors
+
+Summary: production browser QA item 2 (reproduced locally). (a) `DatePicker`: a day of the next/previous month could not be picked — its focus on mousedown flipped the grid to that month, the day's button remounted in another row and the click was lost; only in-month days follow focus now. (b) `CreateRideForm`: a field's error now clears when that field changes, not at the next save. (c) The «Создать профиль организатора» link could not be reproduced as broken (dev and production build, desktop/mobile/touch/keyboard) — awaiting details.
+Contract: none (`DatePicker` props unchanged; behaviour fix in `packages/ui`).
+Files: `packages/ui/src/components/DatePicker{,.test}.tsx`, `apps/web/src/features/organizer/rides/{components/CreateRideForm.tsx,rides.test.tsx}`, new `apps/web/src/stories/{DatePicker,CreateRideForm}.stories.tsx`, `.claude/rules/do-not-break.md`.
+Validation: ui 270/270, web 912/912, coverage ≥ baseline in both; new tests fail on `HEAD`; tsc/eslint/prettier clean; Storybook new 12/12 (axe), full 269/274 (5 pre-existing admin axe findings); e2e critical-journeys/ride-start-time/ride-lifecycle 9/9 ×3, one `loginViaUi` hydration flake; local UI 1280/390.
+Decisions: errors clear per field on change; the next save validates the whole form again.
+Follow-up: the profile-link report (item 2a) needs the QA's steps/device; `EditRideForm` keeps errors until the next save too (not in this item).
+
+## 2026-10-12 — CR-237 — Confirm closing registration
+
+Summary: production browser QA item 3. «Закрыть регистрацию» closed on one click. The documented lifecycle is one-way (`docs/product.md`: `registration_open → registration_closed → started`, no reopen transition in the API), so reopening is a product change and was not added; the button now opens a `ConfirmDialog` that says the step is irreversible, that nobody new can register or join the waitlist, and that registered riders stay. «Не закрывать»/Esc sends nothing.
+Contract: `RIDE_EDIT_TERMS.closeRegistrationConfirm{Title,Description}`, `closeRegistrationKeep` (ui terms); API none.
+Files: `apps/web/src/features/organizer/rides/{components/RideWorkspace.tsx,rides.test.tsx}`, `apps/web/e2e/ride-lifecycle.spec.ts`, `apps/web/src/stories/RideManagement.stories.tsx` (`CloseRegistrationConfirm`), `packages/ui/src/terminology.ts`.
+Validation: see CR-239.
+Decisions: confirm + irreversibility notice instead of a reopen transition (lifecycle unchanged).
+Follow-up: a «reopen registration» transition, if the owner wants it, is a lifecycle/API change.
+
+## 2026-10-12 — CR-238 — The organizer sees their hidden rider list
+
+Summary: production browser QA item 4. With `participantsVisible: false`, `GET /v1/rides/:id/riders` answered `403 riders_hidden` to the ride's own organizer too (CR-125 «no organizer bypass»), so on `/rides/[id]` they saw «3 из 30» and group counts over «Организатор скрыл список». The cabinet table (`/participants`) was never affected. The organizer now gets the list there, with a note that only they see it; riders and guests are unchanged.
+Contract: `GET /v1/rides/:id/riders` — `riders_hidden` no longer for the ride's own organizer (`docs/api.md`); `RidersSection` optional `hiddenFromOthers`; `RIDE_DETAIL_RIDERS_TERMS.hiddenForOthers`.
+Files: `apps/api/src/modules/registrations/registrations.service.ts`, `apps/api/src/modules/rides/participants-visibility.routes.test.ts`, `apps/web/src/features/participant/ride-detail/components/{RidersSection,RideDetailView}.tsx`, new `apps/web/src/stories/RidersSection.stories.tsx`, `docs/api.md`, `.claude/rules/do-not-break.md`.
+Validation: see CR-239.
+Decisions: reverses CR-125's organizer rule for `/riders` at the owner's request — `participantsVisible` hides from the public only (same rule CR-149 gave the rider card).
+Follow-up: none.
+
+## 2026-10-12 — CR-239 — Ride page in sync after a registration change
+
+Summary: production browser QA item 5. After cancel/register the page applied the viewer's new registration at once and re-read counts afterwards, fire-and-forget: with a 3 s re-read the ticket showed «4 из 30» and the phone bar «№ 5» after a cancel; a failed re-read left it stale. Now the action awaits the re-read and registration, waitlist entry, counts and start number land in one update (the ticket stays pending); a failed re-read falls back to the action's reply. The bar's open-state title is the count («3 из 30 участников»), not a bare «№ N» that equalled the old number of the last rider who cancelled.
+Contract: `RegistrationTicket`'s `onChange`/`onWaitlistChange` return `Promise<void>`; `RIDE_TICKET_TERMS.barNumber` → `barCount(count, limit)`.
+Files: `apps/web/src/features/participant/ride-detail/{components/{RideDetailView,RegistrationTicket}.tsx,ride-detail.test.tsx}`, `packages/ui/src/{terminology.ts,terminology-poster.test.ts}`, new `apps/web/src/stories/TicketBar.stories.tsx`, `apps/web/src/stories/RegistrationTicket.stories.tsx`, `.claude/rules/do-not-break.md`.
+Validation (CR-237..239): web 916/916, ui 270/270, api 708/708 with live Redis/S3 on a separate `coffee_ride_test` DB; coverage gate passes (no drops); 6 new tests fail on `HEAD`; tsc/eslint/prettier clean; Storybook touched files 39/39 with axe; e2e ride-lifecycle/critical-journeys/access-control/registration-waitlist/pace-groups/profile-visibility 14/14 (one known `loginViaUi` flake, passed on rerun); local UI at 1280/390 (repro scripts, re-read delayed 3 s).
+Decisions: the viewer's own registration comes from the action's reply; counts, start number and waitlist from the re-read.
+Follow-up: none.

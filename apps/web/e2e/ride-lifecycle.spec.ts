@@ -37,6 +37,17 @@ async function transition(
   await expect(page.getByText(successMessage, { exact: true })).toBeVisible();
 }
 
+/** CR-237: closing registration is one-way, so the button asks first. */
+async function closeRegistration(page: Page) {
+  await page
+    .getByRole('button', { name: RIDE_EDIT_TERMS.closeRegistration })
+    .click();
+  await confirmInDialog(page, RIDE_EDIT_TERMS.closeRegistration);
+  await expect(
+    page.getByText(RIDE_EDIT_TERMS.closeRegistrationSuccess, { exact: true }),
+  ).toBeVisible();
+}
+
 async function publicStatus(rideId: string): Promise<number> {
   const anonymous = await newIsolatedRequest();
   const response = await anonymous.get(`/api/v1/rides/${rideId}`);
@@ -71,11 +82,7 @@ test('organizer takes a ride from draft to finished', async ({ page }) => {
     RIDE_EDIT_TERMS.openRegistration,
     RIDE_EDIT_TERMS.openRegistrationSuccess,
   );
-  await transition(
-    page,
-    RIDE_EDIT_TERMS.closeRegistration,
-    RIDE_EDIT_TERMS.closeRegistrationSuccess,
-  );
+  await closeRegistration(page);
   await transition(page, RIDE_EDIT_TERMS.start, RIDE_EDIT_TERMS.startSuccess);
   await transition(page, RIDE_EDIT_TERMS.finish, RIDE_EDIT_TERMS.finishSuccess);
 
@@ -115,11 +122,7 @@ test('organizer confirms finishing a ride with unresolved riders', async ({
   await rider.dispose();
 
   await page.goto(`/organizer/rides/${rideId}/edit`);
-  await transition(
-    page,
-    RIDE_EDIT_TERMS.closeRegistration,
-    RIDE_EDIT_TERMS.closeRegistrationSuccess,
-  );
+  await closeRegistration(page);
   await transition(page, RIDE_EDIT_TERMS.start, RIDE_EDIT_TERMS.startSuccess);
 
   const finish = page.getByRole('button', { name: RIDE_EDIT_TERMS.finish });
@@ -166,11 +169,7 @@ test('organizer marks riders and the workspace frame follows without a reload', 
   }
 
   await page.goto(`/organizer/rides/${rideId}/participants`);
-  await transition(
-    page,
-    RIDE_EDIT_TERMS.closeRegistration,
-    RIDE_EDIT_TERMS.closeRegistrationSuccess,
-  );
+  await closeRegistration(page);
   await transition(page, RIDE_EDIT_TERMS.start, RIDE_EDIT_TERMS.startSuccess);
   // From here on the page is never reloaded: a navigation would clear this.
   await page.evaluate(() => {

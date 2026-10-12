@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -937,6 +938,102 @@ describe('RideDetailView', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
+    // CR-239 (production QA item 5): the change and the re-read counts land
+    // together — the bar never shows the old start number / stale counts.
+    it('updates the ticket and the phone bar together once a cancellation is re-read', async () => {
+      cancelRideRegistrationMock.mockResolvedValue(undefined);
+      let resolveReread: (value: GetRideResponse) => void = () => {};
+      getRideDetailMock
+        .mockResolvedValueOnce(
+          baseDetailResponse({
+            ride: { ...baseRide, status: 'registration_open' },
+            registrationsCount: 4,
+            viewerRegistration: activeRegistration(),
+            viewerStartNumber: 4,
+          }),
+        )
+        .mockReturnValueOnce(
+          new Promise<GetRideResponse>((resolve) => {
+            resolveReread = resolve;
+          }),
+        );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      const bar = await screen.findByTestId('ticket-bar');
+      expect(bar).toHaveTextContent('Вы зарегистрированы · № 4');
+      fireEvent.click(screen.getByText('Отменить регистрацию'));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Отменить регистрацию' }),
+      );
+      await waitFor(() =>
+        expect(cancelRideRegistrationMock).toHaveBeenCalledWith('ride-1'),
+      );
+      // Re-read in flight: still the old, consistent state — not «Записаться»
+      // over the old counts.
+      expect(bar).toHaveTextContent('Вы зарегистрированы · № 4');
+      expect(
+        screen.queryByRole('button', { name: 'Записаться' }),
+      ).not.toBeInTheDocument();
+
+      await act(async () => {
+        resolveReread(
+          baseDetailResponse({
+            ride: { ...baseRide, status: 'registration_open' },
+            registrationsCount: 3,
+          }),
+        );
+      });
+
+      expect(
+        await screen.findByRole('button', { name: 'Записаться' }),
+      ).toBeInTheDocument();
+      expect(bar).toHaveTextContent('3 из 20 участников');
+      expect(bar).not.toHaveTextContent('№');
+      const ticket = screen.getByTestId('ride-ticket');
+      expect(within(ticket).getByText('Осталось 17 мест')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('still shows the cancellation when the re-read fails', async () => {
+      cancelRideRegistrationMock.mockResolvedValue(undefined);
+      getRideDetailMock
+        .mockResolvedValueOnce(
+          baseDetailResponse({
+            ride: { ...baseRide, status: 'registration_open' },
+            registrationsCount: 4,
+            viewerRegistration: activeRegistration(),
+            viewerStartNumber: 4,
+          }),
+        )
+        .mockRejectedValueOnce(new Error('network error'));
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(await screen.findByText('Отменить регистрацию'));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Отменить регистрацию' }),
+      );
+
+      expect(
+        await screen.findByRole('button', { name: 'Записаться' }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('ticket-bar')).not.toHaveTextContent(
+        'Вы зарегистрированы',
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
     // CR-105's sticky mobile registration bar — the default since CR-119
     // (`FEATURE_STICKY_REGISTRATION_CTA` removed).
     // CR-151: the ticket holds the action; the phone bar only appears once the
@@ -966,7 +1063,8 @@ describe('RideDetailView', () => {
       const bar = screen.getByTestId('ticket-bar');
       expect(bar).toHaveAttribute('aria-hidden', 'true');
       expect(bar).toHaveAttribute('inert');
-      expect(within(bar).getByText('№ 15')).toBeInTheDocument();
+      // CR-239: the count, as on the ticket — never a bare «№ N».
+      expect(within(bar).getByText('14 из 20 участников')).toBeInTheDocument();
       // Only one real register button — the bar's is out of the a11y tree.
       expect(
         screen.getAllByRole('button', { name: 'Записаться' }),
@@ -2109,6 +2207,37 @@ describe('RideDetailView', () => {
       expect(within(riders).getByText('Вера')).toBeInTheDocument();
     });
 
+    // CR-238 (production QA item 4): `participantsVisible: false` hides the
+    // list from the public only — the organizer still gets it, with a note.
+    it('shows the organizer their hidden list, saying nobody else sees it', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, participantsVisible: false },
+          registrationsCount: 1,
+        }),
+      );
+      getRideRidersMock.mockResolvedValue({
+        items: [
+          { registrationId: 'reg-anna', displayName: 'Анна', group: null },
+        ],
+        nextCursor: null,
+      });
+
+      render(<RideDetailView rideId="ride-1" />);
+
+      const riders = await screen.findByRole('region', { name: 'Кто едет' });
+      expect(
+        await within(riders).findByText(
+          'Список скрыт: его видите только вы, участники и гости видят лишь число записавшихся.',
+        ),
+      ).toBeInTheDocument();
+      expect(within(riders).getByText('1 из 20')).toBeInTheDocument();
+      expect(
+        within(riders).getByRole('img', { name: 'Анна' }),
+      ).toBeInTheDocument();
+    });
+
     it('falls back to the sign-in prompt on a 401 from the riders endpoint', async () => {
       sessionState.status = 'authenticated';
       getRideDetailMock.mockResolvedValue(
@@ -2273,9 +2402,14 @@ describe('RideDetailView', () => {
       const click = vi
         .spyOn(HTMLAnchorElement.prototype, 'click')
         .mockImplementation(() => {});
+      const timeout = vi.spyOn(window, 'setTimeout');
       getRideDetailMock.mockResolvedValue(baseDetailResponse());
 
-      render(<RideDetailView rideId="ride-1" />);
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
 
       fireEvent.click(
         await screen.findByRole('button', { name: 'Добавить в календарь' }),
@@ -2286,9 +2420,159 @@ describe('RideDetailView', () => {
       expect(blob.type).toBe('text/calendar;charset=utf-8');
       expect(await blob.text()).toContain('DTSTART:');
       expect(click).toHaveBeenCalledTimes(1);
+      // CR-242: the viewer is told, and the URL outlives the click — an
+      // immediate revoke can cancel the download in Firefox/Safari.
+      expect(
+        await screen.findByText(
+          'Файл календаря скачан — откройте его, чтобы добавить заезд.',
+        ),
+      ).toBeInTheDocument();
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+      const revoke = timeout.mock.calls.find(([, ms]) => ms === 30_000);
+      (revoke![0] as () => void)();
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:ride');
+      timeout.mockRestore();
       click.mockRestore();
       Object.assign(URL, original);
+    });
+
+    it('says so when the calendar file cannot be made (CR-242)', async () => {
+      const original = URL.createObjectURL;
+      URL.createObjectURL = vi.fn(() => {
+        throw new Error('blocked');
+      });
+      getRideDetailMock.mockResolvedValue(baseDetailResponse());
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Добавить в календарь' }),
+      );
+
+      expect(
+        await screen.findByText(/Не удалось скачать файл календаря/),
+      ).toBeInTheDocument();
+      URL.createObjectURL = original;
+    });
+
+    describe('«Поделиться» (CR-242)', () => {
+      const originalShare = Object.getOwnPropertyDescriptor(navigator, 'share');
+      const originalClipboard = Object.getOwnPropertyDescriptor(
+        navigator,
+        'clipboard',
+      );
+
+      function stubNavigator(
+        share: (() => Promise<void>) | undefined,
+        writeText: (() => Promise<void>) | undefined,
+      ) {
+        Object.defineProperty(navigator, 'share', {
+          configurable: true,
+          value: share,
+        });
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: writeText ? { writeText } : undefined,
+        });
+      }
+
+      afterEach(() => {
+        for (const [key, descriptor] of [
+          ['share', originalShare],
+          ['clipboard', originalClipboard],
+        ] as const) {
+          if (descriptor) Object.defineProperty(navigator, key, descriptor);
+          else delete (navigator as unknown as Record<string, unknown>)[key];
+        }
+        delete (document as Partial<Document>).execCommand;
+      });
+
+      async function clickShare() {
+        getRideDetailMock.mockResolvedValue(baseDetailResponse());
+        render(
+          <ToastProvider>
+            <RideDetailView rideId="ride-1" />
+          </ToastProvider>,
+        );
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Поделиться' }),
+        );
+      }
+
+      it('copies the link when the share sheet fails for another reason', async () => {
+        const writeText = vi.fn(() => Promise.resolve());
+        stubNavigator(
+          () => Promise.reject(new DOMException('no', 'NotAllowedError')),
+          writeText,
+        );
+
+        await clickShare();
+
+        expect(
+          await screen.findByText('Ссылка на заезд скопирована.'),
+        ).toBeInTheDocument();
+        expect(writeText).toHaveBeenCalledWith(window.location.href);
+      });
+
+      it('says nothing when the viewer closes the share sheet', async () => {
+        const writeText = vi.fn(() => Promise.resolve());
+        stubNavigator(
+          () => Promise.reject(new DOMException('closed', 'AbortError')),
+          writeText,
+        );
+
+        await clickShare();
+
+        await waitFor(() =>
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+        );
+        expect(writeText).not.toHaveBeenCalled();
+        expect(screen.queryByText('Ссылка на заезд скопирована.')).toBeNull();
+        expect(screen.queryByText('Не удалось скопировать ссылку.')).toBeNull();
+      });
+
+      it('falls back to the legacy copy without the async clipboard', async () => {
+        stubNavigator(undefined, undefined);
+        const execCommand = vi.fn(() => true);
+        document.execCommand = execCommand;
+
+        await clickShare();
+
+        expect(
+          await screen.findByText('Ссылка на заезд скопирована.'),
+        ).toBeInTheDocument();
+        expect(execCommand).toHaveBeenCalledWith('copy');
+      });
+
+      it('shows the link for a manual copy when nothing can copy it', async () => {
+        stubNavigator(undefined, () => Promise.reject(new Error('denied')));
+        document.execCommand = vi.fn(() => false);
+
+        await clickShare();
+
+        const dialog = await screen.findByRole('dialog', {
+          name: 'Ссылка на заезд',
+        });
+        expect(within(dialog).getByLabelText('Ссылка')).toHaveValue(
+          window.location.href,
+        );
+        expect(screen.queryByText('Не удалось скопировать ссылку.')).toBeNull();
+
+        fireEvent.click(
+          within(dialog).getByRole('button', { name: 'Скопировать' }),
+        );
+        expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+          'Не удалось скопировать ссылку.',
+        );
+
+        fireEvent.click(
+          within(dialog).getByRole('button', { name: 'Закрыть' }),
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
     });
 
     it('offers no calendar export once the ride is cancelled', async () => {

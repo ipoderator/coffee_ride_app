@@ -697,9 +697,9 @@ its own" was true before this ticket) is now returned per item — it is not a u
 and the only thing it unlocks is the access-gated "Rider profile" endpoints just below,
 themselves gated by the profile owner's own `profileVisibility` setting.
 
-**CR-125**: `403 riders_hidden` for every caller (including the ride's own organizer —
-use `GET .../participants` instead) when the organizer has set
-`Ride.participantsVisible` to `false`. `GET /v1/rides/:id`'s `registrationsCount` is
+**CR-125**: `403 riders_hidden` for every caller when the organizer has set
+`Ride.participantsVisible` to `false` — **CR-238**: except the ride's own organizer, who
+still gets the list (the setting hides it from the public only). `GET /v1/rides/:id`'s `registrationsCount` is
 unaffected — only this named list is gated. Checked after the existing 401/404 rules
 above, so a non-existent/someone-else's-draft ride still 404s first.
 

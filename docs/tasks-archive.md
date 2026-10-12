@@ -1525,3 +1525,15 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `/v1/admin/*`, block/hide/cancel enforcement, `/admin` web section (Обзор,
       Пользователи, Заезды, Отзывы, Журнал), organizer sees why a ride is hidden —
       done 2026-10-10 on local branch `feat/admin-panel` (not merged/deployed)
+- [x] CR-232 item 1 — `admin:grant` refuses an account with an unconfirmed email
+      (`email_not_verified`, exit 1) — done 2026-10-10 on `feat/admin-panel`
+- [x] CR-232 item 2 — admin reason dialogs name the record (email / ride title /
+      review author, rating, excerpt) — done 2026-10-10 on `feat/admin-panel`
+- [x] CR-232 item 5 — admin list search/filters in the URL (back/forward, card
+      round trip, junk-safe) — done 2026-10-10 on `feat/admin-panel`
+- [x] CR-232 item 4 — mobile `CabinetSectionTabs` scrolls the active tab into view
+      (load + navigation, reduced-motion aware) — done 2026-10-10 on `feat/admin-panel`
+- [x] CR-232 item 3 — per-action reason hint (organizer sees a ride's hide reason;
+      the rest are log-only) — done 2026-10-10 on `feat/admin-panel`
+- [x] CR-232 item 6 — overview counters link to list filters + «Обновить»; log
+      filters by target type/action (URL), deleted target shows its id — done 2026-10-10

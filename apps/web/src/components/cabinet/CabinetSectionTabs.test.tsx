@@ -87,9 +87,10 @@ describe('CabinetSectionTabs keeps the active tab visible (CR-232)', () => {
     expect(
       screen.getByRole('link', { name: 'Журнал' }).getAttribute('aria-current'),
     ).toBe('page');
-    // Journal spans 520–640: the row moves by 640 − 320.
+    // Journal spans 520–640: the row moves it clear of the 40px edge fade
+    // (CR-241), by 640 − (320 − 40).
     expect(scrollTo).toHaveBeenCalledTimes(1);
-    expect(scrollTo).toHaveBeenCalledWith({ left: 320, behavior: 'auto' });
+    expect(scrollTo).toHaveBeenCalledWith({ left: 360, behavior: 'auto' });
     expect(pageScroll).not.toHaveBeenCalled();
   });
 
@@ -106,7 +107,7 @@ describe('CabinetSectionTabs keeps the active tab visible (CR-232)', () => {
     pathname = '/admin/reviews';
     rerender(<CabinetSectionTabs items={ITEMS} />);
     expect(scrollTo).toHaveBeenLastCalledWith({
-      left: 190,
+      left: 230,
       behavior: 'smooth',
     });
 
@@ -123,6 +124,6 @@ describe('CabinetSectionTabs keeps the active tab visible (CR-232)', () => {
     const { rerender } = render(<CabinetSectionTabs items={ITEMS} />);
     pathname = '/admin/actions';
     rerender(<CabinetSectionTabs items={ITEMS} />);
-    expect(scrollTo).toHaveBeenLastCalledWith({ left: 320, behavior: 'auto' });
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 360, behavior: 'auto' });
   });
 });

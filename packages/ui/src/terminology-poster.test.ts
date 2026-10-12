@@ -46,7 +46,15 @@ describe('RIDE_TICKET_TERMS (CR-151)', () => {
     expect(RIDE_TICKET_TERMS.countdown('5 дн 14 ч')).toBe(
       'До старта 5 дн 14 ч',
     );
-    expect(RIDE_TICKET_TERMS.barNumber(14)).toBe('№ 14');
+    // CR-239: the count, never a bare «№ N»; «из N» takes the genitive.
+    expect(RIDE_TICKET_TERMS.barCount(14, 20)).toBe('14 из 20 участников');
+    expect(RIDE_TICKET_TERMS.barCount(0, 1)).toBe('0 из 1 участника');
+    expect(RIDE_TICKET_TERMS.barCount(3, 21)).toBe('3 из 21 участника');
+    expect(RIDE_TICKET_TERMS.barCount(3, 22)).toBe('3 из 22 участников');
+    expect(RIDE_TICKET_TERMS.barCount(1, null)).toBe('1 участник');
+    expect(RIDE_TICKET_TERMS.barCount(2, null)).toBe('2 участника');
+    expect(RIDE_TICKET_TERMS.barCount(5, null)).toBe('5 участников');
+    expect(RIDE_TICKET_TERMS.barCount(11, null)).toBe('11 участников');
     expect(RIDE_TICKET_TERMS.barFull(3)).toBe('Мест нет · очередь 3');
     expect(RIDE_TICKET_TERMS.barRegistered(7)).toBe(
       'Вы зарегистрированы · № 7',

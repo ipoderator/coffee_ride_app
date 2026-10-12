@@ -84,10 +84,19 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const refreshWorkspace = workspace?.refresh;
 
-  /** The list, then the workspace's chip/overview row. */
+  /** The list and the workspace's «N из 6» chip/overview row together.
+   * CR-243 (production QA): the workspace re-read no longer waits on the
+   * list's — a failed list re-read used to skip it — and the conflict paths
+   * below resync both, not only the list (the chip kept «3 из 6» over a list
+   * of two after deleting a group someone else had already removed). */
   async function refreshAll() {
-    await refresh();
     void refreshWorkspace?.();
+    await refresh();
+  }
+
+  /** A quiet resync after a conflict — its failure keeps the screen as is. */
+  function resync() {
+    void refreshAll().catch(() => undefined);
   }
 
   // Keyboard users keep their place: after a move, focus follows the group to
@@ -130,17 +139,17 @@ export function GroupsEditor({ rideId }: { rideId: string }) {
         return;
       case 'group_limit_reached':
         show(T.groupLimitReached);
-        void refresh().catch(() => undefined);
+        resync();
         return;
       case 'group_has_registrations':
         show(T.groupHasRegistrations);
-        void refresh().catch(() => undefined);
+        resync();
         return;
       case 'group_not_found':
         // Someone else removed it meanwhile — resync the list.
         show(T.genericError);
         setMode({ kind: 'idle' });
-        void refresh().catch(() => undefined);
+        resync();
         return;
       default:
         show(T.genericError);

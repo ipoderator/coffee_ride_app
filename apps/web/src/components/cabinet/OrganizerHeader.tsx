@@ -47,7 +47,9 @@ export function OrganizerHeader() {
           href="/"
           className="mr-auto inline-flex min-h-11 items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
-          <Wordmark />
+          {/* CR-241: 22px below `sm`, like `AppHeader`'s phone wordmark —
+              full size, the bar was 9px wider than a 320px screen. */}
+          <Wordmark className="max-sm:text-[1.375rem]" />
         </Link>
 
         <Link
@@ -82,18 +84,21 @@ export function OrganizerHeader() {
                 />
               </span>
             }
-          >
-            <div role="none" className="px-3 pt-2 pb-2.5">
-              {name && (
-                <p className="truncate text-body-sm font-semibold text-text">
-                  {name}
+            // CR-243: whose account this is — outside `role="menu"`, which
+            // owned this text as a non-item before.
+            header={
+              <div className="px-3 pt-2 pb-2.5">
+                {name && (
+                  <p className="truncate text-body-sm font-semibold text-text">
+                    {name}
+                  </p>
+                )}
+                <p className="truncate text-xs text-text-secondary">
+                  {user.email}
                 </p>
-              )}
-              <p className="truncate text-xs text-text-secondary">
-                {user.email}
-              </p>
-            </div>
-            <div role="separator" className="my-0.5 h-px bg-border" />
+              </div>
+            }
+          >
             <Link href="/" role="menuitem" className={NAV_MENU_ITEM_CLASSNAME}>
               <House className="size-4" aria-hidden="true" />
               {ORGANIZER_HEADER_TERMS.allRidesLink}

@@ -115,6 +115,18 @@ describe('RescheduleRideCard (CR-190)', () => {
     );
   });
 
+  // CR-243 (production QA): opening the form moves focus to its heading —
+  // that focus must be visible, not suppressed (the global `:focus-visible`
+  // ring applies after a keyboard open, none after a click).
+  it('moves focus to the form heading without suppressing its focus ring', () => {
+    renderCard();
+    openForm();
+
+    const heading = screen.getByRole('heading', { name: 'Перенос заезда' });
+    expect(heading).toHaveFocus();
+    expect(heading.className).not.toMatch(/outline-none/);
+  });
+
   it('requires a reason and a start different from the current one', () => {
     renderCard();
     openForm();

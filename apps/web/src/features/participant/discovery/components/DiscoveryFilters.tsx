@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import {
   BICYCLE_TYPES,
   DIFFICULTY_LEVELS,
@@ -18,6 +18,7 @@ import {
   type DiscoveryFilters as Filters,
   type PaceBucket,
 } from '../lib/discovery-filters';
+import { SCROLL_ROW_CLASSNAME, useScrollRow } from '@/lib/site/scroll-row';
 
 // CR-153: 44px pills (`docs/design.md` §5); a chosen chip is outlined in
 // `primary` on its tint — plus `aria-pressed`/the select's own value, never
@@ -129,16 +130,21 @@ export function DiscoveryFilters({
   className?: string;
 }) {
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
+  const rowRef = useRef<HTMLDivElement>(null);
+  useScrollRow(rowRef);
 
   return (
     <div
+      ref={rowRef}
       role="group"
       aria-label={RIDE_DISCOVERY_TERMS.filtersLabel}
       className={cn(
-        '-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0',
-        // The row scrolls on a phone: fade its right edge so the cut-off chip
-        // reads as "more this way", not as a clipped layout.
-        '[mask-image:linear-gradient(90deg,black_85%,transparent)] md:[mask-image:none]',
+        // The row scrolls on a phone. CR-241 (production QA): it fades only
+        // an edge that hides chips — the old fixed right fade kept the last
+        // chip, and a focused one there, washed out — and a focused chip is
+        // scrolled clear of the fade so its ring shows.
+        SCROLL_ROW_CLASSNAME,
+        '-mx-4 flex gap-2 px-4 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:[mask-image:none]',
         className,
       )}
     >

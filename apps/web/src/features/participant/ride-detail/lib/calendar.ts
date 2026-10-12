@@ -85,17 +85,33 @@ export function buildIcs(event: CalendarEvent, now = new Date()): string {
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
-/** Hands the file to the browser as a download. */
+/**
+ * Hands the file to the browser as a download. Throws when it cannot, so the
+ * caller can say so (CR-242 — it used to fail, or succeed, silently).
+ *
+ * CR-242: the object URL is revoked a moment later, not right after
+ * `click()` — Firefox and Safari start the download asynchronously and could
+ * lose it. A browser without the `download` attribute (older in-app ones)
+ * gets the file as a `data:` URL, which it opens or imports itself.
+ */
 export function downloadIcs(event: CalendarEvent, filename: string): void {
-  const blob = new Blob([buildIcs(event)], {
-    type: 'text/calendar;charset=utf-8',
-  });
-  const href = URL.createObjectURL(blob);
+  const ics = buildIcs(event);
   const link = document.createElement('a');
+  if (!('download' in link)) {
+    window.location.assign(
+      `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`,
+    );
+    return;
+  }
+  const href = URL.createObjectURL(
+    new Blob([ics], { type: 'text/calendar;charset=utf-8' }),
+  );
   link.href = href;
   link.download = filename;
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(href);
+  window.setTimeout(() => URL.revokeObjectURL(href), REVOKE_DELAY_MS);
 }
+
+const REVOKE_DELAY_MS = 30_000;

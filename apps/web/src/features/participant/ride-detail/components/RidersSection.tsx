@@ -173,6 +173,9 @@ function RiderAvatars({
  * sign-in prompt — the count on the page above this section is unaffected.
  *
  * CR-141: the sign-in link returns to this ride (`/login?next=`).
+ *
+ * CR-238: the ride's own organizer still gets the hidden list (the endpoint lets
+ * them through), with a note that nobody else sees it.
  */
 export function RidersSection({
   rideId,
@@ -180,6 +183,7 @@ export function RidersSection({
   participantLimit = null,
   groups,
   version,
+  hiddenFromOthers = false,
 }: {
   rideId: string;
   registrationsCount: number;
@@ -188,6 +192,9 @@ export function RidersSection({
   groups: RideGroupSummary[];
   /** Bumped by the page after the viewer's own registration changes. */
   version: number;
+  /** CR-238: `!Ride.participantsVisible` — a list that still loads is then the
+   * organizer's own view. */
+  hiddenFromOthers?: boolean;
 }) {
   const session = useSession();
   const sessionStatus = session.status;
@@ -297,6 +304,12 @@ export function RidersSection({
           >
             {RIDE_DETAIL_RIDERS_TERMS.signInPrompt}
           </Link>
+        </p>
+      )}
+
+      {status === 'ready' && hiddenFromOthers && (
+        <p className="text-body-sm text-text-secondary">
+          {RIDE_DETAIL_RIDERS_TERMS.hiddenForOthers}
         </p>
       )}
 

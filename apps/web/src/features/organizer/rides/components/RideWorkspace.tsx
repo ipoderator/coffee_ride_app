@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -121,6 +122,7 @@ export function RideWorkspace({
   const [busy, setBusy] = useState<Busy>(null);
   const [isCheckingFinish, setIsCheckingFinish] = useState(false);
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,11 +150,17 @@ export function RideWorkspace({
     };
   }, [rideId, attempt]);
 
-  /** Quiet re-read; a failure keeps what is on screen. */
+  const refreshSeq = useRef(0);
+  /** Quiet re-read; a failure keeps what is on screen. CR-243: only the
+   * latest one applies — two quick group changes could otherwise land the
+   * older reply last and leave a stale «N из 6». */
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current;
     try {
       const result = await readWorkspace(rideId);
-      if (result !== 'not-found') setData(result);
+      if (result !== 'not-found' && seq === refreshSeq.current) {
+        setData(result);
+      }
     } catch {
       // The last known state stays; the section that asked shows its own result.
     }
@@ -231,6 +239,16 @@ export function RideWorkspace({
       Boolean(unresolvedCount),
     );
     setFinishConfirmOpen(false);
+  }
+
+  /** CR-237: closing is one-way (`docs/product.md`), so it asks first. */
+  async function handleClose() {
+    await transition(
+      'close',
+      closeRegistration,
+      RIDE_EDIT_TERMS.closeRegistrationSuccess,
+    );
+    setCloseConfirmOpen(false);
   }
 
   const isFull = variant === 'full';
@@ -313,13 +331,7 @@ export function RideWorkspace({
             RIDE_EDIT_TERMS.openRegistrationSuccess,
           )
         }
-        onClose={() =>
-          void transition(
-            'close',
-            closeRegistration,
-            RIDE_EDIT_TERMS.closeRegistrationSuccess,
-          )
-        }
+        onClose={() => setCloseConfirmOpen(true)}
         onStart={() => void handleStart()}
         onFinish={() => void requestFinish()}
       />
@@ -429,6 +441,20 @@ export function RideWorkspace({
           {children}
         </div>
       </div>
+
+      {ride.status === 'registration_open' && (
+        <ConfirmDialog
+          open={closeConfirmOpen}
+          onClose={() => setCloseConfirmOpen(false)}
+          onConfirm={() => void handleClose()}
+          title={RIDE_EDIT_TERMS.closeRegistrationConfirmTitle}
+          description={RIDE_EDIT_TERMS.closeRegistrationConfirmDescription}
+          confirmLabel={RIDE_EDIT_TERMS.closeRegistration}
+          cancelLabel={RIDE_EDIT_TERMS.closeRegistrationKeep}
+          isConfirming={busy === 'close'}
+          confirmVariant="primary"
+        />
+      )}
 
       {ride.status === 'started' && (
         <ConfirmDialog

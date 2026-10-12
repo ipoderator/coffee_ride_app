@@ -197,6 +197,16 @@ export function CreateRideForm({
     void loadDraft(initialRideId);
   }, [initialRideId, loadDraft]);
 
+  /** CR-236: an error is about the value it was shown for — editing that
+   * field clears it; the next save checks the form again. */
+  function clearFieldError(field: keyof FieldErrors) {
+    setFieldErrors((current) =>
+      current[field] === undefined
+        ? current
+        : { ...current, [field]: undefined },
+    );
+  }
+
   function handleGpxChange(file: File | null) {
     setGpxError(undefined);
     if (file && !file.name.toLowerCase().endsWith('.gpx')) {
@@ -392,7 +402,10 @@ export function CreateRideForm({
             type="text"
             value={title}
             maxLength={140}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              clearFieldError('title');
+            }}
             disabled={isPending}
             className={CONTROL_CLASS}
           />
@@ -406,7 +419,10 @@ export function CreateRideForm({
           >
             <DatePicker
               value={startDate}
-              onChange={setStartDate}
+              onChange={(value) => {
+                setStartDate(value);
+                clearFieldError('startDate');
+              }}
               min={todayLocal}
               disabled={isPending}
             />
@@ -429,7 +445,10 @@ export function CreateRideForm({
               <select
                 aria-label={RIDE_CREATE_TERMS.startTimezoneLabel}
                 value={startTimezone}
-                onChange={(event) => setStartTimezone(event.target.value)}
+                onChange={(event) => {
+                  setStartTimezone(event.target.value);
+                  clearFieldError('startTimezone');
+                }}
                 disabled={isPending}
                 className="-my-3 min-h-11 max-w-full cursor-pointer [field-sizing:content] rounded-lg bg-transparent text-body-sm text-text-muted hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
@@ -444,7 +463,10 @@ export function CreateRideForm({
               ref={startTimeRef}
               id="ride-start-time"
               value={startTime}
-              onValueChange={setStartTime}
+              onValueChange={(value) => {
+                setStartTime(value);
+                clearFieldError('startTime');
+              }}
               disabled={isPending}
               aria-invalid={Boolean(fieldErrors.startTime)}
               aria-describedby={
@@ -470,9 +492,10 @@ export function CreateRideForm({
           >
             <select
               value={bicycleType}
-              onChange={(event) =>
-                setBicycleType(event.target.value as BicycleType)
-              }
+              onChange={(event) => {
+                setBicycleType(event.target.value as BicycleType);
+                clearFieldError('bicycleType');
+              }}
               disabled={isPending}
               className={selectClassName(Boolean(fieldErrors.bicycleType))}
             >
@@ -491,7 +514,10 @@ export function CreateRideForm({
           >
             <select
               value={difficulty}
-              onChange={(event) => setDifficulty(event.target.value)}
+              onChange={(event) => {
+                setDifficulty(event.target.value);
+                clearFieldError('difficulty');
+              }}
               disabled={isPending}
               className={selectClassName(Boolean(fieldErrors.difficulty))}
             >
@@ -515,7 +541,10 @@ export function CreateRideForm({
             value={description}
             rows={4}
             maxLength={2000}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={(event) => {
+              setDescription(event.target.value);
+              clearFieldError('description');
+            }}
             disabled={isPending}
             className="rounded-xl bg-bg py-3"
           />
@@ -526,7 +555,10 @@ export function CreateRideForm({
         <RideContactFields
           idPrefix="ride-create"
           value={contact}
-          onChange={setContact}
+          onChange={(next) => {
+            setContact(next);
+            clearFieldError('contact');
+          }}
           disabled={isPending}
           error={fieldErrors.contact}
         />

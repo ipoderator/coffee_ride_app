@@ -397,7 +397,16 @@ export function create2GisMapRenderer(
       } | null = null;
       let lastFit: { points: LatLng[]; options?: MapFitOptions } | null = null;
 
-      function applyFit(points: LatLng[], fitOptions: MapFitOptions = {}) {
+      function applyFit(requested: LatLng[], fitOptions: MapFitOptions = {}) {
+        // CR-243 (production QA: `fitBounds` with invalid bounds): a NaN or
+        // out-of-range coordinate would turn the whole box into NaN, and a
+        // hidden container (0×0 — a list/map switch, a collapsed panel)
+        // leaves MapGL a negative area once the padding is taken off. Drop
+        // the bad points; wait for a size (the resize observer re-fits).
+        const points = requested.filter(isValidLatLng);
+        if (points.length === 0) return;
+        const { clientWidth: width, clientHeight: height } = options.container;
+        if (width === 0 || height === 0) return;
         const maxZoom = fitOptions.maxZoom ?? DEFAULT_FIT_MAX_ZOOM;
         // CR-171: an eased fit when asked for, a jump for `0`; omitted, the
         // SDK call stays exactly as before.
@@ -430,7 +439,11 @@ export function create2GisMapRenderer(
           }
           return;
         }
-        const padding = fitOptions.padding ?? DEFAULT_FIT_PADDING;
+        const padding = clampPadding(
+          fitOptions.padding ?? DEFAULT_FIT_PADDING,
+          width,
+          height,
+        );
         map.fitBounds(
           { northEast: [maxLng, maxLat], southWest: [minLng, minLat] },
           {
@@ -690,4 +703,32 @@ export function create2GisMapRenderer(
       };
     },
   };
+}
+
+function isValidLatLng(point: LatLng): boolean {
+  return (
+    Number.isFinite(point.lat) &&
+    Number.isFinite(point.lng) &&
+    Math.abs(point.lat) <= 90 &&
+    Math.abs(point.lng) <= 180
+  );
+}
+
+/** Smallest box, in px, a fit must leave inside the padding. */
+const MIN_FIT_AREA_PX = 32;
+
+/**
+ * CR-243: keeps the padding from eating the whole map — on a small container
+ * (a phone's cover map, a panel mid-resize) MapGL got bounds to fit into a
+ * zero or negative area. `undefined` sizes (no layout, e.g. tests) leave the
+ * padding as asked.
+ */
+function clampPadding(
+  padding: number,
+  width: number | undefined,
+  height: number | undefined,
+): number {
+  if (typeof width !== 'number' || typeof height !== 'number') return padding;
+  const room = Math.floor((Math.min(width, height) - MIN_FIT_AREA_PX) / 2);
+  return Math.max(0, Math.min(padding, room));
 }

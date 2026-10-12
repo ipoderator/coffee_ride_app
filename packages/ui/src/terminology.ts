@@ -833,6 +833,11 @@ export const RIDE_EDIT_TERMS = {
   closeRegistration: 'Закрыть регистрацию',
   closeRegistrationPending: 'Закрытие регистрации…',
   closeRegistrationSuccess: 'Регистрация закрыта.',
+  // CR-237: the lifecycle is one-way (`docs/product.md`) — no reopening.
+  closeRegistrationConfirmTitle: 'Закрыть регистрацию?',
+  closeRegistrationConfirmDescription:
+    'Это действие необратимо: открыть регистрацию снова будет нельзя. Новые участники не смогут записаться или встать в лист ожидания, записавшиеся останутся в заезде.',
+  closeRegistrationKeep: 'Не закрывать',
   // CR-021 ("Cancel ride").
   cancel: 'Отменить заезд',
   cancelPending: 'Отмена…',
@@ -1788,6 +1793,9 @@ export const RIDE_DETAIL_RIDERS_TERMS = {
   signInPrompt: 'Войдите, чтобы увидеть список',
   // CR-125: the organizer turned off `Ride.participantsVisible`.
   hiddenByOrganizer: 'Организатор скрыл список участников этого заезда.',
+  // CR-238: the organizer still sees their own hidden list, told who doesn't.
+  hiddenForOthers:
+    'Список скрыт: его видите только вы, участники и гости видят лишь число записавшихся.',
   showMore: 'Показать ещё',
   loadError: 'Не удалось загрузить список участников. Попробуйте ещё раз.',
   emptyTitle: 'Пока никто не записался',
@@ -2055,6 +2063,13 @@ export const RIDE_POSTER_TERMS = {
   share: 'Поделиться',
   shareCopied: 'Ссылка на заезд скопирована.',
   shareFailed: 'Не удалось скопировать ссылку.',
+  // CR-242: when neither the share sheet nor the clipboard is available.
+  shareManualTitle: 'Ссылка на заезд',
+  shareManualDescription:
+    'Браузер не дал скопировать ссылку автоматически. Выделите её и скопируйте вручную.',
+  shareManualFieldLabel: 'Ссылка',
+  shareManualCopy: 'Скопировать',
+  shareManualClose: 'Закрыть',
   timelineTitle: 'Маршрут по точкам',
   kmUnit: 'км',
   startAt: (time: string) => `Старт · ${time}`,
@@ -2115,7 +2130,12 @@ export const RIDE_TICKET_TERMS = {
   cancelledTitle: 'Заезд отменён',
   cancelledHint: 'Регистрации аннулированы.',
   cancelledBanner: 'Организатор отменил этот заезд.',
-  barNumber: (place: number) => `№ ${place}`,
+  // CR-239: the count, as on the ticket — a bare «№ N» (the place the viewer
+  // would get) read as their old number right after they cancelled.
+  barCount: (count: number, limit: number | null) =>
+    limit === null
+      ? `${count} ${pluralRu(count, 'участник', 'участника', 'участников')}`
+      : `${count} из ${limit} ${pluralRu(limit, 'участника', 'участников', 'участников')}`,
   barFull: (queue: number) => `Мест нет · очередь ${queue}`,
   barRegistered: (place: number | null) =>
     place === null ? 'Вы зарегистрированы' : `Вы зарегистрированы · № ${place}`,
@@ -2147,6 +2167,11 @@ export const RIDE_PAGE_TERMS = {
   seatsFull: (queue: number) =>
     queue === 0 ? 'Мест нет' : `Мест нет · ${queue} в очереди`,
   addToCalendar: 'Добавить в календарь',
+  // CR-242: what the download did — it used to happen silently.
+  calendarDownloaded:
+    'Файл календаря скачан — откройте его, чтобы добавить заезд.',
+  calendarFailed:
+    'Не удалось скачать файл календаря. Попробуйте ещё раз или откройте страницу в другом браузере.',
   elevationTitle: 'Профиль высоты',
   elevationRange: (max: string, min: string) => `макс. ${max} · мин. ${min}`,
   requirementsTitle: 'Требования',
