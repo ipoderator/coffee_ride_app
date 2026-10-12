@@ -130,3 +130,9 @@ Follow-up: owner — set the Strava app's callback domain to `coffeeride.site`, 
 Summary: Owner report — in `AppHeader` the centred 24px wordmark's baseline sat 3.8px below the 16px nav labels and account menu (45.4 vs 41.6px). The `Wordmark` is lifted `md:-translate-y-[0.16em]`, so logo, labels and the account menu share one line; mobile (logo + menu button only) is unchanged.
 Files: `apps/web/src/components/site/AppHeader.tsx`; new `src/stories/AppHeader.stories.tsx` (signed-in light/dark, guest) asserting every label's baseline equals the wordmark's (±0.75px; fails at 3.81px without the fix).
 Validation: stories 3/3, site unit 21/21, web typecheck/lint.
+
+## 2026-10-12 — CR-234 deployed; CI flake fixed; branch flow
+
+Deploy: `542f27c` on coffeeride.site via `deploy/deploy.sh` after green CI on `main` (ci incl. e2e + visual baselines, docker-smoke): migration `0027` applied (28 total, `registrations.strava_*` present), `/health` db/redis/s3 ok, home 200. Strava stays off on prod (`GET /v1/strava/status` → `available:false`) until `STRAVA_CLIENT_ID/SECRET` are in the VPS `.env` and the Strava app's callback domain is `coffeeride.site`.
+CI: the first `main` run (`f60bab5`) failed on a race in `route-builder.test.tsx` (asserted the polyline before the re-render that draws it); `542f27c` waits for the line.
+Process: owner asked for branch → PR → `main` → prod; `rules/git.md` "Branch flow", `commit-push` step 8, GitHub branch protection on `main` (PR + `ci`/`docker-smoke` required, admins included) — PR #41.
