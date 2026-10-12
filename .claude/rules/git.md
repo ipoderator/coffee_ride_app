@@ -2,6 +2,16 @@
 
 Keep commits focused.
 
+## Branch flow (owner, 2026-10-12)
+
+Never commit to `main` directly. Every task:
+
+1. starts on its own branch off fresh `main` — `feat/…`, `fix/…`, `chore/…`, `docs/…`,
+   `test/…` (e.g. `feat/strava-sync`, `fix/s3-init-idempotent`);
+2. is pushed and opened as a PR into `main` (`gh pr create`); CI runs on the PR;
+3. is merged (squash) only after every check on the PR is green;
+4. reaches production only from `main`, after the merge — never deploy a branch.
+
 Before commit:
 
 - inspect `git status`;
