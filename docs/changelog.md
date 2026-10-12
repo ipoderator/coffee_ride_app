@@ -49,6 +49,10 @@ Follow-up: refresh mobile visual baselines from the CI artifact.
 Deploy: `ef49fcd` (PR #43, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on `main` (ci incl. e2e + visual baselines, docker-smoke); no migrations. `/health` db/redis/s3 ok; `/`, `/organizer`, `/me/rides` 200.
 CI: the PR's first run failed only on the mobile `organizer-dashboard` screenshot (3 % of pixels): the intended CR-241 header/tabs change plus CI's subpixel text antialiasing, which the CR-188 baseline lacked; refreshed from the run's actual (layout below the tabs unchanged).
 
+## 2026-10-12 — CR-234 Strava switched on in production
+
+Ops: `STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` appended to the VPS `.env` from the local one over stdin (values never printed; backup `.env.bak-20261012-strava`, mode 600 kept), `deploy/deploy.sh` recreated `api`/`web`; `GET /v1/strava/status` → `available:true`, `/health` ok. Still owner-side: the Strava app's callback domain `coffeeride.site` and Strava's app review (1 athlete until then).
+
 ## Archiving (keep this file cheap to read)
 
 When this file exceeds ~15 entries, move all but the most recent ~8 into

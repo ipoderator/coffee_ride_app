@@ -65,9 +65,10 @@ CR-235..CR-243 — deployed 2026-10-12 (`ef49fcd`). CR-236's profile-link item n
 steps/device; a «reopen registration» transition (CR-237) would be a lifecycle change
 — owner call. `EditRideForm` still keeps field errors until the next save (owner call).
 
-CR-234 — deployed; to turn it on: set the Strava app's Authorization Callback Domain
-to `coffeeride.site`, put `STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` in the VPS `.env`,
-restart `api`, and ask Strava to review the app (a new app connects 1 athlete only).
+CR-234 — deployed and switched on 2026-10-12 (`STRAVA_CLIENT_ID`/`SECRET` in the VPS
+`.env`, `GET /v1/strava/status` → `available:true`). Owner-side: the Strava app's
+Authorization Callback Domain must be `coffeeride.site` (localhost stays allowed by
+Strava), and Strava must review the app (a new app connects 1 athlete only).
 
 CR-228..CR-232 — deployed (see "Current task"); open review findings: "Next" 0.
 Storybook: `AdminOverview` (3 stories) and `CabinetSectionTabs` «Admin Last Tab»
