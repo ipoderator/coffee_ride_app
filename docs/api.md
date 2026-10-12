@@ -624,6 +624,30 @@ claimed a finish»: bodyless, same gates as above; sets `finished` on every acti
 registration of the ride that has a claim and no decision yet (a rider already marked
 `no_show` is left alone). Response `{ updated }`; `0` is valid, repeats are no-ops.
 
+### Strava finish verification (CR-234, ADR-033)
+
+A participant backs their finish claim with one of their own Strava rides. Additive
+fields: `Registration.stravaVerifiedAt` (ISO | null) and `stravaActivityId` (string |
+null) — only ever in the caller's own registration; `RideParticipantSummary.stravaVerified`
+(boolean) — the organizer sees the fact only. Module `strava`.
+
+GET `/v1/strava/status` — **implemented**. Public. `{ available: boolean }` — whether the
+server has a Strava application (`STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET`).
+
+POST `/v1/rides/:id/strava-sync` — **implemented**. Session required (`401`), bodyless,
+per-IP 10/min. Same gates as the claim plus «not decided yet»: `404
+registration_not_found`, `409 ride_not_in_progress`, `409 attendance_already_decided`,
+`503 strava_unavailable` (not configured). `200 { authorizeUrl }` — Strava's consent page
+(`scope=activity:read`, signed 10-minute `state`).
+
+GET `/v1/strava/callback?code&state&scope&error` — **implemented**. Strava's redirect
+target (`WEB_ORIGIN/api/v1/strava/callback`), per-IP 10/min. Always `303`: to
+`/rides/:id?strava=<outcome>`, or `/me/rides?strava=error` when the `state` is forged,
+expired or belongs to another session. Outcomes: `verified` (claim + mark written),
+`no_activity`, `no_match`, `denied` (cancelled or activity access unticked),
+`unavailable` (Strava down/not configured), `already_decided`, `error`. The Strava grant
+is revoked before the redirect; no token is stored.
+
 **Closing summary (CR-182, additive)**: `GET /v1/rides/:id` carries
 `attendanceSummary: { finished, dnf, noShow, unresolved } | null` — counts of the ride's
 active registrations by final status, `null` before the start, safe for any viewer.

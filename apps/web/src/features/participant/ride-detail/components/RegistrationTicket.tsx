@@ -42,6 +42,11 @@ import {
   withdrawRideFinishClaim,
 } from '../api';
 import { seatsLeftOf, type TicketState } from '../lib/ticket-state';
+import {
+  StravaSyncButton,
+  StravaVerifiedNote,
+  useStravaOutcomeToast,
+} from './StravaSync';
 
 /**
  * API error `code` → the message this screen shows. Group codes (CR-117) get
@@ -367,20 +372,26 @@ function GroupPicker({
 /**
  * CR-181: the registered viewer's finish check-in once the ride is under way or
  * over. A claim is only a claim — «Ждём подтверждения» until the organizer
- * decides, and it can be withdrawn until then.
+ * decides, and it can be withdrawn until then. CR-234: while undecided, the claim
+ * can also be backed by the viewer's Strava ride («Синхронизировать со Strava»).
  */
 function FinishCheckIn({
+  rideId,
   registration,
   isPending,
   onClaim,
   onWithdraw,
 }: {
+  rideId: string;
   registration: Registration;
   isPending: boolean;
   onClaim: () => void;
   onWithdraw: () => void;
 }) {
-  const { attendance, finishClaimedAt } = registration;
+  const { attendance, finishClaimedAt, stravaActivityId } = registration;
+  const stravaNote = stravaActivityId ? (
+    <StravaVerifiedNote activityId={stravaActivityId} />
+  ) : null;
   if (attendance === 'finished') {
     return (
       <Cell label={FINISH_CHECKIN_TERMS.sectionTitle} testId="finish-checkin">
@@ -388,6 +399,7 @@ function FinishCheckIn({
           {FINISH_CHECKIN_TERMS.confirmedTitle}
         </b>
         <Hint>{FINISH_CHECKIN_TERMS.confirmedHint}</Hint>
+        {stravaNote}
       </Cell>
     );
   }
@@ -418,6 +430,9 @@ function FinishCheckIn({
           {FINISH_CHECKIN_TERMS.claimedTitle}
         </b>
         <Hint>{FINISH_CHECKIN_TERMS.claimedHint}</Hint>
+        {stravaNote ?? (
+          <StravaSyncButton rideId={rideId} disabled={isPending} />
+        )}
         <Button
           variant="secondary"
           className="mt-2 min-h-11 self-start"
@@ -441,6 +456,7 @@ function FinishCheckIn({
         {FINISH_CHECKIN_TERMS.claimButton}
       </Button>
       <Hint>{FINISH_CHECKIN_TERMS.claimHint}</Hint>
+      <StravaSyncButton rideId={rideId} disabled={isPending} />
     </div>
   );
 }
@@ -523,6 +539,9 @@ export function RegistrationTicket({
   const [isChangingGroup, setIsChangingGroup] = useState(false);
   const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
 
+  // CR-234: the outcome of a Strava check, after its redirect back here.
+  useStravaOutcomeToast();
+
   const hasGroups = groups.length > 0;
   const needsGroupChoice = hasGroups && !selectedGroupId;
 
@@ -561,7 +580,12 @@ export function RegistrationTicket({
     void run(async () => {
       await withdrawRideFinishClaim(rideId);
       if (viewerRegistration) {
-        onChange({ ...viewerRegistration, finishClaimedAt: null });
+        onChange({
+          ...viewerRegistration,
+          finishClaimedAt: null,
+          stravaVerifiedAt: null,
+          stravaActivityId: null,
+        });
       }
       showToast(FINISH_CHECKIN_TERMS.withdrawSuccess);
     });
@@ -867,6 +891,7 @@ export function RegistrationTicket({
           </Button>
         ) : (
           <FinishCheckIn
+            rideId={rideId}
             registration={viewerRegistration}
             isPending={isPending}
             onClaim={handleClaimFinish}

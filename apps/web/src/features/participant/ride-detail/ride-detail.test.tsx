@@ -18,6 +18,7 @@ import type {
 } from 'types';
 import { ToastProvider } from 'ui';
 import { RideDetailView } from './components/RideDetailView';
+import { resetStravaStatusCache } from './components/StravaSync';
 import {
   ApiError,
   cancelRideRegistration,
@@ -29,6 +30,8 @@ import {
   getRouteGeometry,
   joinRideWaitlist,
   registerForRide,
+  getStravaStatus,
+  startStravaSync,
   withdrawRideFinishClaim,
 } from './api';
 
@@ -68,6 +71,8 @@ vi.mock('./api', async () => {
     getRideRiders: vi.fn(),
     claimRideFinish: vi.fn(),
     withdrawRideFinishClaim: vi.fn(),
+    getStravaStatus: vi.fn(),
+    startStravaSync: vi.fn(),
   };
 });
 
@@ -81,6 +86,8 @@ const joinRideWaitlistMock = vi.mocked(joinRideWaitlist);
 const getRideRidersMock = vi.mocked(getRideRiders);
 const claimRideFinishMock = vi.mocked(claimRideFinish);
 const withdrawRideFinishClaimMock = vi.mocked(withdrawRideFinishClaim);
+const getStravaStatusMock = vi.mocked(getStravaStatus);
+const startStravaSyncMock = vi.mocked(startStravaSync);
 
 const baseRoute: RouteSummary = {
   id: 'route-1',
@@ -182,6 +189,8 @@ function activeRegistration(
     cancelledAt: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerifiedAt: null,
+    stravaActivityId: null,
     ...overrides,
   };
 }
@@ -234,6 +243,11 @@ describe('RideDetailView', () => {
     joinRideWaitlistMock.mockReset();
     getRideRidersMock.mockReset();
     getRideRidersMock.mockResolvedValue({ items: [], nextCursor: null });
+    // CR-234: Strava sync is off unless a test turns it on.
+    resetStravaStatusCache();
+    getStravaStatusMock.mockReset();
+    getStravaStatusMock.mockResolvedValue({ available: false });
+    startStravaSyncMock.mockReset();
     sessionState.status = 'anonymous';
   });
 
@@ -718,6 +732,8 @@ describe('RideDetailView', () => {
             cancelledAt: null,
             finishClaimedAt: null,
             attendance: null,
+            stravaVerifiedAt: null,
+            stravaActivityId: null,
           },
         }),
       );
@@ -743,6 +759,8 @@ describe('RideDetailView', () => {
           cancelledAt: null,
           finishClaimedAt: null,
           attendance: null,
+          stravaVerifiedAt: null,
+          stravaActivityId: null,
         },
       });
       getRideDetailMock.mockResolvedValue(
@@ -849,6 +867,8 @@ describe('RideDetailView', () => {
             cancelledAt: null,
             finishClaimedAt: null,
             attendance: null,
+            stravaVerifiedAt: null,
+            stravaActivityId: null,
           },
         }),
       );
@@ -888,6 +908,8 @@ describe('RideDetailView', () => {
             cancelledAt: null,
             finishClaimedAt: null,
             attendance: null,
+            stravaVerifiedAt: null,
+            stravaActivityId: null,
           },
         }),
       );
@@ -981,6 +1003,8 @@ describe('RideDetailView', () => {
       cancelledAt: null,
       finishClaimedAt: null,
       attendance: null,
+      stravaVerifiedAt: null,
+      stravaActivityId: null,
     };
 
     function renderStarted(viewerRegistration: Registration) {
@@ -1128,6 +1152,187 @@ describe('RideDetailView', () => {
     });
   });
 
+  describe('Strava sync (CR-234)', () => {
+    const registered: Registration = {
+      id: 'registration-1',
+      rideId: 'ride-1',
+      userId: 'user-1',
+      status: 'active',
+      groupId: null,
+      createdAt: '2027-01-01T00:00:00.000Z',
+      updatedAt: '2027-01-01T00:00:00.000Z',
+      cancelledAt: null,
+      finishClaimedAt: null,
+      attendance: null,
+      stravaVerifiedAt: null,
+      stravaActivityId: null,
+    };
+
+    function renderStarted(viewerRegistration: Registration) {
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'started' },
+          registrationsCount: 1,
+          viewerRegistration,
+        }),
+      );
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+    }
+
+    afterEach(() => {
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('is hidden while the server has no Strava application', async () => {
+      renderStarted(registered);
+      await screen.findByRole('button', { name: 'Отметить финиш' });
+      await waitFor(() => expect(getStravaStatusMock).toHaveBeenCalled());
+      expect(
+        screen.queryByRole('button', { name: 'Connect with Strava' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers the sync beside the claim and leaves for Strava', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      startStravaSyncMock.mockResolvedValue({
+        authorizeUrl: 'https://www.strava.com/oauth/authorize?state=s',
+      });
+      const assign = vi.fn();
+      vi.spyOn(window, 'location', 'get').mockReturnValue({
+        ...window.location,
+        href: window.location.href,
+        assign,
+      });
+      renderStarted(registered);
+
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Connect with Strava',
+        }),
+      );
+      await waitFor(() =>
+        expect(assign).toHaveBeenCalledWith(
+          'https://www.strava.com/oauth/authorize?state=s',
+        ),
+      );
+      expect(startStravaSyncMock).toHaveBeenCalledWith('ride-1');
+      expect(
+        screen.getByText(/Организатор увидит только отметку/),
+      ).toBeInTheDocument();
+      vi.restoreAllMocks();
+    });
+
+    it('also offers it after a manual claim', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      renderStarted({
+        ...registered,
+        finishClaimedAt: '2027-05-01T09:00:00.000Z',
+      });
+      expect(await screen.findByText('Финиш отмечен')).toBeInTheDocument();
+      expect(
+        await screen.findByRole('button', {
+          name: 'Connect with Strava',
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('explains a refusal to start in Russian', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      startStravaSyncMock.mockRejectedValue(
+        groupProblem('attendance_already_decided', 409),
+      );
+      renderStarted(registered);
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Connect with Strava',
+        }),
+      );
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Организатор уже принял решение',
+      );
+    });
+
+    it.each([
+      ['ride_not_in_progress', 409, 'Отметить финиш можно после старта'],
+      ['strava_unavailable', 503, 'Strava сейчас недоступна'],
+      ['internal_error', 500, 'Не удалось открыть Strava'],
+    ] as const)('maps %s to a Russian line', async (code, status, text) => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      startStravaSyncMock.mockRejectedValue(groupProblem(code, status));
+      renderStarted(registered);
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Connect with Strava',
+        }),
+      );
+      expect(await screen.findByRole('alert')).toHaveTextContent(text);
+    });
+
+    it('sends a signed-out viewer to sign in and back', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      startStravaSyncMock.mockRejectedValue(groupProblem('unauthorized', 401));
+      renderStarted(registered);
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Connect with Strava',
+        }),
+      );
+      await waitFor(() =>
+        expect(pushMock).toHaveBeenCalledWith(
+          expect.stringContaining('/login'),
+        ),
+      );
+    });
+
+    it('toasts a verified finish', async () => {
+      window.history.replaceState(null, '', '/rides/ride-1?strava=verified');
+      renderStarted(registered);
+      expect(
+        await screen.findByText(/Финиш подтверждён поездкой в Strava/),
+      ).toBeInTheDocument();
+    });
+
+    it('shows a verified finish with a link to the own Strava ride', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      renderStarted({
+        ...registered,
+        finishClaimedAt: '2027-05-01T09:00:00.000Z',
+        stravaVerifiedAt: '2027-05-01T09:00:00.000Z',
+        stravaActivityId: '20489295499',
+      });
+      expect(await screen.findByText('Проверено Strava')).toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'View on Strava' }),
+      ).toHaveAttribute(
+        'href',
+        'https://www.strava.com/activities/20489295499',
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Connect with Strava' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('toasts the outcome after the redirect back and drops the parameter', async () => {
+      window.history.replaceState(null, '', '/rides/ride-1?strava=no_match');
+      renderStarted(registered);
+      expect(
+        await screen.findByText(/не совпала с маршрутом заезда/),
+      ).toBeInTheDocument();
+      expect(window.location.search).toBe('');
+    });
+
+    it('ignores an unknown outcome', async () => {
+      window.history.replaceState(null, '', '/rides/ride-1?strava=whatever');
+      renderStarted(registered);
+      await screen.findByRole('button', { name: 'Отметить финиш' });
+      expect(window.location.search).toBe('?strava=whatever');
+    });
+  });
+
   describe('results of a closed ride (CR-182)', () => {
     it('shows the tally and says so when riders are still undecided', async () => {
       getRideDetailMock.mockResolvedValue(
@@ -1191,6 +1396,8 @@ describe('RideDetailView', () => {
       cancelledAt: null,
       finishClaimedAt: null,
       attendance: null,
+      stravaVerifiedAt: null,
+      stravaActivityId: null,
     };
 
     it('explains that ride reviews come after the ride is finished, without fetching', async () => {

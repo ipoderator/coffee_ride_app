@@ -187,6 +187,11 @@ WHERE isActive` enforces "at most one active bike per user" at the DB
   columns are all set or all null. Deliberately not a `status` value — a no-show stays
   an active, reversible row. The migration backfills `finished` for active registrants
   of already-finished rides (attributed to the ride's organizer).
+  CR-234 (ADR-033, migration `0027_strava_verification`) added `stravaVerifiedAt`
+  (`timestamptz`) and `stravaActivityId` (`bigint`): the claim is backed by one of the
+  participant's own Strava activities — evidence, never a decision; no Strava token or
+  activity data is stored. CHECK `registrations_strava_consistent`: both set or both
+  null, and only together with `finishClaimedAt`. Withdrawing the claim clears them.
 - WaitlistEntry — user waiting for a place (CR-036, "Waitlist"): `id`, `rideId` (FK →
   Ride, `ON DELETE CASCADE`), `userId` (FK → User, `ON DELETE CASCADE`), `status` (not
   null, pg enum `waiting`/`promoted`/`cancelled`, default `waiting`), `createdAt`/

@@ -112,6 +112,9 @@ services:
       # see apps/api/src/env.ts before changing either.
       TRUST_PROXY_HOPS: 1
       MAPS_2GIS_API_KEY: ${MAPS_2GIS_API_KEY}
+      # CR-234 (ADR-033). Optional — empty means the Strava sync is off.
+      STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID}
+      STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET}
       # CR-079/KI-006. Optional — see .env.example. Empty string is fine:
       # env.ts's z.string().url().optional() treats an unset/empty value as
       # "not configured", the same degraded mode REDIS_URL/S3_* already use.

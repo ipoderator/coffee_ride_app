@@ -1521,3 +1521,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (items 7–8; KI-097) — done 2026-10-08
 - [x] CR-220 Test-deploy switch `AUTH_SKIP_EMAIL_VERIFICATION`: new accounts
       start verified, no email — done 2026-10-08. See docs/changelog.md
+- [x] CR-228..CR-231 Admin panel P0 (ADR-032): `platform_admins` + CLI grant,
+      `/v1/admin/*`, block/hide/cancel enforcement, `/admin` web section (Обзор,
+      Пользователи, Заезды, Отзывы, Журнал), organizer sees why a ride is hidden —
+      done 2026-10-10 on local branch `feat/admin-panel` (not merged/deployed)

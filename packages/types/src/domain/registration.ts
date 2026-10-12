@@ -35,4 +35,9 @@ export interface Registration {
   finishClaimedAt: string | null;
   // CR-181: the organizer's decision; `null` until they make one.
   attendance: RegistrationAttendance | null;
+  // CR-234 (ADR-033): when the claim was backed by one of the participant's own
+  // Strava activities, and which one — `null`/`null` otherwise. Only ever sent to
+  // the participant themselves (Strava API Agreement).
+  stravaVerifiedAt: string | null;
+  stravaActivityId: string | null;
 }

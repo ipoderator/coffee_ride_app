@@ -20,6 +20,7 @@ export * from './lib/use-in-view-once';
 export * from './components/MetricTile';
 export * from './components/MetricRow';
 export * from './components/StatusBadge';
+export * from './components/StravaVerifiedBadge';
 export * from './components/DifficultyScale';
 export * from './components/Skeleton';
 export * from './components/ContoursIllustration';

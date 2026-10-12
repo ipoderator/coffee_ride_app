@@ -12,6 +12,7 @@ import {
   RIDE_UPDATES_TERMS,
   ROUTE_POINT_TERMS,
   STOPS_TERMS,
+  STRAVA_SYNC_TERMS,
 } from 'ui';
 import { CoverImageUploadForm } from '@/features/organizer/cover-image/components/CoverImageUploadForm';
 import { GroupsEditor } from '@/features/organizer/groups/components/GroupsEditor';
@@ -342,13 +343,20 @@ export const ParticipantsStartedMarking: Story = {
     ride: { status: 'started' },
     participants: [
       participant('reg-1', 'Анна К.'),
-      participant('reg-2', 'Илья В.'),
+      // CR-234: a claim backed by Strava carries the fact-only mark.
+      participant('reg-2', 'Илья В.', {
+        finishClaimedAt: '2026-10-03T09:00:00.000Z',
+        stravaVerified: true,
+      }),
     ],
     liveAttendance: true,
   }),
   play: async ({ canvas, userEvent }) => {
     const T = RIDE_READINESS_TERMS.participants;
     await expect(await canvas.findByText(T.unresolvedChip(2))).toBeVisible();
+    await expect(
+      await canvas.findByText(STRAVA_SYNC_TERMS.verifiedTitle),
+    ).toBeVisible();
     const row = async (name: string) =>
       within(
         await canvas.findByRole('group', {

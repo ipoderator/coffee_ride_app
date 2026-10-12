@@ -132,6 +132,18 @@ const envSchema = z.object({
   // gates (organizer profile, ride publish) pass without a mail provider.
   // Unlike the rate-limit overrides it is allowed in production (a test deploy
   // is exactly where it is needed); the preflight warns while it is on.
+  // CR-234 (ADR-033): the Strava API application behind «Синхронизировать со
+  // Strava». Optional, same degraded-mode shape as MAPS_2GIS_API_KEY: both must
+  // be set for `plugins/strava.ts` to construct a client; otherwise the feature
+  // is off and the button is not shown.
+  STRAVA_CLIENT_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().regex(/^\d+$/, 'STRAVA_CLIENT_ID must be numeric').optional(),
+  ),
+  STRAVA_CLIENT_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
   AUTH_SKIP_EMAIL_VERIFICATION: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z

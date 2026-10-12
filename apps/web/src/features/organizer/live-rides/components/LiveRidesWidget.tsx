@@ -14,6 +14,7 @@ import {
   formatTime,
   ORGANIZER_LIVE_TERMS as T,
   Skeleton,
+  STRAVA_SYNC_TERMS,
 } from 'ui';
 import { confirmFinish, listOwnRides, listRideParticipants } from '../api';
 import {
@@ -222,6 +223,14 @@ function LiveRideCard({
                           timeZone,
                         }),
                       )}
+                      {item.stravaVerified ? (
+                        <>
+                          {' · '}
+                          <span className="font-semibold text-strava-text">
+                            {STRAVA_SYNC_TERMS.verifiedTitle}
+                          </span>
+                        </>
+                      ) : null}
                     </span>
                   )}
                 </div>

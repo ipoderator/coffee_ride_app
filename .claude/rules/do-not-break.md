@@ -304,3 +304,10 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   no `cooldown` on Dependabot's npm entry (CR-216): Dependabot runs pnpm with
   `--config.minimum-release-age` for it, which re-checks the whole lockfile, so a
   young locked version fails every npm update job, security ones included.
+- the Strava sync (ADR-033, CR-234): no Strava access/refresh token is ever persisted or
+  logged — `completeStravaSync` holds it in a local and revokes the grant in `finally`
+  on every path (also when the gate fails after the exchange); the callback route keeps
+  `logLevel: 'warn'` so the `code` stays out of request logs; the signed `state` must
+  match the session's user; the organizer's list carries only `stravaVerified` — never
+  Strava distance/time/track (Strava API Agreement). Strava HTTP only in
+  `modules/strava/strava-client.ts`.

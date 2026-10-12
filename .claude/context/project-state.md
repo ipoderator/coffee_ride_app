@@ -24,23 +24,22 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-228..CR-232 — admin panel P0 (ADR-032), merged into `main` and deployed to
-coffeeride.site (`c01a61f`, 2026-10-10, with the Dependabot triage updates; migration
-`0026` applied; admin granted to the owner's account). CR-233 (PR #40) keeps `s3-init`
-idempotent on SeaweedFS 4.48 — until it is merged, `deploy/deploy.sh` stops at the
-bucket step on the VPS. Admin = `platform_admins`
-row from the host CLI; `/v1/admin/*` behind `requireAdmin`; `/admin` section in
-apps/web (Обзор, Пользователи, Заезды, Отзывы, Журнал); block/hide/cancel enforced
-across auth, rides, registrations, reviews; the organizer sees why a ride is hidden
-(`GET /v1/rides/:id` → owner-only `moderation`).
+CR-234 — «Синхронизировать со Strava» (ADR-033), committed to `main` and deployed
+(migration `0027`): a participant backs the finish claim with their own Strava ride
+(one-shot OAuth, grant revoked, no token stored; organizer sees only «Проверено
+Strava»), via Strava's official «Connect with Strava» button; the mark is Strava-orange
+(`StravaVerifiedBadge`, tokens `strava`/`strava-text`). Header wordmark lifted onto the
+nav labels' baseline. On prod the feature stays hidden until `STRAVA_*` is set there —
+needs the owner-side Strava settings below.
 
-Before this: CR-227 — production email live on Unisender Go, verification required
-again; CR-219 — **coffeeride.site is live** (`docs/deployment.md` → "Production host").
+Before this: CR-228..CR-233 — admin panel P0 (ADR-032) deployed to coffeeride.site
+(`c01a61f`, migration `0026`); CR-233 (PR #40) keeps `s3-init` idempotent on
+SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
 - **Stack/infra:** pnpm + Turborepo, Node 24 LTS; Next.js 15 / React 19 / Tailwind v4;
-  Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0026`); Redis
+  Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0027`); Redis
   (BullMQ notifications, rate limits); S3 — SeaweedFS locally/CI (ADR-025); 2GIS via
   `maps-core`/`maps-2gis` (ADR-010/020). Production: Docker images for web/api/migrate,
   `docker-compose.prod.yml` + Caddy (ADR-018), smoke-tested in CI (`docker-smoke`)
@@ -55,14 +54,15 @@ again; CR-219 — **coffeeride.site is live** (`docs/deployment.md` → "Product
 
 ## In progress
 
-CR-232 items 1–7 (`admin:grant` requires a confirmed email; reason dialogs name
-their record and say who reads the reason; mobile section tabs reveal the active
-tab; list filters in the URL; overview links/refresh and log filters; item 7 — full
-validation sweep + review fixes) done on the same branch. Open review findings
-(not fixed, item 7): see "Next" 0.
-CR-228..CR-231 — awaiting the owner's review and an explicit request to commit; then
-merge/deploy is the owner's call. On deploy: run migration `0026`, then
-`admin:grant <owner email>` via the `migrate` image (`docs/deployment.md` → "Admin access").
+CR-234 — awaiting the owner's review and a request to commit. To ship: set the Strava
+app's Authorization Callback Domain to `coffeeride.site`, put `STRAVA_CLIENT_ID`/
+`STRAVA_CLIENT_SECRET` in the VPS `.env`, deploy (migration `0027`), and ask Strava
+to review the app (a new app connects 1 athlete only).
+
+CR-228..CR-232 — deployed (see "Current task"); open review findings: "Next" 0.
+Storybook: `AdminOverview` (3 stories) and `CabinetSectionTabs` «Admin Last Tab»
+(2) fail axe `label-content-name-mismatch` — the overview counters' `aria-label`
+doesn't contain their visible text; found 2026-10-11, pre-existing on `main`.
 
 CR-221..CR-226 — validated locally (see changelog), awaiting the owner's review/commit
 on `experiments`; deploying needs `SITE_URL` built in (prod compose derives it from
@@ -136,4 +136,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-10 (CR-232 item 7)
+2026-10-11 (CR-234)

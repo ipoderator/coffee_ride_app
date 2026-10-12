@@ -11,6 +11,7 @@ import type {
   RideContactType,
   RideStatus,
   RoutePointType,
+  StravaSyncOutcome,
 } from 'types';
 
 // `RideStatus`/`BicycleType`/`DifficultyLevel` themselves moved to `packages/types`
@@ -2164,6 +2165,36 @@ export const RIDE_PAGE_TERMS = {
 // the organizer decides. Shared by both cabinets, so it lives here. Error copy
 // is keyed by the API's stable `code` (`docs/api.md` → "Finish check-in").
 // ---------------------------------------------------------------------------
+
+// CR-234 (ADR-033): «Синхронизировать со Strava» on the finish check-in. The
+// participant's own finish backed by their Strava ride; the organizer sees only the
+// «Strava» mark, never the ride's data.
+export const STRAVA_SYNC_TERMS = {
+  // Strava's brand guidelines: the OAuth button is their own «Connect with Strava»
+  // artwork, and links back to Strava data read «View on Strava» — kept in English
+  // as the guidelines word them; the accessible name matches the button's text.
+  connectButton: 'Connect with Strava',
+  syncHint:
+    'Найдём вашу поездку в Strava и проверим, что вы проехали маршрут заезда. Организатор увидит только отметку «Проверено Strava» — без километров, времени и трека.',
+  verifiedTitle: 'Проверено Strava',
+  poweredBy: 'Powered by Strava',
+  verifiedHint: 'Поездка в Strava совпала с маршрутом заезда.',
+  openActivity: 'View on Strava',
+  startError: 'Не удалось открыть Strava. Попробуйте ещё раз.',
+  outcome: {
+    verified: 'Финиш подтверждён поездкой в Strava — отметка ушла организатору',
+    no_activity:
+      'В Strava нет велопоездки, начатой около времени старта. Загрузите поездку и попробуйте снова.',
+    no_match:
+      'Поездка в Strava не совпала с маршрутом заезда. Если трек скрыт настройками приватности, отметьте финиш вручную.',
+    denied:
+      'Strava не дала доступ к поездкам. Разрешите «Просмотр данных о ваших тренировках» и попробуйте снова.',
+    unavailable: 'Strava сейчас недоступна. Попробуйте позже.',
+    already_decided:
+      'Организатор уже принял решение — отметку изменить нельзя.',
+    error: 'Не удалось проверить поездку. Попробуйте ещё раз.',
+  } satisfies Record<StravaSyncOutcome, string>,
+} as const;
 
 export const FINISH_CHECKIN_TERMS = {
   // Participant (the registration ticket).

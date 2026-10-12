@@ -15,6 +15,10 @@ import {
 } from '../modules/notifications/notifications.routes.js';
 import { reviewsRoutes } from '../modules/reviews/reviews.routes.js';
 import { adminRoutes } from '../modules/admin/admin.routes.js';
+import {
+  rideStravaRoutes,
+  stravaRoutes,
+} from '../modules/strava/strava.routes.js';
 import { registerCsrf } from '../plugins/csrf.js';
 
 // Versioned root (ADR-011): every product endpoint lives under /v1. Future
@@ -59,4 +63,6 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   await app.register(reviewsRoutes, { prefix: '/rides' });
   // CR-229 (ADR-032): every route inside runs requireAuth + requireAdmin.
   await app.register(adminRoutes, { prefix: '/admin', env: opts.env });
+  await app.register(rideStravaRoutes, { prefix: '/rides', env: opts.env });
+  await app.register(stravaRoutes, { prefix: '/strava', env: opts.env });
 };

@@ -27,7 +27,7 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   unversioned `/health` (DB/Redis/S3, always 200).
 - `plugins/`: `auth` (session → `request.user`; `requireAdmin`, ADR-032), `csrf` (Origin/Referer on unsafe
   methods), `db`, `s3`, `email` (Unisender or null), `maps` (`app.mapProvider` or null),
-  `openapi` (`/docs`), `security-headers` (helmet), `error-handler` (RFC 9457),
+  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `security-headers` (helmet), `error-handler` (RFC 9457),
   `error-reporting` (`app.reportError`).
 - `lib/`: `cursor` (pagination), `account-rate-limit`, `race-timeout`, `request-id`,
   `trust-proxy`, `read-upload`/`image-processing`/`image-storage` (sharp, S3),
@@ -55,6 +55,10 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
     block), rides (hide, cancel via the organizer path), reviews (hide), action log;
     every mutation writes `admin_actions` in its transaction. `rides/ride-visibility.ts`
     `isRidePublic` is the one non-owner visibility rule.
+  - `strava` — «Синхронизировать со Strava» (ADR-033): `strava-client.ts` (only Strava
+    HTTP, `callWithResilience`), pure `match.ts`, `oauth-state.ts` (HMAC state),
+    `strava.service.ts` (one-shot OAuth, grant revoked), `strava.routes.ts`
+    (`/v1/rides/:id/strava-sync`, `/v1/strava/{status,callback}`).
 - Tests: `*.test.ts` beside code; DB via `test-support/test-database-url.ts`
   (`TEST_DATABASE_URL`, disposable names only); `degraded-dependencies.test.ts`;
   `*.live.test.ts` behind `RUN_LIVE_*`.
@@ -97,7 +101,7 @@ participants|updates` — the six-tab workspace «Управление заез�
 - `db` — Drizzle schema `src/schema/*.ts` (one file per entity: user, session, tokens,
   organizer-profile, ride, route, stop, route-point, ride-group, ride-requirement,
   registration, waitlist-entry, ride-update, notification, review, bike, admin); migrations
-  `migrations/0000`–`0026`; `migrate.ts` (advisory lock), `seed-demo.ts`, `admin-cli.ts`
+  `migrations/0000`–`0027`; `migrate.ts` (advisory lock), `seed-demo.ts`, `admin-cli.ts`
   (`admin:grant|revoke|list`),
   `scripts/backup.sh|restore.sh`.
 - `types` — Zod contracts `src/api/*`, domain enums/types `src/domain/*`; `zod-config.ts`
@@ -127,7 +131,8 @@ participants|updates` — the six-tab workspace «Управление заез�
 
 ## Integration boundaries
 
-2GIS only through `maps-2gis` (ADR-010/020); S3 only through `route-storage.ts`/
+2GIS only through `maps-2gis` (ADR-010/020); Strava only through
+`modules/strava/strava-client.ts` (ADR-033); S3 only through `route-storage.ts`/
 `lib/image-storage.ts`; email only through `lib/email/`; Redis via `app.redis`
 (fail-fast, CR-137) and the notifications queue. Each wraps external calls in
 `packages/resilience` and normalises errors into its own domain error.

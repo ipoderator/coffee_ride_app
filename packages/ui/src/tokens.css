@@ -72,6 +72,13 @@
   --on-danger: #ffffff;
   --info: #0b65a6;
   --info-tint: #e3f0fa;
+  /* CR-234: Strava's brand orange — a third-party mark (Strava's brand guidelines),
+     not a Coffee Ride accent; used only on Strava-backed evidence. `--strava` is the
+     exact hex for borders/tints; `--strava-text` is a darker shade that clears AA
+     (≥4.86:1) on `bg`/`surface`/`bg-raised` and on a `strava/10` tint over any of
+     them — the same split as `--brand` vs `--primary` (ADR-024). */
+  --strava: #fc5200;
+  --strava-text: #ad3c00;
   --border: #ddd7e1;
   --border-input: #a89cb0;
 
@@ -167,6 +174,8 @@
   --on-danger: #171614;
   --info: #6db4ee;
   --info-tint: #15293a;
+  /* ≥4.92:1 on every dark ground and the `strava/10` tint. */
+  --strava-text: #ff6a26;
   --border: #2e2934;
   --border-input: #4a4450;
 }
@@ -198,6 +207,8 @@
   --color-on-danger: var(--on-danger);
   --color-info: var(--info);
   --color-info-tint: var(--info-tint);
+  --color-strava: var(--strava);
+  --color-strava-text: var(--strava-text);
   --color-border: var(--border);
   --color-border-input: var(--border-input);
   --color-chart-secondary: var(--chart-secondary);

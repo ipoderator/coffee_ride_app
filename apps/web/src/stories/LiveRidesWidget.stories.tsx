@@ -31,6 +31,8 @@ const PEOPLE = [
     group: null,
     finishClaimedAt: '2026-10-02T09:26:00Z',
     attendance: null,
+    // CR-234: backed by a Strava ride — «… · Проверено Strava».
+    stravaVerified: true,
   },
   {
     id: 'p2',
@@ -40,6 +42,7 @@ const PEOPLE = [
     group: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerified: false,
   },
   {
     id: 'p3',
@@ -49,6 +52,7 @@ const PEOPLE = [
     group: null,
     finishClaimedAt: '2026-10-02T09:18:00Z',
     attendance: 'finished',
+    stravaVerified: false,
   },
   // CR-184: the bar has a segment for every outcome, no-shows included.
   {
@@ -59,6 +63,7 @@ const PEOPLE = [
     group: null,
     finishClaimedAt: null,
     attendance: 'dnf',
+    stravaVerified: false,
   },
   {
     id: 'p5',
@@ -68,6 +73,7 @@ const PEOPLE = [
     group: null,
     finishClaimedAt: null,
     attendance: 'no_show',
+    stravaVerified: false,
   },
 ];
 // CR-184: start passed, still `registration_open` — «Требует решения».

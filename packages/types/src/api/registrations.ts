@@ -75,6 +75,9 @@ export interface RideParticipantSummary {
   // organizer's decision (`null` = undecided); always `null`/`null` on the waitlist.
   finishClaimedAt: string | null;
   attendance: RegistrationAttendance | null;
+  // CR-234 (ADR-033): additive. Only the fact that the claim is backed by a Strava
+  // activity — no Strava data (distance, time, track) reaches the organizer.
+  stravaVerified: boolean;
 }
 
 export type ListRideParticipantsResponse = Paginated<RideParticipantSummary>;

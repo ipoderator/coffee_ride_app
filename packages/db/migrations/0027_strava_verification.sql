@@ -1,0 +1,3 @@
+ALTER TABLE "registrations" ADD COLUMN "strava_verified_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "registrations" ADD COLUMN "strava_activity_id" bigint;--> statement-breakpoint
+ALTER TABLE "registrations" ADD CONSTRAINT "registrations_strava_consistent" CHECK (("registrations"."strava_verified_at" is null) = ("registrations"."strava_activity_id" is null) and ("registrations"."strava_verified_at" is null or "registrations"."finish_claimed_at" is not null));

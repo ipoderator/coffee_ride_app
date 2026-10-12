@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   foreignKey,
   index,
@@ -73,6 +74,13 @@ export const registrations = pgTable(
       withTimezone: true,
     }),
     attendanceMarkedBy: uuid('attendance_marked_by').references(() => users.id),
+    // CR-234 (ADR-033): the participant's claim backed by one of their own Strava
+    // activities — evidence for the organizer, never a decision by itself. Only the
+    // fact and the activity id are kept (no Strava distance/time/track, no token);
+    // both set or both null (`registrations_strava_consistent`). Cleared with the
+    // claim.
+    stravaVerifiedAt: timestamp('strava_verified_at', { withTimezone: true }),
+    stravaActivityId: bigint('strava_activity_id', { mode: 'bigint' }),
   },
   (table) => [
     // `.claude/rules/database.md`: "active duplicate registration is forbidden" —
@@ -108,6 +116,10 @@ export const registrations = pgTable(
     check(
       'registrations_attendance_consistent',
       sql`(${table.attendance} is null) = (${table.attendanceMarkedAt} is null) and (${table.attendance} is null) = (${table.attendanceMarkedBy} is null)`,
+    ),
+    check(
+      'registrations_strava_consistent',
+      sql`(${table.stravaVerifiedAt} is null) = (${table.stravaActivityId} is null) and (${table.stravaVerifiedAt} is null or ${table.finishClaimedAt} is not null)`,
     ),
     check(
       'registrations_cancelled_at_consistent',

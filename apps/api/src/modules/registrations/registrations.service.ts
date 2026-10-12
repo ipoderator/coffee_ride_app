@@ -330,6 +330,10 @@ export function toRegistration(
       ? row.finishClaimedAt.toISOString()
       : null,
     attendance: row.attendance,
+    stravaVerifiedAt: row.stravaVerifiedAt
+      ? row.stravaVerifiedAt.toISOString()
+      : null,
+    stravaActivityId: row.stravaActivityId?.toString() ?? null,
   };
 }
 
@@ -432,6 +436,7 @@ function toRideParticipantSummary(row: {
   // CR-181: absent for a waitlist entry, which has neither.
   finishClaimedAt?: Date | null;
   attendance?: RegistrationAttendance | null;
+  stravaVerifiedAt?: Date | null;
 }): RideParticipantSummary {
   return {
     id: row.id,
@@ -443,6 +448,7 @@ function toRideParticipantSummary(row: {
       ? row.finishClaimedAt.toISOString()
       : null,
     attendance: row.attendance ?? null,
+    stravaVerified: Boolean(row.stravaVerifiedAt),
   };
 }
 
@@ -502,6 +508,7 @@ export async function listParticipants(
       groupPaceKmh: rideGroups.paceKmh,
       finishClaimedAt: registrations.finishClaimedAt,
       attendance: registrations.attendance,
+      stravaVerifiedAt: registrations.stravaVerifiedAt,
     })
     .from(registrations)
     .innerJoin(users, eq(registrations.userId, users.id))
@@ -1348,7 +1355,12 @@ export async function withdrawFinishClaim(
     }
     await tx
       .update(registrations)
-      .set({ finishClaimedAt: null, updatedAt: new Date() })
+      .set({
+        finishClaimedAt: null,
+        stravaVerifiedAt: null,
+        stravaActivityId: null,
+        updatedAt: new Date(),
+      })
       .where(eq(registrations.id, found.id));
   });
 }

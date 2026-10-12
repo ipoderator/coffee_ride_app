@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect } from 'storybook/test';
-import { Skeleton, StatusBadge, type StatusTone } from 'ui';
+import {
+  Skeleton,
+  StatusBadge,
+  StravaVerifiedBadge,
+  type StatusTone,
+} from 'ui';
 
 // The project's badge is `StatusBadge` (packages/ui): there is no separate
 // generic `Badge` primitive (StatusBadge.tsx explains why, KI-020). Colour
@@ -94,4 +99,15 @@ export const Dark: Story = {
 export const BothThemes: Story = {
   globals: { theme: 'both' },
   render: () => <AllTones />,
+};
+
+/** CR-234: the Strava-backed finish mark — Strava's brand orange, AA text ink. */
+export const StravaVerified: Story = {
+  globals: { theme: 'both' },
+  render: () => <StravaVerifiedBadge />,
+  play: async ({ canvas }) => {
+    for (const badge of canvas.getAllByText('Проверено Strava')) {
+      await expect(badge).toHaveClass('text-strava-text');
+    }
+  },
 };

@@ -114,3 +114,19 @@ Files: `docker-compose.infra.yml`, `docker-compose.yml`.
 Validation: the rendered script against a throwaway SeaweedFS 4.48 (isolated network on the prod host): new bucket → 0, existing → 0, invalid name → 1.
 Deploy: `c01a61f` (admin panel) went out by running `deploy.sh`'s remaining steps by hand without `s3-init` (bucket confirmed present): build, migrate (`0026` applied, 27 migrations), app roll; `/health` db/redis/s3 ok; `admin:grant` for the owner's account. Anonymous `/admin` → 404, `/api/v1/admin/me` → 401.
 Follow-up: none.
+
+## 2026-10-11 — CR-234 — «Синхронизировать со Strava»: finish backed by a Strava ride
+
+Summary: A registered rider of a started/finished ride can back the finish claim with their own Strava ride. One-shot OAuth (`activity:read`): the callback exchanges the code, matches a bike activity (not `VirtualRide`) starting −90…+120 min around the start whose track (`summary_polyline`, else the `latlng` stream) passes within 200 m of ≥70% of the route (no route: meeting point + distance), writes claim + mark, then revokes the grant — no token stored. Organizer sees only «Проверено Strava»; `attendance` stays theirs (ADR-027).
+Contract: additive — `Registration.stravaVerifiedAt/stravaActivityId`, `RideParticipantSummary.stravaVerified`; `GET /v1/strava/status`, `POST /v1/rides/:id/strava-sync`, `GET /v1/strava/callback` (303 `?strava=<outcome>`); `types` `STRAVA_SYNC_OUTCOMES`; `ui` `STRAVA_SYNC_TERMS`. Migration `0027_strava_verification`. Env `STRAVA_CLIENT_ID/SECRET` (optional; off without both) + preflight check.
+Files: `apps/api/src/modules/strava/*`, `plugins/strava.ts`, `env.ts`, `preflight.ts`, `registrations.*`; `packages/db` schema + `0027`; `packages/types`, `packages/ui/terminology.ts`; web `ride-detail` (`StravaSync.tsx`, ticket, api), `ParticipantTable`, `LiveRidesWidget`, stories; `docker-compose.prod.yml`, env examples; `docs/{api,database,decisions}.md`; `coverage-baseline.json` (+`src/modules/strava/` scope).
+Validation: api 702/702 (new: match, oauth-state, client, 14 route tests; disposable `coffee_ride_test`), web unit 895+, ui 267, Storybook touched stories 43/43 with axe; `test:coverage` + `coverage:check` green (CI env, live Redis/S3), baseline raised; typecheck, lint (no new warnings), `format:check`, api build, `next build --webpack` (temp copy); live on dev: real Strava accepts the redirect URI, real code exchange → `error`, cancel → `denied`, foreign session → `/me/rides?strava=error`; headless browser: button, consent redirect, outcome toast.
+Decisions: ADR-033.
+Brand: per Strava's guidelines the sync is Strava's official «Connect with Strava» button (`StravaConnectMark.tsx`, their SVG verbatim) and the activity link reads «View on Strava»; «Проверено Strava» is a Strava-orange mark (`ui` `StravaVerifiedBadge`, tokens `strava`/`strava-text`, docs/design.md §3) with the official «Powered by Strava» logo on the ticket; live retry with the streams fallback → `verified`.
+Follow-up: owner — set the Strava app's callback domain to `coffeeride.site`, put both env vars on the VPS, ask Strava for app review (athlete capacity 1). E2E not run locally (no spec covers check-in; CI has no Strava env, so no visual change).
+
+## 2026-10-12 — Header: wordmark on the nav labels' baseline
+
+Summary: Owner report — in `AppHeader` the centred 24px wordmark's baseline sat 3.8px below the 16px nav labels and account menu (45.4 vs 41.6px). The `Wordmark` is lifted `md:-translate-y-[0.16em]`, so logo, labels and the account menu share one line; mobile (logo + menu button only) is unchanged.
+Files: `apps/web/src/components/site/AppHeader.tsx`; new `src/stories/AppHeader.stories.tsx` (signed-in light/dark, guest) asserting every label's baseline equals the wordmark's (±0.75px; fails at 3.81px without the fix).
+Validation: stories 3/3, site unit 21/21, web typecheck/lint.

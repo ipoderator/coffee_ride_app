@@ -70,7 +70,9 @@ export function AppHeader({
           href="/"
           className="inline-flex min-h-11 shrink-0 items-center rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
-          <Wordmark className="text-[1.375rem] md:text-[1.5rem]" />
+          {/* Centred, the 24px wordmark's baseline sat 0.16em (3.8px) below the
+              16px nav labels'; lifted so the logo and every label share one line. */}
+          <Wordmark className="text-[1.375rem] md:-translate-y-[0.16em] md:text-[1.5rem]" />
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">

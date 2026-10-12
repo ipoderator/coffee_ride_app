@@ -59,6 +59,8 @@ const baseItem: MyRegistrationSummary = {
     cancelledAt: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerifiedAt: null,
+    stravaActivityId: null,
   },
   ride: baseRide,
 };

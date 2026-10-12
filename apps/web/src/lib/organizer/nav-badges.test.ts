@@ -26,6 +26,7 @@ function signedUp(id: string, hoursAgo: number): RideParticipantSummary {
     group: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerified: false,
     createdAt: new Date(NOW.getTime() - hoursAgo * 3_600_000).toISOString(),
   };
 }

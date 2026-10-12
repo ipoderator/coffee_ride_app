@@ -17,4 +17,7 @@ export const registrationResponseSchema = z.object({
   // CR-181 ("Finish self-check-in"): additive.
   finishClaimedAt: z.string().nullable(),
   attendance: z.enum(REGISTRATION_ATTENDANCES).nullable(),
+  // CR-234 ("Strava verification"): additive.
+  stravaVerifiedAt: z.string().nullable(),
+  stravaActivityId: z.string().nullable(),
 });

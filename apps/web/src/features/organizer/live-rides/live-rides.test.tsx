@@ -45,6 +45,7 @@ function person(over: Partial<RideParticipantSummary>): RideParticipantSummary {
     group: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerified: false,
     ...over,
   };
 }
@@ -120,6 +121,23 @@ describe('LiveRidesWidget', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
     await waitFor(() => expect(confirmFinish).toHaveBeenCalledWith('r1', 'p1'));
+  });
+
+  it('notes a claim backed by Strava (CR-234)', async () => {
+    vi.mocked(listOwnRides).mockResolvedValue([ride({})]);
+    vi.mocked(listRideParticipants).mockResolvedValue([
+      person({ finishClaimedAt: '2026-10-02T07:00:00Z', stravaVerified: true }),
+      person({ id: 'p2', finishClaimedAt: '2026-10-02T07:05:00Z' }),
+    ]);
+    render(<LiveRidesWidget />);
+
+    // The mark is its own span in Strava's orange, right after the claim time.
+    const mark = await screen.findByText('Проверено Strava');
+    expect(mark).toHaveClass('text-strava-text');
+    expect(mark.parentElement?.textContent).toMatch(
+      /отметил финиш · .+ · Проверено Strava$/,
+    );
+    expect(screen.getAllByText(/Проверено Strava/)).toHaveLength(1);
   });
 
   it('counts every registration in the bar, no-shows included', async () => {

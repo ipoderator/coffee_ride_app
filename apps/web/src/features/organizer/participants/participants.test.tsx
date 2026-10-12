@@ -82,6 +82,7 @@ const first: RideParticipantSummary = {
   group: null,
   finishClaimedAt: null,
   attendance: null,
+  stravaVerified: false,
 };
 const second: RideParticipantSummary = {
   id: 'reg-2',
@@ -91,6 +92,7 @@ const second: RideParticipantSummary = {
   group: null,
   finishClaimedAt: null,
   attendance: null,
+  stravaVerified: false,
 };
 
 describe('ParticipantTable', () => {
@@ -215,6 +217,7 @@ describe('ParticipantTable — pace groups', () => {
           group: null,
           finishClaimedAt: null,
           attendance: null,
+          stravaVerified: false,
         },
       ],
       nextCursor: null,
@@ -398,6 +401,16 @@ describe('ParticipantTable — finish check-in (CR-181)', () => {
         name: 'Подтвердить всех заявивших (1)',
       }),
     ).toBeEnabled();
+  });
+
+  // CR-234: the Strava mark is the fact only — no km/time/track reaches the organizer.
+  it('marks a claim backed by Strava, beside the claim badge', async () => {
+    await renderStarted([{ ...claimed, stravaVerified: true }, silent]);
+
+    const rows = screen.getAllByRole('group', { name: /^Финиш:/ });
+    expect(within(rows[0]!).getByText('Проверено Strava')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('Заявил финиш')).toBeInTheDocument();
+    expect(within(rows[1]!).queryByText('Проверено Strava')).toBeNull();
   });
 
   it('disables the batch button when nobody is waiting for a decision', async () => {

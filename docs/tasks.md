@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-234 «Синхронизировать со Strava» (ADR-033): a participant backs the finish
+      claim with their own Strava ride (one-shot OAuth, no stored tokens, ≥70% of the
+      route within 200 m); organizer sees only «Проверено Strava» — done 2026-10-11
 - [x] CR-232 item 7 — admin validation sweep (320/390/1280 × themes, filters,
       disposable mutations) + review fixes: malformed id → not found, encoded ids,
       non-JSON errors, dialog locked while sending — done 2026-10-10 on `feat/admin-panel`
@@ -34,7 +37,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       review author, rating, excerpt) — done 2026-10-10 on `feat/admin-panel`
 - [x] CR-232 item 1 — `admin:grant` refuses an account with an unconfirmed email
       (`email_not_verified`, exit 1) — done 2026-10-10 on `feat/admin-panel`
-- [x] CR-228..CR-231 Admin panel P0 (ADR-032): `platform_admins` + CLI grant,
-      `/v1/admin/*`, block/hide/cancel enforcement, `/admin` web section (Обзор,
-      Пользователи, Заезды, Отзывы, Журнал), organizer sees why a ride is hidden —
-      done 2026-10-10 on local branch `feat/admin-panel` (not merged/deployed)

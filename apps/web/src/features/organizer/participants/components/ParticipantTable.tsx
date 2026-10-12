@@ -15,6 +15,7 @@ import {
   PARTICIPANTS_TERMS,
   Skeleton,
   StatusBadge,
+  StravaVerifiedBadge,
   formatDate,
   formatTime,
   useToast,
@@ -360,6 +361,8 @@ function ParticipantRow({
               tone="info"
             />
           ) : null}
+          {/* CR-234: evidence beside the claim/decision — the fact only. */}
+          {item.stravaVerified ? <StravaVerifiedBadge /> : null}
           {item.attendance === null ? (
             <>
               <Button

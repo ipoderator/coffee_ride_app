@@ -65,6 +65,8 @@ const rideParticipantSummaryResponseSchema = z.object({
   // CR-181 ("Finish self-check-in"): additive.
   finishClaimedAt: z.string().nullable(),
   attendance: z.enum(REGISTRATION_ATTENDANCES).nullable(),
+  // CR-234 ("Strava verification"): additive.
+  stravaVerified: z.boolean(),
 });
 const listParticipantsResponseSchema = z.object({
   items: z.array(rideParticipantSummaryResponseSchema),

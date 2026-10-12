@@ -72,6 +72,7 @@ function participants(count: number, recent: number) {
     group: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerified: false,
     createdAt: new Date(
       NOW.getTime() - (i < recent ? 3_600_000 : 5 * 86_400_000),
     ).toISOString(),

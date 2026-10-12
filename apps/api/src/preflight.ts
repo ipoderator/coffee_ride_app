@@ -97,6 +97,19 @@ const CHECKS: ReadonlyArray<PreflightCheck> = [
       'Acceptable for a test deploy only. Unset it once an email provider is configured.',
   },
   {
+    // CR-234: `plugins/strava.ts` needs the pair; half of it is silently off.
+    keys: ['STRAVA_CLIENT_ID', 'STRAVA_CLIENT_SECRET'],
+    applies: (env) =>
+      (env.STRAVA_CLIENT_ID === undefined) !==
+      (env.STRAVA_CLIENT_SECRET === undefined),
+    problem:
+      'Only one of STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET is set, so no Strava client is constructed.',
+    consequence:
+      'Participants do not see «Синхронизировать со Strava»; finish claims can only be self-reported (ADR-033).',
+    action:
+      'Set both from the Strava API application settings (strava.com/settings/api), or clear both to make the degraded mode explicit.',
+  },
+  {
     keys: ['MAPS_2GIS_API_KEY'],
     applies: (env) => env.MAPS_2GIS_API_KEY === undefined,
     problem:

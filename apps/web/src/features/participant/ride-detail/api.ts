@@ -9,6 +9,8 @@ import type {
   ListRideReviewsResponse,
   ListRideRidersResponse,
   ProblemDetails,
+  StartStravaSyncResponse,
+  StravaStatusResponse,
   UpdateRegistrationGroupResponse,
 } from 'types';
 import { ApiError } from '@/lib/api/errors';
@@ -294,4 +296,38 @@ export async function getRideRiders(
   }
 
   return body as ListRideRidersResponse;
+}
+
+/**
+ * CR-234 (ADR-033): whether the server has a Strava application configured — the
+ * «Синхронизировать со Strava» button is shown only then. Fails soft to
+ * `available: false`: a missing button is the degraded state, not an error.
+ */
+export async function getStravaStatus(): Promise<StravaStatusResponse> {
+  try {
+    const response = await fetch('/api/v1/strava/status');
+    if (!response.ok) return { available: false };
+    return (await response.json()) as StravaStatusResponse;
+  } catch {
+    return { available: false };
+  }
+}
+
+/**
+ * CR-234: starts the one-shot Strava check for the viewer's own registration —
+ * returns the Strava consent URL to navigate to (`registration_not_found`,
+ * `ride_not_in_progress`, `attendance_already_decided`, `strava_unavailable`).
+ */
+export async function startStravaSync(
+  rideId: string,
+): Promise<StartStravaSyncResponse> {
+  const response = await fetch(`${RIDES_ENDPOINT}/${rideId}/strava-sync`, {
+    method: 'POST',
+  });
+  const body = (await response.json()) as
+    StartStravaSyncResponse | ProblemDetails;
+  if (!response.ok) {
+    throw new ApiError(body as ProblemDetails);
+  }
+  return body as StartStravaSyncResponse;
 }

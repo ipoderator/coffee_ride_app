@@ -2,7 +2,12 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import type { Registration } from 'types';
-import { Button, RIDE_STATUS_TERMS, RIDE_TICKET_TERMS } from 'ui';
+import {
+  Button,
+  RIDE_STATUS_TERMS,
+  RIDE_TICKET_TERMS,
+  STRAVA_SYNC_TERMS,
+} from 'ui';
 import {
   RegistrationTicket,
   type RegistrationTicketProps,
@@ -11,6 +16,31 @@ import {
   ticketStatusTerm,
   type TicketState,
 } from '@/features/participant/ride-detail/lib/ticket-state';
+import { resetStravaStatusCache } from '@/features/participant/ride-detail/components/StravaSync';
+
+// CR-234: answers `GET /api/v1/strava/status` for the Strava stories; every other
+// request goes through untouched.
+function stubStravaStatus(available: boolean) {
+  return () => {
+    resetStravaStatusCache();
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const raw = input instanceof Request ? input.url : String(input);
+      if (
+        new URL(raw, window.location.href).pathname === '/api/v1/strava/status'
+      ) {
+        return new Response(JSON.stringify({ available }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return original(input, init);
+    };
+    return () => {
+      globalThis.fetch = original;
+      resetStravaStatusCache();
+    };
+  };
+}
 
 // The ride page's registration card (CR-151/CR-155). CR-170: a state change
 // after mount is shown, not swapped — the frame colour eases over and the
@@ -26,6 +56,8 @@ const registration: Registration = {
   cancelledAt: null,
   finishClaimedAt: null,
   attendance: null,
+  stravaVerifiedAt: null,
+  stravaActivityId: null,
 };
 
 const base: RegistrationTicketProps = {
@@ -183,6 +215,61 @@ export const FinishClaimed: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Отозвать отметку' }),
     ).toBeVisible();
+  },
+};
+
+/** CR-234: the server has a Strava application — the rider can back the
+ * finish with their Strava ride instead of (or after) a manual claim. */
+export const FinishStravaSync: Story = {
+  args: FinishCheckInOpen.args,
+  beforeEach: stubStravaStatus(true),
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByRole('button', {
+        name: STRAVA_SYNC_TERMS.connectButton,
+      }),
+    ).toBeEnabled();
+    await expect(canvas.getByText(STRAVA_SYNC_TERMS.syncHint)).toBeVisible();
+  },
+};
+
+/** CR-234: claimed by hand — the Strava check is still on offer. */
+export const FinishClaimedStravaSync: Story = {
+  args: FinishClaimed.args,
+  globals: { theme: 'dark' },
+  beforeEach: stubStravaStatus(true),
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByRole('button', {
+        name: STRAVA_SYNC_TERMS.connectButton,
+      }),
+    ).toBeVisible();
+  },
+};
+
+/** CR-234: the claim is backed by a Strava ride — the rider's own link to it. */
+export const FinishStravaVerified: Story = {
+  args: {
+    ...FinishCheckInOpen.args,
+    viewerRegistration: {
+      ...registration,
+      finishClaimedAt: '2026-10-03T09:00:00.000Z',
+      stravaVerifiedAt: '2026-10-03T09:00:00.000Z',
+      stravaActivityId: '20489295499',
+    },
+  },
+  globals: { theme: 'dark' },
+  beforeEach: stubStravaStatus(true),
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText(STRAVA_SYNC_TERMS.verifiedTitle),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('link', { name: STRAVA_SYNC_TERMS.openActivity }),
+    ).toHaveAttribute('href', 'https://www.strava.com/activities/20489295499');
+    await expect(
+      canvas.queryByRole('button', { name: STRAVA_SYNC_TERMS.connectButton }),
+    ).not.toBeInTheDocument();
   },
 };
 

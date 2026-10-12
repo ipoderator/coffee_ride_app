@@ -93,6 +93,7 @@ export function participant(
     group: null,
     finishClaimedAt: null,
     attendance: null,
+    stravaVerified: false,
     ...extra,
   };
 }

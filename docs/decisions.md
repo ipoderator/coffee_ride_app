@@ -1588,3 +1588,68 @@ action log.
   existing row satisfies); dropping the feature means dropping the module and
   leaving the columns null.
 - No admin link in the site header: the section is reached at `/admin` directly.
+
+## ADR-033 — Strava finish verification: one-shot OAuth, no stored tokens, the organizer sees only the fact
+
+Status: Accepted (2026-10-11, owner decisions, CR-234). Extends ADR-027.
+
+### Context
+
+The owner wants a participant to confirm a ride they finished with their Strava
+activity («Синхронизировать со Strava»). ADR-027 keeps the participant's claim and
+the organizer's `attendance` apart. The Strava API Agreement allows a user's Strava
+data to be shown only to that user (others only with explicit consent), and a new
+Strava app starts with an athlete capacity of 1 until Strava reviews it.
+
+### Decision
+
+1. **A match backs the claim; it never decides.** It writes the same
+   `finishClaimedAt` CR-181's «Отметить финиш» writes (keeping an earlier one) plus
+   `strava_verified_at`/`strava_activity_id` on the registration (both or neither,
+   only with a claim — CHECK `registrations_strava_consistent`). `attendance` stays
+   the organizer's; «Подтвердить всех заявивших» picks verified claims up as claims.
+   Withdrawing the claim clears the mark. Only while `attendance` is null.
+2. **One-shot OAuth, nothing stored.** `POST /v1/rides/:id/strava-sync` returns
+   Strava's consent URL (`scope=activity:read`); Strava redirects to
+   `WEB_ORIGIN/api/v1/strava/callback`, which exchanges the code, lists the athlete's
+   activities in the ride's window, matches, writes, and **revokes the grant**
+   (`/oauth/deauthorize`) before answering. No access/refresh token is persisted or
+   logged (the callback route logs at `warn`, so the `code` never reaches the request
+   log). Revoking also frees the app's athlete capacity after every sync.
+3. **The OAuth `state` is the CSRF guard for the state-changing GET**: HMAC-signed
+   `{userId, rideId, exp 10 min, nonce}` with a key derived from `AUTH_SECRET` under
+   its own label, and the callback requires the signed user to be the session's user.
+   Every outcome is a `303` back to the ride page with `?strava=<outcome>` — never an
+   error body mid-navigation.
+4. **Matching** (owner decision): a bike `sport_type` (not `VirtualRide`) starting
+   between 90 min before and 120 min after the ride's start, whose track passes
+   within 200 m of ≥70% of the ride's stored route geometry. The track is the list's
+   `summary_polyline`, or — Strava leaves it empty for some athletes' activities —
+   the activity's `latlng` stream (at most 3 candidates, so ≤3 extra calls). The log
+   records only counts and the best coverage ratio. Without a route: within 1 km of the meeting point and ≥70% of the
+   planned distance. Pure, unit-tested `modules/strava/match.ts`.
+5. **Visibility**: the organizer's participant list carries only
+   `stravaVerified: boolean` («Проверено Strava»); no distance/time/track is shown
+   to anyone else or stored. The participant's own registration carries the activity
+   id for a «Открыть поездку в Strava» link.
+6. **Integration shape**: `modules/strava/strava-client.ts` is the only Strava HTTP
+   code — `packages/resilience` with one breaker; 4xx = `StravaRejectedError`
+   (not retried, not counted), 5xx/429/transport/odd body = `StravaUnavailableError`;
+   the code exchange is never retried (single-use), reads are retried once.
+   `plugins/strava.ts` decorates `app.stravaClient` or `null` without both
+   `STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET`; `GET /v1/strava/status` tells the web
+   app whether to show the button.
+
+### Consequences
+
+- A private activity or a hidden map can't be verified — the participant still has
+  the manual claim. The athlete must re-consent on every sync (the grant is revoked).
+- Strava's app-wide read limit (100 / 15 min, 1000 / day) bounds syncs; each costs
+  two to three calls. Both endpoints have a per-IP 10/min tier. Raising the limit
+  and the athlete capacity is an owner-side request to Strava.
+- Production needs the Strava app's Authorization Callback Domain set to `DOMAIN`.
+
+### Rollback
+
+Unset the two env vars (the button disappears). Fully: drop the module and the
+migration `0027` columns; nothing else reads them.

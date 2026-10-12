@@ -121,69 +121,72 @@ ADR-021's "no card fill" rule, where `bg-raised` equalled `bg`.
 
 ### Light theme
 
-| Token                | Hex       | Contrast              | Use                                                            |
-| -------------------- | --------- | --------------------- | -------------------------------------------------------------- |
-| `bg`                 | `#F3F1F5` | —                     | Page background                                                |
-| `bg-raised`          | `#FFFFFF` | —                     | Panels, header, tab bar                                        |
-| `surface`            | `#F8F6F9` | —                     | Metric cells, selected nav item                                |
-| `text`               | `#17141A` | 17.4:1                | Primary text — the ink                                         |
-| `text-secondary`     | `#413C47` | ~11:1                 | Labels, captions, metric labels                                |
-| `text-muted`         | `#5A5460` | ~7:1                  | Least-important text; still AA                                 |
-| `frame`              | `#17141A` | 17.4:1                | Ink rule: map frame, secondary-button outline, strong dividers |
-| `border`             | `#DDD7E1` | decorative            | Hairlines between rows, card outlines                          |
-| `border-input`       | `#A89CB0` | ~3.3:1                | Form control boundaries (AA for UI components)                 |
-| `primary`            | `#74597E` | 6.1:1                 | AA text role: links, focus ring, active tab                    |
-| `primary-hover`      | `#5F4869` | higher                | Primary text/link hover                                        |
-| `on-primary`         | `#FFFFFF` | on `primary`          | Text on a small `primary`-filled chip                          |
-| `primary-tint`       | `#EDE6F0` | `primary` on it, AA   | Selected state behind primary-role content (sparingly)         |
-| `brand`              | `#82668C` | ≥3:1 (graphics)       | Logo, route track, graphic elements only — not AA text         |
-| `primary-fill`       | `#82668C` | white on it ~5:1      | Primary button fill                                            |
-| `primary-fill-hover` | `#6C5376` | higher                | Primary button fill hover                                      |
-| `on-primary-fill`    | `#FFFFFF` | 5:1 on `primary-fill` | Text on the primary button fill                                |
-| `route`              | `#82668C` | graphics              | The ride's route line on a map (6px) — same value as `brand`   |
-| `route-casing`       | `#FFFFFF` | —                     | Casing under the route line                                    |
-| `elevation`          | `#94650F` | ~5.5:1                | Elevation: profile chart, gain (renamed from `contour`)        |
-| `success`            | `#1D6F38` | ~6:1                  | Registration confirmed, published                              |
-| `warning`            | `#7A5300` | ~6.5:1                | Warning **text**: waitlist, closing registration, degraded     |
-| `warning-fill`       | `#FFC94D` | —                     | Warning fill (badge/notice background)                         |
-| `on-warning-fill`    | `#17141A` | on `warning-fill`     | Ink text on the warning fill                                   |
-| `info`               | `#0B65A6` | ~6:1                  | Neutral informational notes, ride updates                      |
-| `info-tint`          | `#E3F0FA` | `info` on it          | Info notice background                                         |
-| `danger`             | `#B92A1E` | 5.48:1                | Cancellation, destructive action, validation error (KI-080)    |
-| `on-danger`          | `#FFFFFF` | on `danger`           | Text on a filled danger badge/button                           |
+| Token                | Hex       | Contrast                            | Use                                                            |
+| -------------------- | --------- | ----------------------------------- | -------------------------------------------------------------- |
+| `bg`                 | `#F3F1F5` | —                                   | Page background                                                |
+| `bg-raised`          | `#FFFFFF` | —                                   | Panels, header, tab bar                                        |
+| `surface`            | `#F8F6F9` | —                                   | Metric cells, selected nav item                                |
+| `text`               | `#17141A` | 17.4:1                              | Primary text — the ink                                         |
+| `text-secondary`     | `#413C47` | ~11:1                               | Labels, captions, metric labels                                |
+| `text-muted`         | `#5A5460` | ~7:1                                | Least-important text; still AA                                 |
+| `frame`              | `#17141A` | 17.4:1                              | Ink rule: map frame, secondary-button outline, strong dividers |
+| `border`             | `#DDD7E1` | decorative                          | Hairlines between rows, card outlines                          |
+| `border-input`       | `#A89CB0` | ~3.3:1                              | Form control boundaries (AA for UI components)                 |
+| `primary`            | `#74597E` | 6.1:1                               | AA text role: links, focus ring, active tab                    |
+| `primary-hover`      | `#5F4869` | higher                              | Primary text/link hover                                        |
+| `on-primary`         | `#FFFFFF` | on `primary`                        | Text on a small `primary`-filled chip                          |
+| `primary-tint`       | `#EDE6F0` | `primary` on it, AA                 | Selected state behind primary-role content (sparingly)         |
+| `brand`              | `#82668C` | ≥3:1 (graphics)                     | Logo, route track, graphic elements only — not AA text         |
+| `primary-fill`       | `#82668C` | white on it ~5:1                    | Primary button fill                                            |
+| `primary-fill-hover` | `#6C5376` | higher                              | Primary button fill hover                                      |
+| `on-primary-fill`    | `#FFFFFF` | 5:1 on `primary-fill`               | Text on the primary button fill                                |
+| `route`              | `#82668C` | graphics                            | The ride's route line on a map (6px) — same value as `brand`   |
+| `route-casing`       | `#FFFFFF` | —                                   | Casing under the route line                                    |
+| `elevation`          | `#94650F` | ~5.5:1                              | Elevation: profile chart, gain (renamed from `contour`)        |
+| `success`            | `#1D6F38` | ~6:1                                | Registration confirmed, published                              |
+| `warning`            | `#7A5300` | ~6.5:1                              | Warning **text**: waitlist, closing registration, degraded     |
+| `warning-fill`       | `#FFC94D` | —                                   | Warning fill (badge/notice background)                         |
+| `on-warning-fill`    | `#17141A` | on `warning-fill`                   | Ink text on the warning fill                                   |
+| `info`               | `#0B65A6` | ~6:1                                | Neutral informational notes, ride updates                      |
+| `info-tint`          | `#E3F0FA` | `info` on it                        | Info notice background                                         |
+| `strava`             | `#FC5200` | not for text                        | Strava's brand orange: border/tint of Strava evidence (CR-234) |
+| `strava-text`        | `#AD3C00` | ≥ 4.86:1 on grounds and `strava/10` | «Проверено Strava» text, «View on Strava» link                 |
+| `danger`             | `#B92A1E` | 5.48:1                              | Cancellation, destructive action, validation error (KI-080)    |
+| `on-danger`          | `#FFFFFF` | on `danger`                         | Text on a filled danger badge/button                           |
 
 ### Dark theme (the default — §1)
 
-| Token                | Hex       | Contrast            | Use                                         |
-| -------------------- | --------- | ------------------- | ------------------------------------------- |
-| `bg`                 | `#121015` | —                   | Page background                             |
-| `bg-raised`          | `#1C1920` | —                   | Panels, header, tab bar                     |
-| `surface`            | `#25212A` | —                   | Metric cells, selected nav item             |
-| `text`               | `#F3F0F5` | ~15:1               | Primary text                                |
-| `text-secondary`     | `#C7C0CC` | ~10:1               | Labels, captions                            |
-| `text-muted`         | `#A39CA9` | ~6.5:1              | Least-important text                        |
-| `frame`              | `#F3F0F5` | ~15:1               | Ink rule                                    |
-| `border`             | `#2E2934` | decorative          | Hairlines                                   |
-| `border-input`       | `#4A4450` | ~3.3:1              | Form control boundaries                     |
-| `primary`            | `#B8A0C1` | ~7:1                | AA text role: links, focus ring, active tab |
-| `primary-hover`      | `#C7B3CF` | higher              | Primary text/link hover                     |
-| `on-primary`         | `#1C0F1E` | on `primary`        | Text on a small `primary`-filled chip       |
-| `primary-tint`       | `#2E2535` | `primary` on it, AA | Selected state (sparingly)                  |
-| `brand`              | `#B8A0C1` | ≥3:1 (graphics)     | Logo, route track, graphic elements         |
-| `primary-fill`       | `#82668C` | white on it ~5:1    | Primary button fill (same hex both themes)  |
-| `primary-fill-hover` | `#93779D` | higher              | Primary button fill hover                   |
-| `on-primary-fill`    | `#FFFFFF` | on `primary-fill`   | Text on the primary button fill             |
-| `route`              | `#B8A0C1` | graphics            | Route line — same value as `brand`          |
-| `route-casing`       | `#121015` | —                   | Casing under the route line                 |
-| `elevation`          | `#D9A441` | ~7:1                | Elevation (renamed from `contour`)          |
-| `success`            | `#62C483` | ~8:1                | —                                           |
-| `warning`            | `#F0C04E` | ~10:1               | Warning text                                |
-| `warning-fill`       | `#F0C04E` | —                   | Warning fill                                |
-| `on-warning-fill`    | `#121015` | on `warning-fill`   | Text on the warning fill                    |
-| `info`               | `#6DB4EE` | ~8:1                | —                                           |
-| `info-tint`          | `#15293A` | `info` on it        | Info notice background                      |
-| `danger`             | `#FF5A4F` | 6.05:1              | Unchanged                                   |
-| `on-danger`          | `#171614` | on `danger`         | Text on a filled danger badge               |
+| Token                | Hex       | Contrast                 | Use                                         |
+| -------------------- | --------- | ------------------------ | ------------------------------------------- |
+| `bg`                 | `#121015` | —                        | Page background                             |
+| `bg-raised`          | `#1C1920` | —                        | Panels, header, tab bar                     |
+| `surface`            | `#25212A` | —                        | Metric cells, selected nav item             |
+| `text`               | `#F3F0F5` | ~15:1                    | Primary text                                |
+| `text-secondary`     | `#C7C0CC` | ~10:1                    | Labels, captions                            |
+| `text-muted`         | `#A39CA9` | ~6.5:1                   | Least-important text                        |
+| `frame`              | `#F3F0F5` | ~15:1                    | Ink rule                                    |
+| `border`             | `#2E2934` | decorative               | Hairlines                                   |
+| `border-input`       | `#4A4450` | ~3.3:1                   | Form control boundaries                     |
+| `primary`            | `#B8A0C1` | ~7:1                     | AA text role: links, focus ring, active tab |
+| `primary-hover`      | `#C7B3CF` | higher                   | Primary text/link hover                     |
+| `on-primary`         | `#1C0F1E` | on `primary`             | Text on a small `primary`-filled chip       |
+| `primary-tint`       | `#2E2535` | `primary` on it, AA      | Selected state (sparingly)                  |
+| `brand`              | `#B8A0C1` | ≥3:1 (graphics)          | Logo, route track, graphic elements         |
+| `primary-fill`       | `#82668C` | white on it ~5:1         | Primary button fill (same hex both themes)  |
+| `primary-fill-hover` | `#93779D` | higher                   | Primary button fill hover                   |
+| `on-primary-fill`    | `#FFFFFF` | on `primary-fill`        | Text on the primary button fill             |
+| `route`              | `#B8A0C1` | graphics                 | Route line — same value as `brand`          |
+| `route-casing`       | `#121015` | —                        | Casing under the route line                 |
+| `elevation`          | `#D9A441` | ~7:1                     | Elevation (renamed from `contour`)          |
+| `success`            | `#62C483` | ~8:1                     | —                                           |
+| `warning`            | `#F0C04E` | ~10:1                    | Warning text                                |
+| `warning-fill`       | `#F0C04E` | —                        | Warning fill                                |
+| `on-warning-fill`    | `#121015` | on `warning-fill`        | Text on the warning fill                    |
+| `info`               | `#6DB4EE` | ~8:1                     | —                                           |
+| `info-tint`          | `#15293A` | `info` on it             | Info notice background                      |
+| `strava-text`        | `#FF6A26` | ≥ 4.92:1 on dark grounds | «Проверено Strava» text/link (CR-234)       |
+| `danger`             | `#FF5A4F` | 6.05:1                   | Unchanged                                   |
+| `on-danger`          | `#171614` | on `danger`              | Text on a filled danger badge               |
 
 `RouteCover`'s window (§1, new — `cover-bg` `#16131A`, `cover-line` `#2C2732`,
 `cover-ink` `#FFFFFF`, `cover-route` `#B8A0C1`, `cover-elevation` `#82668C`) is
