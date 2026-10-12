@@ -100,3 +100,7 @@ Files: `packages/types/src/{next-path.ts,api/auth.ts,index.ts}`, `apps/api/src/m
 Validation: api auth+notifications 90/90 (5 skipped, no Redis) on `coffee_ride_test`; web unit auth 94/94, web coverage 84.54 % lines ≥ 84.00 baseline; Storybook `EmailVerification` 8/8; tsc/eslint/prettier clean; local browser run with captured email: `/me/rides` → `/register?next=…` → link `/verify-email?token=…&next=%2Fme%2Frides` → «Перейти ко входу» → sign-in → `/me/rides`.
 Decisions: an unsafe `next` is dropped, never a `400`; resend/admin-resend links stay without `next` (no return context).
 Follow-up: none.
+
+## 2026-10-12 — CR-245 deployed
+
+Deploy: `b19a89a` (PR #46, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on `main` (ci incl. e2e, docker-smoke); no migrations. `/health` db/redis/s3 ok; `/`, `/register?next=…`, `/login`, `/me/rides`, `/verify-email` 200. The emailed-link `next` itself is checked by the next real registration (no test account was created on production).
