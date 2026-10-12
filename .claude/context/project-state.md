@@ -24,7 +24,7 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-Production QA follow-ups, 2026-10-12, on `fix/verify-email-next` (committed):
+Production QA follow-ups, 2026-10-12, deployed to coffeeride.site (`b19a89a`, PR #46):
 CR-245 — the emailed verification link keeps `next` (KI-089 resolved): optional `next`
 on `POST /v1/auth/register`, checked by the shared `safeNextPath` (`packages/types`).
 CR-244 — «reset email not sent» investigated on production: the typed address matched
@@ -57,8 +57,8 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
 ## In progress
 
-CR-245 — committed; validated locally (tests, coverage, browser run with captured email); awaits
-PR/deploy. CR-244 — QA to retry the reset with the exact registered address;
+CR-245 — deployed 2026-10-12 (`b19a89a`); production check of the emailed link waits for
+the next real registration from a page with `next`. CR-244 — QA to retry the reset with the exact registered address;
 owner call on mailing an unknown address «нет аккаунта».
 
 CR-235..CR-243 — deployed 2026-10-12 (`ef49fcd`). CR-236's profile-link item needs the QA's
