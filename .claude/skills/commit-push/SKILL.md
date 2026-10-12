@@ -1,6 +1,6 @@
 ---
 name: commit-push
-description: Commit the current task's changes and push them to GitHub (origin). Use when the user says "/commit-push", "коммит и пуш", "закоммить и запушь", "push to github", or otherwise asks to commit and push finished work. Follows .claude/rules/git.md — reviews status/diff, checks for secrets, stages only task-related files, writes a conventional commit message, pushes the current branch.
+description: Commit the current task's changes and push them to GitHub (origin). Use when the user says "/commit-push", "коммит и пуш", "закоммить и запушь", "push to github", or otherwise asks to commit and push finished work. Follows .claude/rules/git.md — reviews status/diff, checks for secrets, stages only task-related files, writes a conventional commit message, pushes a task branch and merges it into main through a green PR.
 ---
 
 # Commit and push
@@ -40,9 +40,13 @@ project-state.md` or `current-task.md` call this work "uncommitted", change that
    If a hook (husky/lint-staged) fails: fix the root cause, re-stage, create a
    **new** commit — never `--no-verify`, never `--amend` a commit that's already
    pushed.
-8. **Push** the current branch: `git push origin HEAD`. This project commits
-   directly to `main` (no PR workflow so far) — keep that unless the user asks for a
-   branch/PR. If the push is rejected as non-fast-forward: `git pull --rebase origin
+8. **Branch, push, PR** (`rules/git.md` → "Branch flow"): never commit on `main`. If
+   the work is on `main`, first `git switch -c <type>/<slug>` (the uncommitted changes
+   come along). Push the branch (`git push -u origin HEAD`) and open a PR into `main`
+   (`gh pr create --base main`, body ending with the session's PR attribution). Watch
+   the PR's checks; merge with `gh pr merge --squash --delete-branch` only when all are
+   green, then `git switch main && git pull`. Deploy to production only from `main`
+   after that. If the push is rejected as non-fast-forward: `git pull --rebase origin
 <branch>`, re-run the affected checks if the rebase pulled in code, push again.
    Never force-push unless the user explicitly asks.
 
@@ -55,5 +59,5 @@ project-state.md` or `current-task.md` call this work "uncommitted", change that
 
 ## Report
 
-Commit hash + subject, branch, push result (`origin/<branch>` updated), and any files
+Commit hash + subject, branch, PR link and its check results, merge result, and any files
 deliberately left uncommitted.
