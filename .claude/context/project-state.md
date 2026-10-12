@@ -25,7 +25,7 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 ## Current task
 
 Production browser QA, items 1–9 (reproduced and fixed locally only, production
-untouched), all on branch `fix/publish-saves-form`, committed, PR into `main`:
+untouched), deployed to coffeeride.site (`ef49fcd`, PR #43):
 CR-235 (P0) draft «Опубликовать» saves the form first; CR-236 create form calendar
 and field errors (profile link not reproduced); CR-237 «Закрыть регистрацию» asks
 first and says it is irreversible (lifecycle stays one-way); CR-238 the organizer
@@ -61,10 +61,7 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
 ## In progress
 
-CR-235..CR-243 — validated locally, committed; PR into `main` (then deploy from
-`main`). The mobile `visual-regression` baselines (discovery grid/map,
-organizer dashboard on Pixel 5) are expected to move with CR-241 and need a refresh
-from the CI artifact after the push. CR-236's profile-link item needs the QA's
+CR-235..CR-243 — deployed 2026-10-12 (`ef49fcd`). CR-236's profile-link item needs the QA's
 steps/device; a «reopen registration» transition (CR-237) would be a lifecycle change
 — owner call. `EditRideForm` still keeps field errors until the next save (owner call).
 

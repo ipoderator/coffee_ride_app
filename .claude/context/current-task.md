@@ -89,8 +89,9 @@ fixed locally only (production neither tested nor changed). Branch
   page overflow at 320/390/768/989/1024; menu focus/inert/Esc/outside/resize; share
   manual dialog, clipboard copy, `.ics` download + toast; reschedule heading ring
   (`:focus-visible`, 2px solid); org menu heading outside `role="menu"`.
-- Not run: mobile visual baselines (need CI artifact after a push); api untouched.
+- CI: mobile `organizer-dashboard` baseline refreshed from run 38267295567; PR and
+  `main` CI green; deployed, `/health` ok.
 
 ## Final result
 
-Items 6–9 fixed and validated locally; committed on `fix/publish-saves-form`, PR into `main`.
+Items 6–9 fixed, merged (PR #43, `ef49fcd`) and deployed to coffeeride.site 2026-10-12.

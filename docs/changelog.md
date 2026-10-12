@@ -44,6 +44,11 @@ Validation (CR-240..243): web 929/929, ui 272/272, maps-2gis 82/82 (+6 live skip
 Decisions: the `fitBounds` hardening lives in the adapter, not in each map caller.
 Follow-up: refresh mobile visual baselines from the CI artifact.
 
+## 2026-10-12 — CR-235..CR-243 deployed
+
+Deploy: `ef49fcd` (PR #43, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on `main` (ci incl. e2e + visual baselines, docker-smoke); no migrations. `/health` db/redis/s3 ok; `/`, `/organizer`, `/me/rides` 200.
+CI: the PR's first run failed only on the mobile `organizer-dashboard` screenshot (3 % of pixels): the intended CR-241 header/tabs change plus CI's subpixel text antialiasing, which the CR-188 baseline lacked; refreshed from the run's actual (layout below the tabs unchanged).
+
 ## Archiving (keep this file cheap to read)
 
 When this file exceeds ~15 entries, move all but the most recent ~8 into
