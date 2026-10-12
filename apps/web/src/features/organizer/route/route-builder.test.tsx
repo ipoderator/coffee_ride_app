@@ -151,8 +151,13 @@ describe('RouteBuilder', () => {
       { lat: 55.75, lng: 37.6 },
       { lat: 55.76, lng: 37.6 },
     ]);
-    const polyline = renderState.handle!.setPolyline.mock.calls.at(-1)![0];
-    expect(polyline.points).toEqual(ROAD_LINE);
+    // `onBuilt` runs right after `setGeometry`, before the re-render whose
+    // effect draws the line — wait for the line itself, not for `onBuilt`.
+    await waitFor(() =>
+      expect(
+        renderState.handle!.setPolyline.mock.calls.at(-1)![0]?.points,
+      ).toEqual(ROAD_LINE),
+    );
     expect(renderState.handle!.fitBounds).toHaveBeenCalledWith(
       ROAD_LINE,
       expect.anything(),
