@@ -5,7 +5,7 @@ import {
   passwordResetTokens,
   sessions,
 } from 'db/schema';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv, type Env } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
@@ -201,6 +201,74 @@ describe('POST /v1/auth/register', () => {
     expect(body.errors.length).toBeGreaterThan(0);
 
     await app.close();
+  });
+
+  // CR-244 (KI-089): the emailed link carries the return target, so «Перейти ко
+  // входу» after verifying leads back to where registration started.
+  describe('emailed verification link', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    async function registerAndCaptureLink(next?: string): Promise<URL> {
+      const fetchMock = vi.fn(
+        async (_url: string, _init: RequestInit) =>
+          new Response(JSON.stringify({ status: 'success' }), { status: 200 }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const app = await buildApp(
+        loadEnv({
+          NODE_ENV: 'test',
+          AUTH_SECRET: 'a-test-only-secret',
+          DATABASE_URL,
+          WEB_ORIGIN,
+          UNISENDER_API_KEY: 'a-test-key',
+          EMAIL_FROM_ADDRESS: 'noreply@example.test',
+        }),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: {
+          email: uniqueEmail(),
+          password: 'a-strong-password-123',
+          next,
+        },
+      });
+      await app.close();
+
+      expect(response.statusCode).toBe(201);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const sent = JSON.parse(fetchMock.mock.calls[0]![1].body as string) as {
+        message: { body: { plaintext: string } };
+      };
+      const link = /https?:\/\/\S+/.exec(sent.message.body.plaintext)?.[0];
+      expect(link).toBeDefined();
+      return new URL(link!);
+    }
+
+    it('appends a safe `next` to the link', async () => {
+      const link = await registerAndCaptureLink('/me/rides?tab=past');
+
+      expect(`${link.origin}${link.pathname}`).toBe(
+        `${WEB_ORIGIN}/verify-email`,
+      );
+      expect(link.searchParams.get('token')).toBeTruthy();
+      expect(link.searchParams.get('next')).toBe('/me/rides?tab=past');
+    });
+
+    it.each([
+      ['no `next`', undefined],
+      ['an absolute URL', 'https://evil.example/'],
+      ['a protocol-relative URL', '//evil.example'],
+      ['an auth page', '/login'],
+    ])('leaves `next` off for %s and still registers', async (_label, next) => {
+      const link = await registerAndCaptureLink(next);
+
+      expect(link.searchParams.get('token')).toBeTruthy();
+      expect(link.searchParams.has('next')).toBe(false);
+    });
   });
 
   it('rate-limits after the auth tier threshold', async () => {

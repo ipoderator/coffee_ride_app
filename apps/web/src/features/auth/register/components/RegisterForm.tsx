@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
-import { loginHref, verifyEmailHref } from '@/lib/auth/next-path';
+import { loginHref, safeNextPath, verifyEmailHref } from '@/lib/auth/next-path';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
 import {
   fieldErrorMessage,
@@ -115,7 +115,11 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
     setIsPending(true);
 
     try {
-      const response = await registerAccount(parsed.data);
+      // CR-244 (KI-089): the API appends `next` to the emailed link too.
+      const safeNext = safeNextPath(next);
+      const response = await registerAccount(
+        safeNext ? { ...parsed.data, next: safeNext } : parsed.data,
+      );
       setVerificationUrl(response.verificationUrl);
       setEmailVerified(response.user.emailVerified);
       setSucceeded(true);

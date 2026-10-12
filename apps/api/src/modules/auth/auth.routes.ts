@@ -6,6 +6,7 @@ import {
   loginRequestSchema,
   registerRequestSchema,
   resetPasswordRequestSchema,
+  verifyEmailHref,
   verifyEmailRequestSchema,
 } from 'types';
 import type { Env } from '../../env.js';
@@ -164,7 +165,9 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         app.notificationQueue,
         app.emailProvider,
         user.email,
-        `${env.WEB_ORIGIN}/verify-email?token=${verificationToken}`,
+        // CR-244 (KI-089): the return target rides along, validated by the
+        // same `safeNextPath` the web pages use — an unsafe one is dropped.
+        `${env.WEB_ORIGIN}${verifyEmailHref(verificationToken, request.body.next)}`,
       );
 
       return reply.status(201).send(body);
