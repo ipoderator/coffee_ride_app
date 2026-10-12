@@ -1444,3 +1444,17 @@ leaving Dependabot's 3-day quarantine on 2026-10-05 ~10:35Z — check it has.
 CR-210..CR-212 are committed; `main` is green end to end at `941c555`
 (run `37425849763`, e2e 60/60, no flaky). CR-212 supersedes Dependabot PR #22 — close it rather than
 merging, its `package.json` change is a subset that breaks ESLint on its own.
+
+## Current task paragraph, condensed 2026-10-12 (CR-245)
+
+Production browser QA, items 1–9 (reproduced and fixed locally only, production
+untouched), deployed to coffeeride.site (`ef49fcd`, PR #43):
+CR-235 (P0) draft «Опубликовать» saves the form first; CR-236 create form calendar
+and field errors (profile link not reproduced); CR-237 «Закрыть регистрацию» asks
+first and says it is irreversible (lifecycle stays one-way); CR-238 the organizer
+sees their own hidden riders list on `/rides/[id]`; CR-239 the ride page applies a
+registration change together with the re-read counts. CR-240 `AppHeader` phone menu
+is a modal layer (Esc, focus, inert page); CR-241 no sideways overflow at 320–1023px
+(scroll-row fades, full header bar from `lg`, truncated email); CR-242 share/`.ics`
+feedback and fallbacks; CR-243 group chip resync, `fitBounds` guards, menu semantics
+(`NavMenu` `header`, theme `menuitemradio`), visible focus.

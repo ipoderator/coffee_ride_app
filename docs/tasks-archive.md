@@ -1537,3 +1537,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       the rest are log-only) — done 2026-10-10 on `feat/admin-panel`
 - [x] CR-232 item 6 — overview counters link to list filters + «Обновить»; log
       filters by target type/action (URL), deleted target shows its id — done 2026-10-10
+- [x] CR-234 «Синхронизировать со Strava» (ADR-033): a participant backs the finish
+      claim with their own Strava ride (one-shot OAuth, no stored tokens, ≥70% of the
+      route within 200 m); organizer sees only «Проверено Strava» — done 2026-10-11
+- [x] CR-232 item 7 — admin validation sweep (320/390/1280 × themes, filters,
+      disposable mutations) + review fixes: malformed id → not found, encoded ids,
+      non-JSON errors, dialog locked while sending — done 2026-10-10 on `feat/admin-panel`

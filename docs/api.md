@@ -20,6 +20,10 @@ POST `/v1/auth/register` — **implemented (CR-011)**. Body: `{ email, password 
 ADR-007, still Pending; see `docs/decisions.md`). `409 email_already_registered`
 on a duplicate email (case-insensitive). Rate-limited (5/min/IP,
 `.claude/context/known-issues.md` KI-022 for the interim-hardening caveats).
+CR-245 (KI-089): optional `next` — the page to return to; when `safeNextPath`
+(`packages/types`, the same rules the web pages use) accepts it, the emailed link
+becomes `/verify-email?token=…&next=…`, so «Перейти ко входу» keeps it. An unsafe
+`next` is dropped silently and never refuses the registration.
 
 POST `/v1/auth/verify-email` — **implemented (CR-011)**. Body: `{ token }`.
 `200` → `{ user }` with `emailVerified: true`. `400` with code

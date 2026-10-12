@@ -24,18 +24,14 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-Production browser QA, items 1–9 (reproduced and fixed locally only, production
-untouched), deployed to coffeeride.site (`ef49fcd`, PR #43):
-CR-235 (P0) draft «Опубликовать» saves the form first; CR-236 create form calendar
-and field errors (profile link not reproduced); CR-237 «Закрыть регистрацию» asks
-first and says it is irreversible (lifecycle stays one-way); CR-238 the organizer
-sees their own hidden riders list on `/rides/[id]`; CR-239 the ride page applies a
-registration change together with the re-read counts. CR-240 `AppHeader` phone menu
-is a modal layer (Esc, focus, inert page); CR-241 no sideways overflow at 320–1023px
-(scroll-row fades, full header bar from `lg`, truncated email); CR-242 share/`.ics`
-feedback and fallbacks; CR-243 group chip resync, `fitBounds` guards, menu semantics
-(`NavMenu` `header`, theme `menuitemradio`), visible focus.
+Production QA follow-ups, 2026-10-12, on `fix/verify-email-next` (committed):
+CR-245 — the emailed verification link keeps `next` (KI-089 resolved): optional `next`
+on `POST /v1/auth/register`, checked by the shared `safeNextPath` (`packages/types`).
+CR-244 — «reset email not sent» investigated on production: the typed address matched
+no account (Gmail `+` alias); no defect.
 
+Before this: CR-235..CR-243 — production browser QA items 1–9, deployed (`ef49fcd`,
+PR #43; details in the changelog).
 Before this: CR-234 — «Синхронизировать со Strava» (ADR-033), deployed (migration
 `0027`); on prod the feature stays hidden until `STRAVA_*` is set there (owner-side
 settings below).
@@ -60,6 +56,10 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-245 — committed; validated locally (tests, coverage, browser run with captured email); awaits
+PR/deploy. CR-244 — QA to retry the reset with the exact registered address;
+owner call on mailing an unknown address «нет аккаунта».
 
 CR-235..CR-243 — deployed 2026-10-12 (`ef49fcd`). CR-236's profile-link item needs the QA's
 steps/device; a «reopen registration» transition (CR-237) would be a lifecycle change
@@ -103,9 +103,7 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    set by hand; `server-admin.ts` duplicates `server-ride.ts`'s forwarded headers;
    `/admin/users/<bad id>` renders the not-found page with HTTP 200 (admin-only,
    noindex; non-admins still get 404 — KI-098).
-1. **KI-089** — owner decision: carry `next` into the emailed verification link
-   (optional `next` on `POST /v1/auth/register`) or keep CR-197 web-only. CR-190
-   follow-ups: no e2e journey for the reschedule, no email (in-app only).
+1. **CR-190 follow-ups**: no e2e journey for the reschedule, no email (in-app only).
 2. **KI-057** (2GIS dark basemap) — blocked on the owner supplying a dark MapGL style
    id from their 2GIS account; then an additive `theme` option on `MapRenderOptions`
    mapped inside `packages/maps-2gis`.
@@ -137,8 +135,8 @@ Open KIs (details: `.claude/context/known-issues.md`): KI-045 Caddy/ACME never r
 real host; KI-055/056 Unisender and 2GIS REST unreachable from this machine;
 KI-075 2GIS demo key (≤ 50 km routing); KI-057 light basemap in the dark theme; KI-082
 undocumented tile-probe host (accepted, guarded weekly); KI-095 `braces` has no
-patched release (dev-only lint path); KI-086/089 await owner
-decisions; KI-021/026/038/042 long-standing narrow items.
+patched release (dev-only lint path); KI-086 awaits an owner
+decision; KI-021/026/038/042 long-standing narrow items.
 
 ## Do not break
 
@@ -147,4 +145,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-12 (CR-243)
+2026-10-12 (CR-245)

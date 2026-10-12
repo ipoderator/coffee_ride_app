@@ -19,6 +19,12 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-245 (production QA) the emailed verification link keeps `next`, so
+      «Перейти ко входу» returns to the page registration started from (KI-089) —
+      done 2026-10-12 on `fix/verify-email-next`. See docs/changelog.md
+- [x] CR-244 (production QA) password-reset email «not sent» — investigated on
+      production: the typed address matched no account (Gmail `+` alias); no
+      defect — 2026-10-12. See docs/changelog.md
 - [x] CR-240..CR-243 (production QA 6–9) phone menu modal (Esc, focus, inert page);
       no overflow at 320–1023 px (scroll-row fades, header bar from `lg`); share/`.ics`
       feedback + fallbacks; group chip resync, `fitBounds` guards, menu semantics,
@@ -36,9 +42,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-235 (P0, production QA) draft «Опубликовать» validates and saves the form
       before publishing; a failed save publishes nothing; one save + one publish on a
       double click — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
-- [x] CR-234 «Синхронизировать со Strava» (ADR-033): a participant backs the finish
-      claim with their own Strava ride (one-shot OAuth, no stored tokens, ≥70% of the
-      route within 200 m); organizer sees only «Проверено Strava» — done 2026-10-11
-- [x] CR-232 item 7 — admin validation sweep (320/390/1280 × themes, filters,
-      disposable mutations) + review fixes: malformed id → not found, encoded ids,
-      non-JSON errors, dialog locked while sending — done 2026-10-10 on `feat/admin-panel`

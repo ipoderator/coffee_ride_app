@@ -325,13 +325,19 @@ describe('RegisterForm', () => {
 
   // CR-197 (QA `fe0b4c2`): the dev verification link dropped `next`, so the
   // verified page's «Перейти ко входу» landed on `/me` instead of the ride.
+  // CR-244 (KI-089): the same safe `next` goes to the API, which appends it to
+  // the emailed link; an unsafe one is not sent at all.
   it.each([
-    ['/rides/ride-1', '/verify-email?token=tok-1&next=%2Frides%2Fride-1'],
-    ['https://evil.example/rides', '/verify-email?token=tok-1'],
-    ['//evil.example', '/verify-email?token=tok-1'],
+    [
+      '/rides/ride-1',
+      '/verify-email?token=tok-1&next=%2Frides%2Fride-1',
+      '/rides/ride-1',
+    ],
+    ['https://evil.example/rides', '/verify-email?token=tok-1', undefined],
+    ['//evil.example', '/verify-email?token=tok-1', undefined],
   ])(
     'carries only a safe `next` (%s) into the verification link',
-    async (next, expected) => {
+    async (next, expected, sentNext) => {
       registerAccountMock.mockResolvedValue({
         user: {
           id: '1',
@@ -358,6 +364,11 @@ describe('RegisterForm', () => {
       expect(
         await screen.findByRole('link', { name: expected }),
       ).toHaveAttribute('href', expected);
+      expect(registerAccountMock).toHaveBeenCalledWith({
+        email: 'rider@example.com',
+        password: 'a-strong-password-123',
+        ...(sentNext ? { next: sentNext } : {}),
+      });
     },
   );
 });

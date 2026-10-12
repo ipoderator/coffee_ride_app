@@ -8,6 +8,10 @@ import type { User } from '../domain/user.js';
 export const registerRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(12, 'Password must be at least 12 characters.'),
+  // CR-244 (KI-089): the page to return to after verifying and signing in,
+  // appended to the emailed verification link. Optional and never a reason to
+  // refuse a registration — the API keeps it only if `safeNextPath` accepts it.
+  next: z.string().optional(),
 });
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 

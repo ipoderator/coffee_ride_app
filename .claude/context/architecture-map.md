@@ -85,7 +85,7 @@ participants|updates` — the six-tab workspace «Управление заез�
 - `lib/`: `admin/` (client, nav registry, `use-admin-list`, server gate, error map,
   URL filters — pure `url-filters` + client `use-admin-url-filters`, CR-232),
   `cabinet/` (nav + widget registries, feature flags, ride workspace sections,
-  readiness), `auth/` (session context, `next-path` safe redirects, resend button),
+  readiness), `auth/` (session context, `next-path` re-exporting `types`' shared `safeNextPath` (CR-245), resend button),
   `api/` (errors, asset URLs, current user), `forms/` (Russian field errors + guard
   test), `datetime/zoned-time`, `maps/create-map-renderer.ts` (only `maps-2gis`
   import), `rides/` (+ `server-ride.ts`: server-side ride lookup for the 404, CR-224),
