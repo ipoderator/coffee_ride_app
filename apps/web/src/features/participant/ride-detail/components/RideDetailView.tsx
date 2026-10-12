@@ -65,7 +65,8 @@ import {
   getRideReviews,
   routeDownloadUrl,
 } from '../api';
-import { downloadIcs } from '../lib/calendar';
+import { downloadIcs, type CalendarEvent } from '../lib/calendar';
+import { shareLink } from '../lib/share';
 import { buildRouteTrack } from '../lib/route-track';
 import {
   ticketStatusTerm,
@@ -85,6 +86,7 @@ import { RidersSection } from './RidersSection';
 import { RouteMap } from './RouteMap';
 import { RouteMapPlaceholder } from './RouteMapPlaceholder';
 import { RouteTimeline } from './RouteTimeline';
+import { ShareLinkDialog } from './ShareLinkDialog';
 import { TicketBar, type TicketBarContent } from './TicketBar';
 import { TrackCover, type CoverMark } from './TrackCover';
 
@@ -223,7 +225,8 @@ function metric(
 function barContent(
   state: TicketState,
   data: {
-    place: number;
+    count: number;
+    limit: number | null;
     waitlistCount: number;
     startNumber: number | null;
     when: string;
@@ -235,7 +238,7 @@ function barContent(
     case 'open':
     case 'few':
       return {
-        title: RIDE_TICKET_TERMS.barNumber(data.place),
+        title: RIDE_TICKET_TERMS.barCount(data.count, data.limit),
         subtitle: `${data.when} · ${data.seatsLine}`,
         action: REGISTRATION_ACTION_TERMS.register,
         variant: 'primary',
@@ -289,6 +292,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
   const [view, setView] = useState<HeroView>('track');
   const [hoverKm, setHoverKm] = useState<number | null>(null);
   const ticketRef = useRef<HTMLElement>(null);
+  const [manualShareUrl, setManualShareUrl] = useState<string | null>(null);
 
   const route = detail?.route ?? null;
   const geometry = useRouteGeometry(rideId, route?.id ?? null);
@@ -360,44 +364,57 @@ export function RideDetailView({ rideId }: { rideId: string }) {
    * After the viewer's own registration/waitlist/group changes: counts, the
    * viewer's start number / queue place and a possible waitlist promotion are
    * server facts, so they are re-read rather than guessed
-   * (`.claude/rules/database.md`). Best-effort — the action itself already
-   * succeeded; a stale count is not worth an error.
+   * (`.claude/rules/database.md`). CR-239: the change and the re-read land in
+   * one update — the ticket stays pending until then — so the ticket, the
+   * phone bar and «Кто едет» never show the new state with the old counts.
+   * Best-effort: the action itself already succeeded, so a failed re-read
+   * applies just the action's own result rather than an error.
    */
-  function refreshCounts() {
+  async function applyViewerChange(change: {
+    registration?: Registration | null;
+    waitlistEntry: WaitlistEntry | null;
+  }) {
+    try {
+      const response = await getRideDetail(rideId);
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              registrationsCount: response.registrationsCount,
+              groups: response.groups,
+              waitlistCount: response.waitlistCount,
+              viewerStartNumber: response.viewerStartNumber,
+              viewerWaitlistPosition: response.viewerWaitlistPosition,
+            }
+          : current,
+      );
+      // A waitlist promotion shows up only in the re-read.
+      setViewerWaitlistEntry(response.viewerWaitlistEntry);
+    } catch {
+      setViewerWaitlistEntry(change.waitlistEntry);
+    }
+    // The action's own reply is the server's word on the viewer's registration.
+    if (change.registration !== undefined) {
+      setViewerRegistration(change.registration);
+    }
     setRidersVersion((n) => n + 1);
-    getRideDetail(rideId)
-      .then((response) => {
-        setDetail((current) =>
-          current
-            ? {
-                ...current,
-                registrationsCount: response.registrationsCount,
-                groups: response.groups,
-                waitlistCount: response.waitlistCount,
-                viewerStartNumber: response.viewerStartNumber,
-                viewerWaitlistPosition: response.viewerWaitlistPosition,
-              }
-            : current,
-        );
-        setViewerWaitlistEntry(response.viewerWaitlistEntry);
-      })
-      .catch(() => {});
   }
 
+  /** CR-242: share sheet → clipboard → the link shown for manual copy. */
   async function shareRide() {
     const url = window.location.href;
-    const title = detail?.ride.title ?? '';
+    const outcome = await shareLink({ title: detail?.ride.title ?? '', url });
+    if (outcome === 'copied') showToast(RIDE_POSTER_TERMS.shareCopied);
+    if (outcome === 'manual') setManualShareUrl(url);
+  }
+
+  /** CR-242: says what happened — the download used to be silent. */
+  function addToCalendar(event: CalendarEvent, filename: string) {
     try {
-      if (typeof navigator.share === 'function') {
-        await navigator.share({ title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      showToast(RIDE_POSTER_TERMS.shareCopied);
-    } catch (error) {
-      // The viewer closing the share sheet is not a failure.
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      showToast(RIDE_POSTER_TERMS.shareFailed);
+      downloadIcs(event, filename);
+      showToast(RIDE_PAGE_TERMS.calendarDownloaded);
+    } catch {
+      showToast(RIDE_PAGE_TERMS.calendarFailed, 'danger');
     }
   }
 
@@ -590,7 +607,8 @@ export function RideDetailView({ rideId }: { rideId: string }) {
         ? RIDE_DETAIL_REGISTRATION_TERMS.seatsLeft(seatsLeft).toLowerCase()
         : '';
   const bar = barContent(ticketState, {
-    place: registrationsCount + 1,
+    count: registrationsCount,
+    limit: ride.participantLimit,
     waitlistCount,
     startNumber: viewerStartNumber,
     when: `${dateLabel} · ${startTime}`,
@@ -618,7 +636,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             type="button"
             className={ACTION_ROW_CLASSNAME}
             onClick={() =>
-              downloadIcs(
+              addToCalendar(
                 {
                   uid: `${ride.id}@coffee-ride`,
                   title: ride.title,
@@ -761,15 +779,15 @@ export function RideDetailView({ rideId }: { rideId: string }) {
             startPointLabel={startPointLabel}
             footer={ticketActions}
             rescheduledFrom={movedFrom}
-            onChange={(registration) => {
-              setViewerRegistration(registration);
-              if (registration) setViewerWaitlistEntry(null);
-              refreshCounts();
-            }}
-            onWaitlistChange={(entry) => {
-              setViewerWaitlistEntry(entry);
-              refreshCounts();
-            }}
+            onChange={(registration) =>
+              applyViewerChange({
+                registration,
+                waitlistEntry: registration ? null : viewerWaitlistEntry,
+              })
+            }
+            onWaitlistChange={(entry) =>
+              applyViewerChange({ waitlistEntry: entry })
+            }
           />
         </aside>
 
@@ -946,6 +964,7 @@ export function RideDetailView({ rideId }: { rideId: string }) {
               participantLimit={ride.participantLimit}
               groups={groups}
               version={ridersVersion}
+              hiddenFromOthers={!ride.participantsVisible}
             />
           )}
 
@@ -983,6 +1002,11 @@ export function RideDetailView({ rideId }: { rideId: string }) {
       </div>
 
       <TicketBar ticketRef={ticketRef} content={bar} />
+      <ShareLinkDialog
+        url={manualShareUrl ?? ''}
+        open={manualShareUrl !== null}
+        onClose={() => setManualShareUrl(null)}
+      />
     </div>
   );
 }

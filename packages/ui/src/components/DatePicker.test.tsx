@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { DatePicker } from './DatePicker';
@@ -52,6 +52,47 @@ describe('DatePicker', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(trigger).toHaveTextContent('Чт, 1 октября 2026');
     expect(trigger).toHaveFocus();
+  });
+
+  // CR-236 (production QA): a browser focuses a button on mousedown and
+  // clicks a task later. Focusing a day of the next/previous month used to
+  // flip the grid to that month, the day moved to another row, its button
+  // was remounted and the click was lost.
+  async function pointerClick(day: HTMLElement) {
+    fireEvent.pointerDown(day);
+    fireEvent.mouseDown(day);
+    await act(async () => day.focus());
+    fireEvent.pointerUp(day);
+    fireEvent.mouseUp(day);
+    fireEvent.click(day);
+  }
+
+  it('picks a day of the next month with a pointer click', async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Дата'));
+
+    // Last row of September's grid; the second row of October's.
+    await pointerClick(
+      screen.getByRole('button', { name: 'Вс, 11 октября 2026' }),
+    );
+
+    expect(onChange).toHaveBeenCalledWith('2026-10-11');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('picks a day of the previous month with a pointer click', async () => {
+    const onChange = vi.fn();
+    render(<Harness initial="2026-09-15" onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Дата'));
+
+    // First row of September's grid; the last row of August's.
+    await pointerClick(
+      screen.getByRole('button', { name: 'Пн, 31 августа 2026' }),
+    );
+
+    expect(onChange).toHaveBeenCalledWith('2026-08-31');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('starts Monday-first and marks today', () => {

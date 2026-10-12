@@ -486,8 +486,10 @@ export interface RegistrationTicketProps {
   /** CR-190: the start this ride had before its latest move (a formatted
    * start line), shown quietly under a registered/queued viewer's date. */
   rescheduledFrom?: string | null;
-  onChange: (registration: Registration | null) => void;
-  onWaitlistChange: (waitlistEntry: WaitlistEntry | null) => void;
+  /** CR-239: the ticket stays pending until the returned promise settles —
+   * the page re-reads its counts before showing the change. */
+  onChange: (registration: Registration | null) => Promise<void>;
+  onWaitlistChange: (waitlistEntry: WaitlistEntry | null) => Promise<void>;
 }
 
 /**
@@ -571,7 +573,7 @@ export function RegistrationTicket({
   function handleClaimFinish() {
     void run(async () => {
       const response = await claimRideFinish(rideId);
-      onChange(response.registration);
+      await onChange(response.registration);
       showToast(FINISH_CHECKIN_TERMS.claimSuccess);
     });
   }
@@ -580,7 +582,7 @@ export function RegistrationTicket({
     void run(async () => {
       await withdrawRideFinishClaim(rideId);
       if (viewerRegistration) {
-        onChange({
+        await onChange({
           ...viewerRegistration,
           finishClaimedAt: null,
           stravaVerifiedAt: null,
@@ -600,7 +602,7 @@ export function RegistrationTicket({
           ? await registerForRide(rideId, selectedGroupId)
           : await registerForRide(rideId);
       setSelectedGroupId(null);
-      onChange(response.registration);
+      await onChange(response.registration);
       showToast(RIDE_DETAIL_TERMS.registerSuccess);
     });
   }
@@ -612,7 +614,7 @@ export function RegistrationTicket({
         hasGroups && selectedGroupId
           ? await joinRideWaitlist(rideId, selectedGroupId)
           : await joinRideWaitlist(rideId);
-      onWaitlistChange(response.waitlistEntry);
+      await onWaitlistChange(response.waitlistEntry);
       showToast(RIDE_DETAIL_TERMS.joinWaitlistSuccess);
     });
   }
@@ -621,7 +623,7 @@ export function RegistrationTicket({
     void run(
       async () => {
         await cancelRideRegistration(rideId);
-        onChange(null);
+        await onChange(null);
         setConfirmAction(null);
         setIsChangingGroup(false);
         showToast(RIDE_DETAIL_TERMS.cancelSuccess);
@@ -634,7 +636,7 @@ export function RegistrationTicket({
     void run(
       async () => {
         await leaveRideWaitlist(rideId);
-        onWaitlistChange(null);
+        await onWaitlistChange(null);
         setConfirmAction(null);
         showToast(RIDE_DETAIL_TERMS.leaveWaitlistSuccess);
       },
@@ -647,7 +649,7 @@ export function RegistrationTicket({
     const groupId = pendingGroupId;
     void run(async () => {
       const response = await changeRegistrationGroup(rideId, groupId);
-      onChange(response.registration);
+      await onChange(response.registration);
       setIsChangingGroup(false);
       showToast(RIDE_DETAIL_GROUP_TERMS.changeSuccess);
     });

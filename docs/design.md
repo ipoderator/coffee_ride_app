@@ -655,7 +655,15 @@ the visitor to `/login`); signed in, the two cabinet pills open their registry
 dropdowns (with a chevron — an honest menu affordance the signed-out mockup doesn't
 show). Right: the theme control as a round 44px icon button (no chevron, also on a
 phone next to the menu button), then «Войти» as a ghost pill and «Регистрация» as the
-filled `Button`; signed in, the account menu instead.
+filled `Button`; signed in, the account menu instead (a person icon and the email,
+truncated — the menu repeats it in full above «Выйти»).
+
+**Phone/tablet header (CR-240/CR-241).** Below `lg` (the full bar needs ~1000px signed
+in) the sections live in one panel behind the menu button, which acts as a modal
+layer: focus moves into it, the page outside the header is `inert`, Escape / a tap
+outside / reaching `lg` closes it and focus returns to the button. The bottom tab bar
+still shows below `md`. Rows that scroll sideways (discovery filters, cabinet section
+tabs) fade only an edge that hides content and scroll a focused item clear of it.
 
 Exception (CR-132, mockup screen 4): `/organizer/*` is an app frame of its own and
 does not show the global header. Its **organizer header** holds only the wordmark

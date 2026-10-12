@@ -163,4 +163,37 @@ describe('NavMenu', () => {
     expect(trigger).toHaveClass('avatar-trigger');
     expect(container.querySelector('svg')).toBeNull();
   });
+
+  // CR-243: a menu owns only items — the account heading sits beside it.
+  it('renders a header outside the menu, as its description', () => {
+    renderMenu({ header: <p>org@example.com</p> });
+    fireEvent.click(screen.getByRole('button', { name: 'Организатор' }));
+
+    const menu = screen.getByRole('menu');
+    expect(menu).not.toContainElement(screen.getByText('org@example.com'));
+    expect(menu).toHaveAccessibleDescription('org@example.com');
+  });
+
+  it('moves through radio items with the arrow keys too', async () => {
+    render(
+      <NavMenu label="Тема">
+        <button type="button" role="menuitemradio" aria-checked="true">
+          Светлая
+        </button>
+        <button type="button" role="menuitemradio" aria-checked="false">
+          Тёмная
+        </button>
+      </NavMenu>,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Тема' }), {
+      key: 'ArrowDown',
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('menuitemradio', { name: 'Светлая' }),
+      ).toHaveFocus(),
+    );
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitemradio', { name: 'Тёмная' })).toHaveFocus();
+  });
 });

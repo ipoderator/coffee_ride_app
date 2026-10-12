@@ -379,7 +379,13 @@ export function DatePicker({
                           aria-label={formatCalendarDate(day)}
                           aria-current={isToday ? 'date' : undefined}
                           onClick={() => pick(day)}
-                          onFocus={() => setFocused(day)}
+                          // CR-236: only this month's days follow focus. A
+                          // pointer focuses on mousedown; flipping the grid to
+                          // an adjacent month then would remount this button
+                          // and lose the click. Keys move `focused` themselves.
+                          onFocus={() => {
+                            if (inMonth) setFocused(day);
+                          }}
                           className={cn(
                             'flex h-12 w-full items-center justify-center rounded-xl text-body font-medium tabular-nums',
                             isSelected

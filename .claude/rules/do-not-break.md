@@ -63,6 +63,33 @@ establishes a new non-obvious invariant.
 - the ride forms' start time is a `TimeInput` read through its ref at save
   (CR-221) — a controlled `<input type="time">` saved a stale state value over what the
   field showed (QA live audit, 08:00 → 12:12);
+- the draft form's «Опубликовать» (`EditRideForm`'s `requestPublish`) runs the same
+  `saveForm()` as «Сохранить» and calls `publishRide` only after it returns `true`;
+  one `busyRef` guards save and publish (CR-235) — publishing straight from the button
+  sent the last saved draft and dropped what the form showed (production QA, P0);
+- `DatePicker`'s day buttons set `focused` on focus only for days of the shown month
+  (CR-236) — a pointer focuses on mousedown, and flipping the grid to an adjacent month
+  then remounts the button and swallows the click;
+- `/rides/[id]` applies a viewer's registration/waitlist change in the same update as
+  the re-read counts and start number (`RideDetailView`'s `applyViewerChange`, awaited
+  by `RegistrationTicket` while pending) — applying it first and re-reading after
+  showed the new state over old counts (CR-239, production QA); a failed re-read falls
+  back to the action's own reply;
+- `AppHeader`'s phone panel (CR-240) marks everything outside the header `inert`
+  while open (`lib/site/inert-outside.ts`) and must close — restoring the page — on
+  Escape, a tap outside and on reaching `lg` (the panel is `lg:hidden`; staying "open"
+  there would leave the whole page inert with no visible way out). The full header
+  bar starts at `lg`, not `md` (CR-241: it overflowed 768–1023px);
+- sideways-scrolling rows use `lib/site/scroll-row.ts` (CR-241): fade only an edge
+  that hides content, and scroll a focused child clear of the fade — a fixed fade
+  kept the last chip and its focus ring washed out;
+- `maps-2gis` `applyFit` validates points, skips a 0×0 container (the resize observer
+  re-fits) and clamps padding to the map size (CR-243) — keep that in the adapter;
+- `GroupsEditor` re-reads the workspace with every list resync, conflicts included,
+  and `RideWorkspace.refresh` applies only its latest reply (CR-243 — stale «N из 6»);
+- `GET /v1/rides/:id/riders` hides a `participantsVisible: false` list from everyone
+  but the ride's own organizer (CR-238) — the cabinet table and the ride page must
+  agree with the counters the organizer sees;
 - `/rides/[id]` calls `notFound()` only on the API's definite 404 (`lookupRide`), with
   no `loading.tsx`/`<Suspense>` above the page — streaming would turn the 404 back into a
   200 (CR-224, KI-096);

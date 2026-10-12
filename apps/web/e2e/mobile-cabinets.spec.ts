@@ -35,27 +35,32 @@ test('organizer cabinet switches between the sidebar and section tabs at `lg`', 
   }
 });
 
-test('participant cabinet switches between the header nav and bottom tab bar at `md`', async ({
+// CR-241: the header's full bar starts at `lg` (it needs ~1000px signed in);
+// the bottom tab bar still hides at `md`.
+test('participant cabinet switches between the header nav and bottom tab bar', async ({
   page,
 }) => {
   const account = await registerAndVerify(page.request);
   await login(page.request, account.email, account.password);
 
   await page.goto('/me');
-  const isDesktop = (page.viewportSize()?.width ?? 0) >= 768;
+  const width = page.viewportSize()?.width ?? 0;
 
   const hamburger = page.locator(
     'button[aria-controls="app-header-mobile-menu"]',
   );
   const bottomTabBar = page.locator('nav.md\\:hidden').last();
 
-  if (isDesktop) {
-    await expect(hamburger).toBeHidden();
-    await expect(bottomTabBar).toBeHidden();
-  } else {
-    await expect(hamburger).toBeVisible();
-    await expect(bottomTabBar).toBeVisible();
-  }
+  if (width >= 1024) await expect(hamburger).toBeHidden();
+  else await expect(hamburger).toBeVisible();
+  if (width >= 768) await expect(bottomTabBar).toBeHidden();
+  else await expect(bottomTabBar).toBeVisible();
+  // Never wider than the screen — the bar overflowed 768–1023px before.
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
 
 // CR-185 (UX handoff P2): a long ride title used to widen `/organizer`'s

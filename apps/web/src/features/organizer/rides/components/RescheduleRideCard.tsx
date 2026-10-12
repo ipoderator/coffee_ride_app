@@ -325,7 +325,7 @@ export function RescheduleRideCard({
           <h3
             ref={formHeadingRef}
             tabIndex={-1}
-            className="text-body font-semibold text-text focus:outline-none"
+            className="rounded-sm text-body font-semibold text-text"
           >
             {T.formTitle}
           </h3>

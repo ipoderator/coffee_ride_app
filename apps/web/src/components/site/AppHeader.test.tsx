@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'types';
 import { ApiError } from '@/lib/api/errors';
@@ -195,5 +201,102 @@ describe('AppHeader', () => {
     expect(
       screen.getByRole('menuitem', { name: 'Первый пункт' }),
     ).toHaveAttribute('aria-current', 'page');
+  });
+
+  // CR-240 (production QA): the phone menu is a modal layer.
+  describe('mobile menu', () => {
+    function renderWithPage() {
+      return render(
+        <SessionProvider>
+          <AppHeader
+            participantNavItems={participantItems}
+            organizerNavItems={organizerItems}
+          />
+          <main>
+            <a href="/behind">Ссылка на странице</a>
+          </main>
+        </SessionProvider>,
+      );
+    }
+
+    async function openMenu() {
+      const toggle = await screen.findByRole('button', {
+        name: 'Открыть меню',
+      });
+      toggle.focus();
+      fireEvent.click(toggle);
+      return toggle;
+    }
+
+    it('moves focus into the panel and makes the page behind inert', async () => {
+      getCurrentUserMock.mockResolvedValue({ user });
+      renderWithPage();
+      await screen.findByRole('button', { name: /Мои заезды/ });
+      await openMenu();
+
+      const panel = document.getElementById('app-header-mobile-menu')!;
+      expect(panel.querySelector('a')).toHaveFocus();
+      expect(screen.getByRole('main', { hidden: true })).toHaveAttribute(
+        'inert',
+      );
+      expect(
+        screen.getByRole('button', { name: 'Закрыть меню' }),
+      ).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('closes on Escape, returns focus to the toggle and restores the page', async () => {
+      getCurrentUserMock.mockRejectedValue(unauthorized());
+      renderWithPage();
+      const toggle = await openMenu();
+
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+
+      expect(
+        document.getElementById('app-header-mobile-menu'),
+      ).not.toBeInTheDocument();
+      expect(toggle).toHaveFocus();
+      expect(toggle).toHaveAccessibleName('Открыть меню');
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert');
+    });
+
+    it('closes on a tap outside the header without stealing focus back', async () => {
+      getCurrentUserMock.mockRejectedValue(unauthorized());
+      renderWithPage();
+      await openMenu();
+
+      fireEvent.pointerDown(document.body);
+
+      expect(
+        document.getElementById('app-header-mobile-menu'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert');
+    });
+
+    it('closes when the window grows to the full bar', async () => {
+      let onChange: (() => void) | null = null;
+      const query = {
+        matches: false,
+        addEventListener: (_: string, listener: () => void) => {
+          onChange = listener;
+        },
+        removeEventListener: vi.fn(),
+      };
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => query),
+      );
+      getCurrentUserMock.mockRejectedValue(unauthorized());
+      renderWithPage();
+      await openMenu();
+
+      query.matches = true;
+      act(() => onChange!());
+
+      expect(
+        document.getElementById('app-header-mobile-menu'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('main')).not.toHaveAttribute('inert');
+      vi.unstubAllGlobals();
+    });
   });
 });

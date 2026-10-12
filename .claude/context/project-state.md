@@ -24,14 +24,21 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-234 — «Синхронизировать со Strava» (ADR-033), committed to `main` and deployed
-(migration `0027`): a participant backs the finish claim with their own Strava ride
-(one-shot OAuth, grant revoked, no token stored; organizer sees only «Проверено
-Strava»), via Strava's official «Connect with Strava» button; the mark is Strava-orange
-(`StravaVerifiedBadge`, tokens `strava`/`strava-text`). Header wordmark lifted onto the
-nav labels' baseline. On prod the feature stays hidden until `STRAVA_*` is set there —
-needs the owner-side Strava settings below.
+Production browser QA, items 1–9 (reproduced and fixed locally only, production
+untouched), all on branch `fix/publish-saves-form`, committed, PR into `main`:
+CR-235 (P0) draft «Опубликовать» saves the form first; CR-236 create form calendar
+and field errors (profile link not reproduced); CR-237 «Закрыть регистрацию» asks
+first and says it is irreversible (lifecycle stays one-way); CR-238 the organizer
+sees their own hidden riders list on `/rides/[id]`; CR-239 the ride page applies a
+registration change together with the re-read counts. CR-240 `AppHeader` phone menu
+is a modal layer (Esc, focus, inert page); CR-241 no sideways overflow at 320–1023px
+(scroll-row fades, full header bar from `lg`, truncated email); CR-242 share/`.ics`
+feedback and fallbacks; CR-243 group chip resync, `fitBounds` guards, menu semantics
+(`NavMenu` `header`, theme `menuitemradio`), visible focus.
 
+Before this: CR-234 — «Синхронизировать со Strava» (ADR-033), deployed (migration
+`0027`); on prod the feature stays hidden until `STRAVA_*` is set there (owner-side
+settings below).
 Before this: CR-228..CR-233 — admin panel P0 (ADR-032) deployed to coffeeride.site
 (`c01a61f`, migration `0026`); CR-233 (PR #40) keeps `s3-init` idempotent on
 SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
@@ -54,10 +61,16 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
 ## In progress
 
-CR-234 — awaiting the owner's review and a request to commit. To ship: set the Strava
-app's Authorization Callback Domain to `coffeeride.site`, put `STRAVA_CLIENT_ID`/
-`STRAVA_CLIENT_SECRET` in the VPS `.env`, deploy (migration `0027`), and ask Strava
-to review the app (a new app connects 1 athlete only).
+CR-235..CR-243 — validated locally, committed; PR into `main` (then deploy from
+`main`). The mobile `visual-regression` baselines (discovery grid/map,
+organizer dashboard on Pixel 5) are expected to move with CR-241 and need a refresh
+from the CI artifact after the push. CR-236's profile-link item needs the QA's
+steps/device; a «reopen registration» transition (CR-237) would be a lifecycle change
+— owner call. `EditRideForm` still keeps field errors until the next save (owner call).
+
+CR-234 — deployed; to turn it on: set the Strava app's Authorization Callback Domain
+to `coffeeride.site`, put `STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` in the VPS `.env`,
+restart `api`, and ask Strava to review the app (a new app connects 1 athlete only).
 
 CR-228..CR-232 — deployed (see "Current task"); open review findings: "Next" 0.
 Storybook: `AdminOverview` (3 stories) and `CabinetSectionTabs` «Admin Last Tab»
@@ -136,4 +149,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-11 (CR-234)
+2026-10-12 (CR-243)

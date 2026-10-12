@@ -126,6 +126,26 @@ export const DraftPublishWithoutRoute: Story = {
   },
 };
 
+/** CR-235: «Опубликовать» saves the form first; a failed save publishes
+ * nothing — the error is on the form, the edits stay in the fields. */
+export const DraftPublishSaveFails: Story = {
+  beforeEach: stubWorkspace({ ride: { status: 'draft' }, failSave: true }),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', { name: RIDE_EDIT_TERMS.publish }),
+    );
+    await expect(
+      await canvas.findByText(RIDE_EDIT_TERMS.loadError),
+    ).toBeInTheDocument();
+    await expect(
+      within(canvasElement.ownerDocument.body).queryByRole('dialog'),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', { name: RIDE_EDIT_TERMS.publish }),
+    ).toBeEnabled();
+  },
+};
+
 /** Published, registration not open yet: opening it is the primary action. */
 export const Published: Story = {
   beforeEach: stubWorkspace({
@@ -205,6 +225,31 @@ export const CancelConfirm: Story = {
     );
     await expect(
       within(dialog).getByRole('button', { name: RIDE_EDIT_TERMS.cancelKeep }),
+    ).toBeEnabled();
+  },
+};
+
+/** CR-237 (production QA item 3): closing registration is one-way, so it asks
+ * first and says so; left open for the a11y check. */
+export const CloseRegistrationConfirm: Story = {
+  beforeEach: stubWorkspace({ ride: { status: 'registration_open' } }),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', {
+        name: RIDE_EDIT_TERMS.closeRegistration,
+      }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByRole(
+      'dialog',
+      { name: RIDE_EDIT_TERMS.closeRegistrationConfirmTitle },
+    );
+    await expect(dialog).toHaveTextContent(
+      RIDE_EDIT_TERMS.closeRegistrationConfirmDescription,
+    );
+    await expect(
+      within(dialog).getByRole('button', {
+        name: RIDE_EDIT_TERMS.closeRegistrationKeep,
+      }),
     ).toBeEnabled();
   },
 };

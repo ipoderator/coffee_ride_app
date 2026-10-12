@@ -130,3 +130,56 @@ export const Guest: Story = {
     await expect(await canvas.findByText('Войти')).toBeVisible();
   },
 };
+
+/** CR-240: the phone menu is a modal layer — focus moves into it, the page
+ * behind is inert, Escape closes it and hands focus back to the toggle. */
+export const MobileMenuOpen: Story = {
+  beforeEach: stubSession('authenticated'),
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  render: (args) => (
+    <SessionProvider>
+      <AppHeader {...args} />
+      <main className="p-4">
+        <a href="/behind">Страница под меню</a>
+      </main>
+    </SessionProvider>
+  ),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await canvas.findByRole('button', { name: /Мои заезды/, hidden: true });
+    const toggle = canvas.getByRole('button', { name: 'Открыть меню' });
+    await userEvent.click(toggle);
+    const panel = canvasElement.querySelector('#app-header-mobile-menu')!;
+    await expect(panel.querySelector('a')).toHaveFocus();
+    await expect(canvasElement.querySelector('main')).toHaveAttribute('inert');
+    await userEvent.keyboard('{Escape}');
+    await expect(toggle).toHaveFocus();
+    await expect(canvasElement.querySelector('main')).not.toHaveAttribute(
+      'inert',
+    );
+    // Left open for the axe pass.
+    await userEvent.click(toggle);
+  },
+};
+
+/** CR-241: a long address truncates in the bar; the menu shows it whole.
+ * CR-243: the theme options are radio items, the current one checked. */
+export const AccountAndThemeMenus: Story = {
+  beforeEach: stubSession('authenticated'),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Тема оформления' }),
+    );
+    const radios = canvas.getAllByRole('menuitemradio');
+    await expect(radios).toHaveLength(3);
+    await expect(
+      radios.filter((item) => item.getAttribute('aria-checked') === 'true'),
+    ).toHaveLength(1);
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'organizer.strava@example.test' }),
+    );
+    await expect(canvas.getByRole('menu')).toHaveAccessibleDescription(
+      'organizer.strava@example.test',
+    );
+  },
+};

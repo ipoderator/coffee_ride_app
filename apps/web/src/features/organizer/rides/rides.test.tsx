@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -397,6 +398,63 @@ describe('CreateRideForm', () => {
     expect(createRideMock).not.toHaveBeenCalled();
   });
 
+  // CR-236 (production QA): errors stayed until the next save, under values
+  // already corrected.
+  it('clears a field’s error once its value is corrected, and only that one', async () => {
+    render(<CreateRideForm />);
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+    expect(await screen.findByText('Укажите дату старта.')).toBeInTheDocument();
+    expect(screen.getByText('Укажите время старта.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Дата'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сб, 24 апреля 2027' }));
+
+    expect(screen.queryByText('Укажите дату старта.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Дата')).toHaveAttribute(
+      'aria-invalid',
+      'false',
+    );
+    expect(screen.getByText('Укажите время старта.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Время старта'), {
+      target: { value: '08:00' },
+    });
+
+    expect(screen.queryByText('Укажите время старта.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Время старта')).toHaveAttribute(
+      'aria-invalid',
+      'false',
+    );
+  });
+
+  it('clears a server field error once that field is edited', async () => {
+    createRideMock.mockRejectedValue(
+      new ApiError({
+        type: 'https://coffee-ride.example/errors/validation_error',
+        title: 'Validation error',
+        status: 400,
+        detail: 'The request payload is invalid.',
+        instance: '/v1/rides',
+        code: 'validation_error',
+        errors: [{ path: 'title', message: 'Title cannot be empty.' }],
+      }),
+    );
+    render(<CreateRideForm />);
+    fillMinimalValidForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Далее: маршрут' }));
+    expect(await screen.findByText('Проверьте это поле.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Название'), {
+      target: { value: 'Другое название' },
+    });
+
+    expect(screen.queryByText('Проверьте это поле.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toHaveAttribute(
+      'aria-invalid',
+      'false',
+    );
+  });
+
   it('shows the generic Russian line for a code it does not know', async () => {
     createRideMock.mockRejectedValue(
       englishProblem('some_new_server_code', { status: 500 }),
@@ -591,7 +649,10 @@ function EditRideForm({
 describe('EditRideForm', () => {
   beforeEach(() => {
     getRideMock.mockReset();
-    updateRideMock.mockReset();
+    // CR-235: «Опубликовать» saves the form first, so every publish saves.
+    updateRideMock
+      .mockReset()
+      .mockResolvedValue({ ride: baseRide, requirements: [] });
     publishRideMock.mockReset();
     openRegistrationMock.mockReset();
     closeRegistrationMock.mockReset();
@@ -1094,6 +1155,160 @@ describe('EditRideForm', () => {
     expect(screen.getByLabelText('Название')).toBeInTheDocument();
   });
 
+  // CR-235 (production QA, P0): «Опубликовать» published the last save and
+  // dropped whatever the form showed on top of it.
+  describe('publishes what the form shows (CR-235)', () => {
+    function draft(route: RouteSummary | null = routeSummary) {
+      getRideMock.mockResolvedValue({
+        ride: baseRide,
+        isOwner: true,
+        requirements: [],
+        ...(route ? { route } : {}),
+      });
+    }
+
+    async function renderAndRename(title: string) {
+      render(<EditRideForm rideId="ride-1" />);
+      await screen.findByRole('heading', { level: 1 });
+      fireEvent.change(screen.getByLabelText('Название'), {
+        target: { value: title },
+      });
+    }
+
+    it('saves the unsaved edits, then publishes', async () => {
+      draft();
+      updateRideMock.mockResolvedValue({
+        ride: { ...baseRide, title: 'Новое название' },
+        requirements: [],
+      });
+      publishRideMock.mockResolvedValue({
+        ride: { ...baseRide, title: 'Новое название', status: 'published' },
+      });
+
+      await renderAndRename('Новое название');
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+      expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+      expect(updateRideMock).toHaveBeenCalledOnce();
+      expect(updateRideMock).toHaveBeenCalledWith(
+        'ride-1',
+        expect.objectContaining({ title: 'Новое название' }),
+      );
+      expect(publishRideMock).toHaveBeenCalledOnce();
+      expect(updateRideMock.mock.invocationCallOrder[0]).toBeLessThan(
+        publishRideMock.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('does not save or publish a form that does not validate', async () => {
+      draft();
+
+      await renderAndRename('   ');
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Название')).toHaveAttribute(
+          'aria-invalid',
+          'true',
+        ),
+      );
+      expect(updateRideMock).not.toHaveBeenCalled();
+      expect(publishRideMock).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Опубликовать' }),
+      ).toBeEnabled();
+    });
+
+    it('does not publish when the save fails', async () => {
+      draft();
+      updateRideMock.mockRejectedValue(new Error('network'));
+
+      await renderAndRename('Новое название');
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+      expect(
+        await screen.findByText(
+          'Не удалось загрузить заезд. Попробуйте ещё раз.',
+        ),
+      ).toBeInTheDocument();
+      expect(publishRideMock).not.toHaveBeenCalled();
+      // The edit stays in the field for another try.
+      expect(screen.getByLabelText('Название')).toHaveValue('Новое название');
+      expect(
+        screen.getByRole('button', { name: 'Опубликовать' }),
+      ).toBeEnabled();
+    });
+
+    it('without a route saves before asking; dismissing keeps the saved draft', async () => {
+      draft(null);
+
+      await renderAndRename('Новое название');
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+
+      await screen.findByRole('dialog', { name: 'Опубликовать без маршрута?' });
+      expect(updateRideMock).toHaveBeenCalledWith(
+        'ride-1',
+        expect.objectContaining({ title: 'Новое название' }),
+      );
+      expect(publishRideMock).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      );
+      expect(screen.getByText('Изменения сохранены.')).toBeInTheDocument();
+      expect(publishRideMock).not.toHaveBeenCalled();
+    });
+
+    it('a double click saves and publishes once', async () => {
+      draft();
+      let finishSave!: (value: Awaited<ReturnType<typeof updateRide>>) => void;
+      updateRideMock.mockReturnValue(
+        new Promise((resolve) => {
+          finishSave = resolve;
+        }),
+      );
+      publishRideMock.mockResolvedValue({
+        ride: { ...baseRide, status: 'published' },
+      });
+
+      await renderAndRename('Новое название');
+      const publish = screen.getByRole('button', { name: 'Опубликовать' });
+      fireEvent.click(publish);
+      fireEvent.click(publish);
+      // «Сохранить» is off while the publish saves.
+      expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
+      expect(screen.getByLabelText('Название')).toBeDisabled();
+
+      finishSave({ ride: baseRide, requirements: [] });
+
+      expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+      expect(updateRideMock).toHaveBeenCalledOnce();
+      expect(publishRideMock).toHaveBeenCalledOnce();
+    });
+
+    it('a double click on «Опубликовать без маршрута» publishes once', async () => {
+      draft(null);
+      publishRideMock.mockResolvedValue({
+        ride: { ...baseRide, status: 'published' },
+      });
+
+      render(<EditRideForm rideId="ride-1" />);
+      await screen.findByRole('heading', { level: 1 });
+      fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+      const confirm = await screen.findByRole('button', {
+        name: 'Опубликовать без маршрута',
+      });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+
+      expect(await screen.findByText('Заезд опубликован.')).toBeInTheDocument();
+      expect(updateRideMock).toHaveBeenCalledOnce();
+      expect(publishRideMock).toHaveBeenCalledOnce();
+    });
+  });
+
   it('still publishes in one click when a cover image is missing (cover stays optional)', async () => {
     getRideMock.mockResolvedValue({
       ride: { ...baseRide, coverImageUrl: null },
@@ -1451,12 +1666,52 @@ describe('EditRideForm', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Закрыть регистрацию' }),
     );
+    // CR-237: one-way, so it asks first and says so.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Закрыть регистрацию?',
+    });
+    expect(dialog).toHaveTextContent('Это действие необратимо');
+    expect(closeRegistrationMock).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Закрыть регистрацию' }),
+    );
 
     expect(await screen.findByText('Регистрация закрыта.')).toBeInTheDocument();
     expect(closeRegistrationMock).toHaveBeenCalledWith('ride-1');
+    expect(closeRegistrationMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Закрыть регистрацию' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps registration open when the close dialog is dismissed', async () => {
+    getRideMock.mockResolvedValue({
+      isOwner: true,
+      requirements: [],
+      ride: { ...baseRide, status: 'registration_open' },
+    });
+
+    render(<EditRideForm rideId="ride-1" />);
+    await screen.findByRole('heading', { level: 1 });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Закрыть регистрацию' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Закрыть регистрацию?',
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Не закрывать' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(closeRegistrationMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Закрыть регистрацию' }),
+    ).toBeInTheDocument();
   });
 
   // KI-065: after publish the riders-list toggle saves on its own.
@@ -2055,6 +2310,46 @@ describe('RideWorkspace (CR-187)', () => {
     expect(
       screen.getByRole('link', { name: 'Написать участникам' }),
     ).toHaveAttribute('href', '/organizer/rides/ride-1/updates');
+  });
+
+  // CR-243 (production QA, stale counters): two quick section changes — the
+  // older re-read answering last must not overwrite the newer one.
+  it('applies only the latest of overlapping re-reads', async () => {
+    const reply = (registrationsCount: number) => ({
+      isOwner: true,
+      requirements: [],
+      registrationsCount,
+      ride: { ...baseRide, status: 'registration_open' as const },
+    });
+    getRideMock.mockResolvedValueOnce(reply(1));
+    function SectionChange() {
+      const workspace = useRideWorkspace();
+      return (
+        <button type="button" onClick={() => void workspace?.refresh()}>
+          Изменено
+        </button>
+      );
+    }
+    render(
+      <RideWorkspace rideId="ride-1" current="edit" sections={[]}>
+        <SectionChange />
+      </RideWorkspace>,
+    );
+    await screen.findByRole('link', { name: 'Участники · 1' });
+
+    let answerOlder: (value: ReturnType<typeof reply>) => void = () => {};
+    getRideMock.mockImplementationOnce(
+      () => new Promise((resolve) => (answerOlder = resolve)),
+    );
+    getRideMock.mockResolvedValueOnce(reply(3));
+    fireEvent.click(screen.getByRole('button', { name: 'Изменено' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Изменено' }));
+    await screen.findByRole('link', { name: 'Участники · 3' });
+
+    await act(async () => answerOlder(reply(2)));
+    expect(
+      screen.getByRole('link', { name: 'Участники · 3' }),
+    ).toBeInTheDocument();
   });
 
   it('offers no lifecycle step on a finished ride', async () => {

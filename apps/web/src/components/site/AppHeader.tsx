@@ -1,9 +1,9 @@
 'use client';
 
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, UserRound, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   buttonClassName,
   cn,
@@ -17,6 +17,7 @@ import { useSession } from '@/lib/auth/session-context';
 import { useLogout } from '@/lib/auth/use-logout';
 import { CABINET_ICONS } from '@/lib/cabinet/icons';
 import type { CabinetNavItem } from '@/lib/cabinet/types';
+import { inertOutside } from '@/lib/site/inert-outside';
 import { ThemeToggle } from './ThemeToggle';
 
 /**
@@ -43,6 +44,9 @@ export function AppHeader({
   const { status, user } = useSession();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const {
     signOut: handleLogout,
     pending: loggingOut,
@@ -54,10 +58,53 @@ export function AppHeader({
     setMobileOpen(false);
   }, [pathname]);
 
+  const closeMobile = useCallback((returnFocus: boolean) => {
+    setMobileOpen(false);
+    if (returnFocus) toggleRef.current?.focus();
+  }, []);
+
+  // CR-240 (production QA): the open panel is a modal layer, not a bare
+  // disclosure. Focus moves into it; the page behind is `inert` (out of the
+  // Tab order and the accessibility tree — the header itself stays, so the
+  // toggle and the theme control still work); Escape closes it and hands
+  // focus back to the toggle; a tap outside closes it; and growing past `lg`,
+  // where the panel is hidden, closes it so the page is never left inert.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!mobileOpen || !header) return;
+    const restore = inertOutside(header);
+    panelRef.current
+      ?.querySelector<HTMLElement>('a[href], button:not([disabled])')
+      ?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeMobile(true);
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && header?.contains(target)) return;
+      closeMobile(false);
+    }
+    const wide = window.matchMedia?.(DESKTOP_BAR_QUERY);
+    function handleWide() {
+      if (wide?.matches) closeMobile(false);
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    wide?.addEventListener('change', handleWide);
+    return () => {
+      restore();
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      wide?.removeEventListener('change', handleWide);
+    };
+  }, [mobileOpen, closeMobile]);
+
   const isAuthenticated = status === 'authenticated';
 
   return (
-    <header className="border-b border-border bg-bg-raised">
+    <header ref={headerRef} className="border-b border-border bg-bg-raised">
       {/* CR-154: the «Ночной старт» discovery mockup's header — a full-width
           raised bar (72px, 60px on a phone), pill section links beside the
           wordmark, the theme as an icon button, «Войти» as a ghost pill and
@@ -75,7 +122,9 @@ export function AppHeader({
           <Wordmark className="text-[1.375rem] md:-translate-y-[0.16em] md:text-[1.5rem]" />
         </Link>
 
-        <div className="hidden items-center gap-1 md:flex">
+        {/* CR-241: the full bar needs ~1000px signed in (~890px signed out),
+            so it starts at `lg`; below that the sections live in the panel. */}
+        <div className="hidden items-center gap-1 lg:flex">
           <HeaderLink
             href="/"
             label={SITE_HEADER_TERMS.homeLink}
@@ -151,8 +200,21 @@ export function AppHeader({
           {isAuthenticated && (
             <NavMenu
               label={user?.email ?? SITE_HEADER_TERMS.accountMenuLabel}
-              className="hidden md:block"
-              triggerClassName={pillClassName(false)}
+              icon={<UserRound aria-hidden="true" />}
+              className="hidden min-w-0 lg:block"
+              // CR-241: a long address truncates (QA: 989px overflowed by the
+              // email); the menu's header shows it in full.
+              triggerClassName={cn(
+                pillClassName(false),
+                'max-w-64 [&>span]:min-w-0 [&>span]:truncate',
+              )}
+              header={
+                user?.email ? (
+                  <p className="truncate px-3 py-2 text-xs text-text-secondary">
+                    {user.email}
+                  </p>
+                ) : undefined
+              }
             >
               <button
                 type="button"
@@ -170,7 +232,7 @@ export function AppHeader({
           {/* `loading`/`error` render neither set: guessing wrong would flash
               "Войти" at someone who is already signed in, or the reverse. */}
           {status === 'anonymous' && (
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="hidden items-center gap-2 lg:flex">
               <Link
                 href="/login"
                 aria-current={pathname === '/login' ? 'page' : undefined}
@@ -192,6 +254,7 @@ export function AppHeader({
           )}
 
           <button
+            ref={toggleRef}
             type="button"
             aria-expanded={mobileOpen}
             aria-controls="app-header-mobile-menu"
@@ -201,7 +264,7 @@ export function AppHeader({
                 : SITE_HEADER_TERMS.openMenuLabel
             }
             onClick={() => setMobileOpen((open) => !open)}
-            className="inline-flex size-11 items-center justify-center rounded-full text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:hidden"
+            className="inline-flex size-11 items-center justify-center rounded-full text-text-secondary hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:hidden"
           >
             {mobileOpen ? (
               <X className="size-5" aria-hidden="true" />
@@ -218,15 +281,16 @@ export function AppHeader({
         </p>
       )}
 
-      {/* Below `md` the bar cannot hold every section at 375px
-          (`docs/design.md` §11), so the same links live in one disclosure
+      {/* Below `lg` the bar cannot hold every section (`docs/design.md`
+          §11; CR-241 moved this from `md`), so the same links live in one
           panel instead — a flat list, since a dropdown inside a dropdown is
           not worth the interaction cost on a phone. The theme control stays
           in the bar (CR-154). */}
       {mobileOpen && (
         <div
+          ref={panelRef}
           id="app-header-mobile-menu"
-          className="flex flex-col gap-1 border-t border-border p-4 md:hidden"
+          className="flex flex-col gap-1 border-t border-border p-4 lg:hidden"
         >
           <MobileLink href="/" label={SITE_HEADER_TERMS.homeLink} />
           {isAuthenticated && (
@@ -295,13 +359,16 @@ export function AppHeader({
   );
 }
 
+/** Where the full bar (and no menu button) takes over — Tailwind's `lg`. */
+const DESKTOP_BAR_QUERY = '(min-width: 64rem)';
+
 /** Signed out, «Мои заезды» points at the rides list itself. */
 const PARTICIPANT_HREF = '/me/rides';
 
 /** CR-154: the mockup's section pill — `surface` fill marks the current one. */
 function pillClassName(active: boolean): string {
   return cn(
-    'rounded-full px-4 font-medium tracking-normal',
+    'rounded-full px-4 font-medium tracking-normal whitespace-nowrap',
     active ? 'bg-surface text-text' : 'text-text-secondary hover:text-text',
   );
 }

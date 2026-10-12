@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { CABINET_NAV_BADGE_TERMS, cn } from 'ui';
 import { CABINET_ICONS } from '@/lib/cabinet/icons';
+import {
+  revealInRow,
+  SCROLL_ROW_CLASSNAME,
+  useScrollRow,
+} from '@/lib/site/scroll-row';
 import type {
   CabinetNavBadgeCounts,
   CabinetNavItem,
@@ -21,6 +26,10 @@ import { isCabinetNavItemActive, NavBadge } from './CabinetSidebar';
  * pathname change the row scrolls its own `scrollLeft` until the active tab is
  * fully visible. Not `scrollIntoView` — that also scrolls the page. Instant on
  * first render, smooth afterwards unless the user asked for reduced motion.
+ *
+ * CR-241 (production QA): the row was cut hard at both edges with no cue —
+ * `SCROLL_ROW_CLASSNAME` fades an edge only while it hides tabs, and the
+ * active/focused tab is moved clear of the fade.
  */
 export function CabinetSectionTabs({
   items,
@@ -40,8 +49,10 @@ export function CabinetSectionTabs({
       hasScrolledRef.current &&
       !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     hasScrolledRef.current = true;
-    revealActiveTab(list, smooth);
+    const active = list.querySelector<HTMLElement>('[aria-current="page"]');
+    if (active) revealInRow(list, active, smooth);
   }, [pathname]);
+  useScrollRow(listRef);
 
   if (items.length === 0) return null;
 
@@ -52,7 +63,7 @@ export function CabinetSectionTabs({
     >
       <ul
         ref={listRef}
-        className="flex gap-1.5 overflow-x-auto px-4 py-2.5 [scrollbar-width:none] md:px-6"
+        className={cn(SCROLL_ROW_CLASSNAME, 'flex gap-1.5 px-4 py-2.5 md:px-6')}
       >
         {items.map((item) => {
           const Icon = item.icon ? CABINET_ICONS[item.icon] : null;
@@ -79,29 +90,4 @@ export function CabinetSectionTabs({
       </ul>
     </nav>
   );
-}
-
-/** Scrolls `list` horizontally by the least distance that puts its
- * `aria-current` link inside the row's padding box (its start edge when the
- * link is wider than the row). No-op when it already fits, when nothing is
- * active, or at `lg`+ where the row is `display: none` and measures zero. */
-function revealActiveTab(list: HTMLUListElement, smooth: boolean) {
-  const link = list.querySelector<HTMLElement>('[aria-current="page"]');
-  if (!link) return;
-  const listBox = list.getBoundingClientRect();
-  const linkBox = link.getBoundingClientRect();
-  const style = getComputedStyle(list);
-  const start = listBox.left + (parseFloat(style.paddingLeft) || 0);
-  const end = listBox.right - (parseFloat(style.paddingRight) || 0);
-  let delta = 0;
-  if (linkBox.width > end - start || linkBox.left < start) {
-    delta = linkBox.left - start;
-  } else if (linkBox.right > end) {
-    delta = linkBox.right - end;
-  }
-  if (delta === 0) return;
-  list.scrollTo({
-    left: list.scrollLeft + delta,
-    behavior: smooth ? 'smooth' : 'auto',
-  });
 }
