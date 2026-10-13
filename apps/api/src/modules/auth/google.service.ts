@@ -1,17 +1,22 @@
-import { and, eq, sql } from 'drizzle-orm';
-import { authIdentities, users } from 'db/schema';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { authIdentities, passwordResetTokens, users } from 'db/schema';
 import type { DbClient } from 'db';
+import { markEmailVerified } from './auth.service.js';
 import type { GoogleIdentity } from './google-client.js';
+import { revokeAllSessions } from './session.js';
 
 // CR-247 (ADR-034): turns a validated Google ID token into one of our users. Runs in
 // one transaction so the decision and the write can't be split by a concurrent
 // request:
 //
 // 1. the Google account (`sub`) is already linked → that user;
-// 2. else a user with the token's email exists (row locked `FOR UPDATE`) → linked,
-//    but only when that account's email is verified: linking an unverified account
-//    would hand it to whoever registered the address with a password first
-//    (account pre-hijacking), so that one is refused;
+// 2. else a user with the token's email exists (row locked `FOR UPDATE`) → linked.
+//    CR-249 (ADR-035): if that account never confirmed its email, Google's
+//    verification proves the address is this person's, so the account is claimed:
+//    email marked verified, password removed, every session and outstanding
+//    verify/reset link voided, then linked. Whoever registered the address with a
+//    password first (account pre-hijacking) keeps nothing — CR-247 refused instead,
+//    which locked real owners out;
 // 3. else a new user, `emailVerified = true` (Google verified the address), no
 //    password.
 //
@@ -20,7 +25,7 @@ import type { GoogleIdentity } from './google-client.js';
 // re-reads the winner's row, which is verified, so it links; the identity insert has
 // the same `ON CONFLICT DO NOTHING` against UNIQUE(provider, provider_account_id).
 // A password registration racing step 3 loses on `users_email_unique` (409), or wins
-// with an unverified row that step 2 then refuses.
+// with an unverified row that step 2 then claims.
 
 export const GOOGLE_PROVIDER = 'google';
 
@@ -30,8 +35,6 @@ const NAME_MAX_LENGTH = 60;
 export type GoogleSignInRefusal =
   // Google did not vouch for the address (or sent none).
   | 'email_unverified'
-  // An existing account with this email never confirmed it.
-  | 'account_unverified'
   | 'blocked'
   // The Google account is linked to a different user than the email matched.
   | 'conflict';
@@ -120,13 +123,12 @@ export async function signInWithGoogle(
       }
     }
 
+    const now = new Date();
     if (!created) {
-      if (!user.emailVerified)
-        throw new GoogleSignInError('account_unverified');
       if (user.blockedAt) throw new GoogleSignInError('blocked');
+      if (!user.emailVerified) await claimUnverifiedAccount(tx, user.id, now);
     }
 
-    const now = new Date();
     const [identityRow] = await tx
       .insert(authIdentities)
       .values({
@@ -169,4 +171,32 @@ export async function signInWithGoogle(
 
     return { userId: user.id, created };
   });
+}
+
+/**
+ * CR-249 (ADR-035): Google vouched for the address of an account that never
+ * confirmed it. Nothing set up before that confirmation survives: the password (it
+ * may be a pre-hijacker's), every session, and every outstanding reset link; the
+ * verification links are consumed by {@link markEmailVerified}.
+ */
+async function claimUnverifiedAccount(
+  tx: Parameters<typeof markEmailVerified>[0],
+  userId: string,
+  now: Date,
+): Promise<void> {
+  await markEmailVerified(tx, userId);
+  await tx
+    .update(users)
+    .set({ passwordHash: null, updatedAt: now })
+    .where(eq(users.id, userId));
+  await tx
+    .update(passwordResetTokens)
+    .set({ usedAt: now })
+    .where(
+      and(
+        eq(passwordResetTokens.userId, userId),
+        isNull(passwordResetTokens.usedAt),
+      ),
+    );
+  await revokeAllSessions(tx, userId);
 }

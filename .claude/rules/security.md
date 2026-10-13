@@ -69,7 +69,9 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
 - Google sign-in (ADR-034, CR-247) is the one OAuth provider: server-side OIDC code
   flow with PKCE/`state`/`nonce`, ID token validated (JWKS signature, iss/aud/exp/
   nonce), ends in the ordinary ADR-013 session; no Google token is stored or logged.
-  An existing account is linked only when its email is verified (pre-hijacking); a
+  An existing verified account is linked; an unverified one is claimed (ADR-035:
+  verified, password + sessions + pending verify/reset links voided — never linked
+  with any of them intact, pre-hijacking); a
   password-less account's password login is the generic `invalid_credentials` with
   the same decoy Argon2 work.
 - 2FA is out of scope for MVP; the auth/session design should not preclude adding it

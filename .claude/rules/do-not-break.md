@@ -343,7 +343,9 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   retried); no Google token persisted or logged, the callback keeps `logLevel: 'warn'`;
   the `state` compared with the signed transaction cookie before any Google call, the
   cookie cleared on every callback (with `secure` in production — a `__Host-` deletion
-  without it is ignored); email-based linking only onto a **verified** account, inside
-  one transaction (`FOR UPDATE` + `ON CONFLICT DO NOTHING` on `users_email_unique` and
+  without it is ignored); email-based linking onto a verified account, or (ADR-035,
+  CR-249) claiming an unverified one only together with voiding its password, every
+  session and pending verify/reset link — never linking it with any of them intact —
+  inside one transaction (`FOR UPDATE` + `ON CONFLICT DO NOTHING` on `users_email_unique` and
   `auth_identities_provider_account_unique`); `loginUser` keeps the decoy verify for a
   `null` `password_hash`.

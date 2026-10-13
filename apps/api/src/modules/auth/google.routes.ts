@@ -47,7 +47,6 @@ const callbackQuerySchema = z.looseObject({
 
 const REFUSAL_OUTCOME: Record<GoogleSignInRefusal, GoogleSignInOutcome> = {
   email_unverified: 'email_unverified',
-  account_unverified: 'account_unverified',
   blocked: 'blocked',
   conflict: 'failed',
 };
