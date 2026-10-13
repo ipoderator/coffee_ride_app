@@ -56,10 +56,12 @@ migration `0027`); CR-228..CR-233 admin panel (ADR-032, migration `0026`); CR-21
 
 ## In progress
 
-CR-247 — committed; PR → green CI → merge → deploy (migration `0028`) → Google Cloud
-OAuth client (redirect URI `https://coffeeride.site/api/v1/auth/google/callback`,
-consent screen with `/privacy`, `/terms`) → env on the VPS → a real sign-in check. Legal
-text needs the owner's review.
+CR-247 — deployed 2026-10-13 (`3bd2ce4`, PR #52, migration `0028` applied). Google is
+off on production (no `GOOGLE_*` in the VPS `.env`, status `available:false`). Next:
+Google Cloud OAuth client with redirect URI
+`https://coffeeride.site/api/v1/auth/google/callback` and the consent screen pointing at
+`/privacy`, `/terms` → `GOOGLE_CLIENT_ID`/`SECRET` in the VPS `.env` → redeploy → a real
+sign-in check. Legal text needs the owner's review.
 
 CR-246 — deployed 2026-10-13 (`784755a`, PR #48); QA to re-run cancel/retry on
 production. The positive

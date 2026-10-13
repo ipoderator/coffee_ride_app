@@ -126,3 +126,7 @@ Files: `apps/api/src/modules/auth/{google-client,google-transaction,google.servi
 Validation: api 762/762, web 941/941, ui 278/278, db 17, resilience 15, maps-2gis 82 (+6 opt-in); `test:coverage` + `coverage:check` hold (auth +1.78 pp lines); typecheck, lint, build green; Storybook `GoogleSignIn` + `LegalDocument` 9/9 with axe; local flow through the Next proxy to Google's consent page and every callback refusal.
 Decisions: static Google metadata (no discovery); unverified existing account refused, not merged; `/privacy` text is a document in `features/legal`, not terminology.
 Follow-up: a real Google client for a full sign-in; no UI to unlink Google or delete an account (by email).
+
+## 2026-10-13 — CR-247 deployed
+
+Deploy: `3bd2ce4` (PR #52, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. Migration `0028` applied (29 rows in `__drizzle_migrations`, `auth_identities` exists, `users.password_hash` nullable). API `/health` db/redis/s3 ok; `/login`, `/register`, `/privacy`, `/terms` 200, both legal pages in `sitemap.xml`. Google stays off until the OAuth client is set: `GET /v1/auth/google/status` → `available:false`, `/api/v1/auth/google` → `303 /login?oauth=unavailable`, no button in `/login`'s HTML. Next: OAuth client + `GOOGLE_*` in the VPS `.env`, then a real sign-in.
