@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
   <!-- ADR-024: the wordmark's elevation profile alone, in the `brand` ink
        (logo/graphics role, not the AA-text `primary`). A static asset cannot
-       read packages/ui's CSS tokens, so the two `--brand` values (light
+       read packages/ui's CSS tokens, so the two `brand` values (light
        #82668C / dark #B8A0C1) are repeated here; keep them in step with
        packages/ui/src/tokens.css. -->
   <style>
