@@ -86,3 +86,7 @@ Files: `apps/api/src/lib/account-rate-limit.ts` (`accountRateLimitKeyFactory`), 
 Validation: api 767/767, 0 skipped (live Redis/S3, `coffee_ride_test`); `pnpm coverage:check` holds; api typecheck, lint (0 errors), prettier.
 Decisions: HMAC, not a bare hash — a leaked key can't be checked against a guessed email. Old raw-email keys expire within their 60 s window after deploy.
 Follow-up: none.
+
+## 2026-10-13 — CR-250 deployed
+
+Deploy: `65b5c4f` (PR #56, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration. After: API `/health` db/redis/s3 ok, site `200`, `POST /v1/auth/login` with an empty body → `400`, no error-level API log lines in the first 2 minutes. Pre-existing raw-email account keys expire within their 60 s window; log lines written before the fix stay as they are.
