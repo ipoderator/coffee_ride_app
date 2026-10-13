@@ -144,6 +144,19 @@ const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.string().optional(),
   ),
+  // CR-247 (ADR-034): the Google OAuth client behind «Войти через Google» (Google
+  // Cloud Console → Credentials → OAuth client ID, type "Web application"). Optional,
+  // same degraded-mode shape as STRAVA_*: both must be set for `plugins/google.ts` to
+  // construct a client; otherwise the button is hidden. The secret is server-only and
+  // never logged (`loadEnv()`'s errors name fields, not values).
+  GOOGLE_CLIENT_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  GOOGLE_CLIENT_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
   AUTH_SKIP_EMAIL_VERIFICATION: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z

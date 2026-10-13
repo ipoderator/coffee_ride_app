@@ -110,6 +110,19 @@ const CHECKS: ReadonlyArray<PreflightCheck> = [
       'Set both from the Strava API application settings (strava.com/settings/api), or clear both to make the degraded mode explicit.',
   },
   {
+    // CR-247: `plugins/google.ts` needs the pair; half of it is silently off.
+    keys: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    applies: (env) =>
+      (env.GOOGLE_CLIENT_ID === undefined) !==
+      (env.GOOGLE_CLIENT_SECRET === undefined),
+    problem:
+      'Only one of GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET is set, so no Google client is constructed.',
+    consequence:
+      'The login and register pages do not offer «Войти через Google»; email and password still work.',
+    action:
+      'Set both from the Google Cloud OAuth client (redirect URI WEB_ORIGIN/api/v1/auth/google/callback), or clear both to make the degraded mode explicit.',
+  },
+  {
     keys: ['MAPS_2GIS_API_KEY'],
     applies: (env) => env.MAPS_2GIS_API_KEY === undefined,
     problem:

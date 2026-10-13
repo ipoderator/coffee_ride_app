@@ -351,7 +351,12 @@ export async function loginUser(
     throw INVALID_CREDENTIALS();
   }
 
-  const valid = await verifyPassword(row.passwordHash, password);
+  // CR-247: a Google-only account has no password. Same decoy verify as the
+  // unknown-email branch, so its answer and latency match a wrong password.
+  const valid =
+    row.passwordHash === null
+      ? (await verifyPassword(DUMMY_PASSWORD_HASH, password)) && false
+      : await verifyPassword(row.passwordHash, password);
   if (!valid) {
     throw INVALID_CREDENTIALS();
   }

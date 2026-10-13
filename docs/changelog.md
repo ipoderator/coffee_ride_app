@@ -113,3 +113,7 @@ Files: `apps/api/src/modules/strava/{oauth-state,strava.service}.ts` + tests, `p
 Validation: api strava 49/49 on `coffee_ride_test`; web unit ride-detail+my-rides 152/152; Storybook `RegistrationTicket` 15/15; typecheck/lint/prettier clean; full `test:coverage` with live Redis/S3 + `coverage:check` holds (strava 94.79/90.52); local browser run (390 px): cancel → ride page + toast + retry copy, expired → ride page, forged → `/me/rides` + toast, no console errors.
 Decisions: the retry keeps Strava's own «Connect with Strava» artwork (brand guidelines) and adds the title/hint around it; `readOAuthState` reports `expired` instead of `null` so the ride can be trusted for the redirect only.
 Follow-up: positive «Проверено Strava» on production needs a real bike activity near a test ride's start.
+
+## 2026-10-13 — CR-246 deployed
+
+Deploy: `784755a` (PR #48, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`; no migrations. API `/health` db/redis/s3 ok, `GET /v1/strava/status` → `available:true`; a forged-state callback → `303 /me/rides?strava=error`; `/`, `/me/rides`, `/login` 200; the new copy (`retryTitle`) is in the served `/rides/[id]` bundle. The real cancel/expired flows on production need a signed-in QA run; positive «Проверено Strava» still needs a bike activity near a test ride's start.

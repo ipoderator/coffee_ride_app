@@ -38,7 +38,10 @@ export const users = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull(),
-    passwordHash: text('password_hash').notNull(),
+    // CR-247 (ADR-034): `null` for an account created by Google sign-in — it has no
+    // password until a reset sets one; password login refuses it with the same
+    // generic `invalid_credentials` (`auth.service.ts`'s `loginUser`).
+    passwordHash: text('password_hash'),
     // Required before a User can act as an organizer or take another
     // trust-sensitive action (`docs/auth.md`) — enforced by future tickets that check
     // this column (starting with organizer-profile creation, CR-014). Defaults false;
