@@ -117,3 +117,9 @@ Follow-up: positive «Проверено Strava» on production needs a real bik
 ## 2026-10-13 — CR-246 deployed
 
 Deploy: `784755a` (PR #48, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`; no migrations. API `/health` db/redis/s3 ok, `GET /v1/strava/status` → `available:true`; a forged-state callback → `303 /me/rides?strava=error`; `/`, `/me/rides`, `/login` 200; the new copy (`retryTitle`) is in the served `/rides/[id]` bundle. The real cancel/expired flows on production need a signed-in QA run; positive «Проверено Strava» still needs a bike activity near a test ride's start.
+
+## 2026-10-13 — CR-248 — Favicon decodes again
+
+Summary: found by the logo-design skill's SVG audit: `apps/web/src/app/icon.svg` had `--brand` inside an XML comment (CR-130, 2026-09-24). A double hyphen is illegal in an XML comment, browsers decode SVG images strictly, so the tab showed no icon (Chromium: the image fails to decode). Comment reworded; nothing else in the file changed.
+Files: `apps/web/src/app/icon.svg`, `apps/web/src/app/icon.test.ts` (new — parses the icon as `image/svg+xml`, fails on any `parsererror`; red before the fix, green after).
+Validation: `xmllint --noout` clean; web unit `icon.test.ts` 1/1; lint/typecheck/prettier clean.
