@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyRegistrationSummary, PublicRide } from 'types';
+import { ToastProvider } from 'ui';
 import { MyRidesView } from './components/MyRidesView';
 import { UpcomingRegistrationsWidget } from './components/UpcomingRegistrationsWidget';
 import { listMyRegistrations } from './api';
@@ -144,6 +145,24 @@ describe('MyRidesView', () => {
     const link = (await screen.findByText('Отменённый заезд')).closest('a');
     expect(link).toHaveAttribute('href', '/rides/ride-2');
     expect(screen.getByText('Отменён')).toBeInTheDocument();
+  });
+
+  it('toasts a Strava check that could not return to its ride (QA)', async () => {
+    listMyRegistrationsMock.mockResolvedValue({ items: [], nextCursor: null });
+    window.history.replaceState(null, '', '/me/rides?strava=error');
+
+    render(
+      <ToastProvider>
+        <MyRidesView />
+      </ToastProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        'Не удалось проверить поездку. Попробуйте ещё раз.',
+      ),
+    ).toBeInTheDocument();
+    expect(window.location.search).toBe('');
   });
 
   it('links each card into the ride detail page', async () => {

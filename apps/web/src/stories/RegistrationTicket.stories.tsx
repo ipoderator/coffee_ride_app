@@ -233,6 +233,29 @@ export const FinishStravaSync: Story = {
   },
 };
 
+/** QA: back from Strava without a verified ride (here: «Отменить» on the consent
+ * screen). The grant was one-shot, so the card offers a retry and says Strava will
+ * ask again, instead of the first visit's «Connect» with nothing changed. */
+export const FinishStravaRetry: Story = {
+  args: FinishCheckInOpen.args,
+  beforeEach: () => {
+    const restore = stubStravaStatus(true)();
+    const url = new URL(window.location.href);
+    url.searchParams.set('strava', 'cancelled');
+    window.history.replaceState(window.history.state, '', url.toString());
+    return restore;
+  },
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByText(STRAVA_SYNC_TERMS.retryTitle),
+    ).toBeVisible();
+    await expect(canvas.getByText(STRAVA_SYNC_TERMS.retryHint)).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: STRAVA_SYNC_TERMS.connectButton }),
+    ).toBeEnabled();
+  },
+};
+
 /** CR-234: claimed by hand — the Strava check is still on offer. */
 export const FinishClaimedStravaSync: Story = {
   args: FinishClaimed.args,

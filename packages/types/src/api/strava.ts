@@ -17,6 +17,8 @@ export const STRAVA_SYNC_OUTCOMES = [
   'no_activity',
   'no_match',
   'denied',
+  'cancelled',
+  'expired',
   'unavailable',
   'already_decided',
   'error',

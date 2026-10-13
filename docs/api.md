@@ -646,10 +646,12 @@ registration_not_found`, `409 ride_not_in_progress`, `409 attendance_already_dec
 
 GET `/v1/strava/callback?code&state&scope&error` — **implemented**. Strava's redirect
 target (`WEB_ORIGIN/api/v1/strava/callback`), per-IP 10/min. Always `303`: to
-`/rides/:id?strava=<outcome>`, or `/me/rides?strava=error` when the `state` is forged,
-expired or belongs to another session. Outcomes: `verified` (claim + mark written),
-`no_activity`, `no_match`, `denied` (cancelled or activity access unticked),
-`unavailable` (Strava down/not configured), `already_decided`, `error`. The Strava grant
+`/rides/:id?strava=<outcome>`, or `/me/rides?strava=error` (shown there as a toast)
+when the `state` is forged or belongs to another session. Outcomes: `verified` (claim +
+mark written), `no_activity`, `no_match`, `denied` (activity access unticked),
+`cancelled` (Strava's `error=access_denied` — «Отменить» on the consent screen),
+`expired` (a genuine own `state` past its 10 minutes — back to the ride, the code is not
+exchanged), `unavailable` (Strava down/not configured), `already_decided`, `error`. The Strava grant
 is revoked before the redirect; no token is stored.
 
 **Closing summary (CR-182, additive)**: `GET /v1/rides/:id` carries

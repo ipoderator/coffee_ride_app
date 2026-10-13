@@ -158,15 +158,19 @@ export async function completeStravaSync(
   const state = query.state
     ? readOAuthState(config.authSecret, query.state)
     : null;
+  // A forged state, or one issued to another session, names no ride we may trust.
   if (!state || state.userId !== sessionUserId) {
     return { rideId: null, outcome: 'error' };
   }
   const { userId, rideId } = state;
   const result = (outcome: StravaSyncOutcome) => ({ rideId, outcome });
 
-  if (query.error || !query.code) {
-    return result('denied');
-  }
+  // «Отменить» on Strava's consent screen comes back as `error=access_denied`.
+  if (query.error) return result('cancelled');
+  // Genuine and this participant's, so the ride page is a safe place to land — but
+  // the grant is not acted on: the button is one press away.
+  if (state.expired) return result('expired');
+  if (!query.code) return result('error');
 
   // Exchanged before any other check, so that every path below revokes the grant
   // the athlete just gave — a new Strava app counts each authorized athlete

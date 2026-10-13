@@ -24,7 +24,13 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-Production QA follow-ups, 2026-10-12, deployed to coffeeride.site (`b19a89a`, PR #46):
+CR-246 (production QA, Strava sync, 2026-10-13): «Отменить» on Strava's consent screen
+→ new outcome `cancelled` («Подключение Strava отменено»), a genuine own `state` past its
+TTL → `expired` back to the ride, `/me/rides?strava=…` now toasts; after a return
+without a verified ride the card reads «Проверить поездку снова» and says the grant is
+one-shot. Shared hook `apps/web/src/lib/strava/outcome-toast.ts`.
+
+Before this: production QA follow-ups, 2026-10-12, deployed (`b19a89a`, PR #46):
 CR-245 — the emailed verification link keeps `next` (KI-089 resolved): optional `next`
 on `POST /v1/auth/register`, checked by the shared `safeNextPath` (`packages/types`).
 CR-244 — «reset email not sent» investigated on production: the typed address matched
@@ -56,6 +62,10 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-246 — local validation done; PR → `main` → production deploy. The positive
+«Проверено Strava» path still needs a real Strava bike activity started near a test
+ride's start (QA account has none).
 
 CR-245 — deployed 2026-10-12 (`b19a89a`); production check of the emailed link waits for
 the next real registration from a page with `next`. CR-244 — QA to retry the reset with the exact registered address;

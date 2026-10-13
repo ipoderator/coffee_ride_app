@@ -1423,6 +1423,35 @@ describe('RideDetailView', () => {
       expect(window.location.search).toBe('');
     });
 
+    it('says a cancel is a cancel and offers to check again (QA)', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      window.history.replaceState(null, '', '/rides/ride-1?strava=cancelled');
+      renderStarted(registered);
+      expect(
+        await screen.findByText('Подключение Strava отменено'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Strava не дала доступ/),
+      ).not.toBeInTheDocument();
+      expect(
+        await screen.findByText('Проверить поездку снова'),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/снова спросит разрешение/)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Connect with Strava' }),
+      ).toBeInTheDocument();
+    });
+
+    it('offers a first check, not a retry, without a return from Strava', async () => {
+      getStravaStatusMock.mockResolvedValue({ available: true });
+      renderStarted(registered);
+      await screen.findByRole('button', { name: 'Connect with Strava' });
+      expect(
+        screen.queryByText('Проверить поездку снова'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText(/на одну проверку/)).toBeInTheDocument();
+    });
+
     it('ignores an unknown outcome', async () => {
       window.history.replaceState(null, '', '/rides/ride-1?strava=whatever');
       renderStarted(registered);
