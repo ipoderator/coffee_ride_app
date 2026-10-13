@@ -338,3 +338,12 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   match the session's user; the organizer's list carries only `stravaVerified` — never
   Strava distance/time/track (Strava API Agreement). Strava HTTP only in
   `modules/strava/strava-client.ts`.
+- Google sign-in (ADR-034, CR-247): Google HTTP only in `modules/auth/google-client.ts`
+  (openid-client `customFetch` through `packages/resilience`; the code exchange never
+  retried); no Google token persisted or logged, the callback keeps `logLevel: 'warn'`;
+  the `state` compared with the signed transaction cookie before any Google call, the
+  cookie cleared on every callback (with `secure` in production — a `__Host-` deletion
+  without it is ignored); email-based linking only onto a **verified** account, inside
+  one transaction (`FOR UPDATE` + `ON CONFLICT DO NOTHING` on `users_email_unique` and
+  `auth_identities_provider_account_unique`); `loginUser` keeps the decoy verify for a
+  `null` `password_hash`.

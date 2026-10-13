@@ -19,6 +19,10 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-247 Google sign-in (OIDC, PKCE/state/nonce) into the existing DB session,
+      `auth_identities` + nullable `password_hash` (migration `0028`), button on
+      `/login`/`/register` keeping `next`, Russian `/privacy` and `/terms` (ADR-034) —
+      done 2026-10-13 on `feat/google-oauth`, committed (PR into `main`). See docs/changelog.md
 - [x] CR-246 (production QA) Strava sync: a cancel reads «Подключение Strava
       отменено», an expired `state` returns to the ride, `/me/rides` shows the
       outcome toast, a return without a verified ride offers «Проверить поездку
@@ -40,9 +44,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       page — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
 - [x] CR-237 (production QA) «Закрыть регистрацию» asks first and says it is
       irreversible — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
-- [x] CR-236 (production QA) create form: adjacent-month calendar days pickable
-      (`DatePicker`), field errors clear on change; profile link not reproduced —
-      done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
-- [x] CR-235 (P0, production QA) draft «Опубликовать» validates and saves the form
-      before publishing; a failed save publishes nothing; one save + one publish on a
-      double click — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

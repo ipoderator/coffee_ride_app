@@ -27,7 +27,7 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   unversioned `/health` (DB/Redis/S3, always 200).
 - `plugins/`: `auth` (session → `request.user`; `requireAdmin`, ADR-032), `csrf` (Origin/Referer on unsafe
   methods), `db`, `s3`, `email` (Unisender or null), `maps` (`app.mapProvider` or null),
-  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `security-headers` (helmet), `error-handler` (RFC 9457),
+  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `google` (`app.googleOidc` or null, ADR-034), `security-headers` (helmet), `error-handler` (RFC 9457),
   `error-reporting` (`app.reportError`).
 - `lib/`: `cursor` (pagination), `account-rate-limit`, `race-timeout`, `request-id`,
   `trust-proxy`, `read-upload`/`image-processing`/`image-storage` (sharp, S3),
@@ -37,7 +37,9 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
 - `modules/<capability>/` = `*.routes.ts` (thin) → `*.service.ts` (rules, authz,
   transactions) + `*-response.schema.ts`:
   - `auth` — register/login/logout/me, verify + resend, forgot/reset password;
-    `password.ts` (Argon2id), `session.ts` (DB sessions, hashed token), `tokens.ts`.
+    `password.ts` (Argon2id), `session.ts` (DB sessions, hashed token), `tokens.ts`;
+    Google sign-in (ADR-034): `google-client.ts` (only Google HTTP, openid-client),
+    `google-transaction.ts` (signed cookie), `google.service.ts`, `google.routes.ts`.
   - `users` — profile, avatar, garage (`Bike`), rider-profile visibility.
   - `organizers` — `OrganizerProfile`, rating aggregate, avatar.
   - `rides` — CRUD + lifecycle, reschedule, discovery list (`phase`, bbox, filters),
@@ -72,9 +74,10 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
 participants|updates` — the six-tab workspace «Управление заездом»), `/admin` (+ `users`,
   `users/[id]`, `rides`, `reviews`, `actions`; layout 404s non-admins via
   `lib/admin/server-admin.ts`, ADR-032); `not-found.tsx`
-  (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226).
+  (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226); `(public)/privacy`,
+  `(public)/terms` (CR-247, text in `features/legal/content.ts`).
 - `features/{auth,organizer,participant,admin}/<feature>/` — ADR-009 modules (`components/`,
-  `api.ts`, tests); admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
+  `api.ts`, tests); auth: login, register, google (CR-247), verify-email, …; admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
   participants, profile, rides, route, updates; participant: discovery, my-rides,
   notifications, organizer-entry, profile, ride-detail, rider-profile.
 - `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink,
@@ -98,7 +101,7 @@ participants|updates` — the six-tab workspace «Управление заез�
 
 ## packages
 
-- `db` — Drizzle schema `src/schema/*.ts` (one file per entity: user, session, tokens,
+- `db` — Drizzle schema `src/schema/*.ts` (one file per entity: user, session, auth-identity, tokens,
   organizer-profile, ride, route, stop, route-point, ride-group, ride-requirement,
   registration, waitlist-entry, ride-update, notification, review, bike, admin); migrations
   `migrations/0000`–`0027`; `migrate.ts` (advisory lock), `seed-demo.ts`, `admin-cli.ts`

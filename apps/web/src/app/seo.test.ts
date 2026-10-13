@@ -38,6 +38,8 @@ describe('sitemap.xml', () => {
     );
     expect(await sitemap()).toEqual([
       { url: 'https://coffeeride.site/', changeFrequency: 'hourly' },
+      { url: 'https://coffeeride.site/privacy', changeFrequency: 'yearly' },
+      { url: 'https://coffeeride.site/terms', changeFrequency: 'yearly' },
       {
         url: 'https://coffeeride.site/rides/ride-1',
         lastModified: '2026-10-08T10:00:00.000Z',
@@ -45,10 +47,10 @@ describe('sitemap.xml', () => {
     ]);
   });
 
-  it('is the catalog alone when the API answers an error or is unreachable', async () => {
+  it('is the catalog and the legal pages alone when the API answers an error or is unreachable', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
-    expect(await sitemap()).toHaveLength(1);
+    expect(await sitemap()).toHaveLength(3);
     fetchMock.mockRejectedValueOnce(new Error('down'));
-    expect(await sitemap()).toHaveLength(1);
+    expect(await sitemap()).toHaveLength(3);
   });
 });

@@ -12,6 +12,7 @@ import type {
   RideStatus,
   RoutePointType,
   StravaSyncOutcome,
+  GoogleSignInOutcome,
 } from 'types';
 
 // `RideStatus`/`BicycleType`/`DifficultyLevel` themselves moved to `packages/types`
@@ -227,6 +228,44 @@ export const AUTH_TERMS = {
   loginLink: 'Уже есть аккаунт? Войти',
   registerLink: 'Нет аккаунта? Зарегистрироваться',
   forgotPasswordLink: 'Забыли пароль?',
+} as const;
+
+// CR-247 (ADR-034): «Войти через Google» on `/login` and `/register`, and the
+// message `/login?oauth=<outcome>` shows when the sign-in came back without a session.
+export const GOOGLE_SIGN_IN_TERMS = {
+  // Google's branding guidelines: «Sign in with Google» in the page's language.
+  button: 'Войти через Google',
+  divider: 'или',
+  // Shown under the button: signing in with Google creates an account.
+  consentPrefix: 'Продолжая, вы принимаете ',
+  consentTerms: 'условия использования',
+  consentJoin: ' и ',
+  consentPrivacy: 'политику конфиденциальности',
+  consentEnd: '.',
+  outcome: {
+    cancelled: 'Вход через Google отменён.',
+    expired:
+      'Время на вход через Google истекло. Нажмите «Войти через Google» ещё раз.',
+    state:
+      'Не удалось подтвердить вход через Google. Нажмите «Войти через Google» ещё раз.',
+    failed: 'Google не подтвердил вход. Попробуйте ещё раз.',
+    unavailable:
+      'Вход через Google сейчас недоступен. Войдите по email и паролю.',
+    email_unverified:
+      'Google не подтвердил адрес почты этого аккаунта — войти через него нельзя.',
+    account_unverified:
+      'Аккаунт с этим email уже есть, но почта в нём не подтверждена. Войдите по паролю и подтвердите почту — после этого можно входить через Google.',
+    blocked: 'Аккаунт заблокирован администратором.',
+  } satisfies Record<GoogleSignInOutcome, string>,
+} as const;
+
+// CR-247: `/privacy` and `/terms`. The documents' own text lives with the pages
+// (`apps/web/src/features/legal/`); these are the names every link uses.
+export const LEGAL_TERMS = {
+  privacyTitle: 'Политика конфиденциальности',
+  termsTitle: 'Условия использования',
+  updatedLabel: 'Редакция от',
+  contactLabel: 'Связаться с нами',
 } as const;
 
 /**

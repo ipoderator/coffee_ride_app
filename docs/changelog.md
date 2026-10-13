@@ -117,3 +117,12 @@ Follow-up: positive «Проверено Strava» on production needs a real bik
 ## 2026-10-13 — CR-246 deployed
 
 Deploy: `784755a` (PR #48, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`; no migrations. API `/health` db/redis/s3 ok, `GET /v1/strava/status` → `available:true`; a forged-state callback → `303 /me/rides?strava=error`; `/`, `/me/rides`, `/login` 200; the new copy (`retryTitle`) is in the served `/rides/[id]` bundle. The real cancel/expired flows on production need a signed-in QA run; positive «Проверено Strava» still needs a bike activity near a test ride's start.
+
+## 2026-10-13 — CR-247 — Google sign-in (OIDC) next to the DB sessions; /privacy and /terms
+
+Summary: «Войти через Google» on `/login` and `/register` (keeps `next`): server-side OIDC code flow via `openid-client` (PKCE, state, nonce, signed 10-min transaction cookie), ID token validated incl. JWKS signature, ends in the ordinary ADR-013 session. New user = verified, password-less; an existing verified email is linked atomically, an unverified one refused; races end in one user + one identity. Russian `/privacy` and `/terms`. ADR-034.
+Contract: `GET /v1/auth/google`, `/google/callback`, `/google/status` (new); `types` `GOOGLE_SIGN_IN_OUTCOMES`; `ui` `GOOGLE_SIGN_IN_TERMS`, `LEGAL_TERMS`. Migration `0028`: `auth_identities`, `users.password_hash` nullable. Env `GOOGLE_CLIENT_ID`/`_SECRET` (optional). New dep `openid-client@^6.8.8`.
+Files: `apps/api/src/modules/auth/{google-client,google-transaction,google.service,google.routes,session-cookie}.ts` + tests, `plugins/google.ts`, `test-support/fake-google.ts`, `env.ts`, `preflight.ts`; `packages/db` schema + `0028`; `apps/web/src/features/{auth/google,legal}`, `app/(public)/{login,register,privacy,terms}`, `sitemap.ts`, stories; env examples, `docker-compose.prod.yml`; docs.
+Validation: api 762/762, web 941/941, ui 278/278, db 17, resilience 15, maps-2gis 82 (+6 opt-in); `test:coverage` + `coverage:check` hold (auth +1.78 pp lines); typecheck, lint, build green; Storybook `GoogleSignIn` + `LegalDocument` 9/9 with axe; local flow through the Next proxy to Google's consent page and every callback refusal.
+Decisions: static Google metadata (no discovery); unverified existing account refused, not merged; `/privacy` text is a document in `features/legal`, not terminology.
+Follow-up: a real Google client for a full sign-in; no UI to unlink Google or delete an account (by email).

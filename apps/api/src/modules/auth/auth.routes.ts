@@ -28,6 +28,7 @@ import {
   verifyEmail,
 } from './auth.service.js';
 import { createSession, revokeSession } from './session.js';
+import { setSessionCookie } from './session-cookie.js';
 
 // Response is built from an explicit Zod schema (not just the `User` TS type)
 // so Fastify's serializer actually strips any unlisted field before it leaves
@@ -253,15 +254,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
 
       const session = await createSession(app.db, user.id);
 
-      reply.setCookie(app.sessionCookieName, session.token, {
-        httpOnly: true,
-        // Plain HTTP in local dev (ADR-013 / this ticket's requirements) —
-        // `Secure` would silently drop the cookie over http://localhost.
-        secure: isProd,
-        sameSite: 'lax',
-        path: '/',
-        expires: session.expiresAt,
-      });
+      setSessionCookie(app, reply, session, isProd);
 
       return reply.status(200).send({ user });
     },
