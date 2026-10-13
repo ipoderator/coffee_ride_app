@@ -1549,3 +1549,5 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-235 (P0, production QA) draft «Опубликовать» validates and saves the form
       before publishing; a failed save publishes nothing; one save + one publish on a
       double click — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
+- [x] CR-237 (production QA) «Закрыть регистрацию» asks first and says it is
+      irreversible — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

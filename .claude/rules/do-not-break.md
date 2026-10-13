@@ -191,6 +191,10 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   `.claude/rules/security.md` names) — don't extend it to
   `/verify-email`/`/reset-password`, which operate on opaque tokens, not an
   identifiable account from the request body;
+- the per-account key built by `accountRateLimitKeyFactory` (an HMAC of the
+  normalized email, keyed from `AUTH_SECRET`) and the fail-open warning
+  logging only `err` — never a raw email in a Redis key or in that log line
+  (CR-250);
 - cover images/avatars served only through their API-proxy path (`GET
 /v1/rides/:id/cover`, `/v1/users/me/avatar`, `/v1/organizers/:id/avatar`),
   never a direct S3 URL — the bucket stays private, and this is what lets
