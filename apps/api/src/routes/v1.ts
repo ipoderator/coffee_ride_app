@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import type { Env } from '../env.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
+import { googleAuthRoutes } from '../modules/auth/google.routes.js';
 import { usersRoutes } from '../modules/users/users.routes.js';
 import { organizersRoutes } from '../modules/organizers/organizers.routes.js';
 import { ridesRoutes } from '../modules/rides/rides.routes.js';
@@ -41,6 +42,7 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   registerCsrf(app, opts.env);
 
   await app.register(authRoutes, { prefix: '/auth', env: opts.env });
+  await app.register(googleAuthRoutes, { prefix: '/auth', env: opts.env });
   await app.register(usersRoutes, { prefix: '/users' });
   await app.register(organizersRoutes, { prefix: '/organizers' });
   await app.register(ridesRoutes, { prefix: '/rides' });

@@ -10,7 +10,8 @@ A **snapshot** of where the project is now — overwritten, never appended to. H
 MVP feature-complete and in owner QA; not deployed anywhere yet (KI-045). Every backlog
 section is done (`docs/tasks.md`, archive in `docs/tasks-archive.md`):
 
-- auth — email + password, DB sessions, verify/resend/reset email;
+- auth — email + password, Google sign-in (ADR-034), DB sessions, verify/resend/reset
+  email;
 - organizer profile, full ride lifecycle (`draft → published → registration_open →
 registration_closed → started → finished`, `cancelled`), the six-tab ride workspace
   «Управление заездом», reschedule (ADR-029);
@@ -24,26 +25,18 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-246 (production QA, Strava sync, 2026-10-13): «Отменить» on Strava's consent screen
-→ new outcome `cancelled` («Подключение Strava отменено»), a genuine own `state` past its
-TTL → `expired` back to the ride, `/me/rides?strava=…` now toasts; after a return
-without a verified ride the card reads «Проверить поездку снова» and says the grant is
-one-shot. Shared hook `apps/web/src/lib/strava/outcome-toast.ts`.
+CR-247 (owner, 2026-10-13): Google sign-in — server-side OIDC code flow
+(`openid-client`, PKCE/state/nonce, signed transaction cookie) into the existing DB
+session; `auth_identities` + nullable `password_hash` (migration `0028`); button on
+`/login`/`/register` keeping `next`; Russian `/privacy` and `/terms`. Validated locally
+on `feat/google-oauth`, committed and going to `main` through a PR. Production
+needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and the Google OAuth client set up.
 
-Before this: production QA follow-ups, 2026-10-12, deployed (`b19a89a`, PR #46):
-CR-245 — the emailed verification link keeps `next` (KI-089 resolved): optional `next`
-on `POST /v1/auth/register`, checked by the shared `safeNextPath` (`packages/types`).
-CR-244 — «reset email not sent» investigated on production: the typed address matched
-no account (Gmail `+` alias); no defect.
-
-Before this: CR-235..CR-243 — production browser QA items 1–9, deployed (`ef49fcd`,
-PR #43; details in the changelog).
-Before this: CR-234 — «Синхронизировать со Strava» (ADR-033), deployed (migration
-`0027`); on prod the feature stays hidden until `STRAVA_*` is set there (owner-side
-settings below).
-Before this: CR-228..CR-233 — admin panel P0 (ADR-032) deployed to coffeeride.site
-(`c01a61f`, migration `0026`); CR-233 (PR #40) keeps `s3-init` idempotent on
-SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
+Before this (details in the changelog): CR-246 Strava sync cancel/expired/retry copy
+(merged, PR #48); CR-245/CR-244 production QA follow-ups (deployed `b19a89a`);
+CR-235..CR-243 production QA 1–9 (deployed `ef49fcd`); CR-234 Strava sync (ADR-033,
+migration `0027`); CR-228..CR-233 admin panel (ADR-032, migration `0026`); CR-219 —
+**coffeeride.site is live** (`docs/deployment.md`).
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
@@ -62,6 +55,11 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-247 — committed; PR → green CI → merge → deploy (migration `0028`) → Google Cloud
+OAuth client (redirect URI `https://coffeeride.site/api/v1/auth/google/callback`,
+consent screen with `/privacy`, `/terms`) → env on the VPS → a real sign-in check. Legal
+text needs the owner's review.
 
 CR-246 — deployed 2026-10-13 (`784755a`, PR #48); QA to re-run cancel/retry on
 production. The positive
@@ -156,4 +154,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-12 (CR-245)
+2026-10-13 (CR-247)

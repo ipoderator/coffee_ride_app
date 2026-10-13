@@ -66,8 +66,12 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
 - Revocation must actually revoke: logout deletes the row, a password change revokes
   every session of that user, a block takes effect on the next request. Any session
   cache (Redis) is invalidated on revocation — Postgres stays the source of truth.
-- OAuth providers can be added later (Auth.js-compatible architecture) but are not
-  required for MVP — don't block CR-011/CR-012 on selecting one.
+- Google sign-in (ADR-034, CR-247) is the one OAuth provider: server-side OIDC code
+  flow with PKCE/`state`/`nonce`, ID token validated (JWKS signature, iss/aud/exp/
+  nonce), ends in the ordinary ADR-013 session; no Google token is stored or logged.
+  An existing account is linked only when its email is verified (pre-hijacking); a
+  password-less account's password login is the generic `invalid_credentials` with
+  the same decoy Argon2 work.
 - 2FA is out of scope for MVP; the auth/session design should not preclude adding it
   later, but do not build it now.
 

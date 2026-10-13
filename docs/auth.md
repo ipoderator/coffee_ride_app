@@ -6,9 +6,9 @@ implementation checklist.
 
 ## Method
 
-Email + password, primary and only required method for MVP. Auth.js-compatible
-architecture so OAuth providers can be added later without restructuring, but no OAuth
-provider is required to ship.
+Email + password, primary method. Google sign-in beside it (CR-247, ADR-034): a
+server-side OIDC code flow (PKCE, `state`, `nonce`) that ends in the same DB session
+cookie. Optional per deployment — hidden without `GOOGLE_CLIENT_ID`/`_SECRET`.
 
 ## Who can do what
 
@@ -30,6 +30,12 @@ else's, using the same login.
   same-origin relative path — absolute/protocol-relative URLs, backslashes, control
   characters and `/login`/`/register` themselves are dropped (open-redirect
   protection, `apps/web/src/lib/auth/next-path.ts`, the one place it is validated).
+- **Google (CR-247, ADR-034)**: «Войти через Google» on `/login` and `/register`
+  keeps `next`. The first sign-in creates a verified, password-less account (names go
+  only into empty fields); an existing account with the same **verified** email is
+  linked; an unverified one is refused (pre-hijacking). Password login of a
+  password-less account gets the generic `invalid_credentials`; «Забыли пароль?»
+  sets a password. Failures return to `/login?oauth=<outcome>`.
 - **Logout**: invalidates the current session.
 - **Password reset**: request by email → single-use, time-limited token → set new
   password. Same generic response whether or not the email exists.
@@ -48,7 +54,7 @@ else's, using the same login.
 - confirm password hashing parameters (Argon2id/bcrypt) against current guidance;
 - define email verification and password-reset email delivery (ties to ADR-007
   notifications decision, still Pending);
-- decide whether/which OAuth providers to add, if any.
+- ~~decide whether/which OAuth providers to add, if any~~ — Google (ADR-034).
 
 Authentication and authorization are separate concerns and are implemented as such:
 authentication establishes identity; authorization (ownership checks, capability checks)

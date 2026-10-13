@@ -3,7 +3,8 @@
 Conceptual model. Exact columns and indexes evolve through migrations.
 
 - User — account. First real table (CR-011): `id`, `email` (unique, stored
-  lowercased by the service layer), `passwordHash` (Argon2id), `emailVerified`
+  lowercased by the service layer), `passwordHash` (Argon2id; nullable since CR-247 —
+  `null` for an account created by Google sign-in), `emailVerified`
   (default `false`, flipped by verify-email), `displayName`/`phone`/`bio`
   (CR-013, all nullable — profile fields set via `PATCH /v1/users/me`; `phone`
   is private contact data, returned only to the profile's own owner),
@@ -36,6 +37,11 @@ registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
   environment (`.claude/rules/security.md`'s no-account-enumeration
   requirement on `POST /v1/auth/forgot-password`). Not a fixed domain
   entity — an auth implementation detail.
+- AuthIdentity (`auth_identities`, CR-247, ADR-034) — an external sign-in linked to
+  a User: `id`, `userId` (FK → User, cascade delete, indexed), `provider` (`google`),
+  `providerAccountId` (Google's `sub`), `createdAt`/`updatedAt`. UNIQUE(`provider`,
+  `providerAccountId`) is the "one external account → one user" invariant; no provider
+  token is stored. An auth implementation detail, not a domain entity.
 - Session — one row per active login (CR-012, ADR-013): `id`, `userId` (FK →
   User, cascade delete), `tokenHash` (SHA-256 of the opaque cookie token —
   same never-store-the-raw-value pattern as `EmailVerificationToken`),

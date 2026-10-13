@@ -1653,3 +1653,65 @@ Strava app starts with an athlete capacity of 1 until Strava reviews it.
 
 Unset the two env vars (the button disappears). Fully: drop the module and the
 migration `0027` columns; nothing else reads them.
+
+## ADR-034 — Google sign-in: server-side OIDC code flow into the existing DB session
+
+Status: Accepted (2026-10-13, owner request, CR-247). Extends ADR-006 and ADR-013.
+
+### Context
+
+The owner wants «Войти через Google» next to email + password, without changing how
+sessions work. ADR-006 left OAuth providers for later; ADR-013 fixed DB-backed
+sessions with an opaque httpOnly cookie.
+
+### Decision
+
+1. **Flow**: OpenID Connect Authorization Code Flow on the server through
+   `openid-client` (v6): scopes `openid email profile`, PKCE S256, `state`, `nonce`.
+   `GET /v1/auth/google?next=` → 303 to Google; `GET /v1/auth/google/callback` →
+   checks `state`, exchanges the code, validates the ID token (signature against
+   Google's JWKS — `enableNonRepudiationChecks` — plus `iss`, `aud`, `exp`/`iat`,
+   `nonce`), creates the ordinary ADR-013 session and 303s to `next` or `/me`.
+   Failures land on `/login?oauth=<outcome>&next=…`. Google's metadata is static
+   (documented stable endpoints) — no discovery call per boot.
+2. **Transaction cookie**: `state`, `nonce`, PKCE verifier and the validated `next`
+   in one HMAC-signed cookie (key derived from `AUTH_SECRET` under its own label),
+   10 min, httpOnly, SameSite=Lax, `__Host-google-oauth` + Secure in production;
+   cleared on every callback. No server-side storage.
+3. **No provider tokens kept**: Google's access/ID tokens never leave
+   `completeSignIn`; nothing from Google is stored besides `auth_identities`
+   (`provider`, `provider_account_id = sub`) and, on first use, names in empty profile
+   fields. The callback keeps `logLevel: 'warn'` so the `code` stays out of logs.
+4. **Account rules** (`google.service.ts`, one transaction): a linked `sub` → its
+   user; else a user with the token's email is linked only if that account's email
+   is verified (row locked `FOR UPDATE`); an unverified one is refused
+   (`account_unverified`) — linking it would hand the account to whoever registered
+   the address with a password first (pre-hijacking); else a new user,
+   `email_verified = true`, `password_hash = null`. Google must vouch for the email
+   (`email_verified`). A blocked user is refused. Races end in one user and one
+   identity: `INSERT … ON CONFLICT DO NOTHING` against `users_email_unique` and
+   UNIQUE(provider, provider_account_id), then a re-read.
+5. **Password-less accounts**: `users.password_hash` is nullable. Password login of
+   such an account answers the generic `invalid_credentials` after the same decoy
+   Argon2id verify as an unknown email. A password reset sets a password (it proves
+   the address).
+6. **Integration shape**: `modules/auth/google-client.ts` is the only Google HTTP code
+   (openid-client's `customFetch` through `packages/resilience`, one breaker, 8 s
+   timeout, the JWKS read retried once, the code exchange never). `plugins/google.ts`
+   decorates `app.googleOidc` or `null` without both `GOOGLE_CLIENT_ID`/
+   `GOOGLE_CLIENT_SECRET`; `GET /v1/auth/google/status` tells the web app whether to
+   show the button.
+
+### Consequences
+
+- Linking by verified email trusts Google's `email_verified` for non-Gmail addresses
+  too (a Google account can be made with any address Google verified once).
+- There is no UI to unlink Google or to add a password other than «Забыли пароль?».
+- The OAuth consent screen needs `/privacy` and `/terms` (added) and the redirect URI
+  `https://DOMAIN/api/v1/auth/google/callback`.
+
+### Rollback
+
+Unset the two env vars (the button disappears; linked users sign in by resetting a
+password). Fully: drop the routes/module and migration `0028` (`auth_identities`; the
+`password_hash` NOT NULL can return only after every password-less user has one).

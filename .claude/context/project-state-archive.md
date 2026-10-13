@@ -1458,3 +1458,26 @@ is a modal layer (Esc, focus, inert page); CR-241 no sideways overflow at 320–
 (scroll-row fades, full header bar from `lg`, truncated email); CR-242 share/`.ics`
 feedback and fallbacks; CR-243 group chip resync, `fitBounds` guards, menu semantics
 (`NavMenu` `header`, theme `menuitemradio`), visible focus.
+
+## Condensed from "Current task" on 2026-10-13 (CR-247)
+
+Before this: CR-246 (production QA, Strava sync, 2026-10-13): «Отменить» on Strava's consent screen
+→ new outcome `cancelled` («Подключение Strava отменено»), a genuine own `state` past its
+TTL → `expired` back to the ride, `/me/rides?strava=…` now toasts; after a return
+without a verified ride the card reads «Проверить поездку снова» and says the grant is
+one-shot. Shared hook `apps/web/src/lib/strava/outcome-toast.ts`.
+
+Before this: production QA follow-ups, 2026-10-12, deployed (`b19a89a`, PR #46):
+CR-245 — the emailed verification link keeps `next` (KI-089 resolved): optional `next`
+on `POST /v1/auth/register`, checked by the shared `safeNextPath` (`packages/types`).
+CR-244 — «reset email not sent» investigated on production: the typed address matched
+no account (Gmail `+` alias); no defect.
+
+Before this: CR-235..CR-243 — production browser QA items 1–9, deployed (`ef49fcd`,
+PR #43; details in the changelog).
+Before this: CR-234 — «Синхронизировать со Strava» (ADR-033), deployed (migration
+`0027`); on prod the feature stays hidden until `STRAVA_*` is set there (owner-side
+settings below).
+Before this: CR-228..CR-233 — admin panel P0 (ADR-032) deployed to coffeeride.site
+(`c01a61f`, migration `0026`); CR-233 (PR #40) keeps `s3-init` idempotent on
+SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).

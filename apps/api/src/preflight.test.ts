@@ -47,6 +47,22 @@ describe('runPreflight', () => {
     ).toEqual(['AUTH_SKIP_EMAIL_VERIFICATION']);
   });
 
+  it('reports half a Google OAuth pair, not an absent one (CR-247)', () => {
+    expect(
+      keysOf({
+        ...FULLY_CONFIGURED,
+        GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com',
+      }),
+    ).toEqual(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']);
+    expect(
+      keysOf({
+        ...FULLY_CONFIGURED,
+        GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com',
+        GOOGLE_CLIENT_SECRET: 'secret',
+      }),
+    ).toEqual([]);
+  });
+
   it('reports a sender address with no email key', () => {
     const findings = runPreflight(
       loadEnv({ ...FULLY_CONFIGURED, UNISENDER_API_KEY: '' }),

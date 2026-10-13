@@ -115,6 +115,9 @@ services:
       # CR-234 (ADR-033). Optional — empty means the Strava sync is off.
       STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID}
       STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET}
+      # CR-247 (ADR-034). Optional — empty means Google sign-in is off.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       # CR-079/KI-006. Optional — see .env.example. Empty string is fine:
       # env.ts's z.string().url().optional() treats an unset/empty value as
       # "not configured", the same degraded mode REDIS_URL/S3_* already use.

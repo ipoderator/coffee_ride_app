@@ -1543,3 +1543,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-232 item 7 — admin validation sweep (320/390/1280 × themes, filters,
       disposable mutations) + review fixes: malformed id → not found, encoded ids,
       non-JSON errors, dialog locked while sending — done 2026-10-10 on `feat/admin-panel`
+- [x] CR-236 (production QA) create form: adjacent-month calendar days pickable
+      (`DatePicker`), field errors clear on change; profile link not reproduced —
+      done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
+- [x] CR-235 (P0, production QA) draft «Опубликовать» validates and saves the form
+      before publishing; a failed save publishes nothing; one save + one publish on a
+      double click — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

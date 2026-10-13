@@ -72,6 +72,21 @@ CR-125 adds `firstName`/`lastName` the same additive way — the name shown in a
 ride's riders/participants/waitlist lists in preference to `displayName` when
 either is set.
 
+GET `/v1/auth/google` — **implemented (CR-247, ADR-034)**. Query `next?`
+(kept only if `safeNextPath` accepts it). Browser navigation: `303` to Google's
+consent screen (`openid email profile`, PKCE S256, `state`, `nonce`) and sets the
+10-minute signed `google-oauth` cookie (`__Host-google-oauth` in production). Not
+configured → `303 /login?oauth=unavailable`. Per-IP 10/min.
+
+GET `/v1/auth/google/callback` — **implemented (CR-247)**. Google's redirect target
+(`WEB_ORIGIN/api/v1/auth/google/callback`). Always `303`: success → session cookie +
+`next` or `/me`; otherwise `/login?next=…&oauth=<outcome>` with `outcome` one of
+`types`' `GOOGLE_SIGN_IN_OUTCOMES` (`cancelled`, `expired`, `state`, `failed`,
+`unavailable`, `email_unverified`, `account_unverified`, `blocked`). Clears the
+`google-oauth` cookie every time. Per-IP 10/min.
+
+GET `/v1/auth/google/status` — **implemented (CR-247)**. `200 { available }`; `/login`/`/register` read it server-side (`features/auth/google/server-status.ts`), so the button is in the first HTML.
+
 POST `/v1/auth/forgot-password` — **implemented (CR-060)**. Body: `{ email }`.
 Always `204` with no body, whether or not the email belongs to a real
 account (`.claude/rules/security.md`: no account enumeration) — a real

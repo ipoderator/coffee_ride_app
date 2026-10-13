@@ -15,6 +15,7 @@ export * from './bike.js';
 export * from './email-verification-token.js';
 export * from './password-reset-token.js';
 export * from './session.js';
+export * from './auth-identity.js';
 export * from './organizer-profile.js';
 export * from './ride.js';
 export * from './route.js';

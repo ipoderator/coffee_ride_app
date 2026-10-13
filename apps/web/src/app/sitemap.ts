@@ -28,6 +28,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const rides = await upcomingRides();
   return [
     { url: new URL('/', base).toString(), changeFrequency: 'hourly' },
+    // CR-247: public documents (Google's OAuth consent screen links them).
+    { url: new URL('/privacy', base).toString(), changeFrequency: 'yearly' },
+    { url: new URL('/terms', base).toString(), changeFrequency: 'yearly' },
     ...rides.map((ride) => ({
       url: new URL(`/rides/${ride.id}`, base).toString(),
       lastModified: ride.updatedAt,

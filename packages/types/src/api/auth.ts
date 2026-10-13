@@ -76,3 +76,28 @@ export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
 export interface ResetPasswordResponse {
   user: User;
 }
+
+// CR-247 (ADR-034): Google sign-in. `GET /v1/auth/google/callback` sends a failed
+// sign-in back to `/login?oauth=<outcome>` (keeping `next`); the login page shows it.
+export const GOOGLE_SIGN_IN_OUTCOMES = [
+  // Declined on Google's consent screen.
+  'cancelled',
+  // The sign-in cookie is missing, expired or forged (took too long, another tab).
+  'expired',
+  // `state` from Google doesn't match the cookie's.
+  'state',
+  // Google refused the code or the ID token failed a check.
+  'failed',
+  // Not configured here, or Google unreachable.
+  'unavailable',
+  // Google didn't vouch for the email address.
+  'email_unverified',
+  // An account with this email exists but never confirmed it.
+  'account_unverified',
+  'blocked',
+] as const;
+export type GoogleSignInOutcome = (typeof GOOGLE_SIGN_IN_OUTCOMES)[number];
+
+export interface GoogleSignInStatusResponse {
+  available: boolean;
+}

@@ -418,3 +418,16 @@ Impact: low — admin-only, noindex, no API request is made with the bad id; an 
 valid uuid keeps CR-231's client-side «Пользователь не найден» (200 by design).
 Workaround: none needed. Not checked on a production build.
 Next action: if a real status matters, move the check into the layout or `proxy.ts`.
+
+### KI-099 — Logout's `clearCookie` for `__Host-session` lacks `Secure`, so browsers keep the cookie
+
+Status: open. Discovered: 2026-10-13 (CR-247 security review).
+Problem: `POST /v1/auth/logout` (`apps/api/src/modules/auth/auth.routes.ts`) calls
+`reply.clearCookie(app.sessionCookieName, { path: '/' })`; `@fastify/cookie` adds no
+`Secure`, and browsers ignore any `Set-Cookie` for a `__Host-` name without it —
+deletion included. In production the browser keeps the (now dead) `__Host-session`.
+Impact: low — logout deletes the session row, so the leftover token is refused; the
+cookie just lingers until it expires. Local dev (`session`, no prefix) is unaffected.
+Workaround: none needed. CR-247's own `__Host-google-oauth` clear passes `secure`.
+Next action: pass the same attributes as `setSessionCookie` (`session-cookie.ts`) when
+clearing; add a production-mode assertion to the logout test.
