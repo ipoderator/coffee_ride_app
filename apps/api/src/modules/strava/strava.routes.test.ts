@@ -14,7 +14,11 @@ import {
   type StravaActivitySummary,
   type StravaClient,
 } from './strava-client.js';
-import { createOAuthState } from './oauth-state.js';
+import {
+  createOAuthState,
+  OAUTH_STATE_TTL_MS,
+  readOAuthState,
+} from './oauth-state.js';
 
 // CR-234 (ADR-033): «Синхронизировать со Strava» end to end — real Postgres, a fake
 // Strava client (the HTTP client itself is covered by `strava-client.test.ts`).
@@ -409,7 +413,7 @@ describe('Strava finish verification (CR-234)', () => {
       },
     );
 
-    it('denied: the athlete cancelled or unticked activity access', async () => {
+    it('cancelled when the athlete pressed «Отменить»; denied when they unticked activity access', async () => {
       const strava = fakeStrava();
       await withApp(strava, async (app) => {
         const { participant, rideId, advance } = await startedRide(app);
@@ -418,7 +422,14 @@ describe('Strava finish verification (CR-234)', () => {
         const cancelled = await sync(app, rideId, participant, {
           error: 'access_denied',
         });
-        expect(cancelled.searchParams.get('strava')).toBe('denied');
+        expect(cancelled.pathname).toBe(`/rides/${rideId}`);
+        expect(cancelled.searchParams.get('strava')).toBe('cancelled');
+        expect(strava.exchangeCode).not.toHaveBeenCalled();
+
+        // Neither a code nor an error: nothing to exchange, but the ride is known.
+        const empty = await sync(app, rideId, participant, {});
+        expect(empty.pathname).toBe(`/rides/${rideId}`);
+        expect(empty.searchParams.get('strava')).toBe('error');
         expect(strava.exchangeCode).not.toHaveBeenCalled();
 
         const unticked = await sync(app, rideId, participant, {
@@ -499,6 +510,40 @@ describe('Strava finish verification (CR-234)', () => {
           expect(landed.pathname).toBe('/me/rides');
           expect(landed.searchParams.get('strava')).toBe('error');
         }
+        expect(strava.exchangeCode).not.toHaveBeenCalled();
+      });
+    });
+
+    it('expired: back to the ride for an own state past its TTL, without touching Strava', async () => {
+      const strava = fakeStrava();
+      await withApp(strava, async (app) => {
+        const { participant, rideId, advance } = await startedRide(app);
+        await advance(START);
+        const started = await call(
+          app,
+          'POST',
+          `/v1/rides/${rideId}/strava-sync`,
+          participant,
+        );
+        const fresh = new URL(started.json().authorizeUrl).searchParams.get(
+          'state',
+        )!;
+        const { userId } = readOAuthState(AUTH_SECRET, fresh)!;
+        const expired = createOAuthState(
+          AUTH_SECRET,
+          { userId, rideId },
+          new Date(Date.now() - OAUTH_STATE_TTL_MS - 1000),
+        );
+
+        const res = await app.inject({
+          method: 'GET',
+          url: `/v1/strava/callback?state=${expired}&code=abc&scope=activity:read`,
+          cookies: { session: participant },
+        });
+        expect(res.statusCode).toBe(303);
+        const landed = new URL(res.headers.location as string);
+        expect(landed.pathname).toBe(`/rides/${rideId}`);
+        expect(landed.searchParams.get('strava')).toBe('expired');
         expect(strava.exchangeCode).not.toHaveBeenCalled();
       });
     });

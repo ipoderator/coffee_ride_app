@@ -15,6 +15,12 @@ export interface OAuthStatePayload {
   rideId: string;
 }
 
+// A genuine state past its TTL still names the ride it was issued for: the callback
+// may send the participant back there, but must not act on it.
+export interface OAuthStateReading extends OAuthStatePayload {
+  expired: boolean;
+}
+
 function stateKey(authSecret: string): Buffer {
   return createHmac('sha256', authSecret).update(KEY_LABEL).digest();
 }
@@ -39,12 +45,12 @@ export function createOAuthState(
   return `${body}.${sign(stateKey(authSecret), body)}`;
 }
 
-/** The payload of a genuine, unexpired state; `null` for anything else. */
+/** The payload of a genuine state and whether it expired; `null` for anything else. */
 export function readOAuthState(
   authSecret: string,
   state: string,
   now: Date = new Date(),
-): OAuthStatePayload | null {
+): OAuthStateReading | null {
   const [body, signature, extra] = state.split('.');
   if (!body || !signature || extra !== undefined) return null;
   const expected = Buffer.from(sign(stateKey(authSecret), body));
@@ -68,6 +74,5 @@ export function readOAuthState(
     return null;
   }
   const { u, r, e } = parsed as { u: string; r: string; e: number };
-  if (e <= now.getTime()) return null;
-  return { userId: u, rideId: r };
+  return { userId: u, rideId: r, expired: e <= now.getTime() };
 }

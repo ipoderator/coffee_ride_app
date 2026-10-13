@@ -2,12 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { STRAVA_SYNC_OUTCOMES, type StravaSyncOutcome } from 'types';
 import {
   FINISH_CHECKIN_TERMS,
   STRAVA_SYNC_TERMS,
   StravaVerifiedBadge,
-  useToast,
 } from 'ui';
 import { loginHref } from '@/lib/auth/next-path';
 import { ApiError, getStravaStatus, startStravaSync } from '../api';
@@ -16,7 +14,8 @@ import { StravaPoweredByMark } from './StravaPoweredByMark';
 
 // CR-234 (ADR-033): Strava's «Connect with Strava» button on the finish check-in. The
 // browser leaves for Strava's consent screen and comes back to this ride page
-// with `?strava=<outcome>`, which `useStravaOutcomeToast` turns into a toast.
+// with `?strava=<outcome>`, which `useStravaOutcomeToast` (`lib/strava`) turns into
+// a toast.
 
 // One status request per page load, shared by every mounted button.
 let statusRequest: Promise<boolean> | null = null;
@@ -58,13 +57,18 @@ function startErrorMessage(error: unknown): string {
 /**
  * The button plus its hint; renders nothing while the server's Strava status is
  * unknown or off, so a ride page without the integration looks exactly as before.
+ * `retry`: the participant has just come back from Strava without a verified ride.
+ * The grant is one-shot (ADR-033), so Strava never stays «connected» and asks again
+ * — the copy says so instead of offering the same «Connect» as on a first visit.
  */
 export function StravaSyncButton({
   rideId,
   disabled = false,
+  retry = false,
 }: {
   rideId: string;
   disabled?: boolean;
+  retry?: boolean;
 }) {
   const router = useRouter();
   const available = useStravaAvailable();
@@ -92,6 +96,11 @@ export function StravaSyncButton({
 
   return (
     <div className="flex flex-col gap-2" data-testid="strava-sync">
+      {retry ? (
+        <b className="font-semibold text-text">
+          {STRAVA_SYNC_TERMS.retryTitle}
+        </b>
+      ) : null}
       {/* Strava's brand guidelines require their own button for the OAuth hand-off. */}
       <button
         type="button"
@@ -104,7 +113,7 @@ export function StravaSyncButton({
         <StravaConnectMark />
       </button>
       <p className="text-body-sm text-text-secondary">
-        {STRAVA_SYNC_TERMS.syncHint}
+        {retry ? STRAVA_SYNC_TERMS.retryHint : STRAVA_SYNC_TERMS.syncHint}
       </p>
       {error ? (
         <p role="alert" className="text-body-sm text-danger">
@@ -135,27 +144,4 @@ export function StravaVerifiedNote({ activityId }: { activityId: string }) {
       <StravaPoweredByMark />
     </div>
   );
-}
-
-function isOutcome(value: string | null): value is StravaSyncOutcome {
-  return (STRAVA_SYNC_OUTCOMES as readonly (string | null)[]).includes(value);
-}
-
-/**
- * Reads `?strava=` once after the callback's redirect, shows the outcome and
- * drops the parameter so a reload doesn't repeat the toast.
- */
-export function useStravaOutcomeToast() {
-  const { showToast } = useToast();
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    const outcome = url.searchParams.get('strava');
-    if (!isOutcome(outcome)) return;
-    showToast(
-      STRAVA_SYNC_TERMS.outcome[outcome],
-      outcome === 'verified' ? 'success' : 'danger',
-    );
-    url.searchParams.delete('strava');
-    window.history.replaceState(window.history.state, '', url.toString());
-  }, [showToast]);
 }

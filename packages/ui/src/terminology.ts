@@ -2200,7 +2200,12 @@ export const STRAVA_SYNC_TERMS = {
   // as the guidelines word them; the accessible name matches the button's text.
   connectButton: 'Connect with Strava',
   syncHint:
-    'Найдём вашу поездку в Strava и проверим, что вы проехали маршрут заезда. Организатор увидит только отметку «Проверено Strava» — без километров, времени и трека.',
+    'Найдём вашу поездку в Strava и проверим, что вы проехали маршрут заезда. Доступ к Strava нужен на одну проверку — сразу после неё мы его закрываем. Организатор увидит только отметку «Проверено Strava» — без километров, времени и трека.',
+  // After a return from Strava without a verified ride: the grant was one-shot, so
+  // Strava is not «connected» and will ask for permission again.
+  retryTitle: 'Проверить поездку снова',
+  retryHint:
+    'Strava не остаётся подключённой: доступ закрывается сразу после проверки, поэтому Strava снова спросит разрешение.',
   verifiedTitle: 'Проверено Strava',
   poweredBy: 'Powered by Strava',
   verifiedHint: 'Поездка в Strava совпала с маршрутом заезда.',
@@ -2214,6 +2219,9 @@ export const STRAVA_SYNC_TERMS = {
       'Поездка в Strava не совпала с маршрутом заезда. Если трек скрыт настройками приватности, отметьте финиш вручную.',
     denied:
       'Strava не дала доступ к поездкам. Разрешите «Просмотр данных о ваших тренировках» и попробуйте снова.',
+    cancelled: 'Подключение Strava отменено',
+    expired:
+      'Время на подключение Strava истекло. Нажмите кнопку Strava ещё раз.',
     unavailable: 'Strava сейчас недоступна. Попробуйте позже.',
     already_decided:
       'Организатор уже принял решение — отметку изменить нельзя.',

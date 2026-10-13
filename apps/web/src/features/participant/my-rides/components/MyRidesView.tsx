@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { MyRegistrationSummary } from 'types';
 import { EmptyState, ErrorState, MY_REGISTRATIONS_TERMS, Skeleton } from 'ui';
+import { useStravaOutcomeToast } from '@/lib/strava/outcome-toast';
 import { listMyRegistrations } from '../api';
 import { MyRideCard } from './MyRideCard';
 import {
@@ -26,6 +27,10 @@ export function MyRidesView() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [items, setItems] = useState<MyRegistrationSummary[]>([]);
   const [attempt, setAttempt] = useState(0);
+
+  // CR-234: the Strava callback lands here when its `state` named no ride it could
+  // trust (forged, or another session's) — the outcome must still be visible.
+  useStravaOutcomeToast();
 
   useEffect(() => {
     let cancelled = false;

@@ -10,9 +10,10 @@ const PAYLOAD = { userId: 'user-1', rideId: 'ride-1' };
 
 describe('Strava OAuth state', () => {
   it('round-trips the payload', () => {
-    expect(readOAuthState(SECRET, createOAuthState(SECRET, PAYLOAD))).toEqual(
-      PAYLOAD,
-    );
+    expect(readOAuthState(SECRET, createOAuthState(SECRET, PAYLOAD))).toEqual({
+      ...PAYLOAD,
+      expired: false,
+    });
   });
 
   it('is different every time (nonce)', () => {
@@ -26,8 +27,15 @@ describe('Strava OAuth state', () => {
     const state = createOAuthState(SECRET, PAYLOAD, issued);
     const justBefore = new Date(issued.getTime() + OAUTH_STATE_TTL_MS - 1);
     const after = new Date(issued.getTime() + OAUTH_STATE_TTL_MS);
-    expect(readOAuthState(SECRET, state, justBefore)).toEqual(PAYLOAD);
-    expect(readOAuthState(SECRET, state, after)).toBeNull();
+    expect(readOAuthState(SECRET, state, justBefore)).toEqual({
+      ...PAYLOAD,
+      expired: false,
+    });
+    // Still genuine, so the callback can send the participant back to the ride.
+    expect(readOAuthState(SECRET, state, after)).toEqual({
+      ...PAYLOAD,
+      expired: true,
+    });
   });
 
   it('rejects another secret, a tampered body and junk', () => {

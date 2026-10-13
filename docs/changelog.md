@@ -104,3 +104,12 @@ Follow-up: none.
 ## 2026-10-12 — CR-245 deployed
 
 Deploy: `b19a89a` (PR #46, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on `main` (ci incl. e2e, docker-smoke); no migrations. `/health` db/redis/s3 ok; `/`, `/register?next=…`, `/login`, `/me/rides`, `/verify-email` 200. The emailed-link `next` itself is checked by the next real registration (no test account was created on production).
+
+## 2026-10-13 — CR-246 — Strava sync: cancel, expired state, retry copy (production QA)
+
+Summary: QA: «Отменить» on Strava's screen showed «Strava не дала доступ…» (the callback mapped `error=access_denied` to `denied`); after a check the button stayed «Connect with Strava» with no sign of what happened (the grant is one-shot by ADR-033, so Strava always asks again); a broken/expired `state` landed on `/me/rides?strava=error` with no message. Now: outcome `cancelled`; a genuine own `state` past its TTL → `expired` on the ride page (code not exchanged); forged/foreign state still → `/me/rides`, which now toasts; a return without a verified ride shows «Проверить поездку снова» + «Strava не остаётся подключённой…», the first-visit hint says access is for one check.
+Contract: `StravaSyncOutcome` + `cancelled`, `expired` (additive, `docs/api.md`); a callback with neither `code` nor `error` → `error` (was `denied`).
+Files: `apps/api/src/modules/strava/{oauth-state,strava.service}.ts` + tests, `packages/types/src/api/strava.ts`, `packages/ui/src/terminology.ts` + test, `apps/web/src/lib/strava/outcome-toast.ts` (hook moved from `StravaSync.tsx`), `StravaSync.tsx`, `RegistrationTicket.tsx`, `MyRidesView.tsx`, tests, `RegistrationTicket.stories.tsx` (`FinishStravaRetry`), `docs/api.md`.
+Validation: api strava 49/49 on `coffee_ride_test`; web unit ride-detail+my-rides 152/152; Storybook `RegistrationTicket` 15/15; typecheck/lint/prettier clean; full `test:coverage` with live Redis/S3 + `coverage:check` holds (strava 94.79/90.52); local browser run (390 px): cancel → ride page + toast + retry copy, expired → ride page, forged → `/me/rides` + toast, no console errors.
+Decisions: the retry keeps Strava's own «Connect with Strava» artwork (brand guidelines) and adds the title/hint around it; `readOAuthState` reports `expired` instead of `null` so the ride can be trusted for the redirect only.
+Follow-up: positive «Проверено Strava» on production needs a real bike activity near a test ride's start.

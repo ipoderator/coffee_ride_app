@@ -19,6 +19,10 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-246 (production QA) Strava sync: a cancel reads «Подключение Strava
+      отменено», an expired `state` returns to the ride, `/me/rides` shows the
+      outcome toast, a return without a verified ride offers «Проверить поездку
+      снова» — done 2026-10-13 on `fix/strava-sync-qa`. See docs/changelog.md
 - [x] CR-245 (production QA) the emailed verification link keeps `next`, so
       «Перейти ко входу» returns to the page registration started from (KI-089) —
       done 2026-10-12 on `fix/verify-email-next`. See docs/changelog.md

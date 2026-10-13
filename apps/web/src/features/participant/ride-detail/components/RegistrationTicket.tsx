@@ -41,12 +41,9 @@ import {
   registerForRide,
   withdrawRideFinishClaim,
 } from '../api';
+import { useStravaOutcomeToast } from '@/lib/strava/outcome-toast';
 import { seatsLeftOf, type TicketState } from '../lib/ticket-state';
-import {
-  StravaSyncButton,
-  StravaVerifiedNote,
-  useStravaOutcomeToast,
-} from './StravaSync';
+import { StravaSyncButton, StravaVerifiedNote } from './StravaSync';
 
 /**
  * API error `code` → the message this screen shows. Group codes (CR-117) get
@@ -379,12 +376,14 @@ function FinishCheckIn({
   rideId,
   registration,
   isPending,
+  stravaRetry,
   onClaim,
   onWithdraw,
 }: {
   rideId: string;
   registration: Registration;
   isPending: boolean;
+  stravaRetry: boolean;
   onClaim: () => void;
   onWithdraw: () => void;
 }) {
@@ -431,7 +430,11 @@ function FinishCheckIn({
         </b>
         <Hint>{FINISH_CHECKIN_TERMS.claimedHint}</Hint>
         {stravaNote ?? (
-          <StravaSyncButton rideId={rideId} disabled={isPending} />
+          <StravaSyncButton
+            rideId={rideId}
+            disabled={isPending}
+            retry={stravaRetry}
+          />
         )}
         <Button
           variant="secondary"
@@ -456,7 +459,11 @@ function FinishCheckIn({
         {FINISH_CHECKIN_TERMS.claimButton}
       </Button>
       <Hint>{FINISH_CHECKIN_TERMS.claimHint}</Hint>
-      <StravaSyncButton rideId={rideId} disabled={isPending} />
+      <StravaSyncButton
+        rideId={rideId}
+        disabled={isPending}
+        retry={stravaRetry}
+      />
     </div>
   );
 }
@@ -542,7 +549,7 @@ export function RegistrationTicket({
   const [pendingGroupId, setPendingGroupId] = useState<string | null>(null);
 
   // CR-234: the outcome of a Strava check, after its redirect back here.
-  useStravaOutcomeToast();
+  const stravaOutcome = useStravaOutcomeToast();
 
   const hasGroups = groups.length > 0;
   const needsGroupChoice = hasGroups && !selectedGroupId;
@@ -896,6 +903,7 @@ export function RegistrationTicket({
             rideId={rideId}
             registration={viewerRegistration}
             isPending={isPending}
+            stravaRetry={stravaOutcome !== null && stravaOutcome !== 'verified'}
             onClaim={handleClaimFinish}
             onWithdraw={handleWithdrawFinish}
           />
