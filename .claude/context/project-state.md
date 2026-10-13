@@ -28,7 +28,7 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 CR-250 (owner, 2026-10-13, security finding LOW): the per-account auth rate-limit
 Redis key was `auth-rl:account:<route>:<email>` and the fail-open warning logged it —
 now an HMAC (key from `AUTH_SECRET`) of the normalized email, nothing logged. Validated
-locally on `fix/account-rate-limit-key-hmac`, committed and going to `main` through a PR.
+deployed 2026-10-13 (`65b5c4f`, PR #56).
 
 Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
