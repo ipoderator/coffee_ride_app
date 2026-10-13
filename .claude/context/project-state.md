@@ -63,7 +63,8 @@ SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
 ## In progress
 
-CR-246 — local validation done; PR → `main` → production deploy. The positive
+CR-246 — deployed 2026-10-13 (`784755a`, PR #48); QA to re-run cancel/retry on
+production. The positive
 «Проверено Strava» path still needs a real Strava bike activity started near a test
 ride's start (QA account has none).
 
