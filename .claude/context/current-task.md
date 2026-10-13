@@ -12,4 +12,4 @@ Source: owner, 2026-10-13 (chat) — production QA of the Strava sync (CR-234).
 ## Result
 
 Done on `fix/strava-sync-qa` — see `docs/changelog.md` (CR-246). Validation there.
-Next: PR → green CI → squash-merge → deploy from `main` → production check.
+Deployed 2026-10-13 (`784755a`, PR #48) — see the changelog's «CR-246 deployed».
