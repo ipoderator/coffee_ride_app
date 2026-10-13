@@ -58,7 +58,8 @@ migration `0027`); CR-228..CR-233 admin panel (ADR-032, migration `0026`); CR-21
 
 CR-249 — first production Google sign-in hit `account_unverified` (the owner's own
 password account was never confirmed). Owner chose ADR-035: Google claims an unverified
-account (verified, password/sessions/pending links voided). PR → CI → deploy.
+account (verified, password/sessions/pending links voided). Deployed 2026-10-13
+(`2304863`, PR #54). Next: the owner's real Google sign-in confirms the claim path.
 
 CR-247 — deployed 2026-10-13 (`3bd2ce4`, PR #52, migration `0028` applied); Google on
 in production (OAuth client `coffee-511414`, keys in the VPS `.env`, Google accepts the
