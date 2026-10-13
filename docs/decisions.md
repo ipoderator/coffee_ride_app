@@ -1715,3 +1715,39 @@ sessions with an opaque httpOnly cookie.
 Unset the two env vars (the button disappears; linked users sign in by resetting a
 password). Fully: drop the routes/module and migration `0028` (`auth_identities`; the
 `password_hash` NOT NULL can return only after every password-less user has one).
+
+## ADR-035 — Google sign-in claims an existing unverified account
+
+Status: Accepted (2026-10-13, owner decision, CR-249). Amends ADR-034 §4.
+
+### Context
+
+ADR-034 refused a Google sign-in whose email matched an account that never confirmed
+it (`account_unverified`): linking would hand the account to whoever registered the
+address with a password first (pre-hijacking). In production this locked the real
+owner out — they had registered by password, never clicked the link, and Google
+proved the address is theirs.
+
+### Decision
+
+When Google vouches for the address (`email_verified`) and the matching account is
+unverified (and not blocked), the callback claims it in the same transaction that
+links it: `email_verified = true` (verification links consumed), `password_hash =
+null`, every outstanding password-reset link consumed, every session deleted, then the
+identity is linked and the Google session created. Nothing a pre-hijacker set up before
+the confirmation survives, which is what the refusal protected. A blocked account is
+still refused. `account_unverified` stays in `GOOGLE_SIGN_IN_OUTCOMES` (old links) but
+is no longer produced.
+
+### Consequences
+
+- An owner who had a password on an unverified account loses it at the first Google
+  sign-in; «Забыли пароль?» sets a new one.
+- Rides/profile data created by a pre-hijacker stay on the account (the same as an
+  ordinary email verification would have kept them) — the owner sees and can delete
+  them.
+
+### Rollback
+
+Restore the refusal in `google.service.ts` (`claimUnverifiedAccount` → `throw new
+GoogleSignInError('account_unverified')`); no schema change either way.

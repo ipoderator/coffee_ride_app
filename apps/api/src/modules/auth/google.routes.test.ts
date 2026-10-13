@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
-import { authIdentities, sessions, users } from 'db/schema';
+import {
+  authIdentities,
+  emailVerificationTokens,
+  passwordResetTokens,
+  sessions,
+  users,
+} from 'db/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../app.js';
@@ -501,16 +507,85 @@ describe('GET /v1/auth/google/callback — refusals', () => {
     expect(await app.db.select().from(users)).toHaveLength(0);
   });
 
-  it('refuses to link an existing account whose email was never confirmed', async () => {
+  // CR-249 (ADR-035): Google's verification claims an account that never confirmed
+  // its email; whatever a pre-hijacker set up before that is voided.
+  it('claims an existing account whose email was never confirmed', async () => {
+    const email = `${randomUUID()}@gmail.test`;
+    const [squatter] = await app.db
+      .insert(users)
+      .values({
+        email,
+        passwordHash: await hashPassword('a-strong-password-123'),
+        emailVerified: false,
+      })
+      .returning();
+    const squatterLogin = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: 'a-strong-password-123' },
+    });
+    expect(squatterLogin.statusCode).toBe(200);
+    const expiresAt = new Date(Date.now() + 30 * 60_000);
+    await app.db
+      .insert(passwordResetTokens)
+      .values({ userId: squatter!.id, tokenHash: 'reset-hash', expiresAt });
+    await app.db
+      .insert(emailVerificationTokens)
+      .values({ userId: squatter!.id, tokenHash: 'verify-hash', expiresAt });
+
+    const { location } = await signIn(googleUser({ email }), {
+      next: '/rides/abc',
+    });
+    expect(location).toBe(`${WEB_ORIGIN}/rides/abc`);
+
+    const row = await userByEmail(email);
+    expect(row).toMatchObject({
+      id: squatter!.id,
+      emailVerified: true,
+      passwordHash: null,
+    });
+    expect(await identityCount()).toBe(1);
+    // Only the Google sign-in's own session is left.
+    expect(
+      await app.db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.userId, squatter!.id)),
+    ).toHaveLength(1);
+    const [reset] = await app.db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.userId, squatter!.id));
+    const [verify] = await app.db
+      .select()
+      .from(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.userId, squatter!.id));
+    expect(reset?.usedAt).not.toBeNull();
+    expect(verify?.usedAt).not.toBeNull();
+
+    // The old password no longer works.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password: 'a-strong-password-123' },
+    });
+    expect(login.statusCode).toBe(401);
+  });
+
+  it('refuses a blocked account even when its email was never confirmed', async () => {
     const email = `${randomUUID()}@gmail.test`;
     await app.db.insert(users).values({
       email,
       passwordHash: await hashPassword('a-strong-password-123'),
       emailVerified: false,
+      blockedAt: new Date(),
+      blockReason: 'spam',
     });
 
-    const result = await signIn(googleUser({ email }), { next: '/rides/abc' });
-    await expectRefused(result, 'account_unverified');
+    await expectRefused(
+      await signIn(googleUser({ email }), { next: '/rides/abc' }),
+      'blocked',
+    );
     expect(await identityCount()).toBe(0);
     expect((await userByEmail(email))?.emailVerified).toBe(false);
   });
@@ -688,7 +763,7 @@ describe('signInWithGoogle — held races', () => {
     expect(await identityCount()).toBe(1);
   });
 
-  it('refuses when a password registration commits first, unverified', async () => {
+  it('claims the account a password registration commits first, unverified', async () => {
     const email = `${randomUUID()}@gmail.test`;
     const held = holdTransaction(async (tx) => {
       await tx.insert(users).values({
@@ -699,17 +774,19 @@ describe('signInWithGoogle — held races', () => {
     });
     await held.written;
 
-    const pending = signInWithGoogle(app.db, identity(email)).catch(
-      (e: unknown) => e,
-    );
+    const pending = signInWithGoogle(app.db, identity(email));
     await settle();
     held.commit();
     await held.done;
 
-    const error = await pending;
-    expect(error).toBeInstanceOf(GoogleSignInError);
-    expect((error as GoogleSignInError).reason).toBe('account_unverified');
-    expect(await identityCount()).toBe(0);
+    const result = await pending;
+    expect(result.created).toBe(false);
+    expect(await userByEmail(email)).toMatchObject({
+      id: result.userId,
+      emailVerified: true,
+      passwordHash: null,
+    });
+    expect(await identityCount()).toBe(1);
   });
 
   it('accepts the identity a concurrent callback linked to the same user', async () => {

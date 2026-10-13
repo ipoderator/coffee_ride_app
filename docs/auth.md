@@ -33,7 +33,9 @@ else's, using the same login.
 - **Google (CR-247, ADR-034)**: «Войти через Google» on `/login` and `/register`
   keeps `next`. The first sign-in creates a verified, password-less account (names go
   only into empty fields); an existing account with the same **verified** email is
-  linked; an unverified one is refused (pre-hijacking). Password login of a
+  linked; an unverified one is claimed (CR-249, ADR-035): email marked verified,
+  password, sessions and pending verify/reset links voided, then linked — a
+  pre-hijacker keeps nothing. Password login of a
   password-less account gets the generic `invalid_credentials`; «Забыли пароль?»
   sets a password. Failures return to `/login?oauth=<outcome>`.
 - **Logout**: invalidates the current session.

@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-249 Google sign-in claims an unverified account with the same email
+      (ADR-035): verified, password/sessions/pending links voided, then linked —
+      done 2026-10-13. See docs/changelog.md
 - [x] CR-247 Google sign-in (OIDC, PKCE/state/nonce) into the existing DB session,
       `auth_identities` + nullable `password_hash` (migration `0028`), button on
       `/login`/`/register` keeping `next`, Russian `/privacy` and `/terms` (ADR-034) —

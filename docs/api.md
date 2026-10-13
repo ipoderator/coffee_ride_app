@@ -82,7 +82,9 @@ GET `/v1/auth/google/callback` — **implemented (CR-247)**. Google's redirect t
 (`WEB_ORIGIN/api/v1/auth/google/callback`). Always `303`: success → session cookie +
 `next` or `/me`; otherwise `/login?next=…&oauth=<outcome>` with `outcome` one of
 `types`' `GOOGLE_SIGN_IN_OUTCOMES` (`cancelled`, `expired`, `state`, `failed`,
-`unavailable`, `email_unverified`, `account_unverified`, `blocked`). Clears the
+`unavailable`, `email_unverified`, `account_unverified`, `blocked`; since CR-249 the
+API no longer sends `account_unverified` — the outcome stays in the list for old
+links). Clears the
 `google-oauth` cookie every time. Per-IP 10/min.
 
 GET `/v1/auth/google/status` — **implemented (CR-247)**. `200 { available }`; `/login`/`/register` read it server-side (`features/auth/google/server-status.ts`), so the button is in the first HTML.
