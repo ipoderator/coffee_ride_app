@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-250 (security, LOW) the per-account auth rate-limit Redis key is an
+      HMAC of the normalized email, and its fail-open warning no longer logs the key —
+      done 2026-10-13 on `fix/account-rate-limit-key-hmac`. See docs/changelog.md
 - [x] CR-249 Google sign-in claims an unverified account with the same email
       (ADR-035): verified, password/sessions/pending links voided, then linked —
       done 2026-10-13. See docs/changelog.md
@@ -45,5 +48,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
 - [x] CR-238 (production QA) the organizer sees their hidden riders list on the ride
       page — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
-- [x] CR-237 (production QA) «Закрыть регистрацию» asks first and says it is
-      irreversible — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

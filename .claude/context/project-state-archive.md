@@ -1481,3 +1481,18 @@ settings below).
 Before this: CR-228..CR-233 — admin panel P0 (ADR-032) deployed to coffeeride.site
 (`c01a61f`, migration `0026`); CR-233 (PR #40) keeps `s3-init` idempotent on
 SeaweedFS 4.48. CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
+
+## Current task as of 2026-10-13 (CR-247), condensed by CR-250
+
+CR-247 (owner, 2026-10-13): Google sign-in — server-side OIDC code flow
+(`openid-client`, PKCE/state/nonce, signed transaction cookie) into the existing DB
+session; `auth_identities` + nullable `password_hash` (migration `0028`); button on
+`/login`/`/register` keeping `next`; Russian `/privacy` and `/terms`. Validated locally
+on `feat/google-oauth`, committed and going to `main` through a PR. Production
+needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and the Google OAuth client set up.
+
+Before this (details in the changelog): CR-246 Strava sync cancel/expired/retry copy
+(merged, PR #48); CR-245/CR-244 production QA follow-ups (deployed `b19a89a`);
+CR-235..CR-243 production QA 1–9 (deployed `ef49fcd`); CR-234 Strava sync (ADR-033,
+migration `0027`); CR-228..CR-233 admin panel (ADR-032, migration `0026`); CR-219 —
+**coffeeride.site is live** (`docs/deployment.md`).

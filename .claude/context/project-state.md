@@ -25,18 +25,14 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-247 (owner, 2026-10-13): Google sign-in — server-side OIDC code flow
-(`openid-client`, PKCE/state/nonce, signed transaction cookie) into the existing DB
-session; `auth_identities` + nullable `password_hash` (migration `0028`); button on
-`/login`/`/register` keeping `next`; Russian `/privacy` and `/terms`. Validated locally
-on `feat/google-oauth`, committed and going to `main` through a PR. Production
-needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and the Google OAuth client set up.
+CR-250 (owner, 2026-10-13, security finding LOW): the per-account auth rate-limit
+Redis key was `auth-rl:account:<route>:<email>` and the fail-open warning logged it —
+now an HMAC (key from `AUTH_SECRET`) of the normalized email, nothing logged. Validated
+locally on `fix/account-rate-limit-key-hmac`, committed and going to `main` through a PR.
 
-Before this (details in the changelog): CR-246 Strava sync cancel/expired/retry copy
-(merged, PR #48); CR-245/CR-244 production QA follow-ups (deployed `b19a89a`);
-CR-235..CR-243 production QA 1–9 (deployed `ef49fcd`); CR-234 Strava sync (ADR-033,
-migration `0027`); CR-228..CR-233 admin panel (ADR-032, migration `0026`); CR-219 —
-**coffeeride.site is live** (`docs/deployment.md`).
+Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
+deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
+CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
@@ -159,4 +155,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-13 (CR-247)
+2026-10-13 (CR-250)

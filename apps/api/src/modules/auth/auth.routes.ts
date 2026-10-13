@@ -10,7 +10,10 @@ import {
   verifyEmailRequestSchema,
 } from 'types';
 import type { Env } from '../../env.js';
-import { isAccountRateLimited } from '../../lib/account-rate-limit.js';
+import {
+  accountRateLimitKeyFactory,
+  isAccountRateLimited,
+} from '../../lib/account-rate-limit.js';
 import { requireAuth } from '../../plugins/auth.js';
 import {
   sendPasswordResetEmail,
@@ -76,10 +79,6 @@ const AUTH_RATE_LIMIT_DEFAULTS = { max: 5, timeWindow: '1 minute' };
 // `max` shares the same `env.AUTH_RATE_LIMIT_MAX` override as the per-IP tier.
 const ACCOUNT_RATE_LIMIT_DEFAULTS = { max: 5, windowMs: 60_000 };
 
-function accountRateLimitKey(routeName: string, email: string) {
-  return `auth-rl:account:${routeName}:${email}`;
-}
-
 /**
  * `.claude/rules/architecture.md`: first capability module under
  * `apps/api/src/modules/`. Registered by `routes/v1.ts` with prefix `/auth`.
@@ -103,14 +102,18 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     ...ACCOUNT_RATE_LIMIT_DEFAULTS,
     max: env.AUTH_RATE_LIMIT_MAX ?? ACCOUNT_RATE_LIMIT_DEFAULTS.max,
   };
+  const accountRateLimitKey = accountRateLimitKeyFactory(env.AUTH_SECRET);
 
   // CR-058's per-account tier. Throws the same `AuthServiceError` convention
   // every other domain error in this module uses, so it flows through the
   // existing RFC 9457 error handler unchanged (no new error-handling code).
-  async function enforceAccountRateLimit(routeName: string, email: string) {
+  async function enforceAccountRateLimit(
+    routeName: string,
+    identifier: string,
+  ) {
     const limited = await isAccountRateLimited({
       redis: app.redis,
-      key: accountRateLimitKey(routeName, email),
+      key: accountRateLimitKey(routeName, identifier),
       max: ACCOUNT_RATE_LIMIT.max,
       windowMs: ACCOUNT_RATE_LIMIT.windowMs,
       logger: app.log,
