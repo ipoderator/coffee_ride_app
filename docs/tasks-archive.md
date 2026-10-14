@@ -1587,3 +1587,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       (`lictor-security-check`/`-explain`/`-fix-it`/`-rotate`, pinned upstream commit),
       routed in CLAUDE.md; `SECURITY-AUDIT.md` gitignored — done 2026-10-14 on
       `chore/lictor-security-skills`. See docs/changelog.md
+- [x] CR-253..CR-258 (security, Lictor audit) verified email to join a ride, hidden
+      ride's reviews + no review `userId`, per-user upload tier, auth event log, logout
+      cookie `Secure` (KI-099), digest-pinned base images — done 2026-10-14 on
+      `fix/security-audit-findings`. See docs/changelog.md

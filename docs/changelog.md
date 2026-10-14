@@ -151,3 +151,12 @@ Files: api `env.ts`, `plugins/maintenance.ts` (+test), `routes/v1.ts`; web `prox
 Validation: format:check (only the untracked mockup differs), lint, lint:root, typecheck, build 7/7; `test:coverage` with live Redis/S3 — api 916, web 1062, ui 300, db 17, resilience 15, maps-2gis 82 (+6 opt-in); `coverage:check` holds, baseline raised; Storybook 326/331 (the 5 are KI-100, same on HEAD), new stories 4/4 with axe; e2e `critical-journeys`, `login-return`, `password-reset`, `themes` 13/13; `caddy validate`/`fmt` + a local Caddy: web down → static 503, web's 503 passes; Chromium on dev and on `next start`: 1440/768/390/320 both themes no overflow, Tab → refresh → mailto, Enter reloads, no leaks/console errors; flag flipped with a tab open → client nav lands on the screen (503), off → refresh back to 200.
 Decisions: env flag over a file flag (container recreate covers the gap with the static page); callbacks exempt per the brief; status dot kept (status indicator in the mockup, not decoration); display size from the role scale (52px, mockup 64px); the app's `Wordmark` instead of the mockup's simplified mark.
 Follow-up: production run of `deploy/MAINTENANCE.md`; Caddy must be recreated once for the new mount.
+
+## 2026-10-15 — CR-266 — CI split into parallel jobs
+
+Summary: owner request — CI took ~12 min, its one `ci` job running format/lint/typecheck, unit tests with coverage (~5 min), build and e2e (~4 min) in sequence. Now three parallel jobs: `unit` (services, migrations, `test:coverage`, coverage gate), `checks` (format, lint, typecheck, build — no services), `e2e` (services, migrations, Playwright). A gate job named `ci` (`needs` all three, `if: always()`) fails unless each succeeded, so branch protection's required check is unchanged. PR #70's run: 4 min 56 s.
+Contract: none (workflow only; required checks still `ci`, `docker-smoke`).
+Files: `.github/workflows/ci.yml`; skills `ci-triage`, `visual-baselines` (job names).
+Validation: actionlint 1.7.12 clean; prettier; PR #70 — unit 4:47, checks 2:19, e2e 3:52, docker-smoke 3:36, ci gate green.
+Decisions: gate job with `always()` — a required check skipped after a failed `needs` would count as passed; services/env/setup steps shared by YAML anchors; e2e no longer waits for `pnpm build` (it runs `next dev`).
+Follow-up: CR-267 — `apps/api` tests in parallel (one DB per worker), the `unit` job is now the longest.

@@ -36,7 +36,7 @@ never committed (delete them if they appear).
 
 ## Path B — CI artifact
 
-1. Push the change (via `commit-push`); let the `ci` job fail on screenshots.
+1. Push the change (via `commit-push`); let the `e2e` job fail on screenshots.
 2. `gh run list --branch <branch> -L 3`, then
    `gh run download <run-id> -n playwright-report -D <scratchpad>/pw-report`.
 3. For **every** `*-diff.png`: Read the image. Accept only the intended change or

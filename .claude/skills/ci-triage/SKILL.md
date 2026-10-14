@@ -5,7 +5,9 @@ description: Use when GitHub Actions is red or the user asks why — "CI упа�
 
 # CI triage
 
-Workflows: `.github/workflows/ci.yml` (jobs `ci`, `docker-smoke`),
+Workflows: `.github/workflows/ci.yml` (parallel jobs `unit` — tests + coverage gate,
+`checks` — format/lint/typecheck/build, `e2e`; `ci` only gathers their results (CR-266);
+`docker-smoke`),
 `load-test.yml` (manual/nightly), `maps-contract.yml` (weekly, protected env).
 
 ## Steps
@@ -30,6 +32,6 @@ Workflows: `.github/workflows/ci.yml` (jobs `ci`, `docker-smoke`),
    root cause (CLAUDE.md self-correction protocol), re-run it and the related checks.
 4. Push and confirm the next run. To wait for it, don't poll in a tight loop — use
    Monitor on `gh run watch <id> --exit-status` or one `ScheduleWakeup` sized to the
-   run (~10–15 min for `ci`).
+   run (~6–8 min for `ci`).
 5. A recurring/environment-only failure → record it with `known-issue`; a fixed one
    gets a changelog line (`close-task`).
