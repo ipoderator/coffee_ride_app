@@ -13,7 +13,28 @@
 //      refused instead of silently wiping whatever it points at.
 const SAFE_DATABASE_NAME_PATTERN = /(^|_)test($|_)|^coffee_ride$/;
 
+// CR-267: test files run in parallel, each Vitest worker against its own copy
+// of this database (`<name>_w<VITEST_POOL_ID>`, cloned by
+// `worker-databases.ts` before any file runs) — the suites' unscoped DELETEs
+// would otherwise wipe each other's rows mid-test. The name check above runs
+// on TEST_DATABASE_URL itself; a worker's name only appends a suffix to it.
 export function getTestDatabaseUrl(): string {
+  const url = new URL(getBaseTestDatabaseUrl());
+  const poolId = process.env.VITEST_POOL_ID;
+  if (!poolId) return url.toString();
+  url.pathname = `/${workerDatabaseName(url.pathname.slice(1), poolId)}`;
+  return url.toString();
+}
+
+export function workerDatabaseName(
+  baseName: string,
+  poolId: number | string,
+): string {
+  return `${baseName}_w${poolId}`;
+}
+
+/** TEST_DATABASE_URL itself, validated — the template every worker's copy is cloned from. */
+export function getBaseTestDatabaseUrl(): string {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) {
     throw new Error(

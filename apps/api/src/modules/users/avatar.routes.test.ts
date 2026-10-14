@@ -15,6 +15,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import { createRedisClient } from '../../redis.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 
 // CR-097 (KI-023 remainder): same S3-mocking technique as `rides/
@@ -370,6 +371,18 @@ describe('/v1/users/me/avatar', () => {
   it.skipIf(!process.env.REDIS_URL)(
     'refuses the 11th upload in a minute with 429 upload_rate_limited, across IPs (CR-255)',
     async () => {
+      // CR-267: an earlier file in this worker (auth's CR-058 block) may have
+      // used up the per-IP sign-in limit in this worker's Redis database — the
+      // same flush auth.routes.test.ts does before its own live-Redis tests.
+      const flusher = createRedisClient(process.env.REDIS_URL!);
+      flusher.on('error', () => {});
+      const staleKeys = [
+        ...(await flusher.keys('fastify-rate-limit-*')),
+        ...(await flusher.keys('auth-rl:account:*')),
+      ];
+      if (staleKeys.length > 0) await flusher.del(...staleKeys);
+      flusher.disconnect();
+
       const app = await buildApp({
         ...testEnv,
         REDIS_URL: process.env.REDIS_URL,

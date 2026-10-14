@@ -73,6 +73,9 @@ function uniqueEmail() {
 describe('POST /v1/auth/register', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    // CR-267: rides first — another file in this worker may have left some,
+    // and `rides.organizer_id` blocks deleting their organizers' users.
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -340,7 +343,8 @@ describe('POST /v1/auth/register', () => {
             (
               await app.db.execute(
                 sql`SELECT 1 FROM pg_stat_activity
-                    WHERE wait_event_type = 'Lock' AND query ILIKE 'insert into "users"%'`,
+                    WHERE wait_event_type = 'Lock' AND datname = current_database()
+                      AND query ILIKE 'insert into "users"%'`,
               )
             ).length,
           { timeout: 10_000 },
@@ -559,6 +563,7 @@ describe('POST /v1/auth/register', () => {
 describe('POST /v1/auth/verify-email', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -750,6 +755,7 @@ function sessionCookie(
 describe('POST /v1/auth/login', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -872,6 +878,7 @@ describe('POST /v1/auth/login', () => {
 describe('POST /v1/auth/logout', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -992,6 +999,7 @@ describe('POST /v1/auth/logout', () => {
 describe('POST /v1/auth/forgot-password', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -1081,6 +1089,7 @@ describe('POST /v1/auth/forgot-password', () => {
 describe('POST /v1/auth/reset-password', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -1352,6 +1361,7 @@ describe('POST /v1/auth/reset-password', () => {
 describe('POST /v1/auth/resend-verification', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -1551,6 +1561,7 @@ describe('POST /v1/auth/resend-verification', () => {
 describe('GET /v1/auth/me', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -1631,6 +1642,7 @@ describe('GET /v1/auth/me', () => {
 describe('CSRF: Origin/Referer check on /v1 unsafe methods', () => {
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });
@@ -1712,6 +1724,7 @@ describe('CR-058: Redis-backed rate limiting (live Redis)', () => {
     flusher.disconnect();
 
     const app = await buildApp(testEnvWithRedis);
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });

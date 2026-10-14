@@ -160,3 +160,12 @@ Files: `.github/workflows/ci.yml`; skills `ci-triage`, `visual-baselines` (job n
 Validation: actionlint 1.7.12 clean; prettier; PR #70 — unit 4:47, checks 2:19, e2e 3:52, docker-smoke 3:36, ci gate green.
 Decisions: gate job with `always()` — a required check skipped after a failed `needs` would count as passed; services/env/setup steps shared by YAML anchors; e2e no longer waits for `pnpm build` (it runs `next dev`).
 Follow-up: CR-267 — `apps/api` tests in parallel (one DB per worker), the `unit` job is now the longest.
+
+## 2026-10-15 — CR-267 — `apps/api` test files in parallel, one database per worker
+
+Summary: owner request (CI speed-up, point 2). The api suite ran file by file (`fileParallelism: false`) because every file wipes whole tables on one shared database — ~4:50 of the `unit` job. Now a Vitest globalSetup clones TEST_DATABASE_URL's migrated database once per worker (`<name>_w<VITEST_POOL_ID>`, `CREATE DATABASE … TEMPLATE`, re-cloned every run), `getTestDatabaseUrl()` points each worker at its copy, and a setupFile gives each worker its own Redis logical database. Locally 917 tests in ~85–100 s with 3 workers.
+Contract: none (test infrastructure only).
+Files: api `vitest.config.ts`, `test-support/{test-database-url,worker-databases,worker-redis}.ts`; tests `auth/{auth.routes,google.routes,yandex.routes,session}`, `users/avatar.routes`.
+Validation: api typecheck, lint (0 errors), format; `vitest --sequence.shuffle` with 3 workers, seeds 11/77/888/9 — 917/917 each; full `test:coverage` with live Redis/S3 + `coverage:check` — holds.
+Decisions: parallelism exposed order/timing dependencies, fixed at the root: four auth files deleted `users` without `rides` first (FK from leftover rides); Google held-race tests slept 150 ms instead of polling `pg_stat_activity` for the lock wait (now scoped to `current_database()`, as is #68's register race); the avatar live-Redis test now clears sign-in limiter keys like CR-058's block. `testTimeout` 15 s (slowest ~1 s alone; 5 s was exceeded under a full parallel turbo run); workers ≤ 15 (Redis databases 0..15).
+Follow-up: none.

@@ -1,27 +1,31 @@
+import { availableParallelism } from 'node:os';
+
 import { defineConfig } from 'vitest/config';
 import { coverageConfig } from 'config/vitest/coverage';
 import { nodeLibraryVitestConfig } from 'config/vitest/node-library';
 
-// `fileParallelism: false` (apps/api only — `packages/maps-2gis` stays on the
-// shared fragment's default, it mocks `fetch` and touches no shared external
-// resource): every test file here shares one real Postgres database and each
-// file's `beforeEach` does an unscoped `DELETE FROM users` (CR-011/CR-012's
-// TRUNCATE-deadlock fix). That's safe within one file (tests run in
-// sequence), but Vitest's default is to run different *files* concurrently —
-// found this session (CR-013), adding a fourth DB-touching file
-// (`users.routes.test.ts`) made two files' concurrent `DELETE FROM users`
-// calls collide with each other's in-flight register/login/patch requests,
-// often enough to surface as intermittent `500`s (a genuine Postgres
-// deadlock/serialization failure, not a bug in either file). Serializing
-// files removes the race at its root instead of trying to scope every test's
-// data by file (which the existing "wipe the whole table" pattern isn't
-// designed for). The suite is small enough (currently 4 files) that this
-// costs no meaningful wall-clock time.
+// Test files run in parallel (CR-267). Every DB-touching file wipes whole
+// tables in `beforeEach` (`DELETE FROM users`, CR-011/CR-012), so two files
+// sharing one database broke each other's requests (CR-013's intermittent
+// 500s) and the suite ran with `fileParallelism: false` — ~5 min on CI. Now
+// `worker-databases.ts` clones TEST_DATABASE_URL's database once per worker
+// and `getTestDatabaseUrl()` points each worker at its own copy; files in one
+// worker still run one after another, as before.
 export default defineConfig({
   ...nodeLibraryVitestConfig(),
   test: {
     ...nodeLibraryVitestConfig().test,
-    fileParallelism: false,
+    globalSetup: ['./src/test-support/worker-databases.ts'],
+    setupFiles: ['./src/test-support/worker-redis.ts'],
+    // Explicit, so worker-databases.ts knows how many copies to clone (Vitest's
+    // own default: one core left for the main process); at most 15, one Redis
+    // logical database each (worker-redis.ts).
+    maxWorkers: Math.min(15, Math.max(1, availableParallelism() - 1)),
+    // Integration tests (real Postgres, password hashing) next to other files
+    // and `turbo test:coverage`'s other packages share the CPU now; the slowest
+    // take ~1 s alone, Vitest's 5 s default was exceeded under a full parallel
+    // run on a laptop.
+    testTimeout: 15_000,
     // server.ts is the process entry point (listen + signal handlers); every
     // test builds the app through app.ts instead.
     coverage: coverageConfig({ exclude: ['src/server.ts'] }),
