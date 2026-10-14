@@ -25,12 +25,16 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»); **deployed**
-2026-10-14 (`92ffe50`, PR #66): same frame as `/register`
-(`LoginScreen`), Google then Yandex ID («Войти с Яндекс ID»), «или через email»,
-«Забыли пароль?» on the password line (`ui` `FormField.labelAction`), show/hide. No auth
-logic change; Yandex/social-only password login/forged code/prod cookie flags pinned
-by new API tests.
+CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
+«Техработы», ADR-040), committed on `feat/cr-265-maintenance-mode` (PR pending):
+`MAINTENANCE_MODE=true` on `web`/`api` → pages 503 + `Retry-After` with «Технический
+пит-стоп», `/v1/*` 503 `maintenance` (`/health` and provider callbacks up);
+`app/error.tsx`/`global-error.tsx` in the same frame; Caddy serves
+`deploy/maintenance/index.html` when `web` is down. Runbook `deploy/MAINTENANCE.md`.
+
+Before it: CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»);
+**deployed** 2026-10-14 (`92ffe50`, PR #66): same frame as `/register` (`LoginScreen`),
+Google then Yandex ID, «или через email», «Забыли пароль?» on the password line.
 
 Before it: CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
 (`reference/coffee-ride-auth-mockup`, tab «Регистрация»); **deployed** 2026-10-14
@@ -68,10 +72,12 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-264 — deployed (see "Current task"); no env var or migration.
-CR-262/CR-263 — deployed (see "Current task"). Next from the same mockup: the
-maintenance screen (owner's prompt 3). KI-103: local web unit runs need the reCAPTCHA
-site key exported empty.
+CR-265 — committed on `feat/cr-265-maintenance-mode` (PR pending); new env
+`MAINTENANCE_MODE`/`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On
+deploy Caddy is recreated once (new read-only mount `deploy/maintenance`); first
+production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. Next
+from the same mockup: the final check (owner's prompt 4). KI-103: local web unit runs
+need the reCAPTCHA site key exported empty.
 
 CR-260/CR-261 — deployed (`146ff5d`); Yandex and reCAPTCHA keys are in the VPS `.env`
 (each listed twice, same values). Still open: the reCAPTCHA secret confirmed by a real
@@ -183,4 +189,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-264 deploy)
+2026-10-14 (CR-265)

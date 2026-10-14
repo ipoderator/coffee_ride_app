@@ -1968,3 +1968,50 @@ verificationUrl? }` — the body no longer carries `user`. The service hashes th
 
 Revert the CR: the schema field is optional and the response change is confined to
 `/register` and its callers; no migration, no data.
+
+## ADR-040 — Planned maintenance by env flag; a static fallback page at the proxy
+
+Status: Accepted (2026-10-14, owner request, CR-265).
+
+### Context
+
+The owner's auth mockup (`reference/coffee-ride-auth-mockup`, tab «Техработы»; brief
+item 7) asks for a maintenance mode switched by configuration rather than by swapping
+the application by hand, answering `503` + `Retry-After` while health checks, the
+provider callbacks and the static assets keep working, plus a static page at the
+reverse proxy that depends on nothing behind it. Before this, a stopped `web` meant
+Caddy's empty `502`, and there was no way to close the site for a migration.
+
+### Decision
+
+- One env pair on both `web` and `api`: `MAINTENANCE_MODE` (`true`/`1` → on; anything
+  else, a typo included, → off — a toggle never refuses a boot) and
+  `MAINTENANCE_RETRY_AFTER_SECONDS` (1..86400, else 600). Read per request at runtime:
+  switching is `docker compose up -d --no-build web api`, never a rebuild.
+- `web` (`src/proxy.ts`): every page is rewritten to `/maintenance` with `503`,
+  `Retry-After`, `no-store`, `X-Robots-Tag: noindex`; the root layout renders the page
+  alone (no header, no session lookup). Router prefetches now pass through the proxy
+  (the `missing` prefetch condition is gone) so none caches a real page; an RSC
+  navigation gets the same 503 and the App Router falls back to a full load. Not gated:
+  `/_next/static`, `/_next/image`, `/favicon.ico`, `/api/*` (matcher), `/robots.txt`,
+  `/icon.svg`. `/maintenance` is a 404 while the mode is off.
+- `api` (`plugins/maintenance.ts`, inside `v1Routes` like CSRF): `/v1/*` → `503
+maintenance` + `Retry-After`; `/health`, `/docs` and the Google/Yandex/Strava
+  callbacks stay up, so a sign-in in flight finishes or fails into its own reply.
+- Caddy: `handle_errors 502 503 504` serves `deploy/maintenance/index.html` (inline
+  CSS/SVG, no external files) with `503`, `Retry-After: 60`, `no-store`, `noindex` when
+  `web` cannot answer. A 503 that `web` sends is an ordinary response and passes.
+  Still one upstream and no `/api` route at the proxy (ADR-018).
+- The unexpected-error state is the same screen with its own text: `app/error.tsx`
+  (under the header) and `app/global-error.tsx` (own document). Neither renders the
+  error's message, digest or stack.
+
+### Consequences
+
+- The static page is a hand-kept copy of the screen (texts, token colours, contact
+  address); a change to one needs the other.
+- Background jobs keep running during maintenance; a migration that must not race them
+  stops the worker some other way (today it is inside `api`).
+- The callbacks may write sessions during maintenance; a maintenance that must freeze
+  writes completely has to stop `api` (Caddy then serves the static page).
+- Turning the mode on/off restarts the containers: a few seconds of the static page.

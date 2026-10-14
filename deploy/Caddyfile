@@ -13,6 +13,22 @@
 
 {$DOMAIN} {
 	reverse_proxy web:3000
+
+	# CR-265: `web` not answering at all (a restart — e.g. switching
+	# MAINTENANCE_MODE —, a deploy, a crash) gets the static maintenance page
+	# instead of Caddy's empty 502: `deploy/maintenance/` is mounted read-only
+	# and depends on nothing behind this proxy. A 503 that `web` itself sends
+	# (planned maintenance) is an ordinary response and passes through as is.
+	handle_errors 502 503 504 {
+		header Retry-After 60
+		header Cache-Control no-store
+		header X-Robots-Tag noindex
+		root * /srv/maintenance
+		rewrite * /index.html
+		file_server {
+			status 503
+		}
+	}
 }
 
 # CR-219: `www.` is a permanent redirect to the bare domain, so one canonical
