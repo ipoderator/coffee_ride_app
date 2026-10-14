@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-251 (security) Redis command args (a queued job's email + one-time link)
+      redacted from every API log line — done 2026-10-14 on
+      `fix/redact-redis-command-args`. See docs/changelog.md
 - [x] CR-250 (security, LOW) the per-account auth rate-limit Redis key is an
       HMAC of the normalized email, and its fail-open warning no longer logs the key —
       done 2026-10-13 on `fix/account-rate-limit-key-hmac`. See docs/changelog.md
@@ -46,5 +49,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-239 (production QA) ride page in sync after cancel/register: counts, start
       number and the phone bar land together; bar shows the count, not «№ N» —
       done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
-- [x] CR-238 (production QA) the organizer sees their hidden riders list on the ride
-      page — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

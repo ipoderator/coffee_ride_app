@@ -25,10 +25,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-250 (owner, 2026-10-13, security finding LOW): the per-account auth rate-limit
-Redis key was `auth-rl:account:<route>:<email>` and the fail-open warning logged it —
-now an HMAC (key from `AUTH_SECRET`) of the normalized email, nothing logged. Validated
-deployed 2026-10-13 (`65b5c4f`, PR #56).
+CR-251 (owner, 2026-10-14, security): ioredis error `command.args` — a queued job's
+email + one-time link — reached the API log; the logger now redacts them app-wide
+(`lib/log-redaction.ts`). Validated locally on `fix/redact-redis-command-args`,
+committed and going to `main` through a PR. CR-250 (per-account rate-limit key → HMAC,
+no email in logs) deployed 2026-10-13 (`65b5c4f`, PR #56).
 
 Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
@@ -155,4 +156,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-13 (CR-250)
+2026-10-14 (CR-251)

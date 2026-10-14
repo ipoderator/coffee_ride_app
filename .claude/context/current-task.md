@@ -1,27 +1,34 @@
-# Current task — CR-250 — Account rate-limit Redis key leaks the email into logs
+# Current task — CR-251 — Redis command args (job email + token link) reach the log
 
-Source: owner, 2026-10-13 (pasted security finding, LOW). Branch `fix/account-rate-limit-key-hmac`.
+Source: owner, 2026-10-14 ("нужно решить проблему" — CR-250's Found list). Branch
+`fix/redact-redis-command-args`.
 
 ## Goal
 
-The per-account auth rate limit (CR-058) built its Redis key as
-`auth-rl:account:<route>:<raw email>`, and on a Redis failure `isAccountRateLimited`
-logged `{ err, key }` — so register/login/forgot-password emails reached the API log
-(and Redis itself, and ioredis `ReplyError.command.args`).
+ioredis attaches `command: { name, args }` to reply/abort errors and pino's `err`
+serializer logs it. A BullMQ `queue.add()` passes the job JSON as an arg, so a Redis
+error during an enqueue logged the recipient email and the one-time verify/reset link
+(`sendVerificationEmail`/`sendPasswordResetEmail` catch → `logger.error({ err })`).
 
 ## Requirements / acceptance
 
-1. Key = `auth-rl:account:<route>:<HMAC-SHA256 base64url>` over the trimmed, lowercased
-   identifier; HMAC key derived from `AUTH_SECRET` under its own label (same pattern as
-   `google-transaction.ts`). Prefix kept (live-Redis test flushes `auth-rl:account:*`).
-2. `logger.warn` on fail-open carries no key/identifier.
-3. Unit tests: key has no email, is stable, case/space-insensitive, route- and
-   secret-scoped; the warn payload holds no key.
-4. lint, typecheck, api unit tests + auth.routes tests, coverage of touched files.
+1. No log line of `apps/api` carries a Redis command's args; the command name stays.
+2. One app-wide rule (logger `redact`), not per call site.
+3. Tests through the real Fastify/pino pipeline: top-level error, error in a property,
+   `AggregateError` members; an ordinary error untouched.
+4. api tests + coverage gate, typecheck, lint, prettier.
 
-## Planned files
+## Investigation
 
-`apps/api/src/lib/account-rate-limit.ts` (+ test), `apps/api/src/modules/auth/auth.routes.ts`.
+- Unisender errors were already safe: `redactEmails()` on the provider message,
+  `failed_emails` → generic "rejected the recipient" (the CR-250 "Found" guess was wrong).
+- Live: `evalsha` NOSCRIPT ReplyError with job JSON logged email + token without the
+  rule, `args: "[redacted]"` with it. BullMQ 6.3.6 `addStandardJobArgs` pushes
+  `job.data` into the command args.
+- Production logs: 0 matching lines; the `api` container was recreated by the CR-250
+  deploy and the `json-file` driver drops a removed container's log — nothing to purge.
+- Dependabot #18 = `braces` GHSA-vfj7-8cjw-p6xm (KI-095): no patched release exists;
+  only path is web's dev-only `eslint-config-next` → `fast-glob` → `micromatch`.
 
 ## Progress
 
@@ -29,18 +36,11 @@ logged `{ err, key }` — so register/login/forgot-password emails reached the A
 
 ## Validation results
 
-- `pnpm test:coverage` in `apps/api` (live Redis/S3, `coffee_ride_test`): 55 files,
-  767/767, 0 skipped; `pnpm coverage:check`: holds (`apps/api/src/lib/` +0.15 lines).
-- `pnpm --filter api typecheck` clean; `lint` 0 errors (8 pre-existing warnings in
-  `scripts/preflight.ts`); prettier clean on touched files.
-
-## Discovered issues
-
-- `notifications.service.ts:604/642/648` log the SMTP `err`; a provider rejection
-  message can quote the recipient address. Not changed (out of scope).
+- `pnpm test:coverage` (apps/api, live Redis/S3, `coffee_ride_test`): 56 files,
+  770/770; `pnpm coverage:check` holds (api total +0.37, `lib/` +0.17).
+- typecheck clean; lint 0 errors (8 pre-existing warnings, `scripts/preflight.ts`);
+  prettier clean.
 
 ## Final result
 
-Done locally, all acceptance criteria met (tests in `account-rate-limit.test.ts`:
-"CR-250: the fail-open warning carries no key", `accountRateLimitKeyFactory` block).
-Committed; PR into `main`.
+Done locally; committed and going to `main` through a PR.

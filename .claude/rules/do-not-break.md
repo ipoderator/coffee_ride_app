@@ -195,6 +195,9 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   normalized email, keyed from `AUTH_SECRET`) and the fail-open warning
   logging only `err` — never a raw email in a Redis key or in that log line
   (CR-250);
+- the API logger's `redact: LOG_REDACT` (`lib/log-redaction.ts`): ioredis errors
+  carry `command.args` (a BullMQ job's email + one-time link) — never drop the rule
+  or log an error under a key other than `err` without extending its paths (CR-251);
 - cover images/avatars served only through their API-proxy path (`GET
 /v1/rides/:id/cover`, `/v1/users/me/avatar`, `/v1/organizers/:id/avatar`),
   never a direct S3 URL — the bucket stays private, and this is what lets
