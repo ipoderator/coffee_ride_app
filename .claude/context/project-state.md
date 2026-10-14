@@ -25,16 +25,17 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
-«Техработы», ADR-040), committed on `feat/cr-265-maintenance-mode` (PR pending):
+CR-266 (owner, 2026-10-15) — CI split into parallel jobs (`unit`, `checks`, `e2e`) plus
+a gate job `ci` (`always()`, the required status check); PR #70 — the run took ~5 min
+instead of ~12. Next in the same thread: CR-267, `apps/api` test files in parallel on
+one database per Vitest worker (unit job ~5 → ~2 min).
+
+Before it: CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
+«Техработы», ADR-040), merged 2026-10-14 (`7d22fa2`, PR #69), not deployed yet:
 `MAINTENANCE_MODE=true` on `web`/`api` → pages 503 + `Retry-After` with «Технический
 пит-стоп», `/v1/*` 503 `maintenance` (`/health` and provider callbacks up);
 `app/error.tsx`/`global-error.tsx` in the same frame; Caddy serves
 `deploy/maintenance/index.html` when `web` is down. Runbook `deploy/MAINTENANCE.md`.
-
-Before it: CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»);
-**deployed** 2026-10-14 (`92ffe50`, PR #66): same frame as `/register` (`LoginScreen`),
-Google then Yandex ID, «или через email», «Забыли пароль?» on the password line.
 
 Before it: CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
 (`reference/coffee-ride-auth-mockup`, tab «Регистрация»); **deployed** 2026-10-14
@@ -72,7 +73,7 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-265 — committed on `feat/cr-265-maintenance-mode` (PR pending); new env
+CR-265 — merged (`7d22fa2`), awaiting deploy; new env
 `MAINTENANCE_MODE`/`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On
 deploy Caddy is recreated once (new read-only mount `deploy/maintenance`); first
 production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. Next
@@ -189,4 +190,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-265)
+2026-10-15 (CR-266)
