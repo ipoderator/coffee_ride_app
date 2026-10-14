@@ -106,5 +106,5 @@ Summary: `main`'s CI after #71 failed one web unit test (`rides.test.tsx`, «wit
 Contract: none.
 Files: web `features/organizer/rides/rides.test.tsx`.
 Validation: the file 94/94, and 3× under artificial CPU load (10 × `yes`) — 94/94 each; prettier.
-Decisions: test-only; `Dialog` unchanged (binding in an effect is correct for the app).
+Decisions: test-only; `Dialog` unchanged (binding in an effect is correct for the app). Resolves KI-102 (moved to the archive).
 Follow-up: none.

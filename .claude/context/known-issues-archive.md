@@ -2724,3 +2724,18 @@ frames, forms and framing are blocked.
 Workaround: none. Keep new inline scripts out of the app.
 Next action: an ADR on nonce CSP via `proxy.ts` (all pages dynamic) vs. the status quo;
 re-inventory 2GIS hosts on any MapGL upgrade (`*.2gis.com`, `blob:` workers).
+
+### KI-102 — `EditRideForm` dismiss test flaky under coverage load
+
+Status: open. Discovered: 2026-10-14 (CR-262 validation).
+Problem: `rides.test.tsx` › «without a route saves before asking; dismissing keeps the
+saved draft» failed once in `pnpm test:coverage` (dialog still in the document after
+`waitFor`'s default 1 s); it passed in the plain run, in a second coverage run and 3/3
+alone. Unrelated to CR-262's files.
+Impact: low — a red CI run that a retry clears.
+Workaround: re-run the job.
+Next action: code — wait for the dialog's exit animation explicitly (or a longer
+`waitFor` timeout for this assertion).
+Resolved: 2026-10-15 (CR-267 follow-up, PR #72) — the cause was not the exit animation:
+`Dialog` binds Escape in a passive effect, and the test pressed Escape before it ran.
+Both such tests in the file retry Escape inside `waitFor`; 3/3 under artificial CPU load.
