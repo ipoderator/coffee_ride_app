@@ -4,6 +4,7 @@ import {
   emailVerificationTokens,
   passwordResetTokens,
   sessions,
+  users,
 } from 'db/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -305,6 +306,57 @@ describe('POST /v1/auth/register', () => {
         sql`SELECT 1 FROM users WHERE email = ${email}`,
       );
       expect(rows).toHaveLength(1);
+
+      await app.close();
+    });
+
+    it('answers the loser of a registration race like any taken email', async () => {
+      const app = await buildApp(testEnv);
+      const email = uniqueEmail();
+
+      // The race made deterministic (the test above only "usually" hits it):
+      // an open transaction holds the same email, so the route's pre-check can't
+      // see the uncommitted row and its insert waits on `users_email_unique`;
+      // committing then fails that insert with 23505.
+      let commit!: () => void;
+      const committed = new Promise<void>((resolve) => (commit = resolve));
+      let markHeld!: () => void;
+      const held = new Promise<void>((resolve) => (markHeld = resolve));
+      const holder = app.db.transaction(async (tx) => {
+        await tx.insert(users).values({ email });
+        markHeld();
+        await committed;
+      });
+      await held;
+
+      const pending = app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: { email, password: 'a-strong-password-123' },
+      });
+      await expect
+        .poll(
+          async () =>
+            (
+              await app.db.execute(
+                sql`SELECT 1 FROM pg_stat_activity
+                    WHERE wait_event_type = 'Lock' AND query ILIKE 'insert into "users"%'`,
+              )
+            ).length,
+          { timeout: 10_000 },
+        )
+        .toBeGreaterThan(0);
+      commit();
+      await holder;
+
+      const response = await pending;
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toEqual({ emailVerificationRequired: true });
+      expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
+        expect.anything(),
+        'register_existing_email',
+        expect.any(String),
+      );
 
       await app.close();
     });
