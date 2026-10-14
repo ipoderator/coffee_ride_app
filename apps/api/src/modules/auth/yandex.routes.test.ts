@@ -79,6 +79,9 @@ async function startApp(env: Env = testEnv) {
 
 beforeEach(async () => {
   await startApp();
+  // CR-267: rides first — another file in this worker may have left some,
+  // and `rides.organizer_id` blocks deleting their organizers' users.
+  await app.db.execute(sql`DELETE FROM rides`);
   await app.db.execute(sql`DELETE FROM users`);
 });
 

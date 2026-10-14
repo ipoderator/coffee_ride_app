@@ -72,6 +72,9 @@ async function startApp(env: Env = testEnv) {
 
 beforeEach(async () => {
   await startApp();
+  // CR-267: rides first — another file in this worker may have left some,
+  // and `rides.organizer_id` blocks deleting their organizers' users.
+  await app.db.execute(sql`DELETE FROM rides`);
   await app.db.execute(sql`DELETE FROM users`);
 });
 
@@ -755,8 +758,23 @@ describe('signInWithOAuth (Google) — held races', () => {
     return { written, commit, done };
   }
 
-  // Long enough for the sign-in to reach the statement that waits on the lock.
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
+  // Until the sign-in is blocked on the held transaction's lock. Polled, not
+  // a fixed sleep: under parallel test files (CR-267) a loaded machine can take
+  // longer than any fixed delay to reach that statement, and committing before
+  // it waits tests a different path. This worker's database only.
+  const settle = () =>
+    expect
+      .poll(
+        async () =>
+          (
+            await app.db.execute(
+              sql`SELECT 1 FROM pg_stat_activity
+                  WHERE wait_event_type = 'Lock' AND datname = current_database()`,
+            )
+          ).length,
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
 
   const identity = (email: string) => ({
     accountId: `1${Math.floor(Math.random() * 1e15)}`,

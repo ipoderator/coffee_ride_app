@@ -1591,3 +1591,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       ride's reviews + no review `userId`, per-user upload tier, auth event log, logout
       cookie `Secure` (KI-099), digest-pinned base images — done 2026-10-14 on
       `fix/security-audit-findings`. See docs/changelog.md
+- [x] CR-259 (security, KI-097) page CSP by per-request nonce + `'strict-dynamic'`,
+      no `'unsafe-inline'` for scripts; every page renders per request (ADR-036) —
+      done 2026-10-14 on `feat/nonce-csp`. See docs/changelog.md

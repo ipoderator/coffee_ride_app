@@ -29,6 +29,9 @@ describe('session rolling expiry (ADR-013: extended at most once/day)', () => {
   // this is the second file touching the same tables.
   beforeEach(async () => {
     const app = await buildApp(testEnv);
+    // CR-267: rides first — another file in this worker may have left some,
+    // and `rides.organizer_id` blocks deleting their organizers' users.
+    await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
   });

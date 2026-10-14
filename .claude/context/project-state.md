@@ -25,10 +25,10 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-266 (owner, 2026-10-15) — CI split into parallel jobs (`unit`, `checks`, `e2e`) plus
-a gate job `ci` (`always()`, the required status check); PR #70 — the run took ~5 min
-instead of ~12. Next in the same thread: CR-267, `apps/api` test files in parallel on
-one database per Vitest worker (unit job ~5 → ~2 min).
+CR-267 (owner, 2026-10-15) — `apps/api` test files run in parallel: a Vitest globalSetup
+clones TEST_DATABASE_URL's database per worker (`<name>_w<poolId>`), a setupFile gives
+each worker its own Redis logical database; PR #71. Before it CR-266 — CI split into
+parallel jobs `unit`/`checks`/`e2e` + gate `ci` (merged, `5ecc175`, PR #70).
 
 Before it: CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
 «Техработы», ADR-040), merged 2026-10-14 (`7d22fa2`, PR #69), not deployed yet:
@@ -190,4 +190,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-15 (CR-266)
+2026-10-15 (CR-267)

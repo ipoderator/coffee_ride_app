@@ -1,34 +1,31 @@
-# Current task — CR-266 — CI split into parallel jobs
+# Current task — CR-267 — `apps/api` test files in parallel
 
-Source: owner, 2026-10-14/15 («можем как-то ускорить github action?» → point 1 of the
-proposal). Branch `chore/ci-parallel-jobs`, PR #70.
+Source: owner, 2026-10-15 (CI speed-up, point 2, after CR-266). Branch
+`test/api-parallel-files`, PR #71.
 
 ## Goal
 
-Cut CI wall time (~12 min) without touching branch protection.
+Drop `fileParallelism: false` from `apps/api` (the `unit` job's critical path, ~4:50).
 
 ## Requirements / acceptance criteria
 
-- format/lint/typecheck/build, unit+coverage and e2e run as parallel jobs — done;
-- the required status check `ci` stays and fails if any job fails or is skipped — done
-  (gate job, `if: always()`);
-- coverage gate, coverage and Playwright artifacts unchanged — done;
-- `docker-smoke` untouched — done.
-
-## Files
-
-`.github/workflows/ci.yml`; `.claude/skills/ci-triage/SKILL.md`,
-`.claude/skills/visual-baselines/SKILL.md`.
+- each Vitest worker gets its own Postgres database and Redis logical database — done
+  (`worker-databases.ts` globalSetup, `worker-redis.ts` setupFile);
+- KI-049's name allowlist still guards TEST_DATABASE_URL — done (runs on the base URL);
+- the suite passes in any file order — done (4 shuffled seeds, 917/917);
+- coverage gate holds — done.
 
 ## Validation
 
-actionlint 1.7.12 clean; prettier; YAML aliases resolve (parsed); PR #70 run 4:56 —
-unit 4:47, checks 2:19, e2e 3:52, docker-smoke 3:36, gate green.
+api typecheck, lint (0 errors), format; shuffled ×4 with 3 workers, 85–100 s each; full
+`test:coverage` with live Redis/S3 + `coverage:check` holds.
 
-## Discovered issues
+## Discovered issues (fixed)
 
-The `unit` job is now the critical path (apps/api suite runs file by file) → CR-267.
+Auth files deleted `users` without `rides` first; Google held-race tests slept 150 ms
+instead of polling the lock wait; avatar live-Redis test inherited a used-up sign-in
+limit; Vitest 5 gives globalSetup no `maxWorkers` unless the config sets it.
 
 ## Final result
 
-Implemented and validated on PR #70.
+Implemented and validated locally; PR #71 CI pending.
