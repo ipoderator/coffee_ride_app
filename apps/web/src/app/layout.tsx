@@ -10,6 +10,7 @@ import { filterEnabled } from '@/lib/cabinet/feature-flags';
 import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
 import { PARTICIPANT_NAV_ITEMS } from '@/lib/cabinet/participant-nav';
 import { SessionProvider } from '@/lib/auth/session-context';
+import { readMaintenanceConfig } from '@/lib/site/maintenance';
 import { SITE_OPEN_GRAPH } from '@/lib/site/site-meta';
 import { siteUrl } from '@/lib/site/site-url';
 import { THEME_INIT_SCRIPT } from '@/lib/theme/theme';
@@ -132,32 +133,47 @@ export default async function RootLayout({
         />
       </head>
       <body>
-        {/* docs/design.md §11: "xl (>= 1280): max content width 1200px, centered" —
-            one shared cap here rather than repeated per-page, per
-            `.claude/context/current-task.md`'s CR-044 finding. Every page's own
-            (narrower) container still applies inside it; this only bounds the
-            widest screens/layouts (the discovery split view).
-            CR-108: `AppHeader` sits outside that cap so its bottom border runs
-            the full width of the viewport, and caps its own inner nav instead. */}
-        <SessionProvider>
-          <ToastProvider>
-            {/* CR-132: `SiteChrome` leaves both off on `/organizer/*`,
-                which draws its own header and frame. */}
-            <SiteChrome
-              header={
-                <AppHeader
-                  participantNavItems={filterEnabled(PARTICIPANT_NAV_ITEMS)}
-                  organizerNavItems={filterEnabled(ORGANIZER_NAV_ITEMS)}
-                />
-              }
-            >
-              {children}
-            </SiteChrome>
-            {/* CR-130 (ADR-024): mobile-only, alongside `AppHeader`'s menu. */}
-            <BottomTabBar />
-          </ToastProvider>
-        </SessionProvider>
+        {readMaintenanceConfig().enabled ? (
+          // CR-265: `src/proxy.ts` has rewritten the request to `/maintenance`
+          // (503). The screen stands alone, as in the mockup: no header, no
+          // session lookup, nothing that would call the API.
+          children
+        ) : (
+          <SiteFrame>{children}</SiteFrame>
+        )}
       </body>
     </html>
+  );
+}
+
+function SiteFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {/* docs/design.md §11: "xl (>= 1280): max content width 1200px, centered" —
+          one shared cap here rather than repeated per-page, per
+          `.claude/context/current-task.md`'s CR-044 finding. Every page's own
+          (narrower) container still applies inside it; this only bounds the
+          widest screens/layouts (the discovery split view).
+          CR-108: `AppHeader` sits outside that cap so its bottom border runs
+          the full width of the viewport, and caps its own inner nav instead. */}
+      <SessionProvider>
+        <ToastProvider>
+          {/* CR-132: `SiteChrome` leaves both off on `/organizer/*`,
+              which draws its own header and frame. */}
+          <SiteChrome
+            header={
+              <AppHeader
+                participantNavItems={filterEnabled(PARTICIPANT_NAV_ITEMS)}
+                organizerNavItems={filterEnabled(ORGANIZER_NAV_ITEMS)}
+              />
+            }
+          >
+            {children}
+          </SiteChrome>
+          {/* CR-130 (ADR-024): mobile-only, alongside `AppHeader`'s menu. */}
+          <BottomTabBar />
+        </ToastProvider>
+      </SessionProvider>
+    </>
   );
 }

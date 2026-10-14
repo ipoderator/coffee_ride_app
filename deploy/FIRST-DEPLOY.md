@@ -134,3 +134,8 @@ rather than from outside.
 Update KI-045 in `.claude/context/known-issues.md` with what this run actually proved —
 particularly Caddy/ACME, the one part that has never had evidence behind it. If everything in this file passed, KI-045 can be closed; if a step failed, record
 what failed there rather than leaving the issue's text as-is.
+
+## Later: planned maintenance
+
+Switching the site into maintenance and back (`MAINTENANCE_MODE`, CR-265) is its own
+runbook: `deploy/MAINTENANCE.md`.

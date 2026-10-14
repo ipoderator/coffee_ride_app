@@ -1,3 +1,5 @@
+import { SITE_CONTACT_EMAIL } from '@/lib/site/contact';
+
 // CR-247: the text of `/privacy` and `/terms` — documents, not UI labels, so they
 // live with the pages rather than in `packages/ui`'s terminology module (the shared
 // names — titles, the consent line — are `LEGAL_TERMS`/`OAUTH_SIGN_IN_TERMS` there).
@@ -8,7 +10,7 @@
 // sessions, ADR-034 Google, ADR-037 Yandex ID), ADR-033 (Strava), `docker-compose.prod.yml` (backups,
 // log rotation), `apps/web/src/lib/theme/theme.ts` (the only browser storage).
 
-export const LEGAL_CONTACT_EMAIL = 'glebchurkin48@gmail.com';
+export const LEGAL_CONTACT_EMAIL = SITE_CONTACT_EMAIL;
 // ISO date of the current wording; the page formats it.
 export const LEGAL_UPDATED_AT = '2026-10-14';
 

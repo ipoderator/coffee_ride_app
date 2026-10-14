@@ -4,17 +4,17 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 94.55,
-        "statements": 93.52,
-        "functions": 97.47,
-        "branches": 85.38
+        "lines": 94.56,
+        "statements": 93.57,
+        "functions": 97.48,
+        "branches": 85.48
       },
       "scopes": {
         "src/modules/auth/": {
           "lines": 99.08,
-          "statements": 98.27,
+          "statements": 98.44,
           "functions": 100,
-          "branches": 93.61
+          "branches": 93.92
         },
         "src/modules/registrations/": {
           "lines": 93.97,
@@ -53,10 +53,10 @@
           "branches": 70.9
         },
         "src/plugins/": {
-          "lines": 96.84,
-          "statements": 96.11,
+          "lines": 97.02,
+          "statements": 96.39,
           "functions": 100,
-          "branches": 93.47
+          "branches": 93.75
         },
         "src/lib/": {
           "lines": 95.9,
@@ -74,16 +74,16 @@
     },
     "apps/web": {
       "total": {
-        "lines": 85.11,
-        "statements": 83.52,
-        "functions": 83.23,
-        "branches": 82.7
+        "lines": 85.29,
+        "statements": 83.69,
+        "functions": 83.34,
+        "branches": 82.78
       }
     },
     "packages/ui": {
       "total": {
         "lines": 100,
-        "statements": 99.73,
+        "statements": 99.74,
         "functions": 100,
         "branches": 94.22
       }

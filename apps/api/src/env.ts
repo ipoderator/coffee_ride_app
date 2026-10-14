@@ -186,6 +186,24 @@ const envSchema = z.object({
       .default('false')
       .transform((v) => v === 'true'),
   ),
+  // CR-265: planned maintenance (`plugins/maintenance.ts`). `true`/`1` turns every
+  // `/v1/*` route except the provider callbacks into `503 maintenance` with
+  // `Retry-After`; anything else — unset, empty, a typo — leaves the API serving,
+  // never refusing to boot over a toggle. apps/web reads the same pair
+  // (`lib/site/maintenance.ts`); Compose passes both to both services.
+  MAINTENANCE_MODE: z.preprocess(
+    (value) =>
+      typeof value === 'string' &&
+      ['1', 'true'].includes(value.trim().toLowerCase()),
+    z.boolean(),
+  ),
+  // Seconds for `Retry-After`; out of 1..86400 or not a number → the default.
+  MAINTENANCE_RETRY_AFTER_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .catch(600),
 });
 
 export type Env = z.infer<typeof envSchema>;

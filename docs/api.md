@@ -1156,6 +1156,14 @@ The `GET` behind each URL accepts an optional `v` (≤ 64 chars) and sets
 GET `/health` — reports DB/Redis/S3 status; must not fail hard if one dependency is
 degraded (CR-051, `.claude/rules/resilience.md`). Unversioned by design (ADR-011).
 
+## Maintenance (CR-265, ADR-040)
+
+With `MAINTENANCE_MODE=true` every `/v1/*` route answers `503` `code: "maintenance"`
+with `Retry-After: <MAINTENANCE_RETRY_AFTER_SECONDS, default 600>` and
+`Cache-Control: no-store`, before CSRF, auth or validation. Not gated: `GET /health`,
+`/docs`, `GET /v1/auth/google/callback`, `GET /v1/auth/yandex/callback`,
+`GET /v1/strava/callback`. An unknown path keeps its `404`.
+
 ## Pagination
 
 Every collection endpoint — including ones added later — accepts `?limit=` and `?cursor=`

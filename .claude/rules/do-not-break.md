@@ -230,6 +230,15 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   `clearCookie` — a `__Host-` deletion without `Secure` is ignored (CR-257, KI-099);
 - Dockerfile base images stay pinned by digest (`node:24-alpine@sha256:…`, CR-258);
   Dependabot's `docker` entries bump the digest — don't drop it back to a bare tag;
+- maintenance mode (ADR-040, CR-265): `MAINTENANCE_MODE` read at runtime on `web` and
+  `api` (never baked into a build, never failing a boot); `web` answers pages `503` +
+  `Retry-After` by the proxy rewrite to `/maintenance` and the root layout drops the
+  header/session there; `api` gates `/v1/*` only, `/health` and the three provider
+  callbacks stay up; the proxy matcher keeps prefetches (no `missing` condition) so
+  none caches a real page. Caddy's `handle_errors` fallback stays a self-contained
+  file (`deploy/maintenance/index.html`) — no Next/API/font dependency. The error
+  screens (`app/error.tsx`, `app/global-error.tsx`) never render the error's message,
+  digest or stack;
 - cover images/avatars served only through their API-proxy path (`GET
 /v1/rides/:id/cover`, `/v1/users/me/avatar`, `/v1/organizers/:id/avatar`),
   never a direct S3 URL — the bucket stays private, and this is what lets
