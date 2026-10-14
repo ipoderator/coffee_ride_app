@@ -69,4 +69,4 @@ state; a static fallback page at the reverse proxy for when `web` itself is down
 
 ## Final result
 
-Implemented and validated; committed and pushed to `experiments` (owner asked).
+Implemented and validated; committed on `experiments`, cherry-picked onto `main` as `feat/cr-265-maintenance-mode` (PR).

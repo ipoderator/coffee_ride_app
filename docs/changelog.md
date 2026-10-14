@@ -117,6 +117,10 @@ Validation: web typecheck, eslint, vitest auth + register 121/121, Storybook `Re
 Decisions: deliberate departure from the mockup's panel (owner).
 Follow-up: none.
 
+## 2026-10-14 — CR-262, CR-263 deployed
+
+Deploy: `c53271b` (PR #64, squash of `experiments`' CR-262/CR-263 rebased on `main`; CR-260/CR-261 were already live at `146ff5d`, PR #63) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration, no env change. Before: format, lint, typecheck, build, api 884, web 999 (KI-103 workaround), coverage gate, e2e 56 + Linux baselines in CI. After: API `/health` db/redis/s3 ok; `/`, `/register`, `/login`, `/forgot-password` `200`; Chromium on `/register` and `/login`: new register layout, reCAPTCHA renders, zero `securitypolicyviolation`; no level ≥50 API log lines in the first 10 minutes. A taken email on `/register` now emails its owner (email is live in production).
+
 ## 2026-10-14 — CR-264 — `/login` to the auth mockup; social sign-in checks re-proven
 
 Summary: owner request (mockup tab «Вход»). `/login` moves into CR-262/263's frame: story text (`lg`+), «Выберите быстрый вход…», Google then Yandex ID as equal buttons («Войти через Google», «Войти с Яндекс ID»), «или через email», the form without a card (placeholders, «Забыли пароль?» on the «Пароль» line, show/hide), «Нет аккаунта? Зарегистрироваться», the consent line. No auth logic changed: the existing Yandex/Google flows already met the brief; new tests pin the gaps.
@@ -125,6 +129,19 @@ Files: ui `FormField.tsx`, `terminology.ts` (+tests); web `(public)/login/page.t
 Validation: format:check (only the untracked mockup differs), lint, lint:root, typecheck, build 7/7; `test:coverage` with live Redis/S3 — api 886, web 1011, ui 298, db 17, resilience 15, maps-2gis 82 (+6 opt-in); `coverage:check` holds, baseline raised; Storybook auth stories 56/56 with axe; e2e `login-return`, `password-reset`, `critical-journeys` 9/9; Chromium on the dev stack with mock provider ids: 1440/768/390/320 no overflow, Yandex/Google start → S256 + state (+ nonce for Google), cookie HttpOnly/Lax/600 s, forged state → «state», no cookie → «expired», unsafe `next` dropped, wrong password → generic, right → `/me`.
 Decisions: Google first on `/login` too (mockup; reverses CR-262's note); reCAPTCHA stays on password login (ADR-038) though the mockup shows none; story column text-only as CR-263; Yandex keeps no nonce (no ID token, ADR-037).
 Follow-up: the maintenance screen (owner's prompt 3).
+
+## 2026-10-14 — CR-264 deployed
+
+Deploy: `92ffe50` (PR #66, squash of `experiments`' `cbf5e95` rebased on `main` + `dbdac72`) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration, no env change. CI's coverage gate first failed on `packages/ui` (99.61/94.05 vs the raised 99.73/94.22): `offsetMinutes`' bare-`GMT` fallback is reached only on ICU < 78, where the cloud session measured it; `dbdac72` pins that fallback with a test (99.74/94.22 on any ICU, baseline unchanged). After: API `/health` db/redis/s3 ok; `/`, `/login`, `/register`, `/forgot-password` `200`; Chromium on `/login` and `/register`: new layout, reCAPTCHA renders, zero `securitypolicyviolation`; no level ≥50 API log lines in the first 10 minutes.
+
+## 2026-10-14 — CR-262 follow-up — the register race covered deterministically
+
+Summary: `main`'s CI after the docs-only #67 failed the coverage gate (`apps/api/src/modules/auth/` −1.08 pp lines): `registerUser`'s unique-violation branch (`findExisting` on 23505, `isUniqueViolation`'s `cause` check) ran only when the five-concurrent-registrations test happened to race. A new test holds the email in an open transaction, waits until the route's insert blocks on `users_email_unique` (`pg_stat_activity`), then commits — the branch runs every time.
+Contract: none.
+Files: api `modules/auth/auth.routes.test.ts`.
+Validation: the new test 3/3 alone, lines 165–167/531–535 covered; format, api lint/typecheck; `test:coverage` with live Redis/S3 — api 887, web 1011, ui 299; `coverage:check` holds.
+Decisions: test-only; the baseline stays.
+Follow-up: none.
 
 ## 2026-10-14 — CR-265 — Maintenance mode, the unexpected-error state, a static fallback at Caddy (ADR-040)
 

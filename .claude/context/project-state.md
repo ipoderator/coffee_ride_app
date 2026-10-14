@@ -26,19 +26,19 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 ## Current task
 
 CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
-«Техработы», ADR-040), committed on `experiments` (no PR yet): `MAINTENANCE_MODE=true`
-on `web`/`api` → pages 503 + `Retry-After` with «Технический пит-стоп», `/v1/*` 503
-`maintenance` (`/health` and provider callbacks up); `app/error.tsx`/`global-error.tsx`
-in the same frame; Caddy serves `deploy/maintenance/index.html` when `web` is down.
-Runbook `deploy/MAINTENANCE.md`.
+«Техработы», ADR-040), committed on `feat/cr-265-maintenance-mode` (PR pending):
+`MAINTENANCE_MODE=true` on `web`/`api` → pages 503 + `Retry-After` with «Технический
+пит-стоп», `/v1/*` 503 `maintenance` (`/health` and provider callbacks up);
+`app/error.tsx`/`global-error.tsx` in the same frame; Caddy serves
+`deploy/maintenance/index.html` when `web` is down. Runbook `deploy/MAINTENANCE.md`.
 
-Before it: CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»),
-committed on `experiments` (no PR yet): same frame as `/register` (`LoginScreen`),
+Before it: CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»);
+**deployed** 2026-10-14 (`92ffe50`, PR #66): same frame as `/register` (`LoginScreen`),
 Google then Yandex ID, «или через email», «Забыли пароль?» on the password line.
 
-Before it: CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
-(`reference/coffee-ride-auth-mockup`, tab «Регистрация»), validated on `experiments`,
-committed on `experiments` (no PR yet):
+Before it: CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
+(`reference/coffee-ride-auth-mockup`, tab «Регистрация»); **deployed** 2026-10-14
+(`c53271b`, PR #64):
 
 - story column (`lg`+, text only since CR-263), Google/Yandex ID first («Продолжить с …»), strength meter, live
   match line, show/hide (`ui` `PasswordInput`);
@@ -47,7 +47,7 @@ committed on `experiments` (no PR yet):
   emails the owner «Аккаунт уже есть».
 
 Before it: CR-260 + CR-261 — Yandex ID sign-in (ADR-037) and reCAPTCHA v2 on password
-auth (ADR-038), one PR from `feat/yandex-oauth-recaptcha` (committed).
+auth (ADR-038), deployed (`146ff5d`, PR #63).
 
 Before it (details in the changelog): CR-259 page CSP by nonce (ADR-036) and CR-251,
 CR-253..CR-258 Lictor fixes (deployed, PR #61); CR-249/CR-247 Google sign-in (ADR-034/035,
@@ -72,17 +72,15 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-265 — committed on `experiments` (no PR yet); new env `MAINTENANCE_MODE`/
-`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On deploy Caddy is
-recreated once (new read-only mount `deploy/maintenance`); first production switch per
-`deploy/MAINTENANCE.md`. CR-264, CR-262/263 — committed on `experiments` (no PR yet);
-ship after (or with) CR-260/CR-261. Next from the same mockup: the final check (owner's
-prompt 4).
+CR-265 — committed on `feat/cr-265-maintenance-mode` (PR pending); new env
+`MAINTENANCE_MODE`/`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On
+deploy Caddy is recreated once (new read-only mount `deploy/maintenance`); first
+production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. Next
+from the same mockup: the final check (owner's prompt 4). KI-103: local web unit runs
+need the reCAPTCHA site key exported empty.
 
-CR-260/CR-261 — awaiting merge and deploy. Owner-side: `YANDEX_CLIENT_ID`/`_SECRET`
-(redirect URI `…/api/v1/auth/yandex/callback`), `RECAPTCHA_SECRET_KEY` and
-`NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (v2 «I'm not a robot», coffeeride.site + localhost) in
-the VPS `.env`, then a web rebuild; the reCAPTCHA secret is not yet confirmed by a real
+CR-260/CR-261 — deployed (`146ff5d`); Yandex and reCAPTCHA keys are in the VPS `.env`
+(each listed twice, same values). Still open: the reCAPTCHA secret confirmed by a real
 solved challenge (a registration → 201, `captcha_unavailable` = secret rejected); name
 reCAPTCHA in the privacy policy.
 

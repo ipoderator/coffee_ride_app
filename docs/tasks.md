@@ -21,7 +21,7 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 - [x] CR-265 maintenance mode by env (`MAINTENANCE_MODE`, 503 + `Retry-After`, the
       «Техработы» screen), unexpected-error state, static 503 fallback at Caddy
-      (ADR-040) — done 2026-10-14, committed on `experiments`. See docs/changelog.md
+      (ADR-040) — done 2026-10-14, committed on `feat/cr-265-maintenance-mode`. See docs/changelog.md
 - [x] CR-264 `/login` to the auth mockup («Вход»: story text, Google/Yandex ID first,
       «или через email», «Забыли пароль?» by the field, show/hide); Yandex/social-only
       sign-in checks re-proven — done 2026-10-14, committed on `experiments`. See docs/changelog.md
