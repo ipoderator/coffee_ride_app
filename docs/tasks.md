@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-264 `/login` to the auth mockup («Вход»: story text, Google/Yandex ID first,
+      «или через email», «Забыли пароль?» by the field, show/hide); Yandex/social-only
+      sign-in checks re-proven — done 2026-10-14, committed on `experiments`. See docs/changelog.md
 - [x] CR-263 `/register` story column without background (text only) — done 2026-10-14
 - [x] CR-262 `/register` to the auth mockup (story panel, Google/Yandex ID first,
       strength meter, live match, show/hide), `confirmPassword` checked by the API, no
@@ -41,6 +44,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       (`lictor-security-check`/`-explain`/`-fix-it`/`-rotate`, pinned upstream commit),
       routed in CLAUDE.md; `SECURITY-AUDIT.md` gitignored — done 2026-10-14 on
       `chore/lictor-security-skills`. See docs/changelog.md
-- [x] CR-251 (security) Redis command args (a queued job's email + one-time link)
-      redacted from every API log line — done 2026-10-14 on
-      `fix/redact-redis-command-args`. See docs/changelog.md

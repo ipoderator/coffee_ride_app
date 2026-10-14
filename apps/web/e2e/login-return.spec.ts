@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { AUTH_TERMS, REGISTRATION_ACTION_TERMS, VERIFY_EMAIL_TERMS } from 'ui';
+import {
+  AUTH_TERMS,
+  LOGIN_PAGE_TERMS,
+  REGISTRATION_ACTION_TERMS,
+  VERIFY_EMAIL_TERMS,
+} from 'ui';
 import {
   createOrganizerProfile,
   createPublishedRide,
@@ -42,11 +47,13 @@ test('an anonymous «Зарегистрироваться» returns to the ride 
   await page.waitForURL(`/login?next=${next}`);
   // «Нет аккаунта?» keeps the return target too.
   await expect(
-    page.getByRole('link', { name: AUTH_TERMS.registerLink }),
+    page.getByRole('link', { name: LOGIN_PAGE_TERMS.switchLink }),
   ).toHaveAttribute('href', `/register?next=${next}`);
 
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(participant.email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(participant.password);
+  await page
+    .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
+    .fill(participant.password);
   await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
 
   await page.waitForURL(`/rides/${rideId}`);
@@ -86,7 +93,7 @@ test('a new account made from a ride returns to it after email verification and 
     .getByRole('button', { name: REGISTRATION_ACTION_TERMS.register })
     .click();
   await page.waitForURL(`/login?next=${next}`);
-  await page.getByRole('link', { name: AUTH_TERMS.registerLink }).click();
+  await page.getByRole('link', { name: LOGIN_PAGE_TERMS.switchLink }).click();
   await page.waitForURL(`/register?next=${next}`);
 
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(email);
@@ -120,7 +127,9 @@ test('a new account made from a ride returns to it after email verification and 
   await page.waitForURL(`/login?next=${next}`);
 
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(E2E_PASSWORD);
+  await page
+    .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
+    .fill(E2E_PASSWORD);
   await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
 
   await page.waitForURL(`/rides/${rideId}`);
@@ -173,7 +182,9 @@ test('a guest sent to sign in from a cabinet page returns to it', async ({
   );
 
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(account.email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(account.password);
+  await page
+    .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
+    .fill(account.password);
   await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
   await expect(page).toHaveURL('/me/rides?tab=history');
 });

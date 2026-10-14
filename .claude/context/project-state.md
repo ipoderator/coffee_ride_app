@@ -25,7 +25,14 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
+CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»), on
+`feat/cr-264-login-screen` (PR into `main`): same frame as `/register`
+(`LoginScreen`), Google then Yandex ID («Войти с Яндекс ID»), «или через email»,
+«Забыли пароль?» on the password line (`ui` `FormField.labelAction`), show/hide. No auth
+logic change; Yandex/social-only password login/forged code/prod cookie flags pinned
+by new API tests.
+
+Before it: CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
 (`reference/coffee-ride-auth-mockup`, tab «Регистрация»); **deployed** 2026-10-14
 (`c53271b`, PR #64):
 
@@ -61,9 +68,10 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-262/CR-263 — deployed (see "Current task"). Next from the same mockup: `/login` and
-the maintenance screen (owner's prompts 2–3). KI-103: local web unit runs need the
-reCAPTCHA site key exported empty.
+CR-264 — PR into `main` from `feat/cr-264-login-screen`; no env var or migration.
+CR-262/CR-263 — deployed (see "Current task"). Next from the same mockup: the
+maintenance screen (owner's prompt 3). KI-103: local web unit runs need the reCAPTCHA
+site key exported empty.
 
 CR-260/CR-261 — deployed (`146ff5d`); Yandex and reCAPTCHA keys are in the VPS `.env`
 (each listed twice, same values). Still open: the reCAPTCHA secret confirmed by a real
@@ -175,4 +183,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-262/CR-263 deploy)
+2026-10-14 (CR-264)

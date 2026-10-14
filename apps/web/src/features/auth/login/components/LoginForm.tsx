@@ -3,12 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
-import {
-  DEFAULT_AFTER_LOGIN,
-  registerHref,
-  safeNextPath,
-} from '@/lib/auth/next-path';
+import { AUTH_TERMS, Button, FormField, Input, PasswordInput } from 'ui';
+import { DEFAULT_AFTER_LOGIN, safeNextPath } from '@/lib/auth/next-path';
 import { useSession } from '@/lib/auth/session-context';
 import { ApiError, login, loginRequestSchema } from '../api';
 import {
@@ -36,6 +32,10 @@ interface FieldErrors {
  *
  * CR-261 (ADR-038): the reCAPTCHA tick when a site key is configured. A CAPTCHA
  * refusal is checked before the credentials, so it reads the same for any account.
+ *
+ * CR-264: laid out for the auth mockup's «Вход» — no card around the form,
+ * «Забыли пароль?» on the «Пароль» line, a show/hide toggle on the password; the
+ * page renders the «Нет аккаунта?» line and the consent text.
  */
 export function LoginForm({
   next = null,
@@ -115,69 +115,63 @@ export function LoginForm({
   }
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <FormField
-          id="login-email"
-          label={AUTH_TERMS.emailLabel}
-          error={fieldErrors.email}
-        >
-          <Input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={isPending}
-          />
-        </FormField>
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <FormField
+        id="login-email"
+        label={AUTH_TERMS.emailLabel}
+        error={fieldErrors.email}
+      >
+        <Input
+          type="email"
+          autoComplete="email"
+          placeholder={AUTH_TERMS.emailPlaceholder}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          disabled={isPending}
+        />
+      </FormField>
 
-        <FormField
-          id="login-password"
-          label={AUTH_TERMS.passwordLabel}
-          error={fieldErrors.password}
-        >
-          <Input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={isPending}
-          />
-        </FormField>
-
-        {captcha.siteKey && (
-          <RecaptchaField
-            id="login-captcha"
-            siteKey={captcha.siteKey}
-            {...captcha.fieldProps}
-          />
-        )}
-
-        {formError && (
-          <p role="alert" className="text-body-sm text-danger">
-            {formError}
-          </p>
-        )}
-
-        <Button type="submit" isLoading={isPending}>
-          {isPending ? AUTH_TERMS.loginSubmitPending : AUTH_TERMS.loginSubmit}
-        </Button>
-
-        <div className="flex flex-col items-start text-body-sm">
+      <FormField
+        id="login-password"
+        label={AUTH_TERMS.passwordLabel}
+        error={fieldErrors.password}
+        labelAction={
           <Link
             href="/forgot-password"
-            className="inline-flex min-h-11 items-center text-primary hover:underline"
+            // A 44px target that doesn't push the field down: the negative margin
+            // gives the label line back its own height.
+            className="-my-3 inline-flex min-h-11 items-center text-body-sm font-medium text-primary hover:underline"
           >
             {AUTH_TERMS.forgotPasswordLink}
           </Link>
-          <Link
-            href={registerHref(next)}
-            className="inline-flex min-h-11 items-center text-primary hover:underline"
-          >
-            {AUTH_TERMS.registerLink}
-          </Link>
-        </div>
-      </form>
-    </Card>
+        }
+      >
+        <PasswordInput
+          autoComplete="current-password"
+          placeholder={AUTH_TERMS.passwordPlaceholder}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          disabled={isPending}
+        />
+      </FormField>
+
+      {captcha.siteKey && (
+        <RecaptchaField
+          id="login-captcha"
+          siteKey={captcha.siteKey}
+          {...captcha.fieldProps}
+        />
+      )}
+
+      {formError && (
+        <p role="alert" className="text-body-sm text-danger">
+          {formError}
+        </p>
+      )}
+
+      <Button type="submit" isLoading={isPending} className="w-full">
+        {isPending ? AUTH_TERMS.loginSubmitPending : AUTH_TERMS.loginSubmit}
+      </Button>
+    </form>
   );
 }

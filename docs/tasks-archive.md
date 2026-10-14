@@ -1580,3 +1580,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-249 Google sign-in claims an unverified account with the same email
       (ADR-035): verified, password/sessions/pending links voided, then linked —
       done 2026-10-13. See docs/changelog.md
+- [x] CR-251 (security) Redis command args (a queued job's email + one-time link)
+      redacted from every API log line — done 2026-10-14 on
+      `fix/redact-redis-command-args`. See docs/changelog.md

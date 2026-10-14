@@ -2,12 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GOOGLE_SIGN_IN_OUTCOMES, YANDEX_SIGN_IN_OUTCOMES } from 'types';
-import {
-  GOOGLE_SIGN_IN_TERMS,
-  LEGAL_TERMS,
-  OAUTH_SIGN_IN_TERMS,
-  YANDEX_SIGN_IN_TERMS,
-} from 'ui';
+import { GOOGLE_SIGN_IN_TERMS, LEGAL_TERMS, YANDEX_SIGN_IN_TERMS } from 'ui';
 import { OAuthOutcomeAlert } from './components/OAuthOutcomeAlert';
 import { OAuthSignIn } from './components/OAuthSignIn';
 import { oauthSignInHref, parseOAuthOutcome } from './api';
@@ -112,7 +107,7 @@ describe('isSignInProviderAvailable / signInProviders', () => {
 });
 
 describe('OAuthSignIn', () => {
-  it('links both providers to the API start with next, and the consent line to the documents', () => {
+  it('links both providers to the API start with next, Google first', () => {
     render(
       <OAuthSignIn
         next="/rides/abc"
@@ -126,19 +121,32 @@ describe('OAuthSignIn', () => {
     expect(
       screen.getByRole('link', { name: GOOGLE_SIGN_IN_TERMS.button }),
     ).toHaveAttribute('href', '/api/v1/auth/google?next=%2Frides%2Fabc');
-    expect(
-      screen.getByRole('link', { name: OAUTH_SIGN_IN_TERMS.consentTerms }),
-    ).toHaveAttribute('href', '/terms');
-    expect(
-      screen.getByRole('link', { name: OAUTH_SIGN_IN_TERMS.consentPrivacy }),
-    ).toHaveAttribute('href', '/privacy');
+    // CR-264: the mockup's order; the page owns the divider and consent line.
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual(
+      [GOOGLE_SIGN_IN_TERMS.button, YANDEX_SIGN_IN_TERMS.button],
+    );
+  });
+
+  it('words the buttons for /register with «Продолжить с …»', () => {
+    render(
+      <OAuthSignIn
+        providers={{ google: true, yandex: true }}
+        intent="register"
+      />,
+    );
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual(
+      [
+        GOOGLE_SIGN_IN_TERMS.continueButton,
+        YANDEX_SIGN_IN_TERMS.continueButton,
+      ],
+    );
   });
 
   it('shows only the configured providers, and nothing without any', () => {
     const { rerender, container } = render(
       <OAuthSignIn providers={{ google: false, yandex: true }} />,
     );
-    expect(screen.getAllByRole('link')).toHaveLength(3);
+    expect(screen.getAllByRole('link')).toHaveLength(1);
     expect(
       screen.queryByRole('link', { name: GOOGLE_SIGN_IN_TERMS.button }),
     ).toBeNull();
