@@ -8,6 +8,7 @@ import {
   Card,
   FormField,
   Input,
+  PasswordInput,
   VALIDATION_TERMS,
 } from 'ui';
 import { loginHref, safeNextPath, verifyEmailHref } from '@/lib/auth/next-path';
@@ -18,6 +19,8 @@ import {
 } from '@/lib/forms/field-errors';
 import { RecaptchaField } from '../../captcha/components/RecaptchaField';
 import { RECAPTCHA_SITE_KEY, useCaptcha } from '../../captcha/use-captcha';
+import { PasswordMatch } from '../../password/components/PasswordMatch';
+import { PasswordStrengthMeter } from '../../password/components/PasswordStrengthMeter';
 
 interface FieldErrors {
   email?: string;
@@ -54,9 +57,16 @@ function toVerifyEmailWebPath(
  * ride that sent the visitor here) is only handed on to `/login` — directly,
  * and through `/verify-email` (CR-197).
  *
- * CR-261: «Повторите пароль» is checked here, before sending, and never leaves the
- * browser — the API gets `password` only. The reCAPTCHA tick (ADR-038) is asked for
- * when a site key is configured; `captchaSiteKey` exists for stories and tests.
+ * CR-261: «Повторите пароль» is checked here before sending. CR-262 (ADR-039): it is
+ * sent as `confirmPassword` too, and the API refuses a mismatch with the same rule.
+ * The reCAPTCHA tick (ADR-038) is asked for when a site key is configured;
+ * `captchaSiteKey` exists for stories and tests.
+ *
+ * CR-262: the success card is the same whether the email was new or already had
+ * an account — the API no longer says which (ADR-039), and neither does this.
+ * Laid out for the auth mockup: no card around the form, a strength meter under
+ * «Пароль» and a live match line under «Повторите пароль»; the page renders the
+ * «Уже есть аккаунт?» line and the consent text.
  */
 export function RegisterForm({
   next = null,
@@ -70,21 +80,26 @@ export function RegisterForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [verificationUrl, setVerificationUrl] = useState<string | undefined>();
-  const [emailVerified, setEmailVerified] = useState(false);
-  const [succeeded, setSucceeded] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(true);
+  // The address the success card names — the one actually sent.
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
-  if (succeeded) {
+  if (submittedEmail !== null) {
     const verifyEmailPath = verificationUrl
       ? toVerifyEmailWebPath(verificationUrl, next)
       : null;
 
     return (
       <Card role="status" aria-live="polite">
-        <h2 className="text-h2 text-text">{AUTH_TERMS.registerSuccessTitle}</h2>
+        <h2 className="text-h2 text-text">
+          {verificationRequired
+            ? AUTH_TERMS.registerSuccessTitle
+            : AUTH_TERMS.registerSuccessTitleVerified}
+        </h2>
         <p className="mt-2 text-text-secondary">
-          {emailVerified
-            ? AUTH_TERMS.registerSuccessBodyVerified
-            : AUTH_TERMS.registerSuccessBody}
+          {verificationRequired
+            ? AUTH_TERMS.registerSuccessBody(submittedEmail)
+            : AUTH_TERMS.registerSuccessBodyVerified}
         </p>
         {verifyEmailPath && (
           <p className="mt-4 rounded-lg border border-border bg-surface p-3 text-body-sm text-text-secondary">
@@ -148,30 +163,28 @@ export function RegisterForm({
     try {
       // CR-244 (KI-089): the API appends `next` to the emailed link too.
       const safeNext = safeNextPath(next);
-      // Only the schema's fields — never `confirmPassword`.
+      // CR-262 (ADR-039): `confirmPassword` goes too — the API checks it again.
       const response = await registerAccount({
         ...parsed.data,
+        confirmPassword,
         ...(safeNext ? { next: safeNext } : {}),
         ...captcha.payload(),
       });
       setVerificationUrl(response.verificationUrl);
-      setEmailVerified(response.user.emailVerified);
-      setSucceeded(true);
+      setVerificationRequired(response.emailVerificationRequired);
+      setSubmittedEmail(parsed.data.email);
     } catch (error) {
       const code = error instanceof ApiError ? error.problem.code : undefined;
       if (captcha.afterFailure(code)) {
         // The CAPTCHA field shows the API's refusal.
       } else if (error instanceof ApiError) {
-        if (error.problem.code === 'email_already_registered') {
-          setFieldErrors({ email: AUTH_TERMS.emailAlreadyRegistered });
-        } else if (
-          error.problem.code === 'validation_error' &&
-          error.problem.errors
-        ) {
+        if (error.problem.code === 'validation_error' && error.problem.errors) {
           const nextErrors: FieldErrors = {};
           for (const issue of error.problem.errors) {
             if (issue.path === 'email' || issue.path === 'password') {
               nextErrors[issue.path] ??= serverFieldErrorMessage();
+            } else if (issue.path === 'confirmPassword') {
+              nextErrors.confirmPassword ??= AUTH_TERMS.passwordsMismatch;
             }
           }
           setFieldErrors(nextErrors);
@@ -187,78 +200,79 @@ export function RegisterForm({
   }
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <FormField
-          id="register-email"
-          label={AUTH_TERMS.emailLabel}
-          error={fieldErrors.email}
-        >
-          <Input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={isPending}
-          />
-        </FormField>
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <FormField
+        id="register-email"
+        label={AUTH_TERMS.emailLabel}
+        error={fieldErrors.email}
+      >
+        <Input
+          type="email"
+          autoComplete="email"
+          placeholder={AUTH_TERMS.emailPlaceholder}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          disabled={isPending}
+        />
+      </FormField>
 
+      <div className="flex flex-col gap-2">
         <FormField
           id="register-password"
           label={AUTH_TERMS.passwordLabel}
           hint={AUTH_TERMS.passwordHint}
           error={fieldErrors.password}
         >
-          <Input
-            type="password"
+          <PasswordInput
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             disabled={isPending}
           />
         </FormField>
+        <PasswordStrengthMeter password={password} />
+      </div>
 
+      <div className="flex flex-col gap-2">
         <FormField
           id="register-confirm-password"
           label={AUTH_TERMS.confirmPasswordLabel}
           error={fieldErrors.confirmPassword}
         >
-          <Input
-            type="password"
+          <PasswordInput
             autoComplete="new-password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             disabled={isPending}
           />
         </FormField>
-
-        {captcha.siteKey && (
-          <RecaptchaField
-            id="register-captcha"
-            siteKey={captcha.siteKey}
-            {...captcha.fieldProps}
+        {!fieldErrors.confirmPassword && (
+          <PasswordMatch
+            password={password}
+            confirmPassword={confirmPassword}
           />
         )}
+      </div>
 
-        {formError && (
-          <p role="alert" className="text-body-sm text-danger">
-            {formError}
-          </p>
-        )}
+      {captcha.siteKey && (
+        <RecaptchaField
+          id="register-captcha"
+          siteKey={captcha.siteKey}
+          {...captcha.fieldProps}
+        />
+      )}
 
-        <Button type="submit" isLoading={isPending}>
-          {isPending
-            ? AUTH_TERMS.registerSubmitPending
-            : AUTH_TERMS.registerSubmit}
-        </Button>
+      {formError && (
+        <p role="alert" className="text-body-sm text-danger">
+          {formError}
+        </p>
+      )}
 
-        <Link
-          href={loginHref(next)}
-          className="inline-flex min-h-11 items-center text-body-sm text-primary hover:underline"
-        >
-          {AUTH_TERMS.loginLink}
-        </Link>
-      </form>
-    </Card>
+      <Button type="submit" isLoading={isPending} className="w-full">
+        {isPending
+          ? AUTH_TERMS.registerSubmitPending
+          : AUTH_TERMS.registerSubmit}
+      </Button>
+    </form>
   );
 }

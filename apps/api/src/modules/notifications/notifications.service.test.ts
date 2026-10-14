@@ -5,6 +5,8 @@ import {
   NotificationQueueUnavailableError,
   createRegistrationConfirmedNotification,
   notifyRideCancelled,
+  processNotificationJob,
+  sendAccountExistsEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   type NotificationQueue,
@@ -189,5 +191,71 @@ describe('notification producers while the queue is down (KI-071)', () => {
       'https://example.com/reset-password?token=t',
     );
     await vi.waitFor(() => expect(log.error).toHaveBeenCalledTimes(1));
+  });
+});
+
+// CR-262 (ADR-039): `/register` with a taken email notifies the owner instead.
+describe('account-exists email', () => {
+  it('is sent directly while the queue is down, like the verification email', async () => {
+    const provider = emailProvider();
+
+    await sendAccountExistsEmail(
+      logger(),
+      rejectingQueue(unavailable()),
+      provider,
+      'rider@example.com',
+      'https://example.com/login?next=%2Fme',
+      'https://example.com/forgot-password',
+    );
+
+    expect(provider.send).toHaveBeenCalledTimes(1);
+    const message = provider.send.mock.calls[0]![0];
+    expect(message.to).toBe('rider@example.com');
+    expect(message.subject).toBe('Аккаунт уже есть — Coffee Ride');
+    expect(message.text).toContain('https://example.com/login?next=%2Fme');
+    expect(message.text).toContain('https://example.com/forgot-password');
+  });
+
+  it('is what the worker sends for an account_exists_email job', async () => {
+    const provider = emailProvider();
+
+    await processNotificationJob(
+      {} as DbClient,
+      provider,
+      'account_exists_email',
+      {
+        email: 'rider@example.com',
+        loginUrl: 'https://example.com/login',
+        forgotPasswordUrl: 'https://example.com/forgot-password',
+      },
+    );
+
+    expect(provider.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'rider@example.com',
+        subject: 'Аккаунт уже есть — Coffee Ride',
+      }),
+    );
+  });
+
+  it('logs a failed send without the address and never throws', async () => {
+    const log = logger();
+    const provider = {
+      send: vi.fn<EmailProvider['send']>().mockRejectedValue(new Error('down')),
+    };
+
+    await sendAccountExistsEmail(
+      log,
+      null,
+      provider,
+      'rider@example.com',
+      'https://example.com/login',
+      'https://example.com/forgot-password',
+    );
+
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(log.error.mock.calls)).not.toContain(
+      'rider@example.com',
+    );
   });
 });

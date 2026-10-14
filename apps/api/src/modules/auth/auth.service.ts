@@ -70,13 +70,22 @@ export function toPublicUser(row: typeof users.$inferSelect): User {
 // is no `:id` for a "me"-scoped resource.
 const USER_AVATAR_URL_PATH = '/v1/users/me/avatar';
 
-export interface RegisterResult {
-  user: User;
-  // Raw token, never persisted — the route layer decides whether/how to expose
-  // it (dev-only response field, per this ticket's scope boundaries). `null`
-  // when the account was created already verified (CR-220).
-  verificationToken: string | null;
-}
+export type RegisterResult =
+  | {
+      created: true;
+      user: User;
+      // Raw token, never persisted — the route layer decides whether/how to
+      // expose it (dev-only response field, per this ticket's scope
+      // boundaries). `null` when the account was created already verified
+      // (CR-220).
+      verificationToken: string | null;
+    }
+  | {
+      // CR-262 (ADR-039): the email already has an account. Not an error — the
+      // route answers exactly as for a new account and emails the owner instead.
+      created: false;
+      existingUserId: string;
+    };
 
 /**
  * Creates a user + its first email-verification token in one transaction
@@ -84,6 +93,10 @@ export interface RegisterResult {
  * endpoint protects; there is no capacity/concurrency race here the way
  * registration-for-a-ride has, so a single uniqueness check + the table's own
  * unique index (belt and suspenders against a race between the two) is enough.
+ *
+ * CR-262 (ADR-039): a taken email is reported as `created: false`, never thrown,
+ * after the same Argon2 work a new account costs — `/register` must not reveal
+ * which emails have accounts, by status, body or timing.
  */
 export async function registerUser(
   db: DbClient,
@@ -95,21 +108,24 @@ export async function registerUser(
 ): Promise<RegisterResult> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  const existing = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, normalizedEmail))
-    .limit(1);
-  if (existing.length > 0) {
-    throw new AuthServiceError(
-      'email_already_registered',
-      409,
-      'Email already registered',
-      'An account with this email already exists.',
-    );
+  const findExisting = async () => {
+    const [row] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+    return row;
+  };
+
+  // Hashed before the lookup, so a taken email costs the same Argon2 work as a
+  // new one (the hash is simply discarded then).
+  const passwordHash = await hashPassword(password);
+
+  const existing = await findExisting();
+  if (existing) {
+    return { created: false, existingUserId: existing.id };
   }
 
-  const passwordHash = await hashPassword(password);
   const rawToken = skipEmailVerification ? null : generateVerificationToken();
 
   try {
@@ -137,20 +153,18 @@ export async function registerUser(
       return inserted;
     });
 
-    return { user: toPublicUser(user), verificationToken: rawToken };
+    return {
+      created: true,
+      user: toPublicUser(user),
+      verificationToken: rawToken,
+    };
   } catch (error) {
     // Race: two concurrent registrations for the same email both pass the
     // pre-check above. The table's unique index (`users_email_unique`) is the
-    // real guard; surface it as the same domain error rather than a raw
-    // constraint-violation message (`.claude/rules/backend.md`: never leak
-    // driver internals).
+    // real guard; the loser is answered like any other taken email.
     if (isUniqueViolation(error)) {
-      throw new AuthServiceError(
-        'email_already_registered',
-        409,
-        'Email already registered',
-        'An account with this email already exists.',
-      );
+      const winner = await findExisting();
+      if (winner) return { created: false, existingUserId: winner.id };
     }
     throw error;
   }
@@ -254,8 +268,8 @@ export interface ResendEmailVerificationResult {
  * CR-168: issues a replacement email-verification token for an
  * already-authenticated user (KI-026's remaining code-side half — before this,
  * `registerUser` issued the only token a user would ever get, so an expired or
- * undelivered first email left the account permanently unverifiable, with
- * `/register` answering 409 for the taken email).
+ * undelivered first email left the account permanently unverifiable, and
+ * `/register` refused the taken email — since CR-262 it emails the owner instead).
  *
  * `userId` comes from the verified session, never a request body
  * (`.claude/rules/security.md`) — which is also why this can report honestly
@@ -511,12 +525,16 @@ const DUMMY_PASSWORD_HASH =
 
 function isUniqueViolation(error: unknown): boolean {
   // postgres-js / node-postgres both surface Postgres's unique_violation as
-  // error code 23505 on the thrown error object.
+  // error code 23505 on the thrown error object. CR-262: drizzle-orm 0.45 wraps a
+  // failed query in `DrizzleQueryError`, the driver's error in its `cause` — so the
+  // race below was never recognized and answered 500.
+  const hasCode = (value: unknown) =>
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { code?: unknown }).code === '23505';
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === '23505'
+    hasCode(error) ||
+    (error instanceof Error && hasCode((error as { cause?: unknown }).cause))
   );
 }
 

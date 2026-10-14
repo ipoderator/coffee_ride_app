@@ -198,31 +198,35 @@ export const UI_TERMS = {
 
 /**
  * Register screen copy (CR-011, `.claude/rules/frontend.md`: no hard-coded
- * user-visible Russian string in a component). `emailAlreadyRegistered` maps
- * the API's `email_already_registered` domain code (`docs/api.md`) to a
- * field-level message; other server errors fall back to `genericError`.
+ * user-visible Russian string in a component). Server errors fall back to
+ * `genericError`. CR-262 (ADR-039): there is no «email already registered» message
+ * any more — the API answers a taken email like a new one, so the success copy
+ * covers both.
  */
 export const AUTH_TERMS = {
   emailLabel: 'Email',
+  emailPlaceholder: 'you@example.ru',
   passwordLabel: 'Пароль',
-  passwordHint: 'Минимум 12 символов.',
+  // CR-262: the auth mockup's wording of the same 12+ policy.
+  passwordHint: 'Не менее 12 символов. Длинная фраза лучше сложной комбинации.',
   // CR-261: the register form's second password field, checked before sending.
   confirmPasswordLabel: 'Повторите пароль',
   passwordsMismatch: 'Пароли не совпадают.',
   registerSubmit: 'Зарегистрироваться',
   registerSubmitPending: 'Регистрация…',
-  registerSuccessTitle: 'Аккаунт создан',
-  registerSuccessBody:
-    'Проверьте почту, чтобы подтвердить адрес и активировать аккаунт.',
-  // CR-220: the API created the account already verified (test deploy).
+  // CR-262 (ADR-039): true whether the email was new or already had an account.
+  registerSuccessTitle: 'Проверьте почту',
+  registerSuccessBody: (email: string) =>
+    `Мы отправили письмо на ${email}. Перейдите по ссылке из него, чтобы подтвердить адрес. Если аккаунт с этим адресом уже есть, в письме будет ссылка для входа.`,
+  // CR-220: the deployment creates accounts already verified (test deploy).
+  registerSuccessTitleVerified: 'Готово',
   registerSuccessBodyVerified:
-    'Подтверждать почту не нужно — можно сразу войти.',
+    'Подтверждать почту не нужно — можно сразу войти. Если аккаунт с этим адресом уже был, мы отправили на почту ссылку для входа.',
   registerSuccessDevNote:
     'Только для этого окружения — ссылка для подтверждения:',
   // CR-141: the success card's own way on — signing in right away works
   // before the email is confirmed, and keeps any `?next=` return target.
   registerSuccessLoginLink: 'Войти',
-  emailAlreadyRegistered: 'Аккаунт с таким email уже существует.',
   genericError: 'Не удалось выполнить запрос. Попробуйте ещё раз.',
   loginTitle: 'Вход',
   loginSubmit: 'Войти',
@@ -230,9 +234,40 @@ export const AUTH_TERMS = {
   invalidCredentials: 'Неверный email или пароль.',
   // CR-230 (ADR-032): only after the password verified (`403 account_blocked`).
   accountBlocked: 'Аккаунт заблокирован администратором.',
-  loginLink: 'Уже есть аккаунт? Войти',
   registerLink: 'Нет аккаунта? Зарегистрироваться',
   forgotPasswordLink: 'Забыли пароль?',
+} as const;
+
+// CR-262: `/register` laid out like the auth mockup — a story panel beside the
+// form on wide screens, social sign-in first, then the email form.
+export const REGISTER_PAGE_TERMS = {
+  title: 'Регистрация',
+  lead: 'Быстрее всего — через знакомый аккаунт.',
+  // No Google/Yandex configured: the email form is the only way.
+  leadEmailOnly: 'Создайте аккаунт по email и паролю.',
+  divider: 'или создайте пароль',
+  storyTitle: 'От первого клика — до общего старта.',
+  storyBody:
+    'Создайте профиль один раз, выбирайте заезды на карте и записывайтесь в подходящую группу.',
+  switchPrompt: 'Уже есть аккаунт?',
+  switchLink: 'Войти',
+  consentPrefix: 'Создавая аккаунт, вы принимаете ',
+} as const;
+
+// CR-262: the register form's password fields — the show/hide toggle, the strength
+// meter (four steps, named in words, never by colour alone) and the live match line.
+export const PASSWORD_TERMS = {
+  show: 'Показать пароль',
+  hide: 'Скрыть пароль',
+  strengthLabel: 'Надёжность пароля',
+  strength: {
+    too_short: 'слишком короткий',
+    weak: 'слабый',
+    good: 'хороший',
+    strong: 'надёжный',
+  },
+  match: 'Пароли совпадают',
+  mismatch: 'Пароли не совпадают',
 } as const;
 
 // CR-261 (ADR-038): the reCAPTCHA v2 «Я не робот» check on register, password
@@ -270,6 +305,8 @@ export const OAUTH_SIGN_IN_TERMS = {
 export const GOOGLE_SIGN_IN_TERMS = {
   // Google's branding guidelines: «Sign in with Google» in the page's language.
   button: 'Войти через Google',
+  // CR-262: `/register`'s wording («Continue with Google»).
+  continueButton: 'Продолжить с Google',
   outcome: {
     cancelled: 'Вход через Google отменён.',
     expired:
@@ -291,6 +328,8 @@ export const GOOGLE_SIGN_IN_TERMS = {
 // `/login?oauth=<outcome>&provider=yandex` without a session.
 export const YANDEX_SIGN_IN_TERMS = {
   button: 'Войти через Яндекс',
+  // CR-262: `/register`'s wording, as Yandex ID names itself.
+  continueButton: 'Продолжить с Яндекс ID',
   outcome: {
     cancelled: 'Вход через Яндекс отменён.',
     expired:

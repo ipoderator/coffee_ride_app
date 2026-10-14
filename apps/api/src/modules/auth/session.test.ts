@@ -34,12 +34,13 @@ describe('session rolling expiry (ADR-013: extended at most once/day)', () => {
   });
 
   async function createTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
-    const { user } = await registerUser(
+    const result = await registerUser(
       app.db,
       `${randomUUID()}@example.test`,
       'a-strong-password-123',
     );
-    return user;
+    if (!result.created) throw new Error('fresh email was taken');
+    return result.user;
   }
 
   it('extends expiresAt/lastUsedAt when used again after the rolling threshold', async () => {

@@ -3,6 +3,7 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import {
   forgotPasswordRequestSchema,
+  loginHref,
   loginRequestSchema,
   registerRequestSchema,
   resetPasswordRequestSchema,
@@ -17,6 +18,7 @@ import {
 import { logAuthEvent } from '../../lib/auth-events.js';
 import { requireAuth } from '../../plugins/auth.js';
 import {
+  sendAccountExistsEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from '../notifications/notifications.service.js';
@@ -41,8 +43,10 @@ import { clearSessionCookie, setSessionCookie } from './session-cookie.js';
 // `toPublicUser`, against ever returning `passwordHash`
 // (`.claude/rules/security.md`). Shared with `modules/users` (CR-013) so
 // there's exactly one "user over the wire" shape, not two that can drift.
+// CR-262 (ADR-039): no `user` — the body is the same whether the email was new or
+// already had an account.
 const registerResponseSchema = z.object({
-  user: userResponseSchema,
+  emailVerificationRequired: z.boolean(),
   verificationUrl: z.string().optional(),
 });
 
@@ -192,15 +196,43 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
       ],
     },
     async (request, reply) => {
-      const { user, verificationToken } = await registerUser(
+      const result = await registerUser(
         app.db,
         request.body.email,
         request.body.password,
         { skipEmailVerification: env.AUTH_SKIP_EMAIL_VERIFICATION },
       );
+
+      // CR-262 (ADR-039): the same status and body either way. `verificationUrl`
+      // below is dev-only and is the one difference, never sent in production.
+      const body: {
+        emailVerificationRequired: boolean;
+        verificationUrl?: string;
+      } = { emailVerificationRequired: !env.AUTH_SKIP_EMAIL_VERIFICATION };
+
+      if (!result.created) {
+        logAuthEvent(
+          request.log,
+          'register_existing_email',
+          result.existingUserId,
+        );
+        // The owner of the address learns that someone tried, and how to get in;
+        // the caller learns nothing. Same delivery policy as the verification
+        // email, so the response time matches too.
+        await sendAccountExistsEmail(
+          app.log,
+          app.notificationQueue,
+          app.emailProvider,
+          request.body.email,
+          `${env.WEB_ORIGIN}${loginHref(request.body.next)}`,
+          `${env.WEB_ORIGIN}/forgot-password`,
+        );
+        return reply.status(201).send(body);
+      }
+
+      const { user, verificationToken } = result;
       logAuthEvent(request.log, 'register', user.id);
 
-      const body: { user: typeof user; verificationUrl?: string } = { user };
       // CR-220: the account is already verified — no link, no email.
       if (verificationToken === null) {
         return reply.status(201).send(body);

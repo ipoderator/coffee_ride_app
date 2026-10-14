@@ -418,6 +418,33 @@ Next action: code — make the scroll assertion independent of the test viewport
 the stories a fixed narrow viewport), find the AdminOverview cause; then decide whether
 CI should run the storybook project.
 
+### KI-101 — Unique-violation checks miss drizzle's wrapped `23505` outside auth
+
+Status: open. Discovered: 2026-10-14 (CR-262).
+Problem: drizzle-orm 0.45 throws `DrizzleQueryError` for a failed query, with the
+driver's error (code `23505`) in `cause`. `isUniqueViolation`-style checks that read
+only `error.code` never match: `reviews.service.ts:114`, `ride-groups.service.ts:107`,
+`organizers.service.ts:459`. CR-262 fixed the copy in `auth.service.ts` (the register
+race answered 500).
+Impact: medium-low — the losing side of a concurrent duplicate (review, group name,
+organizer profile) gets a 500 instead of its domain `409`; the database constraint
+still holds, no bad data.
+Workaround: none needed for data; the user retries and sees the normal conflict.
+Next action: code — one shared `isUniqueViolation` (e.g. `apps/api/src/lib/`) that
+also checks `cause`, used by all four modules, with a race test per module.
+
+### KI-102 — `EditRideForm` dismiss test flaky under coverage load
+
+Status: open. Discovered: 2026-10-14 (CR-262 validation).
+Problem: `rides.test.tsx` › «without a route saves before asking; dismissing keeps the
+saved draft» failed once in `pnpm test:coverage` (dialog still in the document after
+`waitFor`'s default 1 s); it passed in the plain run, in a second coverage run and 3/3
+alone. Unrelated to CR-262's files.
+Impact: low — a red CI run that a retry clears.
+Workaround: re-run the job.
+Next action: code — wait for the dialog's exit animation explicitly (or a longer
+`waitFor` timeout for this assertion).
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

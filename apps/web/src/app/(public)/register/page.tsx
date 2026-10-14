@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { OAUTH_SIGN_IN_TERMS, REGISTER_PAGE_TERMS } from 'ui';
+import { AuthSplitLayout } from '@/features/auth/layout/AuthSplitLayout';
 import { OAuthSignIn } from '@/features/auth/oauth/components/OAuthSignIn';
 import { signInProviders } from '@/features/auth/oauth/server-status';
 import { RegisterForm } from '@/features/auth/register/components/RegisterForm';
-import { safeNextPath } from '@/lib/auth/next-path';
+import { loginHref, safeNextPath } from '@/lib/auth/next-path';
 import { NO_INDEX } from '@/lib/site/site-meta';
 
 export const metadata: Metadata = {
@@ -14,6 +17,9 @@ export const metadata: Metadata = {
 // First real screen (CR-011). One `<h1>` per page (docs/design.md §12).
 // CR-141: `?next=` only passes through — registering doesn't sign in, so the
 // form hands it on to `/login`, which returns there after signing in.
+// CR-262: laid out like the auth mockup's «Регистрация» tab
+// (`reference/coffee-ride-auth-mockup`) — Google/Yandex ID first (a provider
+// sign-in creates the account on first use, CR-247/CR-260), then the email form.
 export default async function RegisterPage({
   searchParams,
 }: {
@@ -21,13 +27,58 @@ export default async function RegisterPage({
 }) {
   const next = safeNextPath((await searchParams).next);
   const providers = await signInProviders();
+  const hasProviders = Object.values(providers).some(Boolean);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
-      <h1 className="text-h1 text-text">Регистрация</h1>
-      <RegisterForm next={next} />
-      {/* CR-247, CR-260: a Google/Yandex sign-in creates the account on first use. */}
-      <OAuthSignIn next={next} providers={providers} />
-    </main>
+    <AuthSplitLayout
+      storyTitle={REGISTER_PAGE_TERMS.storyTitle}
+      storyBody={REGISTER_PAGE_TERMS.storyBody}
+    >
+      <h1 className="text-h1 text-text">{REGISTER_PAGE_TERMS.title}</h1>
+      <p className="mt-3 text-body text-text-secondary">
+        {hasProviders
+          ? REGISTER_PAGE_TERMS.lead
+          : REGISTER_PAGE_TERMS.leadEmailOnly}
+      </p>
+
+      <div className="mt-6 flex flex-col gap-5">
+        {hasProviders && (
+          <>
+            <OAuthSignIn next={next} providers={providers} intent="register" />
+            <div
+              className="flex items-center gap-3 text-body-sm text-text-secondary"
+              aria-hidden="true"
+            >
+              <span className="h-px flex-1 bg-border" />
+              {REGISTER_PAGE_TERMS.divider}
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          </>
+        )}
+
+        <RegisterForm next={next} />
+      </div>
+
+      <p className="mt-5 text-center text-body-sm text-text-secondary">
+        {REGISTER_PAGE_TERMS.switchPrompt}{' '}
+        <Link
+          href={loginHref(next)}
+          className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+        >
+          {REGISTER_PAGE_TERMS.switchLink}
+        </Link>
+      </p>
+      <p className="mt-2 text-center text-body-sm text-text-secondary">
+        {REGISTER_PAGE_TERMS.consentPrefix}
+        <Link href="/terms" className="text-primary hover:underline">
+          {OAUTH_SIGN_IN_TERMS.consentTerms}
+        </Link>
+        {OAUTH_SIGN_IN_TERMS.consentJoin}
+        <Link href="/privacy" className="text-primary hover:underline">
+          {OAUTH_SIGN_IN_TERMS.consentPrivacy}
+        </Link>
+        {OAUTH_SIGN_IN_TERMS.consentEnd}
+      </p>
+    </AuthSplitLayout>
   );
 }
