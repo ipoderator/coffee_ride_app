@@ -133,3 +133,12 @@ Follow-up: the maintenance screen (owner's prompt 3).
 ## 2026-10-14 — CR-264 deployed
 
 Deploy: `92ffe50` (PR #66, squash of `experiments`' `cbf5e95` rebased on `main` + `dbdac72`) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration, no env change. CI's coverage gate first failed on `packages/ui` (99.61/94.05 vs the raised 99.73/94.22): `offsetMinutes`' bare-`GMT` fallback is reached only on ICU < 78, where the cloud session measured it; `dbdac72` pins that fallback with a test (99.74/94.22 on any ICU, baseline unchanged). After: API `/health` db/redis/s3 ok; `/`, `/login`, `/register`, `/forgot-password` `200`; Chromium on `/login` and `/register`: new layout, reCAPTCHA renders, zero `securitypolicyviolation`; no level ≥50 API log lines in the first 10 minutes.
+
+## 2026-10-14 — CR-262 follow-up — the register race covered deterministically
+
+Summary: `main`'s CI after the docs-only #67 failed the coverage gate (`apps/api/src/modules/auth/` −1.08 pp lines): `registerUser`'s unique-violation branch (`findExisting` on 23505, `isUniqueViolation`'s `cause` check) ran only when the five-concurrent-registrations test happened to race. A new test holds the email in an open transaction, waits until the route's insert blocks on `users_email_unique` (`pg_stat_activity`), then commits — the branch runs every time.
+Contract: none.
+Files: api `modules/auth/auth.routes.test.ts`.
+Validation: the new test 3/3 alone, lines 165–167/531–535 covered; format, api lint/typecheck; `test:coverage` with live Redis/S3 — api 887, web 1011, ui 299; `coverage:check` holds.
+Decisions: test-only; the baseline stays.
+Follow-up: none.
