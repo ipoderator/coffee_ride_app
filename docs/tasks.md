@@ -19,6 +19,10 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-267 final check of the auth mockup work (CR-260..CR-265): the whole flow in
+      Chromium with fake Google/Yandex/siteverify, maintenance on/off, mockup comparison,
+      axe, leak scan; fixed the stale «Пароли не совпадают.» on `/register` — done
+      2026-10-14 on `experiments`. See docs/changelog.md
 - [x] CR-265 maintenance mode by env (`MAINTENANCE_MODE`, 503 + `Retry-After`, the
       «Техработы» screen), unexpected-error state, static 503 fallback at Caddy
       (ADR-040) — done 2026-10-14, committed on `feat/cr-265-maintenance-mode`. See docs/changelog.md
@@ -39,7 +43,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-259 (security, KI-097) page CSP by per-request nonce + `'strict-dynamic'`,
       no `'unsafe-inline'` for scripts; every page renders per request (ADR-036) —
       done 2026-10-14 on `feat/nonce-csp`. See docs/changelog.md
-- [x] CR-253..CR-258 (security, Lictor audit) verified email to join a ride, hidden
-      ride's reviews + no review `userId`, per-user upload tier, auth event log, logout
-      cookie `Secure` (KI-099), digest-pinned base images — done 2026-10-14 on
-      `fix/security-audit-findings`. See docs/changelog.md

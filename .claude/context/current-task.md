@@ -1,72 +1,59 @@
-# Current task — CR-265 — Maintenance mode and the unexpected-error state
+# Current task — CR-267 — Final check of the auth mockup work (CR-260..CR-265)
 
-Source: owner, 2026-10-14 (mockup package `reference/coffee-ride-auth-mockup/`, tab
-«Техработы», prompt 3 of `CLAUDE-CLOUD-PROMPTS.md`, brief item 7) — reference only,
-never edited. No subagents; commit and push to `experiments` when done (owner).
+Source: owner, 2026-10-14 (prompt 4 «Финальная проверка» of the mockup package
+`reference/coffee-ride-auth-mockup/` — reference only, never edited). No subagents;
+commit and push to `experiments` (owner). Fix only regressions of this work.
 
 ## Goal
 
-A planned-maintenance mode switched by env (no image swap), answering `503` +
-`Retry-After` with the mockup's «Технический пит-стоп» screen, while health checks,
-static assets and the provider callbacks keep working; a separate unexpected-error
-state; a static fallback page at the reverse proxy for when `web` itself is down.
+Prove the auth mockup work end to end against the three mockup tabs («Вход»,
+«Регистрация», «Техработы») and the brief, with OAuth/CAPTCHA mocked.
 
 ## Requirements
 
-- Screen per mockup (brand, h1, text, «Обновить страницу», «Написать нам», status
-  line) — no route line, points or illustration; existing tokens/components only.
-- `MAINTENANCE_MODE=true` (+ `MAINTENANCE_RETRY_AFTER_SECONDS`, default 600) on
-  `web` and `api`; `docker compose up -d web api` toggles it, no rebuild.
-- web: every document → 503 + `Retry-After` + `Cache-Control: no-store` +
-  `X-Robots-Tag: noindex`; RSC/prefetch requests → bare 503 (client falls back to a
-  full load). Not gated: `/_next/static`, `/_next/image`, `/favicon.ico`,
-  `/icon.svg`, `/robots.txt`, `/api/*` (the API decides).
-- api: `/v1/*` → 503 problem+json `maintenance` + `Retry-After`; not gated: `/health`,
-  `/docs`, the Google/Yandex/Strava callbacks.
-- Unexpected error: `app/error.tsx` + `app/global-error.tsx`, same frame, no
-  `error.message`/digest/stack shown.
-- Caddy: `handle_errors 502 503 504` → `deploy/maintenance/index.html` (self-contained,
-  no Next/API/DB), 503 + `Retry-After`.
-- Keyboard: real `<button>`/`<a>`, visible focus; mobile 320–390 without overflow.
+- Flow: register → confirm password → reCAPTCHA → email verification → password login
+  → Google → Yandex → safe-next → logout → maintenance → recovery.
+- Also: concurrent OAuth callbacks and identity linking; Google/Yandex-only accounts;
+  generic auth errors; state/PKCE/nonce/cookie flags; 503/Retry-After/healthcheck;
+  desktop/mobile vs the mockup; accessibility; console errors and data leaks.
+- Full test suite, lint, typecheck, production build.
 
 ## Acceptance
 
-- [x] on/off via env, 503 + Retry-After + no-store + noindex (web and api) — tests
-- [x] `/health`, static assets, callbacks reachable in maintenance — tests
-- [x] refresh reloads, mailto link, keyboard order — tests + Chromium
-- [x] no stack/secret/internal text in maintenance or error responses — tests
-- [x] desktop/mobile screenshots, no overflow
-- [x] Caddyfile validated (`caddy validate`), fallback served with 503 when web is down
-- [x] tests, lint, typecheck, build green
+- [x] every flow step passes in Chromium against the real API with fake providers
+- [x] each extra check has evidence (test name or browser/HTTP output)
+- [x] screenshots 1440/768/390/320 compared with the mockup tabs
+- [x] axe (WCAG 2.1 AA) on login/register/maintenance/error: no violations
+- [x] no console errors; no stack/secret/token/email in responses or logs checked
+- [x] format, lint, lint:root, typecheck, build, test:coverage, Storybook, e2e green
+      (or pre-existing failures named)
 
 ## Progress
 
-- Done: api `plugins/maintenance.ts` + env; web proxy/layout/`/maintenance`/error
-  states/`SystemStatusScreen`; ui `SYSTEM_STATUS_TERMS`; Caddy fallback + compose +
-  env examples; runbook `deploy/MAINTENANCE.md`; ADR-040; docs.
+- `experiments` merged with `main` (CR-262..CR-265 had landed via PRs #64..#69); the
+  next free id was CR-267 (CR-266 = open PR #70, CI split).
+- Harness (scratchpad, never committed): `next start` built with a fake site key + the
+  real API with fake Google/Yandex/siteverify (`harness/mock-api.mts`), rate limits
+  raised (all traffic from 127.0.0.1); `flow.mjs` 75/75, `maint.mjs` 37/37.
 
 ## Validation
 
-- format:check (only untracked `reference/`), lint, lint:root, typecheck, build 7/7.
-- test:coverage (live Redis/S3): api 916, web 1062, ui 300, db 17, resilience 15,
-  maps-2gis 82 (+6); coverage:check holds, baseline raised. (A first api run failed
-  `queue.live.test` because a dev API's BullMQ worker shared the Redis queue — rerun
-  without it: green.)
-- Storybook 326/331 — the 5 failures are KI-100, identical on clean HEAD; new stories 4/4.
-- e2e critical-journeys, login-return, password-reset, themes: 13/13.
-- `caddy validate` + `fmt`; local Caddy: web down → static 503 + Retry-After 60, web's
-  503 passes through.
-- Chromium (dev and `next start` built without the flag): 503 + Retry-After + no-store +
-  noindex, robots/icon/static 200, 1440/768/390/320 both themes no overflow, Tab order,
-  Enter reloads, mailto, no leaks or console errors; flag on with an open tab → client
-  nav gets the screen; flag off → refresh 200.
+- format:check (only the untracked mockup), lint (0 errors, warnings 8/29), lint:root,
+  typecheck, build 7/7.
+- test:coverage (live Redis/S3): api 917, web 1063, ui 301, db 17, resilience 15,
+  maps-2gis 82 (+6 opt-in); coverage:check holds; first run hit KI-102 once.
+- Storybook auth/status 44/44 with axe; full 326/331 (KI-100).
+- e2e 63/69: the 6 failures are `visual-regression` screenshots (anti-aliasing only, local vs CI baselines), not auth.
 
 ## Discovered issues
 
-- The real error boundary is not reachable on a live route on demand (the app degrades
-  gracefully when the API is down) — covered by unit tests and Storybook.
-- `/favicon.ico` 404 (no such file; pre-existing, not gated).
+- Fixed: `/register` kept «Пароли не совпадают.» (submit-time) after the passwords were
+  made equal — hidden live «Пароли совпадают» until the next submit.
+- Not changed (owner decision): provider buttons are app-drawn outlined buttons, the
+  brief asks for GIS/Yandex-constructor rendering (white in the mockup).
+- Harness-only: the global per-IP limit hides the social buttons once exceeded (status
+  calls 429) — graceful; production sees real client IPs.
 
 ## Final result
 
-Implemented and validated; committed on `experiments`, cherry-picked onto `main` as `feat/cr-265-maintenance-mode` (PR).
+Done — the auth mockup work holds end to end; one UX regression fixed.

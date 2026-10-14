@@ -74,10 +74,10 @@
     },
     "apps/web": {
       "total": {
-        "lines": 85.29,
-        "statements": 83.69,
-        "functions": 83.34,
-        "branches": 82.78
+        "lines": 85.3,
+        "statements": 83.7,
+        "functions": 83.36,
+        "branches": 82.79
       }
     },
     "packages/ui": {

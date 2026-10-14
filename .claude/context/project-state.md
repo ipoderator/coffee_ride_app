@@ -25,8 +25,14 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
-«Техработы», ADR-040), committed on `feat/cr-265-maintenance-mode` (PR pending):
+CR-267 (owner, 2026-10-14) — final check of the auth mockup work (CR-260..CR-265, prompt
+4), on `experiments` (main merged in): the whole flow in Chromium against `next start` +
+the real API with fake Google/Yandex/siteverify (75/75), maintenance on → off with a
+signed-in tab (37/37), mockup tabs compared at 1440/390, axe, leak scan of the API log.
+One fix: `/register` dropped the stale «Пароли не совпадают.» once a field changes.
+
+Before it: CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
+«Техработы», ADR-040), merged (`7d22fa2`, PR #69), not yet deployed:
 `MAINTENANCE_MODE=true` on `web`/`api` → pages 503 + `Retry-After` with «Технический
 пит-стоп», `/v1/*` 503 `maintenance` (`/health` and provider callbacks up);
 `app/error.tsx`/`global-error.tsx` in the same frame; Caddy serves
@@ -72,11 +78,13 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-265 — committed on `feat/cr-265-maintenance-mode` (PR pending); new env
+CR-267 — on `experiments`, no PR yet (web-only fix + tests; no env, no migration).
+
+CR-265 — merged (`7d22fa2`, PR #69), deploy pending; new env
 `MAINTENANCE_MODE`/`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On
 deploy Caddy is recreated once (new read-only mount `deploy/maintenance`); first
-production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. Next
-from the same mockup: the final check (owner's prompt 4). KI-103: local web unit runs
+production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. The
+mockup's final check is CR-267. KI-103: local web unit runs
 need the reCAPTCHA site key exported empty.
 
 CR-260/CR-261 — deployed (`146ff5d`); Yandex and reCAPTCHA keys are in the VPS `.env`
@@ -189,4 +197,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-265)
+2026-10-14 (CR-267)

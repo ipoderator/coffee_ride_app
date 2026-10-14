@@ -122,6 +122,16 @@ export function RegisterForm({
     );
   }
 
+  // The submit-time «Пароли не совпадают.» describes the values at that submit;
+  // once either field changes it is stale, and the live match line takes over.
+  function clearConfirmError() {
+    setFieldErrors((current) =>
+      current.confirmPassword
+        ? { ...current, confirmPassword: undefined }
+        : current,
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -226,7 +236,10 @@ export function RegisterForm({
           <PasswordInput
             autoComplete="new-password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              clearConfirmError();
+            }}
             disabled={isPending}
           />
         </FormField>
@@ -242,7 +255,10 @@ export function RegisterForm({
           <PasswordInput
             autoComplete="new-password"
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={(event) => {
+              setConfirmPassword(event.target.value);
+              clearConfirmError();
+            }}
             disabled={isPending}
           />
         </FormField>
