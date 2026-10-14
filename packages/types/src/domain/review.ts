@@ -9,7 +9,6 @@
 export interface Review {
   id: string;
   rideId: string;
-  userId: string;
   authorName: string | null;
   rating: number;
   comment: string | null;

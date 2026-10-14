@@ -63,6 +63,30 @@ async function registerAndLoginUser(app: Awaited<ReturnType<typeof buildApp>>) {
 }
 
 /**
+ * CR-253: a fresh user who signs in without following the verification link.
+ * Tests that need an unverified account that already holds a seat verify
+ * normally and then flip `email_verified` back in SQL instead.
+ */
+async function registerAndLoginUnverifiedUser(
+  app: Awaited<ReturnType<typeof buildApp>>,
+) {
+  const email = uniqueEmail();
+  await app.inject({
+    method: 'POST',
+    url: '/v1/auth/register',
+    headers: { origin: WEB_ORIGIN },
+    payload: { email, password: PASSWORD },
+  });
+  const login = await app.inject({
+    method: 'POST',
+    url: '/v1/auth/login',
+    headers: { origin: WEB_ORIGIN },
+    payload: { email, password: PASSWORD },
+  });
+  return sessionCookie(login)!.value;
+}
+
+/**
  * An organizer with a fresh `draft` ride — `openRegistration: true` (default)
  * additionally publishes it and opens registration, the state every "register" test
  * needs; some 404/409 cases want an earlier lifecycle state instead.
@@ -463,6 +487,54 @@ describe('/v1/rides/:id/waitlist', () => {
     await app.db.execute(sql`DELETE FROM rides`);
     await app.db.execute(sql`DELETE FROM users`);
     await app.close();
+
+    it('rejects an unverified account with 403 email_verification_required (CR-253)', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app);
+      const unverifiedToken = await registerAndLoginUnverifiedUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: unverifiedToken },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('email_verification_required');
+      const [count] = await app.db.execute<{ count: number }>(
+        sql`SELECT count(*)::int AS count FROM registrations WHERE ride_id = ${rideId}`,
+      );
+      expect(count?.count).toBe(0);
+      await app.close();
+    });
+
+    it('still replays an existing registration with 200 after the account lost verification (CR-253, CR-083)', async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app);
+      const { rawToken, userId } = await registerAndLoginUser(app);
+      const first = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+      expect(first.statusCode).toBe(201);
+      await app.db.execute(
+        sql`UPDATE users SET email_verified = false WHERE id = ${userId}`,
+      );
+
+      const replay = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: rawToken },
+      });
+
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json().registration.id).toBe(first.json().registration.id);
+      await app.close();
+    });
   });
 
   describe('POST /v1/rides/:id/waitlist', () => {
@@ -638,6 +710,33 @@ describe('/v1/rides/:id/waitlist', () => {
     // CR-083 ("Idempotency"): a repeat waitlist-join call while already `waiting` —
     // e.g. a network retry — is not an error. Returns the same existing entry with
     // 200, not a fresh 201 or a 409, and does not create a second row.
+    it("rejects an unverified account joining a full ride's waitlist with 403 email_verification_required (CR-253)", async () => {
+      const app = await buildApp(testEnv);
+      const { rideId } = await createOrganizerRide(app, {
+        participantLimit: 1,
+      });
+      const { rawToken: firstToken } = await registerAndLoginUser(app);
+      const first = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/register`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: firstToken },
+      });
+      expect(first.statusCode).toBe(201);
+      const unverifiedToken = await registerAndLoginUnverifiedUser(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/waitlist`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: unverifiedToken },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('email_verification_required');
+      await app.close();
+    });
+
     it('returns the existing waitlist entry idempotently on a repeat join call, instead of an error or a duplicate', async () => {
       const app = await buildApp(testEnv);
       const { organizerToken, rideId } = await createOrganizerRide(app, {

@@ -9,6 +9,7 @@ import {
   createOrganizerProfileRequestSchema,
   updateOrganizerProfileRequestSchema,
 } from 'types';
+import { uploadRateLimit } from '../../lib/upload-rate-limit.js';
 import { requireAuth } from '../../plugins/auth.js';
 import {
   readUploadedFile,
@@ -131,7 +132,7 @@ export const organizersRoutes: FastifyPluginAsyncZod = async (app) => {
     '/me/avatar',
     {
       schema: { response: { 201: avatarResponseSchema } },
-      preHandler: requireAuth,
+      preHandler: [requireAuth, uploadRateLimit(app)],
     },
     async (request, reply) => {
       const file = await readAvatarUpload(request);
@@ -151,7 +152,7 @@ export const organizersRoutes: FastifyPluginAsyncZod = async (app) => {
     '/me/avatar',
     {
       schema: { response: { 200: avatarResponseSchema } },
-      preHandler: requireAuth,
+      preHandler: [requireAuth, uploadRateLimit(app)],
     },
     async (request, reply) => {
       const file = await readAvatarUpload(request);

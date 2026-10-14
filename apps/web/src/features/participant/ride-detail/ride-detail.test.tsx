@@ -56,6 +56,12 @@ vi.mock('@/lib/auth/session-context', () => ({
     user: null,
     refresh: vi.fn(),
   }),
+  // CR-253: `ResendVerificationButton` (the verified-email banner) reads it.
+  useOptionalSession: () => ({
+    status: sessionState.status,
+    user: null,
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock('./api', async () => {
@@ -1600,7 +1606,6 @@ describe('RideDetailView', () => {
           viewerReview: {
             id: 'review-1',
             rideId: 'ride-1',
-            userId: 'user-1',
             authorName: 'Иван',
             rating: 5,
             comment: null,
@@ -1624,7 +1629,6 @@ describe('RideDetailView', () => {
           {
             id: 'review-1',
             rideId: 'ride-1',
-            userId: 'user-2',
             authorName: 'Мария',
             rating: 4,
             comment: 'Отличный заезд!',
@@ -1932,6 +1936,35 @@ describe('RideDetailView', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Записаться' }));
 
       expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    });
+
+    it('asks an unverified viewer to confirm their email and offers a new link (CR-253)', async () => {
+      sessionState.status = 'authenticated';
+      getRideDetailMock.mockResolvedValue(
+        baseDetailResponse({
+          ride: { ...baseRide, status: 'registration_open' },
+        }),
+      );
+      registerForRideMock.mockRejectedValue(
+        groupProblem('email_verification_required', 403),
+      );
+
+      render(
+        <ToastProvider>
+          <RideDetailView rideId="ride-1" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Записаться' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Подтвердите email, чтобы записаться на заезд.',
+      );
+      expect(
+        screen.getByRole('button', { name: 'Отправить письмо повторно' }),
+      ).toBeInTheDocument();
     });
 
     it('shows the pace range across groups as the pace metric', async () => {

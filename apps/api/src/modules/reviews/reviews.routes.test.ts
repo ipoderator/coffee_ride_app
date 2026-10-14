@@ -342,7 +342,8 @@ describe('Post-ride (CR-042/CR-043)', () => {
       expect(response.statusCode).toBe(201);
       const review = response.json().review;
       expect(review.rideId).toBe(rideId);
-      expect(review.userId).toBe(participant.userId);
+      // CR-254: no author user id in a review reply (ADR-023).
+      expect(review).not.toHaveProperty('userId');
       expect(review.rating).toBe(5);
       expect(review.comment).toBe('Отличный маршрут!');
       expect(review.createdAt).toEqual(expect.any(String));
@@ -414,6 +415,47 @@ describe('Post-ride (CR-042/CR-043)', () => {
       expect(items[0].rideId).toBe(rideId);
       expect(items[0].rating).toBe(4);
       expect(items[0].comment).toBe('Хорошо.');
+      expect(items[0]).not.toHaveProperty('userId');
+      await app.close();
+    });
+
+    it('hides an admin-hidden ride’s reviews from everyone but its organizer (CR-254)', async () => {
+      const app = await buildApp(testEnv);
+      const { organizerToken, rideId, participant } =
+        await createFinishedRideWithParticipant(app);
+      const create = await app.inject({
+        method: 'POST',
+        url: `/v1/rides/${rideId}/reviews`,
+        headers: { origin: WEB_ORIGIN },
+        cookies: { session: participant.rawToken },
+        payload: { rating: 5 },
+      });
+      expect(create.statusCode).toBe(201);
+      await app.db.execute(
+        sql`UPDATE rides SET hidden_at = now(), hidden_reason = 'test' WHERE id = ${rideId}`,
+      );
+
+      const anonymous = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/reviews`,
+      });
+      expect(anonymous.statusCode).toBe(404);
+      expect(anonymous.json().code).toBe('ride_not_found');
+
+      const asParticipant = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/reviews`,
+        cookies: { session: participant.rawToken },
+      });
+      expect(asParticipant.statusCode).toBe(404);
+
+      const asOrganizer = await app.inject({
+        method: 'GET',
+        url: `/v1/rides/${rideId}/reviews`,
+        cookies: { session: organizerToken },
+      });
+      expect(asOrganizer.statusCode).toBe(200);
+      expect(asOrganizer.json().items).toHaveLength(1);
       await app.close();
     });
   });

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import { createReviewRequestSchema, listRidesQuerySchema } from 'types';
-import { requireAuth } from '../../plugins/auth.js';
+import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import { reviewResponseSchema } from './review-response.schema.js';
 import { createReview, listRideReviews } from './reviews.service.js';
 
@@ -53,10 +53,13 @@ export const reviewsRoutes: FastifyPluginAsyncZod = async (app) => {
         querystring: listRidesQuerySchema,
         response: { 200: listRideReviewsResponseSchema },
       },
+      // CR-254: the ride's own organizer still sees reviews of a hidden ride.
+      preHandler: resolveOptionalUser,
     },
     async (request, reply) => {
       const page = await listRideReviews(
         app.db,
+        request.user?.id ?? null,
         request.params.id,
         request.query,
       );

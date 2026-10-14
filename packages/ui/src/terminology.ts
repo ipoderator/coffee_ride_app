@@ -1168,6 +1168,10 @@ export const RIDE_DETAIL_TERMS = {
   // `RIDE_EDIT_TERMS.loadError` (`EditRideForm`'s publish/open/close/cancel handlers
   // all reuse that one key too).
   registrationActionError: 'Не удалось выполнить действие. Попробуйте ещё раз.',
+  // CR-253: a seat or a waitlist place needs a verified email (same gate as the
+  // organizer profile/publish lines); `ResendVerificationButton` renders beside it.
+  registrationEmailVerificationRequired:
+    'Подтвердите email, чтобы записаться на заезд.',
   // CR-043 ("Organizer rating summary"): shown next to `organizedByLabel`.
   ratingReviewsCount: formatReviewsCount,
   // CR-103 (`ConfirmDialog`/`Toast`, `/impeccable critique` P0): confirmation copy for

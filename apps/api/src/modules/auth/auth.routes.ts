@@ -14,6 +14,7 @@ import {
   accountRateLimitKeyFactory,
   isAccountRateLimited,
 } from '../../lib/account-rate-limit.js';
+import { logAuthEvent } from '../../lib/auth-events.js';
 import { requireAuth } from '../../plugins/auth.js';
 import {
   sendPasswordResetEmail,
@@ -31,7 +32,7 @@ import {
   verifyEmail,
 } from './auth.service.js';
 import { createSession, revokeSession } from './session.js';
-import { setSessionCookie } from './session-cookie.js';
+import { clearSessionCookie, setSessionCookie } from './session-cookie.js';
 
 // Response is built from an explicit Zod schema (not just the `User` TS type)
 // so Fastify's serializer actually strips any unlisted field before it leaves
@@ -146,6 +147,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         request.body.password,
         { skipEmailVerification: env.AUTH_SKIP_EMAIL_VERIFICATION },
       );
+      logAuthEvent(request.log, 'register', user.id);
 
       const body: { user: typeof user; verificationUrl?: string } = { user };
       // CR-220: the account is already verified — no link, no email.
@@ -189,6 +191,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     },
     async (request, reply) => {
       const user = await verifyEmail(app.db, request.body.token);
+      logAuthEvent(request.log, 'email_verified', user.id);
       return reply.status(200).send({ user });
     },
   );
@@ -258,6 +261,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
       const session = await createSession(app.db, user.id);
 
       setSessionCookie(app, reply, session, isProd);
+      logAuthEvent(request.log, 'login', user.id);
 
       return reply.status(200).send({ user });
     },
@@ -312,6 +316,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         request.body.token,
         request.body.password,
       );
+      logAuthEvent(request.log, 'password_reset', user.id);
       return reply.status(200).send({ user });
     },
   );
@@ -323,8 +328,9 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     if (token) {
       await revokeSession(app.db, token);
     }
+    logAuthEvent(request.log, 'logout', request.user!.id);
 
-    reply.clearCookie(app.sessionCookieName, { path: '/' });
+    clearSessionCookie(app, reply, isProd);
     return reply.status(204).send();
   });
 

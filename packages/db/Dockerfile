@@ -12,7 +12,10 @@
 # devDependencies (`tsx`) is simpler than adding a build step for a script
 # that already runs correctly via `tsx` in CI and local dev.
 
-FROM node:24-alpine AS deps
+# CR-258: the base image is pinned by digest, not the moving `24-alpine` tag, so a
+# deploy's server-side build can't silently pick up a different image; Dependabot's
+# `docker` entry for this directory proposes each new digest as a PR.
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS deps
 RUN corepack enable
 WORKDIR /app
 

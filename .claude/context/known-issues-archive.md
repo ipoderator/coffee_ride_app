@@ -2698,3 +2698,16 @@ Next action: owner decision — an optional `next` on `POST /v1/auth/register`
 (additive contract change), validated server-side with the same rules as
 `apps/web/src/lib/auth/next-path.ts` (that validator would move to `packages/types`)
 and appended to the emailed link; or keep it web-only.
+
+### KI-099 — Logout's `clearCookie` for `__Host-session` lacks `Secure`, so browsers keep the cookie
+
+Status: resolved 2026-10-14 (CR-257) — logout clears the cookie through `clearSessionCookie` with the attributes it was set with (`Secure` in production); a production-mode logout test asserts it. Discovered: 2026-10-13 (CR-247 security review).
+Problem: `POST /v1/auth/logout` (`apps/api/src/modules/auth/auth.routes.ts`) calls
+`reply.clearCookie(app.sessionCookieName, { path: '/' })`; `@fastify/cookie` adds no
+`Secure`, and browsers ignore any `Set-Cookie` for a `__Host-` name without it —
+deletion included. In production the browser keeps the (now dead) `__Host-session`.
+Impact: low — logout deletes the session row, so the leftover token is refused; the
+cookie just lingers until it expires. Local dev (`session`, no prefix) is unaffected.
+Workaround: none needed. CR-247's own `__Host-google-oauth` clear passes `secure`.
+Next action: pass the same attributes as `setSessionCookie` (`session-cookie.ts`) when
+clearing; add a production-mode assertion to the logout test.

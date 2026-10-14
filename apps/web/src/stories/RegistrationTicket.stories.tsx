@@ -4,6 +4,8 @@ import { expect, userEvent, waitFor } from 'storybook/test';
 import type { Registration } from 'types';
 import {
   Button,
+  RESEND_VERIFICATION_TERMS,
+  RIDE_DETAIL_TERMS,
   RIDE_STATUS_TERMS,
   RIDE_TICKET_TERMS,
   STRAVA_SYNC_TERMS,
@@ -17,6 +19,7 @@ import {
   type TicketState,
 } from '@/features/participant/ride-detail/lib/ticket-state';
 import { resetStravaStatusCache } from '@/features/participant/ride-detail/components/StravaSync';
+import { SessionProvider } from '@/lib/auth/session-context';
 
 // CR-234: answers `GET /api/v1/strava/status` for the Strava stories; every other
 // request goes through untouched.
@@ -105,6 +108,87 @@ export const Open: Story = {
   play: async ({ canvas }) => {
     await expect(
       canvas.getByRole('button', { name: 'Записаться' }),
+    ).toBeVisible();
+  },
+};
+
+// CR-253: an unverified viewer's «Записаться» — the API's 403
+// `email_verification_required` reads as a Russian line plus a fresh-link button.
+// The real `SessionProvider` resolves a signed-in (unverified) viewer from the
+// stubbed `/auth/me`, so the button renders as it does on the page.
+function stubUnverifiedRegister() {
+  return () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const raw = input instanceof Request ? input.url : String(input);
+      const path = new URL(raw, window.location.href).pathname;
+      const json = (body: unknown, status: number) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        });
+      if (path === '/api/v1/auth/me') {
+        return json(
+          {
+            user: {
+              id: 'user-1',
+              email: 'rider@example.com',
+              emailVerified: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              displayName: 'Райдер',
+              firstName: null,
+              lastName: null,
+              phone: null,
+              bio: null,
+              avatarUrl: null,
+              profileVisibility: 'co_participants',
+              distanceWeekKm: null,
+              distanceMonthKm: null,
+              distanceYearKm: null,
+            },
+          },
+          200,
+        );
+      }
+      if (path === '/api/v1/rides/ride-1/register') {
+        return json(
+          {
+            type: 'https://coffee-ride.example/errors/email_verification_required',
+            title: 'Email verification required',
+            status: 403,
+            detail: 'Verify your email before joining a ride.',
+            instance: '/v1/rides/ride-1/register',
+            code: 'email_verification_required',
+          },
+          403,
+        );
+      }
+      return original(input, init);
+    };
+    return () => {
+      globalThis.fetch = original;
+    };
+  };
+}
+
+export const EmailVerificationRequired: Story = {
+  beforeEach: stubUnverifiedRegister(),
+  decorators: [
+    (Story) => (
+      <SessionProvider>
+        <Story />
+      </SessionProvider>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Записаться' }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      RIDE_DETAIL_TERMS.registrationEmailVerificationRequired,
+    );
+    await expect(
+      await canvas.findByRole('button', {
+        name: RESEND_VERIFICATION_TERMS.submit,
+      }),
     ).toBeVisible();
   },
 };

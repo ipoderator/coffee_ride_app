@@ -31,6 +31,7 @@ import {
   type StatusTone,
 } from 'ui';
 import { loginHref } from '@/lib/auth/next-path';
+import { ResendVerificationButton } from '@/lib/auth/ResendVerificationButton';
 import {
   ApiError,
   cancelRideRegistration,
@@ -63,9 +64,18 @@ function actionErrorMessage(error: unknown): string {
         return FINISH_CHECKIN_TERMS.alreadyDecided;
       case 'ride_not_in_progress':
         return FINISH_CHECKIN_TERMS.rideNotInProgress;
+      case 'email_verification_required':
+        return RIDE_DETAIL_TERMS.registrationEmailVerificationRequired;
     }
   }
   return RIDE_DETAIL_TERMS.registrationActionError;
+}
+
+function isEmailVerificationRequired(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.problem.code === 'email_verification_required'
+  );
 }
 
 function isUnauthorized(error: unknown): boolean {
@@ -541,6 +551,8 @@ export function RegistrationTicket({
   const now = useNow();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // CR-253: the error came from the verified-email gate — offer a fresh link.
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
     'cancel' | 'leaveWaitlist' | null
   >(null);
@@ -560,6 +572,7 @@ export function RegistrationTicket({
   ) {
     if (isPending) return;
     setError(null);
+    setVerificationRequired(false);
     setIsPending(true);
     try {
       await action();
@@ -571,6 +584,7 @@ export function RegistrationTicket({
       }
       if (closeDialog) setConfirmAction(null);
       setError(actionErrorMessage(err));
+      setVerificationRequired(isEmailVerificationRequired(err));
     } finally {
       setIsPending(false);
     }
@@ -663,9 +677,14 @@ export function RegistrationTicket({
   }
 
   const errorAlert = error ? (
-    <p role="alert" className="text-body-sm text-danger">
-      {error}
-    </p>
+    <div className="flex flex-col gap-3">
+      <p role="alert" className="text-body-sm text-danger">
+        {error}
+      </p>
+      {verificationRequired && (
+        <ResendVerificationButton className="self-start" />
+      )}
+    </div>
   ) : null;
 
   const dialogs = (

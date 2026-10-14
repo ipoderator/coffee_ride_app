@@ -22,3 +22,22 @@ export function setSessionCookie(
     expires: session.expiresAt,
   });
 }
+
+/**
+ * KI-099 (CR-257): clears the session cookie with the attributes it was set with.
+ * Browsers ignore any `Set-Cookie` for a `__Host-` name without `Secure` — the
+ * deletion included — so a bare `clearCookie(name, { path })` left the dead
+ * `__Host-session` in place in production.
+ */
+export function clearSessionCookie(
+  app: FastifyInstance,
+  reply: FastifyReply,
+  isProd: boolean,
+) {
+  reply.clearCookie(app.sessionCookieName, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    path: '/',
+  });
+}

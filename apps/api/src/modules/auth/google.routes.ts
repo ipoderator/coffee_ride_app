@@ -19,6 +19,7 @@ import {
   type GoogleSignInRefusal,
   signInWithGoogle,
 } from './google.service.js';
+import { logAuthEvent } from '../../lib/auth-events.js';
 import { createSession } from './session.js';
 import { setSessionCookie } from './session-cookie.js';
 
@@ -202,6 +203,7 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
 
       const session = await createSession(app.db, userId);
       setSessionCookie(app, reply, session, isProd);
+      logAuthEvent(request.log, 'google_sign_in', userId);
       return redirectToWeb(reply, next ?? DEFAULT_AFTER_SIGN_IN);
     },
   );

@@ -1560,3 +1560,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-239 (production QA) ride page in sync after cancel/register: counts, start
       number and the phone bar land together; bar shows the count, not «№ N» —
       done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
+- [x] CR-244 (production QA) password-reset email «not sent» — investigated on
+      production: the typed address matched no account (Gmail `+` alias); no
+      defect — 2026-10-12. See docs/changelog.md

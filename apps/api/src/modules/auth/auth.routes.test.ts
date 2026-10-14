@@ -17,6 +17,14 @@ import {
 import { createRedisClient } from '../../redis.js';
 import { hashSessionToken } from './session.js';
 import { hashToken } from './tokens.js';
+import { logAuthEvent } from '../../lib/auth-events.js';
+
+// CR-256: a pass-through spy — the real logger call still runs.
+vi.mock('../../lib/auth-events.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../lib/auth-events.js')>();
+  return { logAuthEvent: vi.fn(actual.logAuthEvent) };
+});
 
 // These tests exercise the real service/repository layers against a live
 // Postgres database (`.claude/rules/testing.md` — behavior, not mocks, for
@@ -678,6 +686,60 @@ describe('POST /v1/auth/logout', () => {
     });
     expect(meAfterLogout.statusCode).toBe(401);
 
+    await app.close();
+  });
+
+  it('records register, login and logout as auth events with the user id, never the email (CR-256)', async () => {
+    const app = await buildApp(testEnv);
+    vi.mocked(logAuthEvent).mockClear();
+    const rawToken = await loginAndGetCookie(app);
+    const me = await app.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      cookies: { session: rawToken },
+    });
+    const userId: string = me.json().user.id;
+
+    await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout',
+      cookies: { session: rawToken },
+    });
+
+    const calls = vi.mocked(logAuthEvent).mock.calls;
+    expect(calls.map(([, event, id]) => [event, id])).toEqual([
+      ['register', userId],
+      ['login', userId],
+      ['logout', userId],
+    ]);
+    expect(JSON.stringify(calls.map(([, ...rest]) => rest))).not.toContain('@');
+    await app.close();
+  });
+
+  it('clears `__Host-session` with Secure in production, or the browser keeps it (KI-099, CR-257)', async () => {
+    const app = await buildApp({ ...testEnv, NODE_ENV: 'production' });
+    const { email, password } = await registerTestUser(app);
+    const login = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { email, password },
+    });
+    const sessionToken = login.cookies.find(
+      (c) => c.name === '__Host-session',
+    )?.value;
+    expect(sessionToken).toBeDefined();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/logout',
+      cookies: { '__Host-session': sessionToken! },
+    });
+
+    expect(response.statusCode).toBe(204);
+    const cleared = response.cookies.find((c) => c.name === '__Host-session');
+    expect(cleared).toMatchObject({ secure: true, path: '/', httpOnly: true });
+    expect(cleared?.domain).toBeUndefined();
+    expect(cleared?.expires?.getTime()).toBeLessThan(Date.now());
     await app.close();
   });
 
