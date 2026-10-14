@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterForm } from './components/RegisterForm';
 import { ApiError, registerAccount } from './api';
+import { installFakeGrecaptcha } from '../captcha/fake-grecaptcha';
 import {
   ENGLISH_API_TEXTS,
   englishProblem,
@@ -15,12 +16,19 @@ vi.mock('./api', async () => {
 
 const registerAccountMock = vi.mocked(registerAccount);
 
-function fillAndSubmit(email: string, password: string) {
+function fillAndSubmit(
+  email: string,
+  password: string,
+  confirmPassword = password,
+) {
   fireEvent.change(screen.getByLabelText('Email'), {
     target: { value: email },
   });
   fireEvent.change(screen.getByLabelText('Пароль'), {
     target: { value: password },
+  });
+  fireEvent.change(screen.getByLabelText('Повторите пароль'), {
+    target: { value: confirmPassword },
   });
   fireEvent.click(
     screen.getByRole('button', { name: /Зарегистрироваться|Регистрация…/ }),
@@ -371,4 +379,188 @@ describe('RegisterForm', () => {
       });
     },
   );
+});
+
+// CR-261: «Повторите пароль» never leaves the browser.
+describe('RegisterForm confirm password', () => {
+  beforeEach(() => {
+    registerAccountMock.mockReset();
+  });
+
+  it('shows «Пароли не совпадают.» at the field and sends nothing', async () => {
+    render(<RegisterForm />);
+    fillAndSubmit(
+      'rider@example.com',
+      'a-strong-password-123',
+      'a-strong-password-124',
+    );
+
+    const confirm = screen.getByLabelText('Повторите пароль');
+    await waitFor(() =>
+      expect(confirm).toHaveAttribute('aria-invalid', 'true'),
+    );
+    const message = screen.getByText('Пароли не совпадают.');
+    expect(confirm.getAttribute('aria-describedby')).toBe(message.id);
+    expect(screen.getByLabelText('Пароль')).toHaveAttribute(
+      'aria-invalid',
+      'false',
+    );
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('asks to fill an empty confirm field', async () => {
+    render(<RegisterForm />);
+    fillAndSubmit('rider@example.com', 'a-strong-password-123', '');
+    expect(await screen.findByText('Заполните это поле.')).toBeInTheDocument();
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('clears the mismatch once the passwords match and sends only password', async () => {
+    registerAccountMock.mockResolvedValue({
+      user: {
+        id: 'user-1',
+        email: 'rider@example.com',
+        emailVerified: false,
+      } as never,
+    });
+    render(<RegisterForm />);
+    fillAndSubmit(
+      'rider@example.com',
+      'a-strong-password-123',
+      'other-password-12',
+    );
+    expect(await screen.findByText('Пароли не совпадают.')).toBeInTheDocument();
+
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    await screen.findByText('Аккаунт создан');
+    expect(registerAccountMock).toHaveBeenCalledTimes(1);
+    const payload = registerAccountMock.mock.calls[0]![0];
+    expect(payload).toEqual({
+      email: 'rider@example.com',
+      password: 'a-strong-password-123',
+    });
+    expect(payload).not.toHaveProperty('confirmPassword');
+  });
+});
+
+// CR-261 (ADR-038): the reCAPTCHA tick on register.
+describe('RegisterForm reCAPTCHA', () => {
+  let fake: ReturnType<typeof installFakeGrecaptcha>;
+
+  beforeEach(() => {
+    registerAccountMock.mockReset();
+    fake = installFakeGrecaptcha();
+  });
+
+  afterEach(() => {
+    fake.uninstall();
+  });
+
+  async function renderWithCaptcha() {
+    render(<RegisterForm captchaSiteKey="a-site-key" />);
+    await waitFor(() => expect(fake.grecaptcha.render).toHaveBeenCalled());
+  }
+
+  it('renders the widget with the site key, in Russian-labelled group', async () => {
+    await renderWithCaptcha();
+    expect(fake.widgets[0]).toMatchObject({
+      sitekey: 'a-site-key',
+      theme: 'light',
+    });
+    expect(
+      screen.getByRole('group', { name: 'Проверка «Я не робот»' }),
+    ).toBeInTheDocument();
+  });
+
+  it('refuses to send before the tick and says so', async () => {
+    await renderWithCaptcha();
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+    expect(
+      await screen.findByText('Отметьте «Я не робот».'),
+    ).toBeInTheDocument();
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the token with the form once ticked', async () => {
+    registerAccountMock.mockResolvedValue({
+      user: {
+        id: 'u',
+        email: 'rider@example.com',
+        emailVerified: false,
+      } as never,
+    });
+    await renderWithCaptcha();
+    fake.solve('token-1');
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    await screen.findByText('Аккаунт создан');
+    expect(registerAccountMock).toHaveBeenCalledWith({
+      email: 'rider@example.com',
+      password: 'a-strong-password-123',
+      captchaToken: 'token-1',
+    });
+  });
+
+  it.each([
+    [
+      'captcha_invalid',
+      400,
+      'Проверка «Я не робот» не пройдена или устарела. Отметьте её ещё раз.',
+    ],
+    ['captcha_required', 400, 'Отметьте «Я не робот».'],
+    [
+      'captcha_unavailable',
+      503,
+      'Проверка «Я не робот» сейчас недоступна. Попробуйте ещё раз через минуту.',
+    ],
+  ])(
+    'shows the API’s %s refusal at the widget and resets it',
+    async (code, status, text) => {
+      registerAccountMock.mockRejectedValue(englishProblem(code, { status }));
+      await renderWithCaptcha();
+      fake.solve('token-1');
+      fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(fake.grecaptcha.reset).toHaveBeenCalledWith(0);
+      expectNoEnglishApiText();
+
+      // The spent token is gone: the next submit asks for a new tick.
+      registerAccountMock.mockClear();
+      fillAndSubmit('rider@example.com', 'a-strong-password-123');
+      expect(
+        await screen.findByText('Отметьте «Я не робот».'),
+      ).toBeInTheDocument();
+      expect(registerAccountMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('resets the tick after any other failure too (the token is spent)', async () => {
+    registerAccountMock.mockRejectedValue(
+      englishProblem('email_already_registered', { status: 409 }),
+    );
+    await renderWithCaptcha();
+    fake.solve('token-1');
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    expect(
+      await screen.findByText('Аккаунт с таким email уже существует.'),
+    ).toBeInTheDocument();
+    expect(fake.grecaptcha.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the tick expires before sending', async () => {
+    await renderWithCaptcha();
+    fake.solve('token-1');
+    fake.expire();
+    expect(
+      screen.getByText('Проверка устарела — отметьте «Я не робот» ещё раз.'),
+    ).toBeInTheDocument();
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+    expect(
+      await screen.findByText('Отметьте «Я не робот».'),
+    ).toBeInTheDocument();
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
 });

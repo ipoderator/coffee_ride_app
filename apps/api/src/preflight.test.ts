@@ -15,6 +15,7 @@ const FULLY_CONFIGURED = {
   UNISENDER_API_KEY: 'a-key',
   EMAIL_FROM_ADDRESS: 'rides@example.com',
   ERROR_REPORTING_WEBHOOK_URL: 'https://sink.example.com/hook',
+  RECAPTCHA_SECRET_KEY: 'a-secret',
 };
 
 const keysOf = (env: Record<string, string>) =>
@@ -63,6 +64,19 @@ describe('runPreflight', () => {
     ).toEqual([]);
   });
 
+  it('reports half a Yandex ID pair, not an absent one (CR-260)', () => {
+    expect(
+      keysOf({ ...FULLY_CONFIGURED, YANDEX_CLIENT_SECRET: 'secret' }),
+    ).toEqual(['YANDEX_CLIENT_ID', 'YANDEX_CLIENT_SECRET']);
+    expect(
+      keysOf({
+        ...FULLY_CONFIGURED,
+        YANDEX_CLIENT_ID: 'yandex-client-id',
+        YANDEX_CLIENT_SECRET: 'secret',
+      }),
+    ).toEqual([]);
+  });
+
   it('reports a sender address with no email key', () => {
     const findings = runPreflight(
       loadEnv({ ...FULLY_CONFIGURED, UNISENDER_API_KEY: '' }),
@@ -94,6 +108,7 @@ describe('runPreflight', () => {
     ['REDIS_URL', /notification/i],
     ['S3_ENDPOINT', /upload/i],
     ['ERROR_REPORTING_WEBHOOK_URL', /stdout/i],
+    ['RECAPTCHA_SECRET_KEY', /bots/i],
   ])('reports an unconfigured %s', (key, expectedConsequence) => {
     const findings = runPreflight(loadEnv({ ...FULLY_CONFIGURED, [key]: '' }));
     expect(findings).toHaveLength(1);
@@ -116,6 +131,7 @@ describe('runPreflight', () => {
         'REDIS_URL',
         'S3_ENDPOINT',
         'ERROR_REPORTING_WEBHOOK_URL',
+        'RECAPTCHA_SECRET_KEY',
       ]),
     );
   });

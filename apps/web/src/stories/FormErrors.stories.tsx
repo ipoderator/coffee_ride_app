@@ -160,6 +160,10 @@ export const RegisterServerRejectsFields: Story = {
       canvas.getByLabelText(AUTH_TERMS.passwordLabel),
       'a-strong-password-123',
     );
+    await userEvent.type(
+      canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
+      'a-strong-password-123',
+    );
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );
@@ -186,6 +190,10 @@ export const RegisterUnknownServerCode: Story = {
     );
     await userEvent.type(
       canvas.getByLabelText(AUTH_TERMS.passwordLabel),
+      'a-strong-password-123',
+    );
+    await userEvent.type(
+      canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
       'a-strong-password-123',
     );
     await userEvent.click(

@@ -27,6 +27,8 @@ describe('contentSecurityPolicy', () => {
       "'nonce-abc123=='",
       "'strict-dynamic'",
       'https://mapgl.2gis.com',
+      'https://www.google.com/recaptcha/',
+      'https://www.gstatic.com/recaptcha/',
       'blob:',
     ]);
     expect(production.get('default-src')).toEqual(["'self'"]);
@@ -37,6 +39,21 @@ describe('contentSecurityPolicy', () => {
     expect(production.get('connect-src')).toContain('https://*.2gis.com');
     expect(production.get('img-src')).toContain('https://*.2gis.com');
     expect(production.get('worker-src')).toEqual(["'self'", 'blob:']);
+  });
+
+  it('allows Google reCAPTCHA only by its paths (CR-261)', () => {
+    expect(production.get('frame-src')).toEqual([
+      'https://www.google.com/recaptcha/',
+      'https://recaptcha.google.com/recaptcha/',
+    ]);
+    expect(production.get('connect-src')).toContain(
+      'https://www.google.com/recaptcha/',
+    );
+    // Never a whole Google host.
+    for (const sources of production.values()) {
+      expect(sources).not.toContain('https://www.google.com');
+      expect(sources).not.toContain('https://*.google.com');
+    }
   });
 
   it('adds eval and hot-reload sockets in development only', () => {

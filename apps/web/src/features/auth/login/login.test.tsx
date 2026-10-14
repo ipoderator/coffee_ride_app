@@ -1,13 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from 'types';
-import { AUTH_TERMS } from 'ui';
+import { AUTH_TERMS, CAPTCHA_TERMS } from 'ui';
 import { CabinetShell } from '@/components/cabinet/CabinetShell';
 import { getCurrentUser } from '@/lib/api/current-user';
 import { SessionProvider } from '@/lib/auth/session-context';
 import { LoginForm } from './components/LoginForm';
 import { ApiError, login } from './api';
+import { installFakeGrecaptcha } from '../captcha/fake-grecaptcha';
 import {
   englishProblem,
   expectNoEnglishApiText,
@@ -317,5 +318,86 @@ describe('LoginForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Не удалось выполнить запрос.',
     );
+  });
+});
+
+// CR-261 (ADR-038): the reCAPTCHA tick on the password login.
+describe('LoginForm reCAPTCHA', () => {
+  let fake: ReturnType<typeof installFakeGrecaptcha>;
+
+  beforeEach(() => {
+    loginMock.mockReset();
+    replaceMock.mockReset();
+    getCurrentUserMock.mockRejectedValue(signedOut());
+    fake = installFakeGrecaptcha();
+  });
+
+  afterEach(() => {
+    fake.uninstall();
+  });
+
+  async function renderWithCaptcha(next?: string) {
+    render(
+      <SessionProvider>
+        <LoginForm next={next} captchaSiteKey="a-site-key" />
+      </SessionProvider>,
+    );
+    await waitFor(() => expect(fake.grecaptcha.render).toHaveBeenCalled());
+  }
+
+  it('refuses to send before the tick', async () => {
+    await renderWithCaptcha();
+    fillAndSubmit('rider@example.com', 'a-password');
+    expect(
+      await screen.findByText('Отметьте «Я не робот».'),
+    ).toBeInTheDocument();
+    expect(loginMock).not.toHaveBeenCalled();
+  });
+
+  it('signs in with the token and still returns to a safe `next`', async () => {
+    loginMock.mockResolvedValue({ user });
+    await renderWithCaptcha('/rides/ride-1');
+    fake.solve('token-1');
+    fillAndSubmit('rider@example.com', 'a-password');
+
+    await waitFor(() =>
+      expect(replaceMock).toHaveBeenCalledWith('/rides/ride-1'),
+    );
+    expect(loginMock).toHaveBeenCalledWith({
+      email: 'rider@example.com',
+      password: 'a-password',
+      captchaToken: 'token-1',
+    });
+  });
+
+  it('keeps the one generic message for wrong credentials and resets the tick', async () => {
+    loginMock.mockRejectedValue(
+      englishProblem('invalid_credentials', { status: 401 }),
+    );
+    await renderWithCaptcha();
+    fake.solve('token-1');
+    fillAndSubmit('rider@example.com', 'a-password');
+
+    expect(
+      await screen.findByText(AUTH_TERMS.invalidCredentials),
+    ).toBeInTheDocument();
+    expect(fake.grecaptcha.reset).toHaveBeenCalledWith(0);
+  });
+
+  it.each([
+    ['captcha_invalid', 400],
+    ['captcha_unavailable', 503],
+  ] as const)('shows the %s refusal at the widget', async (code, status) => {
+    loginMock.mockRejectedValue(englishProblem(code, { status }));
+    await renderWithCaptcha();
+    fake.solve('token-1');
+    fillAndSubmit('rider@example.com', 'a-password');
+
+    expect(
+      await screen.findByText(CAPTCHA_TERMS.apiError[code]),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(AUTH_TERMS.genericError)).not.toBeInTheDocument();
+    expect(fake.grecaptcha.reset).toHaveBeenCalledTimes(1);
+    expectNoEnglishApiText();
   });
 });

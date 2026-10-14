@@ -12,13 +12,25 @@ export type AuthEvent =
   | 'email_verified'
   | 'login'
   | 'google_sign_in'
+  | 'yandex_sign_in'
   | 'password_reset'
   | 'logout';
 
+/**
+ * `reqId`: for a caller that logs through `app.log` because its route's request
+ * logger drops `info` — the OAuth callbacks run at `logLevel: 'warn'` to keep the
+ * one-time `code` out of the request log (CR-260 found their events silently lost).
+ */
 export function logAuthEvent(
   log: Pick<FastifyBaseLogger, 'info'>,
   event: AuthEvent,
   userId: string,
+  reqId?: string,
 ): void {
-  log.info({ authEvent: event, userId }, 'Auth event');
+  log.info(
+    reqId === undefined
+      ? { authEvent: event, userId }
+      : { authEvent: event, userId, reqId },
+    'Auth event',
+  );
 }

@@ -10,8 +10,8 @@ A **snapshot** of where the project is now — overwritten, never appended to. H
 MVP feature-complete and in owner QA; not deployed anywhere yet (KI-045). Every backlog
 section is done (`docs/tasks.md`, archive in `docs/tasks-archive.md`):
 
-- auth — email + password, Google sign-in (ADR-034), DB sessions, verify/resend/reset
-  email;
+- auth — email + password (reCAPTCHA v2, ADR-038), Google + Yandex ID sign-in
+  (ADR-034/037), DB sessions, verify/resend/reset email;
 - organizer profile, full ride lifecycle (`draft → published → registration_open →
 registration_closed → started → finished`, `cancelled`), the six-tab ride workspace
   «Управление заездом», reschedule (ADR-029);
@@ -25,12 +25,19 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-259 (owner, 2026-10-14, security): KI-097 closed — page CSP by per-request nonce +
-`'strict-dynamic'` (ADR-036, `apps/web/src/proxy.ts`); every page renders per request.
-Deployed 2026-10-14 together with CR-251 and CR-253..CR-258 (`ca19f6d`, PR #61): no
-open Lictor finding left in code. Since CR-253, unverified accounts can't join rides.
+CR-260 + CR-261 (owner, 2026-10-14), one PR from `feat/yandex-oauth-recaptcha`
+(committed):
 
-Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
+- CR-260: «Войти через Яндекс» on `/login`/`/register` (ADR-037) — Yandex ID OAuth code
+  flow with PKCE/state; the Google account-linking rules are now one shared
+  `signInWithOAuth`. Live-checked with the owner's Yandex ID app.
+- CR-261 (security): Google reCAPTCHA v2 on register, password login and
+  forgot-password, verified only by the API and failing closed (ADR-038, owner
+  confirmed); register's «Повторите пароль» is browser-only. Off until both keys are
+  set; deploying it needs a web rebuild.
+
+Before it (details in the changelog): CR-259 page CSP by nonce (ADR-036) and CR-251,
+CR-253..CR-258 Lictor fixes (deployed, PR #61); CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
 CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
 
@@ -51,6 +58,13 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-260/CR-261 — awaiting merge and deploy. Owner-side: `YANDEX_CLIENT_ID`/`_SECRET`
+(redirect URI `…/api/v1/auth/yandex/callback`), `RECAPTCHA_SECRET_KEY` and
+`NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (v2 «I'm not a robot», coffeeride.site + localhost) in
+the VPS `.env`, then a web rebuild; the reCAPTCHA secret is not yet confirmed by a real
+solved challenge (a registration → 201, `captcha_unavailable` = secret rejected); name
+reCAPTCHA in the privacy policy.
 
 CR-249 — first production Google sign-in hit `account_unverified` (the owner's own
 password account was never confirmed). Owner chose ADR-035: Google claims an unverified
@@ -157,4 +171,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-259)
+2026-10-14 (CR-260, CR-261)

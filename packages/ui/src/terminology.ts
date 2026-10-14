@@ -13,6 +13,8 @@ import type {
   RoutePointType,
   StravaSyncOutcome,
   GoogleSignInOutcome,
+  CaptchaErrorCode,
+  YandexSignInOutcome,
 } from 'types';
 
 // `RideStatus`/`BicycleType`/`DifficultyLevel` themselves moved to `packages/types`
@@ -204,6 +206,9 @@ export const AUTH_TERMS = {
   emailLabel: 'Email',
   passwordLabel: 'Пароль',
   passwordHint: 'Минимум 12 символов.',
+  // CR-261: the register form's second password field, checked before sending.
+  confirmPasswordLabel: 'Повторите пароль',
+  passwordsMismatch: 'Пароли не совпадают.',
   registerSubmit: 'Зарегистрироваться',
   registerSubmitPending: 'Регистрация…',
   registerSuccessTitle: 'Аккаунт создан',
@@ -230,18 +235,41 @@ export const AUTH_TERMS = {
   forgotPasswordLink: 'Забыли пароль?',
 } as const;
 
+// CR-261 (ADR-038): the reCAPTCHA v2 «Я не робот» check on register, password
+// login and forgot-password. `apiError` words the API's refusals; the widget's own
+// labels are Google's (`hl=ru`).
+export const CAPTCHA_TERMS = {
+  label: 'Проверка «Я не робот»',
+  required: 'Отметьте «Я не робот».',
+  expired: 'Проверка устарела — отметьте «Я не робот» ещё раз.',
+  loadFailed:
+    'Не удалось загрузить проверку «Я не робот». Обновите страницу или попробуйте позже.',
+  apiError: {
+    captcha_required: 'Отметьте «Я не робот».',
+    captcha_invalid:
+      'Проверка «Я не робот» не пройдена или устарела. Отметьте её ещё раз.',
+    captcha_unavailable:
+      'Проверка «Я не робот» сейчас недоступна. Попробуйте ещё раз через минуту.',
+  } satisfies Record<CaptchaErrorCode, string>,
+} as const;
+
 // CR-247 (ADR-034): «Войти через Google» on `/login` and `/register`, and the
 // message `/login?oauth=<outcome>` shows when the sign-in came back without a session.
-export const GOOGLE_SIGN_IN_TERMS = {
-  // Google's branding guidelines: «Sign in with Google» in the page's language.
-  button: 'Войти через Google',
+// CR-247, CR-260: the block under the login/register form that holds the external
+// sign-in buttons (Google, Yandex ID) — one divider and one consent line for all.
+export const OAUTH_SIGN_IN_TERMS = {
   divider: 'или',
-  // Shown under the button: signing in with Google creates an account.
+  // Shown under the buttons: signing in with a provider creates an account.
   consentPrefix: 'Продолжая, вы принимаете ',
   consentTerms: 'условия использования',
   consentJoin: ' и ',
   consentPrivacy: 'политику конфиденциальности',
   consentEnd: '.',
+} as const;
+
+export const GOOGLE_SIGN_IN_TERMS = {
+  // Google's branding guidelines: «Sign in with Google» in the page's language.
+  button: 'Войти через Google',
   outcome: {
     cancelled: 'Вход через Google отменён.',
     expired:
@@ -257,6 +285,25 @@ export const GOOGLE_SIGN_IN_TERMS = {
       'Аккаунт с этим email уже есть, но почта в нём не подтверждена. Войдите по паролю и подтвердите почту — после этого можно входить через Google.',
     blocked: 'Аккаунт заблокирован администратором.',
   } satisfies Record<GoogleSignInOutcome, string>,
+} as const;
+
+// CR-260 (ADR-037): «Войти через Яндекс» and why a Yandex sign-in came back to
+// `/login?oauth=<outcome>&provider=yandex` without a session.
+export const YANDEX_SIGN_IN_TERMS = {
+  button: 'Войти через Яндекс',
+  outcome: {
+    cancelled: 'Вход через Яндекс отменён.',
+    expired:
+      'Время на вход через Яндекс истекло. Нажмите «Войти через Яндекс» ещё раз.',
+    state:
+      'Не удалось подтвердить вход через Яндекс. Нажмите «Войти через Яндекс» ещё раз.',
+    failed: 'Яндекс не подтвердил вход. Попробуйте ещё раз.',
+    unavailable:
+      'Вход через Яндекс сейчас недоступен. Войдите по email и паролю.',
+    email_unverified:
+      'В аккаунте Яндекса нет адреса почты — войти через него нельзя. Добавьте почту в Яндекс ID или войдите по email и паролю.',
+    blocked: 'Аккаунт заблокирован администратором.',
+  } satisfies Record<YandexSignInOutcome, string>,
 } as const;
 
 // CR-247: `/privacy` and `/terms`. The documents' own text lives with the pages

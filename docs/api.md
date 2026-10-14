@@ -13,6 +13,17 @@ alive until every client is migrated (`.claude/rules/extensibility.md`).
 
 ## Auth
 
+**reCAPTCHA (CR-261, ADR-038).** While `RECAPTCHA_SECRET_KEY` is set, `register`,
+`login` and `forgot-password` take `captchaToken` (the reCAPTCHA v2 widget's token,
+1..10 000 chars) and check it with Google `siteverify` after both rate-limit tiers and
+body validation, before anything else: missing → `400 captcha_required`; refused,
+expired or already used → `400 captcha_invalid`; Google unreachable, slow (5 s), not
+`200`, or rejecting the secret → `503 captcha_unavailable` (fails closed). The refusal
+never depends on the account. Unset secret → no token asked for. Google sign-in,
+`verify-email`, `reset-password` and `resend-verification` never ask. `register` gets
+`password` only — the web form's «Повторите пароль» is checked in the browser and never
+sent.
+
 POST `/v1/auth/register` — **implemented (CR-011)**. Body: `{ email, password }`
 (`password` min 12 chars, `.claude/rules/security.md`). `201` →
 `{ user: { id, email, emailVerified, createdAt }, verificationUrl? }` —
@@ -87,7 +98,22 @@ API no longer sends `account_unverified` — the outcome stays in the list for o
 links). Clears the
 `google-oauth` cookie every time. Per-IP 10/min.
 
-GET `/v1/auth/google/status` — **implemented (CR-247)**. `200 { available }`; `/login`/`/register` read it server-side (`features/auth/google/server-status.ts`), so the button is in the first HTML.
+GET `/v1/auth/google/status` — **implemented (CR-247)**. `200 { available }`; `/login`/`/register` read it server-side (`features/auth/oauth/server-status.ts`, CR-260), so the button is in the first HTML.
+
+GET `/v1/auth/yandex` — **implemented (CR-260, ADR-037)**. Query `next?` (kept only if
+`safeNextPath` accepts it). `303` to `oauth.yandex.ru/authorize` (`login:info
+login:email`, PKCE S256, `state`) and sets the 10-minute signed `yandex-oauth` cookie
+(`__Host-yandex-oauth` in production). Not configured →
+`303 /login?oauth=unavailable&provider=yandex`. Per-IP 10/min.
+
+GET `/v1/auth/yandex/callback` — **implemented (CR-260)**. Yandex's redirect target
+(`WEB_ORIGIN/api/v1/auth/yandex/callback`). Always `303`: success → session cookie +
+`next` or `/me`; otherwise `/login?next=…&oauth=<outcome>&provider=yandex` with
+`outcome` one of `types`' `YANDEX_SIGN_IN_OUTCOMES` (`cancelled`, `expired`, `state`,
+`failed`, `unavailable`, `email_unverified`, `blocked`). Clears the `yandex-oauth`
+cookie every time. Per-IP 10/min.
+
+GET `/v1/auth/yandex/status` — **implemented (CR-260)**. `200 { available }`.
 
 POST `/v1/auth/forgot-password` — **implemented (CR-060)**. Body: `{ email }`.
 Always `204` with no body, whether or not the email belongs to a real

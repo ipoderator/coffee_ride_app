@@ -22,8 +22,24 @@
 // connections, frames, fonts and images from any other origin, `<base>`/
 // `<object>` tricks, form posts elsewhere, and framing.
 // Dev only: `'unsafe-eval'` (React's dev tooling) and `ws:` (hot reload).
+//
+// Google reCAPTCHA v2 (CR-261, ADR-038) on the auth forms: its loader comes from
+// `www.google.com/recaptcha/`, the challenge code from `www.gstatic.com/recaptcha/`
+// (both trusted through `'strict-dynamic'`; the paths are the fallback), and the
+// checkbox and the image challenge are frames from `www.google.com/recaptcha/` and
+// `recaptcha.google.com/recaptcha/`, and the loader may call back to
+// `www.google.com/recaptcha/` — Google's documented CSP for reCAPTCHA. Only those
+// paths, not the hosts.
 
 const TWO_GIS = 'https://*.2gis.com';
+const RECAPTCHA_SCRIPTS = [
+  'https://www.google.com/recaptcha/',
+  'https://www.gstatic.com/recaptcha/',
+];
+const RECAPTCHA_FRAMES = [
+  'https://www.google.com/recaptcha/',
+  'https://recaptcha.google.com/recaptcha/',
+];
 
 export function contentSecurityPolicy({
   dev,
@@ -40,14 +56,20 @@ export function contentSecurityPolicy({
       "'strict-dynamic'",
       ...(dev ? ["'unsafe-eval'"] : []),
       'https://mapgl.2gis.com',
+      ...RECAPTCHA_SCRIPTS,
       'blob:',
     ],
     'worker-src': ["'self'", 'blob:'],
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'blob:', TWO_GIS],
     'font-src': ["'self'", 'data:'],
-    'connect-src': ["'self'", TWO_GIS, ...(dev ? ['ws:'] : [])],
-    'frame-src': ["'none'"],
+    'connect-src': [
+      "'self'",
+      TWO_GIS,
+      'https://www.google.com/recaptcha/',
+      ...(dev ? ['ws:'] : []),
+    ],
+    'frame-src': RECAPTCHA_FRAMES,
     'frame-ancestors': ["'none'"],
     'base-uri': ["'self'"],
     'form-action': ["'self'"],

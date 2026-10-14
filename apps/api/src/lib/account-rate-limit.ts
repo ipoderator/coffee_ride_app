@@ -14,7 +14,7 @@ const REDIS_OP_TIMEOUT_MS = 500;
 // `ReplyError.command.args`). An HMAC keeps one counter per account without
 // the address: keyed (not a bare hash) so a leaked key can't be confirmed
 // against a guessed email, the key derived from AUTH_SECRET under its own
-// label so it never doubles as another signature (`google-transaction.ts`).
+// label so it never doubles as another signature (`oauth-transaction.ts`).
 const KEY_LABEL = 'coffee-ride/account-rate-limit-key/v1';
 
 /**

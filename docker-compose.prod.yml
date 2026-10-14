@@ -63,6 +63,9 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY: ${NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY}
+        # CR-261 (ADR-038): reCAPTCHA v2 site key — set together with the api's
+        # RECAPTCHA_SECRET_KEY below, or neither.
+        NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
         # Internal-only — Caddy is the only public entry point (ADR-018 §2).
         # CR-134: a build arg, not runtime `environment:` — Next bakes the
         # rewrite target into the image at `next build` (apps/web/Dockerfile).
@@ -118,6 +121,12 @@ services:
       # CR-247 (ADR-034). Optional — empty means Google sign-in is off.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # CR-261 (ADR-038). Optional — empty means register/login/forgot-password
+      # ask for no reCAPTCHA. Server-only; pairs with the web build's site key.
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
+      # CR-260 (ADR-037). Optional — empty means Yandex ID sign-in is off.
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
       # CR-079/KI-006. Optional — see .env.example. Empty string is fine:
       # env.ts's z.string().url().optional() treats an unset/empty value as
       # "not configured", the same degraded mode REDIS_URL/S3_* already use.

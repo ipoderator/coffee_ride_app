@@ -189,6 +189,13 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   critical journeys (`.claude/rules/resilience.md`); don't add a
   `skipOnError: false`/fail-closed path "for security" without re-reading
   that rule first;
+- the reCAPTCHA gate (ADR-038, CR-261) on exactly `/register`/`/login`/
+  `/forgot-password`, in `preHandler` after the per-account tier (the per-IP tier runs
+  earlier) so a flood never reaches Google; failing CLOSED by decision — the one
+  deliberate exception to the fail-open rule above; `siteverify` never retried (a
+  token is spent on the first call) and only in `recaptcha-client.ts`; the forms
+  resetting the widget after every failed answer; `register` never sending
+  `confirmPassword`; e2e servers run with both reCAPTCHA keys empty;
 - the per-account rate-limit tier staying independent of the per-IP one
   (two separate gates keyed differently, not a combined key) and scoped to
   exactly `/register`/`/login`/`/forgot-password` (the three endpoints
@@ -374,3 +381,11 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   inside one transaction (`FOR UPDATE` + `ON CONFLICT DO NOTHING` on `users_email_unique` and
   `auth_identities_provider_account_unique`); `loginUser` keeps the decoy verify for a
   `null` `password_hash`.
+- Yandex ID sign-in (ADR-037, CR-260) follows the same invariants: Yandex HTTP only in
+  `modules/auth/yandex-client.ts` (resilience, the code exchange never retried), the
+  access token a local of `completeSignIn`, `logLevel: 'warn'` on the callback, the
+  cookie cleared on every callback, `state` checked before the query's `error`/`code`
+  are believed; account rules only via `signInWithOAuth` (`oauth-sign-in.service.ts`,
+  shared with Google). The transaction cookie's HMAC label is per provider — keep
+  Google's `coffee-ride/google-oauth-transaction/v1` unchanged. Their auth events go
+  through `app.log` with `reqId` — the callbacks' request log drops `info` (CR-260).

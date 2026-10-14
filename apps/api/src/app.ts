@@ -20,6 +20,8 @@ import { registerEmail } from './plugins/email.js';
 import { registerMaps } from './plugins/maps.js';
 import { registerS3 } from './plugins/s3.js';
 import { registerGoogle } from './plugins/google.js';
+import { registerRecaptcha } from './plugins/recaptcha.js';
+import { registerYandex } from './plugins/yandex.js';
 import { registerStrava } from './plugins/strava.js';
 import { registerSecurityHeaders } from './plugins/security-headers.js';
 import { registerNotificationQueue } from './modules/notifications/queue.js';
@@ -92,6 +94,8 @@ export async function buildApp(env: Env) {
   registerMaps(app, env);
   registerStrava(app, env);
   registerGoogle(app, env);
+  registerRecaptcha(app, env);
+  registerYandex(app, env);
   // Needs app.db/app.emailProvider (worker's job processor reads/writes
   // notifications and sends email) — must come after registerDb/registerEmail.
   registerNotificationQueue(app, env);

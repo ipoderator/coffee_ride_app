@@ -31,6 +31,7 @@ import {
   toPublicUser,
   verifyEmail,
 } from './auth.service.js';
+import { RecaptchaUnavailableError } from './recaptcha-client.js';
 import { createSession, revokeSession } from './session.js';
 import { clearSessionCookie, setSessionCookie } from './session-cookie.js';
 
@@ -129,6 +130,53 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     }
   }
 
+  // CR-261 (ADR-038): the reCAPTCHA gate of register, password login and
+  // forgot-password. Runs after both rate-limit tiers (a flood is refused before it
+  // costs a call to Google) and before the service, so a refusal says nothing about
+  // the account — the generic auth errors stay generic. Off while
+  // `RECAPTCHA_SECRET_KEY` is unset. Fails closed when Google can't answer: the
+  // widget in the browser depends on Google anyway, and an open gate during an
+  // outage would be a bot's bypass. The token is never logged.
+  async function enforceCaptcha(
+    request: FastifyRequest,
+    token: string | undefined,
+  ) {
+    const recaptcha = app.recaptcha;
+    if (!recaptcha) return;
+
+    if (!token) {
+      throw new AuthServiceError(
+        'captcha_required',
+        400,
+        'Bad Request',
+        'Complete the CAPTCHA and try again.',
+      );
+    }
+
+    let verdict;
+    try {
+      verdict = await recaptcha.verify(token, request.ip);
+    } catch (error) {
+      if (!(error instanceof RecaptchaUnavailableError)) throw error;
+      request.log.warn({ err: error }, 'reCAPTCHA verification unavailable');
+      throw new AuthServiceError(
+        'captcha_unavailable',
+        503,
+        'Service Unavailable',
+        'The CAPTCHA check is temporarily unavailable. Try again later.',
+      );
+    }
+    if (!verdict.ok) {
+      request.log.info({ reason: verdict.reason }, 'reCAPTCHA token rejected');
+      throw new AuthServiceError(
+        'captcha_invalid',
+        400,
+        'Bad Request',
+        'The CAPTCHA was not passed or has expired. Complete it again.',
+      );
+    }
+  }
+
   app.post(
     '/register',
     {
@@ -137,8 +185,11 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         response: { 201: registerResponseSchema },
       },
       config: { rateLimit: AUTH_RATE_LIMIT },
-      preHandler: async (request) =>
-        enforceAccountRateLimit('register', request.body.email),
+      preHandler: [
+        async (request) =>
+          enforceAccountRateLimit('register', request.body.email),
+        async (request) => enforceCaptcha(request, request.body.captchaToken),
+      ],
     },
     async (request, reply) => {
       const { user, verificationToken } = await registerUser(
@@ -245,8 +296,10 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
         response: { 200: loginResponseSchema },
       },
       config: { rateLimit: AUTH_RATE_LIMIT },
-      preHandler: async (request) =>
-        enforceAccountRateLimit('login', request.body.email),
+      preHandler: [
+        async (request) => enforceAccountRateLimit('login', request.body.email),
+        async (request) => enforceCaptcha(request, request.body.captchaToken),
+      ],
     },
     async (request, reply) => {
       // Generic `invalid_credentials` for both "no such account" and "wrong
@@ -272,8 +325,11 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     {
       schema: { body: forgotPasswordRequestSchema },
       config: { rateLimit: AUTH_RATE_LIMIT },
-      preHandler: async (request) =>
-        enforceAccountRateLimit('forgot-password', request.body.email),
+      preHandler: [
+        async (request) =>
+          enforceAccountRateLimit('forgot-password', request.body.email),
+        async (request) => enforceCaptcha(request, request.body.captchaToken),
+      ],
     },
     async (request, reply) => {
       // The response stays identical whether or not the email belongs to a

@@ -157,6 +157,28 @@ const envSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.string().optional(),
   ),
+  // CR-261 (ADR-038): the server half of the Google reCAPTCHA v2 key pair (the
+  // site key is `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, baked into apps/web). Set → register,
+  // password login and forgot-password require a token `plugins/recaptcha.ts` checks
+  // with Google; unset → no check (local dev, tests); the preflight warns. Server-only,
+  // never logged (`loadEnv()`'s errors name fields, not values) or sent to a client.
+  RECAPTCHA_SECRET_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  // CR-260 (ADR-037): the Yandex ID app behind «Войти через Яндекс»
+  // (oauth.yandex.ru → «Создать приложение», platform «Веб-сервисы», rights
+  // `login:info` + `login:email`). Optional, the same both-or-neither shape as
+  // GOOGLE_*: without the pair `plugins/yandex.ts` constructs no client and the button
+  // is hidden. The secret is server-only and never logged.
+  YANDEX_CLIENT_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
+  YANDEX_CLIENT_SECRET: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().optional(),
+  ),
   AUTH_SKIP_EMAIL_VERIFICATION: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z
@@ -167,6 +189,10 @@ const envSchema = z.object({
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+// developers.google.com/recaptcha/docs/faq — always answers `success: true`.
+export const GOOGLE_RECAPTCHA_TEST_SECRET =
+  '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe';
 
 const isLocalhost = (value: string) =>
   value.includes('localhost') || value.includes('127.0.0.1');
@@ -185,6 +211,14 @@ const PRODUCTION_PLACEHOLDER_CHECKS: ReadonlyArray<{
     isPlaceholder: (v) => v === 'change-me',
     message:
       "AUTH_SECRET is still the placeholder value 'change-me'. Generate one with: openssl rand -base64 32",
+  },
+  {
+    // CR-261 (ADR-038): Google's published test secret passes every token —
+    // a CAPTCHA that checks nothing.
+    key: 'RECAPTCHA_SECRET_KEY',
+    isPlaceholder: (v) => v === GOOGLE_RECAPTCHA_TEST_SECRET,
+    message:
+      "RECAPTCHA_SECRET_KEY is Google's public test secret, which accepts every token.",
   },
   {
     key: 'S3_ACCESS_KEY_ID',

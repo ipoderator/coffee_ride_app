@@ -123,6 +123,30 @@ const CHECKS: ReadonlyArray<PreflightCheck> = [
       'Set both from the Google Cloud OAuth client (redirect URI WEB_ORIGIN/api/v1/auth/google/callback), or clear both to make the degraded mode explicit.',
   },
   {
+    // CR-261 (ADR-038): unset is a supported mode (dev/tests), never a silent one.
+    keys: ['RECAPTCHA_SECRET_KEY'],
+    applies: (env) => env.RECAPTCHA_SECRET_KEY === undefined,
+    problem:
+      'RECAPTCHA_SECRET_KEY is empty, so register, password login and forgot-password ask for no reCAPTCHA.',
+    consequence:
+      'Bots meet only the rate limits on account creation, password guessing and reset-email sending.',
+    action:
+      'Create a reCAPTCHA v2 «I am not a robot» key pair for DOMAIN at google.com/recaptcha/admin; set RECAPTCHA_SECRET_KEY here and NEXT_PUBLIC_RECAPTCHA_SITE_KEY for the web build — both, or neither.',
+  },
+  {
+    // CR-260: `plugins/yandex.ts` needs the pair, like Google's.
+    keys: ['YANDEX_CLIENT_ID', 'YANDEX_CLIENT_SECRET'],
+    applies: (env) =>
+      (env.YANDEX_CLIENT_ID === undefined) !==
+      (env.YANDEX_CLIENT_SECRET === undefined),
+    problem:
+      'Only one of YANDEX_CLIENT_ID / YANDEX_CLIENT_SECRET is set, so no Yandex ID client is constructed.',
+    consequence:
+      'The login and register pages do not offer «Войти через Яндекс»; email and password still work.',
+    action:
+      'Set both from the Yandex ID app at oauth.yandex.ru (Redirect URI WEB_ORIGIN/api/v1/auth/yandex/callback), or clear both to make the degraded mode explicit.',
+  },
+  {
     keys: ['MAPS_2GIS_API_KEY'],
     applies: (env) => env.MAPS_2GIS_API_KEY === undefined,
     problem:

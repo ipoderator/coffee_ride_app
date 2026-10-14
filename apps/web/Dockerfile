@@ -2,7 +2,8 @@
 #
 # CR-074. Build context is the monorepo root:
 #   docker build -f apps/web/Dockerfile --build-arg API_INTERNAL_URL=http://api:4000 \
-#     --build-arg NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY=... .
+#     --build-arg NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY=... \
+#     --build-arg NEXT_PUBLIC_RECAPTCHA_SITE_KEY=... .
 #
 # Three stages: `deps` (install once, cache-friendly), `builder` (compile the
 # Next.js standalone output), `runner` (the actual runtime image — no
@@ -42,6 +43,11 @@ COPY . .
 # `.claude/rules/maps.md` and `.env.example`).
 ARG NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY
 ENV NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY=$NEXT_PUBLIC_MAPS_2GIS_MAPGL_KEY
+# CR-261 (ADR-038): the public half of the reCAPTCHA v2 pair, inlined the same way.
+# Only the site key — `RECAPTCHA_SECRET_KEY` is the API's and never reaches this image.
+# Empty = no «Я не робот» widget (the API must then run without the secret too).
+ARG NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+ENV NEXT_PUBLIC_RECAPTCHA_SITE_KEY=$NEXT_PUBLIC_RECAPTCHA_SITE_KEY
 # CR-134. next.config.ts's `/api/v1/*` rewrite destination is resolved here,
 # at `next build`, and written into routes-manifest.json — the standalone
 # server never re-reads it, so setting API_INTERNAL_URL on the running

@@ -15,6 +15,8 @@ import {
   fieldErrorMessage,
   serverFieldErrorMessage,
 } from '@/lib/forms/field-errors';
+import { RecaptchaField } from '../../captcha/components/RecaptchaField';
+import { RECAPTCHA_SITE_KEY, useCaptcha } from '../../captcha/use-captcha';
 
 interface FieldErrors {
   email?: string;
@@ -31,8 +33,14 @@ interface FieldErrors {
  *
  * CR-141: `next` (the page already validated it; re-checked right before
  * navigating) is where a successful sign-in returns to, `/me` otherwise.
+ *
+ * CR-261 (ADR-038): the reCAPTCHA tick when a site key is configured. A CAPTCHA
+ * refusal is checked before the credentials, so it reads the same for any account.
  */
-export function LoginForm({ next = null }: { next?: string | null } = {}) {
+export function LoginForm({
+  next = null,
+  captchaSiteKey = RECAPTCHA_SITE_KEY,
+}: { next?: string | null; captchaSiteKey?: string | null } = {}) {
   const router = useRouter();
   const { refresh } = useSession();
   const [email, setEmail] = useState('');
@@ -40,6 +48,7 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const captcha = useCaptcha(captchaSiteKey);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,9 +56,10 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
     if (isPending) return;
 
     const parsed = loginRequestSchema.safeParse({ email, password });
-    if (!parsed.success) {
+    const captchaPassed = captcha.check();
+    if (!parsed.success || !captchaPassed) {
       const nextErrors: FieldErrors = {};
-      for (const issue of parsed.error.issues) {
+      for (const issue of parsed.error?.issues ?? []) {
         const field = issue.path[0];
         if (field === 'email' || field === 'password') {
           nextErrors[field] ??= fieldErrorMessage(issue);
@@ -65,11 +75,14 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
     setIsPending(true);
 
     try {
-      await login(parsed.data);
+      await login({ ...parsed.data, ...captcha.payload() });
       refresh();
       router.replace(safeNextPath(next) ?? DEFAULT_AFTER_LOGIN);
     } catch (error) {
-      if (error instanceof ApiError) {
+      const code = error instanceof ApiError ? error.problem.code : undefined;
+      if (captcha.afterFailure(code)) {
+        // The CAPTCHA field shows the API's refusal.
+      } else if (error instanceof ApiError) {
         if (error.problem.code === 'invalid_credentials') {
           // Deliberately a form-level error, not attached to either field —
           // pointing at "email" or "password" specifically would itself leak
@@ -131,6 +144,14 @@ export function LoginForm({ next = null }: { next?: string | null } = {}) {
             disabled={isPending}
           />
         </FormField>
+
+        {captcha.siteKey && (
+          <RecaptchaField
+            id="login-captcha"
+            siteKey={captcha.siteKey}
+            {...captcha.fieldProps}
+          />
+        )}
 
         {formError && (
           <p role="alert" className="text-body-sm text-danger">

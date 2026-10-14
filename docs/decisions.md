@@ -1801,3 +1801,124 @@ or on a MapGL upgrade (re-inventory its hosts and loader).
 
 Delete `src/proxy.ts`, put the CSP back in `next.config.ts`'s `headers()` with
 `'unsafe-inline'`, drop `headers()`/`nonce` from the root layout; no data involved.
+
+## ADR-037 — Yandex ID sign-in beside Google, one shared account-linking service
+
+Status: Accepted (2026-10-14, owner request, CR-260). Extends ADR-034/ADR-035.
+
+### Context
+
+Coffee Ride is a Russian product; most of its riders have a Yandex account, fewer use
+Google. The owner asked for «Войти через Яндекс» on `/login` and `/register`, built on
+the Google pattern: server-side Authorization Code Flow with PKCE and `state`, a stable
+provider id in `auth_identities`, atomic linking by a confirmed email, the existing
+session cookie, no provider tokens kept.
+
+### Decision
+
+- **Flow.** `GET /v1/auth/yandex?next=` → `303` to `oauth.yandex.ru/authorize`
+  (`login:info login:email`, PKCE S256, `state`) with a 10-minute signed
+  `yandex-oauth` cookie (`__Host-` in production); `GET /v1/auth/yandex/callback`
+  clears the cookie, opens it, compares `state` (constant time) **before** reading
+  anything else of the query (a decline included), exchanges the code with the PKCE
+  verifier (Basic client auth, never retried), reads `login.yandex.ru/info` with the
+  token and ends in the ordinary ADR-013 session. `GET /v1/auth/yandex/status` drives
+  the button. Yandex HTTP only in `modules/auth/yandex-client.ts`, through
+  `packages/resilience` (own breaker; the profile read retried once). The access token
+  is a local of `completeSignIn` — never stored or logged.
+- **Identity.** `auth_identities.provider = 'yandex'`, `provider_account_id` = the
+  profile's numeric `id` (stable; the login and email can change). No migration: the
+  column is text (ADR-034 anticipated a second provider).
+- **Email = verified.** Yandex ID has no OIDC `email_verified`. Its `default_email` is
+  one of the account's addresses, and Yandex ID holds only addresses it has confirmed
+  (a Yandex Mail box, or an external address confirmed by code/link before it is
+  accepted), so a present `default_email` counts as verified; an absent one refuses
+  the sign-in (`email_unverified`). The ADR-035 rules then apply unchanged: a verified
+  account is linked, an unverified one claimed (password, sessions, pending
+  verify/reset links voided), a blocked one refused.
+- **One linking service.** `google.service.ts` became `oauth-sign-in.service.ts`
+  (`signInWithOAuth(db, provider, identity)`), and `google-transaction.ts` became
+  `oauth-transaction.ts` with an HMAC key label per provider (Google's label kept, so
+  in-flight Google cookies survive the deploy; a Google cookie never opens as a
+  Yandex one). Same transaction, `FOR UPDATE`, `ON CONFLICT DO NOTHING` on
+  `users_email_unique` and `auth_identities_provider_account_unique` — so races
+  between two Yandex callbacks, or a Google and a Yandex sign-in of one person, end in
+  one user with one identity per provider.
+- **Web.** `features/auth/oauth` renders one block — divider, «Войти через Яндекс»,
+  «Войти через Google», one consent line — for the providers the server reports.
+  Yandex failures return to `/login?oauth=<outcome>&provider=yandex`; no `provider`
+  still means Google.
+
+### Consequences
+
+- Two providers, one set of account rules; a third is a client + routes file and a
+  `provider` value.
+- Trust in an address now rests on Yandex's confirmation as well as Google's: a
+  Yandex account carrying someone's confirmed address claims or links that person's
+  Coffee Ride account — the same exposure ADR-035 accepted for Google.
+- The privacy policy names Yandex as a recipient and the `yandex-oauth` cookie.
+
+### What this does NOT mean
+
+No Yandex tokens for later API calls, no avatar/phone/birthday rights, no unlinking UI
+(by email, as for Google), no account merge across different emails.
+
+### Revisit
+
+If Yandex documents an explicit verification flag, or starts returning unconfirmed
+addresses in `default_email`; if a third provider appears (consider a provider table
+instead of one client per file).
+
+### Rollback
+
+Clear `YANDEX_CLIENT_ID`/`_SECRET` — the button disappears and the routes answer
+`unavailable`; existing `yandex` identities stay inert. Removing the code needs no
+migration.
+
+## ADR-038 — reCAPTCHA v2 on password auth, verified server-side, failing closed
+
+Status: Accepted (2026-10-14, owner request, CR-261).
+
+### Context
+
+Register, password login and forgot-password were protected by rate limits only (per IP
+and per account, ADR-013/CR-058). The owner asked for Google reCAPTCHA v2 («Я не робот»)
+on those three forms, verified only on the server, with OAuth sign-in left untouched.
+`.claude/rules/resilience.md` treats login/register as critical journeys that an
+external failure must not block, which decides what happens when Google can't answer.
+
+### Decision
+
+- `apps/web`: `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (build-time, public) renders the v2
+  checkbox (`render=explicit`, `hl=ru`, page theme, compact under 304 px) in
+  `features/auth/captcha/`; the forms send its token as `captchaToken` and reset the
+  widget after any failed answer (a token is single-use). The page CSP allows only
+  Google's documented reCAPTCHA paths (`www.google.com/recaptcha/`,
+  `www.gstatic.com/recaptcha/`, `recaptcha.google.com/recaptcha/`).
+- `apps/api`: `RECAPTCHA_SECRET_KEY` (optional; unset = no check, preflight warns)
+  builds `modules/auth/recaptcha-client.ts`, the only `siteverify` caller — through
+  `packages/resilience` (5 s timeout, no retry because the token is spent on the first
+  call, one breaker). The gate runs after both rate-limit tiers and before the service,
+  so refusals don't depend on the account and floods cost no Google call.
+- **Fails closed**: Google unreachable → `503 captcha_unavailable`. The browser half
+  already depends on Google (no widget, no token), so failing open server-side would
+  only add a bypass window for bots without restoring sign-in for people. This is a
+  deliberate exception to resilience.md's critical-journey rule for this one gate;
+  Google sign-in and existing sessions are unaffected.
+- Register's «Повторите пароль» is client-only; the API contract has no
+  `confirmPassword`.
+
+### Consequences
+
+- A Google reCAPTCHA outage (or Google blocked for a visitor) stops password register/
+  login/reset requests; existing sessions and Google sign-in keep working.
+- Every check sends the token and the client IP to Google (privacy policy should name
+  reCAPTCHA — owner).
+- Keys come as a pair: a secret without the site key refuses every password sign-in.
+- The response `hostname` is not compared with `DOMAIN`; Google's default «verify the
+  origin of solutions» key setting covers it — keep it on.
+
+### Rollback
+
+Clear both env values (no CAPTCHA, no rebuild needed for the API; the web image needs a
+rebuild to drop the widget) — or revert the CR; no data involved.

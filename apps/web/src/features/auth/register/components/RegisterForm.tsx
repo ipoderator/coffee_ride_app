@@ -2,17 +2,27 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import { AUTH_TERMS, Button, Card, FormField, Input } from 'ui';
+import {
+  AUTH_TERMS,
+  Button,
+  Card,
+  FormField,
+  Input,
+  VALIDATION_TERMS,
+} from 'ui';
 import { loginHref, safeNextPath, verifyEmailHref } from '@/lib/auth/next-path';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
 import {
   fieldErrorMessage,
   serverFieldErrorMessage,
 } from '@/lib/forms/field-errors';
+import { RecaptchaField } from '../../captcha/components/RecaptchaField';
+import { RECAPTCHA_SITE_KEY, useCaptcha } from '../../captcha/use-captcha';
 
 interface FieldErrors {
   email?: string;
   password?: string;
+  confirmPassword?: string;
 }
 
 /**
@@ -43,10 +53,19 @@ function toVerifyEmailWebPath(
  * CR-141: registering doesn't sign in, so `next` (a return target, e.g. the
  * ride that sent the visitor here) is only handed on to `/login` — directly,
  * and through `/verify-email` (CR-197).
+ *
+ * CR-261: «Повторите пароль» is checked here, before sending, and never leaves the
+ * browser — the API gets `password` only. The reCAPTCHA tick (ADR-038) is asked for
+ * when a site key is configured; `captchaSiteKey` exists for stories and tests.
  */
-export function RegisterForm({ next = null }: { next?: string | null } = {}) {
+export function RegisterForm({
+  next = null,
+  captchaSiteKey = RECAPTCHA_SITE_KEY,
+}: { next?: string | null; captchaSiteKey?: string | null } = {}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const captcha = useCaptcha(captchaSiteKey);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -97,14 +116,26 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
     if (isPending) return;
 
     const parsed = registerRequestSchema.safeParse({ email, password });
+    const nextErrors: FieldErrors = {};
     if (!parsed.success) {
-      const nextErrors: FieldErrors = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         if (field === 'email' || field === 'password') {
           nextErrors[field] ??= fieldErrorMessage(issue);
         }
       }
+    }
+    if (confirmPassword === '') {
+      nextErrors.confirmPassword = VALIDATION_TERMS.required;
+    } else if (confirmPassword !== password) {
+      nextErrors.confirmPassword = AUTH_TERMS.passwordsMismatch;
+    }
+    const captchaPassed = captcha.check();
+    if (
+      !parsed.success ||
+      Object.keys(nextErrors).length > 0 ||
+      !captchaPassed
+    ) {
       setFieldErrors(nextErrors);
       setFormError(null);
       return;
@@ -117,14 +148,20 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
     try {
       // CR-244 (KI-089): the API appends `next` to the emailed link too.
       const safeNext = safeNextPath(next);
-      const response = await registerAccount(
-        safeNext ? { ...parsed.data, next: safeNext } : parsed.data,
-      );
+      // Only the schema's fields — never `confirmPassword`.
+      const response = await registerAccount({
+        ...parsed.data,
+        ...(safeNext ? { next: safeNext } : {}),
+        ...captcha.payload(),
+      });
       setVerificationUrl(response.verificationUrl);
       setEmailVerified(response.user.emailVerified);
       setSucceeded(true);
     } catch (error) {
-      if (error instanceof ApiError) {
+      const code = error instanceof ApiError ? error.problem.code : undefined;
+      if (captcha.afterFailure(code)) {
+        // The CAPTCHA field shows the API's refusal.
+      } else if (error instanceof ApiError) {
         if (error.problem.code === 'email_already_registered') {
           setFieldErrors({ email: AUTH_TERMS.emailAlreadyRegistered });
         } else if (
@@ -180,6 +217,28 @@ export function RegisterForm({ next = null }: { next?: string | null } = {}) {
             disabled={isPending}
           />
         </FormField>
+
+        <FormField
+          id="register-confirm-password"
+          label={AUTH_TERMS.confirmPasswordLabel}
+          error={fieldErrors.confirmPassword}
+        >
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            disabled={isPending}
+          />
+        </FormField>
+
+        {captcha.siteKey && (
+          <RecaptchaField
+            id="register-captcha"
+            siteKey={captcha.siteKey}
+            {...captcha.fieldProps}
+          />
+        )}
 
         {formError && (
           <p role="alert" className="text-body-sm text-danger">
