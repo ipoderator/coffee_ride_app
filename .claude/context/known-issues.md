@@ -433,18 +433,6 @@ Workaround: none needed for data; the user retries and sees the normal conflict.
 Next action: code — one shared `isUniqueViolation` (e.g. `apps/api/src/lib/`) that
 also checks `cause`, used by all four modules, with a race test per module.
 
-### KI-102 — `EditRideForm` dismiss test flaky under coverage load
-
-Status: open. Discovered: 2026-10-14 (CR-262 validation).
-Problem: `rides.test.tsx` › «without a route saves before asking; dismissing keeps the
-saved draft» failed once in `pnpm test:coverage` (dialog still in the document after
-`waitFor`'s default 1 s); it passed in the plain run, in a second coverage run and 3/3
-alone. Unrelated to CR-262's files.
-Impact: low — a red CI run that a retry clears.
-Workaround: re-run the job.
-Next action: code — wait for the dialog's exit animation explicitly (or a longer
-`waitFor` timeout for this assertion).
-
 ### KI-103 — Local web unit tests pick up the root `.env`'s reCAPTCHA site key
 
 Status: open. Discovered: 2026-10-14 (CR-262 merge validation).

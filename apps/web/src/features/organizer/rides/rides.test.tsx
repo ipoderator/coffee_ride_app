@@ -1146,11 +1146,12 @@ describe('EditRideForm', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
     await screen.findByRole('dialog');
-    fireEvent.keyDown(document, { key: 'Escape' });
-
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-    );
+    // Dialog binds Escape in a passive effect, which can run after the dialog
+    // is already in the DOM — retry until it is bound (as admin reviews does).
+    await waitFor(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
     expect(publishRideMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Название')).toBeInTheDocument();
   });
@@ -1253,10 +1254,11 @@ describe('EditRideForm', () => {
       );
       expect(publishRideMock).not.toHaveBeenCalled();
 
-      fireEvent.keyDown(document, { key: 'Escape' });
-      await waitFor(() =>
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-      );
+      // Escape is bound in Dialog's passive effect — retry until it is.
+      await waitFor(() => {
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
       expect(screen.getByText('Изменения сохранены.')).toBeInTheDocument();
       expect(publishRideMock).not.toHaveBeenCalled();
     });

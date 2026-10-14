@@ -99,3 +99,12 @@ Files: api `vitest.config.ts`, `test-support/{test-database-url,worker-databases
 Validation: api typecheck, lint (0 errors), format; `vitest --sequence.shuffle` with 3 workers, seeds 11/77/888/9 — 917/917 each; full `test:coverage` with live Redis/S3 + `coverage:check` — holds.
 Decisions: parallelism exposed order/timing dependencies, fixed at the root: four auth files deleted `users` without `rides` first (FK from leftover rides); Google held-race tests slept 150 ms instead of polling `pg_stat_activity` for the lock wait (now scoped to `current_database()`, as is #68's register race); the avatar live-Redis test now clears sign-in limiter keys like CR-058's block. `testTimeout` 15 s (slowest ~1 s alone; 5 s was exceeded under a full parallel turbo run); workers ≤ 15 (Redis databases 0..15).
 Follow-up: none.
+
+## 2026-10-15 — CR-267 follow-up — Escape on a just-opened dialog retried in two organizer tests
+
+Summary: `main`'s CI after #71 failed one web unit test (`rides.test.tsx`, «without a route saves before asking; dismissing keeps the saved draft»): `Dialog` binds Escape in a passive effect, and the test pressed Escape as soon as the dialog was in the DOM — under the busier `unit` job (api files now in parallel beside web) the effect had not run yet. Both such tests in the file now retry Escape inside `waitFor`, as admin reviews already does.
+Contract: none.
+Files: web `features/organizer/rides/rides.test.tsx`.
+Validation: the file 94/94, and 3× under artificial CPU load (10 × `yes`) — 94/94 each; prettier.
+Decisions: test-only; `Dialog` unchanged (binding in an effect is correct for the app). Resolves KI-102 (moved to the archive).
+Follow-up: none.
