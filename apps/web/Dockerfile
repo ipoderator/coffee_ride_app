@@ -11,7 +11,7 @@
 # CR-258: the base image is pinned by digest, not the moving `24-alpine` tag, so a
 # deploy's server-side build can't silently pick up a different image; Dependabot's
 # `docker` entry for this directory proposes each new digest as a PR.
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS deps
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS deps
 RUN corepack enable
 WORKDIR /app
 
@@ -65,7 +65,7 @@ RUN pnpm --filter web build
 # auto-detects the workspace root from the lockfile. `.next/static` and
 # `public` are deliberately left out of that trace (Next's own documented
 # standalone caveat) and are copied separately below.
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS runner
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS runner
 RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs
 WORKDIR /app
 ENV NODE_ENV=production
