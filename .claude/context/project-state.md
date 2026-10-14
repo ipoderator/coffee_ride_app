@@ -26,10 +26,9 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 ## Current task
 
 CR-259 (owner, 2026-10-14, security): KI-097 closed — page CSP by per-request nonce +
-`'strict-dynamic'` (ADR-036, `apps/web/src/proxy.ts`); every page now renders per
-request. On `feat/nonce-csp`. Not deployed yet; CR-251 + CR-253..CR-258 (merged,
-`1e362ff`) also await the production deploy — the owner approved it, the run itself
-needs the owner's permission for the deploy command.
+`'strict-dynamic'` (ADR-036, `apps/web/src/proxy.ts`); every page renders per request.
+Deployed 2026-10-14 together with CR-251 and CR-253..CR-258 (`ca19f6d`, PR #61): no
+open Lictor finding left in code. Since CR-253, unverified accounts can't join rides.
 
 Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
@@ -128,7 +127,7 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
    недоступен» instead of «точки слишком далеко друг от друга». A commercial key
    changes the limit, not the mapping.
-6. **After the deploy**: re-run `lictor-security-check` (expect no open finding).
+6. **Re-run `lictor-security-check`** on the deployed code (expect no open finding).
    Owner-side: restrict the 2GIS MapGL key to the domain.
 7. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).

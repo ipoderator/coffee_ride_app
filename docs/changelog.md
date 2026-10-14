@@ -126,3 +126,7 @@ Files: `src/proxy.ts` (+test), `lib/security/headers.ts` (+test), `app/layout.ts
 Validation: web unit 944/944 with coverage (web above baseline); typecheck, lint, `lint:root`, `format:check`, `next build` (all pages `ƒ`); e2e `security-headers.spec.ts` 4/4 (isolated dev servers); production build on :3100 in Chromium: `/`, `/?view=map` (MapGL tiles + canvas), `/login`, `/register`, a ride 404 — zero `securitypolicyviolation`.
 Decisions: `style-src` keeps `'unsafe-inline'` (a nonce would block `style` attributes); `'self'`/MapGL host/`blob:` kept as the pre-`strict-dynamic` fallback; prefetches skip the proxy.
 Follow-up: deploy; re-run `lictor-security-check`.
+
+## 2026-10-14 — CR-251, CR-253..CR-259 deployed
+
+Deploy: `ca19f6d` (PR #61, squash; includes PR #58 and #60) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration. After: API `/health` db/redis/s3 ok, `/`, `/login`, `/?view=map`, `/api/v1/rides` `200`; page CSP carries a fresh nonce + `'strict-dynamic'`, every `<script>` on `/` has it; Chromium on `/?view=map`: MapGL renders, zero `securitypolicyviolation`; no level ≥50 API log lines in the first 5 minutes. Unverified accounts now get `403 email_verification_required` on joining a ride (existing registrations kept).
