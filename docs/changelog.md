@@ -90,3 +90,12 @@ Follow-up: none.
 ## 2026-10-13 — CR-250 deployed
 
 Deploy: `65b5c4f` (PR #56, squash) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration. After: API `/health` db/redis/s3 ok, site `200`, `POST /v1/auth/login` with an empty body → `400`, no error-level API log lines in the first 2 minutes. Pre-existing raw-email account keys expire within their 60 s window; log lines written before the fix stay as they are.
+
+## 2026-10-14 — CR-251 — Redis command args no longer reach the API log
+
+Summary: ioredis attaches `command: { name, args }` to reply/abort errors and pino logged it whole. BullMQ's `queue.add()` passes the job JSON as an arg, so a Redis error during an enqueue logged the recipient email and the one-time verify/reset link. The API logger now redacts `err.command.args` (also in an error held in a property and in `AggregateError` members) — one app-wide `redact` rule; the command name stays. Reproduced live against Redis before/after. Unisender errors were already redacted (`redactEmails`).
+Contract: none.
+Files: `apps/api/src/lib/log-redaction.ts` (+ test), `apps/api/src/app.ts`.
+Validation: api 770/770 (live Redis/S3, `coffee_ride_test`); `pnpm coverage:check` holds; typecheck, lint (0 errors), prettier.
+Decisions: pino `redact`, not a custom `err` serializer — no new dependency, applies to every logger child. Production logs checked: none matching; the CR-250 deploy recreated the container, so nothing to purge.
+Follow-up: Dependabot #18 (`braces`, KI-095) has no fix to apply — owner's call on dismissing it.

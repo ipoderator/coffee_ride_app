@@ -1551,3 +1551,5 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       double click — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
 - [x] CR-237 (production QA) «Закрыть регистрацию» asks first and says it is
       irreversible — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
+- [x] CR-238 (production QA) the organizer sees their hidden riders list on the ride
+      page — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

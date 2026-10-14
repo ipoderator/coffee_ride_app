@@ -8,6 +8,7 @@ import {
   type ZodTypeProvider,
 } from '@fastify/type-provider-zod';
 import type { Env } from './env.js';
+import { LOG_REDACT } from './lib/log-redaction.js';
 import { generateRequestId } from './lib/request-id.js';
 import { createTrustProxy } from './lib/trust-proxy.js';
 import { registerSessionCookieName } from './plugins/auth.js';
@@ -56,6 +57,7 @@ export async function buildApp(env: Env) {
       // CR-079: once api/migrate/web all ship to one log pipeline, this is
       // what tells their lines apart.
       base: { service: 'api' },
+      redact: LOG_REDACT,
     },
     // CR-079: correlates a request across the CR-075 Caddy -> web -> api hop
     // — Fastify's default genReqId is just a per-process counter, useless
