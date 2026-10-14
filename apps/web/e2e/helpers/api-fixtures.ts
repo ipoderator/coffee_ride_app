@@ -53,8 +53,9 @@ export async function registerAndVerify(
     data: { email, password },
   });
   await assertOk(register, 'register');
-  const { user, verificationUrl } = (await register.json()) as {
-    user: { id: string };
+  // CR-262 (ADR-039): the register body carries no user — the id comes from
+  // `verify-email`'s reply below.
+  const { verificationUrl } = (await register.json()) as {
     verificationUrl: string;
   };
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(
@@ -65,6 +66,7 @@ export async function registerAndVerify(
     data: { token },
   });
   await assertOk(verify, 'verify-email');
+  const { user } = (await verify.json()) as { user: { id: string } };
   return { email, password, userId: user.id };
 }
 

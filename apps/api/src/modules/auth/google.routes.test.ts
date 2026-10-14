@@ -709,9 +709,14 @@ describe('signInWithOAuth (Google) — concurrency', () => {
 
     const rows = await app.db.select().from(users);
     expect(rows).toHaveLength(1);
-    const registered =
-      registration.status === 'fulfilled' &&
-      registration.value.statusCode === 201;
+    // CR-262 (ADR-039): `/register` answers 201 whoever won, so the winner is read
+    // from the account itself.
+    expect(registration.status).toBe('fulfilled');
+    expect(
+      (registration as PromiseFulfilledResult<{ statusCode: number }>).value
+        .statusCode,
+    ).toBe(201);
+    const registered = rows[0]!.passwordHash !== null;
     if (registered) {
       // The password account won: unverified, so Google must not have linked it.
       expect(google.status).toBe('rejected');

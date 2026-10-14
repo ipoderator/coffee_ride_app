@@ -1922,3 +1922,49 @@ external failure must not block, which decides what happens when Google can't an
 
 Clear both env values (no CAPTCHA, no rebuild needed for the API; the web image needs a
 rebuild to drop the widget) — or revert the CR; no data involved.
+
+## ADR-039 — Register without account enumeration; password confirmation checked by the API
+
+Status: Accepted (2026-10-14, owner request, CR-262). Supersedes ADR-038's last bullet
+(«Повторите пароль» client-only).
+
+### Context
+
+The owner's auth mockup task (`reference/coffee-ride-auth-mockup`) asked for the
+register screen with «Повторите пароль» checked in the browser **and** on the server,
+and for generic errors that never reveal whether an account exists. `/register`
+answered `409 email_already_registered` for a taken email — an account-existence oracle
+that `.claude/rules/security.md` already forbids for login and forgot-password.
+
+### Decision
+
+- `registerRequestSchema` gets an optional `confirmPassword`; when present it must equal
+  `password` (one Zod refinement shared by the web form and the API → `400
+validation_error` on `confirmPassword`). The web form always sends it. Optional so a
+  client that never had the field keeps working; it is never stored or returned.
+- `/register` answers a taken email (case-insensitive, including the lost side of a
+  concurrent race) exactly like a new one: `201 { emailVerificationRequired,
+verificationUrl? }` — the body no longer carries `user`. The service hashes the
+  password before the lookup so both paths cost one Argon2 hash. The owner of the
+  address gets an «Аккаунт уже есть» email (login link with the safe `next`,
+  forgot-password link, no token) through the same delivery policy as the verification
+  email, so status, body and timing match. `verificationUrl` stays dev-only and only for
+  a new account. The auth event `register_existing_email` records the existing user id.
+- The account-exists job is dropped from Redis on failure like the token-carrying jobs:
+  its payload says the address has an account.
+
+### Consequences
+
+- A person who forgot they registered sees «Проверьте почту» and finds the way in in
+  their inbox, not on the page; without an email provider (dev) they get no hint.
+- API clients reading `user` from the register response must read it from
+  `verify-email`/`login`/`me` instead (only the web app and tests did).
+- Outside production the dev-only `verificationUrl` still differs between the two cases;
+  production responses are identical.
+- With `AUTH_SKIP_EMAIL_VERIFICATION` on, a new account sends no email while a taken one
+  sends the notice — a timing difference on test deployments only.
+
+### Rollback
+
+Revert the CR: the schema field is optional and the response change is confined to
+`/register` and its callers; no migration, no data.

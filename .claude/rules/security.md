@@ -53,7 +53,8 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
 - Require a verified email before an account can act as an organizer (publish a ride) or
   before any future money-adjacent trust action. Participants may browse unverified.
 - Login errors must not reveal whether the account exists — one generic message for both
-  "no such account" and "wrong password".
+  "no such account" and "wrong password". Register neither (ADR-039, CR-262): a taken
+  email gets the same `201` and body as a new one, and the address's owner an email.
 - Password reset tokens are single-use and time-limited (e.g. 15–30 min), invalidated
   after use/expiry. Requesting a reset for a non-existent email returns the same response
   as for an existing one (no account enumeration).

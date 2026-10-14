@@ -185,8 +185,18 @@ describe('registerNotificationQueue', () => {
     };
     await queue.add('verification_email', { email: 'a@b.c', verifyUrl: 'x' });
     await queue.add('password_reset_email', { email: 'a@b.c', resetUrl: 'x' });
+    // CR-262: no token, but it says the address has an account (ADR-039).
+    await queue.add('account_exists_email', {
+      email: 'a@b.c',
+      loginUrl: 'x',
+      forgotPasswordUrl: 'y',
+    });
 
-    for (const name of ['verification_email', 'password_reset_email']) {
+    for (const name of [
+      'verification_email',
+      'password_reset_email',
+      'account_exists_email',
+    ]) {
       expect(queueAddMock).toHaveBeenCalledWith(
         name,
         expect.anything(),

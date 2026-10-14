@@ -67,10 +67,13 @@ const ENQUEUE_BREAKER_COOLDOWN_MS = 30_000;
 const CLOSE_TIMEOUT_MS = 3000;
 // CR-217: these jobs carry a raw single-use token inside their link (the database
 // only ever stores its SHA-256 hash, ADR-013), so a failed one must not stay in
-// Redis for inspection the way other jobs do.
+// Redis for inspection the way other jobs do. CR-262: the account-exists notice
+// carries no token, but its payload says that this email has an account — the very
+// fact `/register` keeps private (ADR-039) — so it goes too.
 const TOKEN_CARRYING_JOBS: ReadonlySet<NotificationJobName> = new Set([
   'verification_email',
   'password_reset_email',
+  'account_exists_email',
 ]);
 // Bounded trail of failed jobs for inspection instead of an unbounded one —
 // mirrors the bounded-retry reasoning above.

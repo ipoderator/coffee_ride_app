@@ -25,7 +25,12 @@ else's, using the same login.
 
 - **Register**: email + password (+ minimum password policy — see `security.md`). Sends a
   verification email. Unverified accounts can browse but cannot publish a ride or take
-  other trust-sensitive actions.
+  other trust-sensitive actions. CR-262 (ADR-039): «Повторите пароль» is checked by the
+  browser and by the API; the page shows a strength meter (advisory — the rule is 12+
+  characters) and a live match line. A taken email gets the same answer as a new one —
+  «Проверьте почту» — and its owner an «Аккаунт уже есть» email with login and
+  forgot-password links (no account enumeration). The screen follows the auth mockup
+  (`reference/coffee-ride-auth-mockup`): Google/Yandex ID first, then the email form.
 - **Login**: email + password → session. Generic error on failure (no account
   enumeration).
 - **Return target (CR-141)**: `/login?next=<path>` returns there after a successful

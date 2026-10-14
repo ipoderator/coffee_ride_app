@@ -25,16 +25,18 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-260 + CR-261 (owner, 2026-10-14), one PR from `feat/yandex-oauth-recaptcha`
-(committed):
+CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
+(`reference/coffee-ride-auth-mockup`, tab «Регистрация»), validated on `experiments`,
+committed on `experiments` (no PR yet):
 
-- CR-260: «Войти через Яндекс» on `/login`/`/register` (ADR-037) — Yandex ID OAuth code
-  flow with PKCE/state; the Google account-linking rules are now one shared
-  `signInWithOAuth`. Live-checked with the owner's Yandex ID app.
-- CR-261 (security): Google reCAPTCHA v2 on register, password login and
-  forgot-password, verified only by the API and failing closed (ADR-038, owner
-  confirmed); register's «Повторите пароль» is browser-only. Off until both keys are
-  set; deploying it needs a web rebuild.
+- story panel (`lg`+), Google/Yandex ID first («Продолжить с …»), strength meter, live
+  match line, show/hide (`ui` `PasswordInput`);
+- ADR-039: `confirmPassword` checked by the API too; `/register` answers a taken email
+  like a new one (`201 { emailVerificationRequired, verificationUrl? }`, no `user`) and
+  emails the owner «Аккаунт уже есть».
+
+Before it: CR-260 + CR-261 — Yandex ID sign-in (ADR-037) and reCAPTCHA v2 on password
+auth (ADR-038), one PR from `feat/yandex-oauth-recaptcha` (committed).
 
 Before it (details in the changelog): CR-259 page CSP by nonce (ADR-036) and CR-251,
 CR-253..CR-258 Lictor fixes (deployed, PR #61); CR-249/CR-247 Google sign-in (ADR-034/035,
@@ -58,6 +60,10 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-262 — awaiting the owner's review/commit (branch `experiments`); ships after (or
+with) CR-260/CR-261 — no new env var or migration of its own. Next from the same mockup:
+`/login` and the maintenance screen (owner's prompts 2–3).
 
 CR-260/CR-261 — awaiting merge and deploy. Owner-side: `YANDEX_CLIENT_ID`/`_SECRET`
 (redirect URI `…/api/v1/auth/yandex/callback`), `RECAPTCHA_SECRET_KEY` and
@@ -171,4 +177,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-260, CR-261)
+2026-10-14 (CR-262)

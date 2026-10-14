@@ -26,23 +26,40 @@ export function isCaptchaErrorCode(
   return (CAPTCHA_ERROR_CODES as readonly string[]).includes(code ?? '');
 }
 
-export const registerRequestSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
-  password: z.string().min(12, 'Password must be at least 12 characters.'),
-  // CR-244 (KI-089): the page to return to after verifying and signing in,
-  // appended to the emailed verification link. Optional and never a reason to
-  // refuse a registration — the API keeps it only if `safeNextPath` accepts it.
-  next: z.string().optional(),
-  captchaToken: captchaTokenSchema.optional(),
-});
+export const registerRequestSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email(),
+    password: z.string().min(12, 'Password must be at least 12 characters.'),
+    // CR-262 (ADR-039): «Повторите пароль». Optional in the shape so older API
+    // callers keep working; when sent it must equal `password` — checked here, so
+    // the web form and the API refuse a mismatch with the same rule. The API
+    // never stores or returns it.
+    confirmPassword: z.string().optional(),
+    // CR-244 (KI-089): the page to return to after verifying and signing in,
+    // appended to the emailed verification link. Optional and never a reason to
+    // refuse a registration — the API keeps it only if `safeNextPath` accepts it.
+    next: z.string().optional(),
+    captchaToken: captchaTokenSchema.optional(),
+  })
+  .refine(
+    (body) =>
+      body.confirmPassword === undefined ||
+      body.confirmPassword === body.password,
+    { path: ['confirmPassword'], message: 'Passwords do not match.' },
+  );
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 
+// CR-262 (ADR-039): the same `201` and body whether the email was new or already
+// had an account — no account enumeration (`.claude/rules/security.md`). The owner
+// of an existing address gets an email instead of an error, so the response
+// carries no `user`.
 export interface RegisterResponse {
-  user: User;
+  // Whether the deployment asks new accounts to confirm their email
+  // (`AUTH_SKIP_EMAIL_VERIFICATION` off) — a setting, not a fact about this email.
+  emailVerificationRequired: boolean;
   // Dev-only: the raw email-verification link, returned only outside production
-  // (`.claude/rules/security.md` forbids logging the token; ADR-007/notifications
-  // is Pending so there is no real delivery channel yet — see the CR-011 plan's
-  // scope boundaries). Absent in production responses.
+  // (`.claude/rules/security.md` forbids logging the token) and only for a new
+  // account. Absent in production responses.
   verificationUrl?: string;
 }
 

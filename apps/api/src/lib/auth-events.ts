@@ -9,6 +9,9 @@ import type { FastifyBaseLogger } from 'fastify';
 // every 4xx with its `code` (`invalid_credentials`, `account_rate_limited`).
 export type AuthEvent =
   | 'register'
+  // CR-262 (ADR-039): `/register` with an email that already has an account —
+  // answered like a new one; the line names the existing account.
+  | 'register_existing_email'
   | 'email_verified'
   | 'login'
   | 'google_sign_in'

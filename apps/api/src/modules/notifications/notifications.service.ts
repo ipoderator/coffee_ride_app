@@ -86,7 +86,8 @@ export type NotificationJobName =
   | 'ride_cancelled'
   | 'ride_rescheduled'
   | 'verification_email'
-  | 'password_reset_email';
+  | 'password_reset_email'
+  | 'account_exists_email';
 
 export interface RegistrationConfirmedJobData {
   userId: string;
@@ -123,13 +124,21 @@ export interface PasswordResetEmailJobData {
   resetUrl: string;
 }
 
+// CR-262 (ADR-039): `/register` with an email that already has an account.
+export interface AccountExistsEmailJobData {
+  email: string;
+  loginUrl: string;
+  forgotPasswordUrl: string;
+}
+
 export type NotificationJobData =
   | RegistrationConfirmedJobData
   | RideUpdateJobData
   | RideCancelledJobData
   | RideRescheduledJobData
   | VerificationEmailJobData
-  | PasswordResetEmailJobData;
+  | PasswordResetEmailJobData
+  | AccountExistsEmailJobData;
 
 // Minimal handle every producer below needs — same "define the small interface
 // this module actually needs" pattern as {@link NotificationLogger}/`S3Handle`
@@ -551,6 +560,17 @@ function verificationEmailContent(verifyUrl: string): EmailContent {
   };
 }
 
+function accountExistsEmailContent(
+  loginUrl: string,
+  forgotPasswordUrl: string,
+): EmailContent {
+  return {
+    subject: 'Аккаунт уже есть — Coffee Ride',
+    text: `Кто-то, возможно вы, пытался зарегистрироваться на Coffee Ride с этим email. Аккаунт с ним уже есть — новый не создан.\n\nВойти: ${loginUrl}\nЗабыли пароль или входили через Google или Яндекс — задайте пароль: ${forgotPasswordUrl}\n\nЕсли это были не вы, просто проигнорируйте это письмо.`,
+    html: `<p>Кто-то, возможно вы, пытался зарегистрироваться на Coffee Ride с этим email. Аккаунт с ним уже есть — новый не создан.</p><p><a href="${loginUrl}">Войти</a></p><p>Забыли пароль или входили через Google или Яндекс — <a href="${forgotPasswordUrl}">задайте пароль</a>.</p><p>Если это были не вы, просто проигнорируйте это письмо.</p>`,
+  };
+}
+
 function passwordResetEmailContent(resetUrl: string): EmailContent {
   return {
     subject: 'Восстановление пароля — Coffee Ride',
@@ -580,9 +600,9 @@ async function sendEmail(
  * `.claude/rules/security.md`: never logs the token (embedded in `verifyUrl`)
  * or the recipient's email address — the error log carries only `{ err }`.
  *
- * KI-071: sent directly when the queue is unavailable — there is no resend
- * endpoint, so a dropped email would leave the account unverifiable, and
- * `/register` already answers 409 for a taken email, so the extra latency
+ * KI-071: sent directly when the queue is unavailable — a dropped email would
+ * leave the account unverifiable. CR-262 (ADR-039): a taken email gets
+ * {@link sendAccountExistsEmail} by the same policy, so the extra latency
  * reveals nothing about which accounts exist.
  */
 export async function sendVerificationEmail(
@@ -602,6 +622,39 @@ export async function sendVerificationEmail(
     );
   } catch (err) {
     logger.error({ err }, 'Failed to send verification email');
+  }
+}
+
+/**
+ * CR-262 (ADR-039): `/register` was called with an email that already has an
+ * account, so instead of an error its owner gets this notice. Delivered by the
+ * same policy as {@link sendVerificationEmail} (queued; sent directly, awaited,
+ * when the queue is unavailable or absent) so the response time of a taken email
+ * matches a new one. Never logs the recipient — only `{ err }`.
+ */
+export async function sendAccountExistsEmail(
+  logger: NotificationLogger,
+  queue: NotificationQueue | null,
+  emailProvider: EmailProvider | null,
+  email: string,
+  loginUrl: string,
+  forgotPasswordUrl: string,
+): Promise<void> {
+  try {
+    await enqueueOrDeliver(
+      queue,
+      (q) =>
+        q.add('account_exists_email', { email, loginUrl, forgotPasswordUrl }),
+      () =>
+        sendEmail(
+          emailProvider,
+          email,
+          accountExistsEmailContent(loginUrl, forgotPasswordUrl),
+        ),
+      true,
+    );
+  } catch (err) {
+    logger.error({ err }, 'Failed to send account-exists email');
   }
 }
 
@@ -710,6 +763,16 @@ export async function processNotificationJob(
         emailProvider,
         email,
         passwordResetEmailContent(resetUrl),
+      );
+      return;
+    }
+    case 'account_exists_email': {
+      const { email, loginUrl, forgotPasswordUrl } =
+        data as AccountExistsEmailJobData;
+      await sendEmail(
+        emailProvider,
+        email,
+        accountExistsEmailContent(loginUrl, forgotPasswordUrl),
       );
       return;
     }

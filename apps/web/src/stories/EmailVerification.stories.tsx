@@ -64,12 +64,13 @@ function stub(verify: 'ok' | 'expired', { registerVerified = false } = {}) {
         return problem(401, 'unauthorized');
       }
       if (url.pathname === '/api/v1/auth/register') {
-        // CR-220: AUTH_SKIP_EMAIL_VERIFICATION — verified, no link.
+        // CR-220: AUTH_SKIP_EMAIL_VERIFICATION — verified, no link. CR-262
+        // (ADR-039): the body carries no user.
         return json(
           registerVerified
-            ? { user: USER }
+            ? { emailVerificationRequired: false }
             : {
-                user: { ...USER, emailVerified: false },
+                emailVerificationRequired: true,
                 verificationUrl: '/v1/auth/verify-email?token=tok-1',
               },
           201,

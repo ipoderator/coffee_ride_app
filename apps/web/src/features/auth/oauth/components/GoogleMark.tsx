@@ -8,6 +8,7 @@ export function GoogleMark() {
     <svg
       aria-hidden="true"
       focusable="false"
+      className="shrink-0"
       width="18"
       height="18"
       viewBox="0 0 48 48"

@@ -80,7 +80,7 @@ participants|updates` — the six-tab workspace «Управление заез�
   (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226); `(public)/privacy`,
   `(public)/terms` (CR-247, text in `features/legal/content.ts`).
 - `features/{auth,organizer,participant,admin}/<feature>/` — ADR-009 modules (`components/`,
-  `api.ts`, tests); auth: login, register, captcha (reCAPTCHA v2 widget + `useCaptcha`, ADR-038), oauth (Google CR-247 + Yandex CR-260), verify-email, …; admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
+  `api.ts`, tests); auth: login, register, captcha (reCAPTCHA v2 widget + `useCaptcha`, ADR-038), oauth (Google CR-247 + Yandex CR-260; `intent="register"` button grid, CR-262), layout (`AuthSplitLayout`, the auth mockup's story panel, CR-262), password (strength meter + match line, CR-262), verify-email, …; admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
   participants, profile, rides, route, updates; participant: discovery, my-rides,
   notifications, organizer-entry, profile, ride-detail, rider-profile.
 - `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink,
@@ -114,7 +114,7 @@ participants|updates` — the six-tab workspace «Управление заез�
 - `types` — Zod contracts `src/api/*`, domain enums/types `src/domain/*`; `zod-config.ts`
   (browser-only `jitless`, CR-226).
 - `ui` — tokens (`tokens.css`, ADR-024), `format.ts` (Russian numbers/dates/units),
-  `terminology.ts` (every user-visible string), components (Button, Input, TimeInput, Dialog/
+  `terminology.ts` (every user-visible string), components (Button, Input, PasswordInput (CR-262), TimeInput, Dialog/
   ConfirmDialog, MetricTile, StatusBadge, EmptyState, ErrorState, Skeleton, …).
 - `maps-core` — `MapProvider` + render-layer interfaces (`/server` export omits render).
 - `maps-2gis` — REST provider (`provider.ts`, `http.ts` with breaker), `render.ts`
