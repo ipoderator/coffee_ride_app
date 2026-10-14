@@ -29,7 +29,7 @@ CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
 (`reference/coffee-ride-auth-mockup`, tab «Регистрация»), validated on `experiments`,
 committed on `experiments` (no PR yet):
 
-- story panel (`lg`+), Google/Yandex ID first («Продолжить с …»), strength meter, live
+- story column (`lg`+, text only since CR-263), Google/Yandex ID first («Продолжить с …»), strength meter, live
   match line, show/hide (`ui` `PasswordInput`);
 - ADR-039: `confirmPassword` checked by the API too; `/register` answers a taken email
   like a new one (`201 { emailVerificationRequired, verificationUrl? }`, no `user`) and
@@ -177,4 +177,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-262)
+2026-10-14 (CR-263)

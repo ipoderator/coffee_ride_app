@@ -107,3 +107,12 @@ Validation: format:check (only the untracked mockup file differs), lint (warning
 Decisions: confirmation optional in the schema (older callers keep working), the web form always sends it; the meter only advises; Google first as in the mockup on `/register` (login keeps Yandex first); form column 30.5rem so «Продолжить с Яндекс ID» stays on one line.
 Fixed on the way: `isUniqueViolation` missed drizzle 0.45's wrapped `23505` (the error is the `cause`), so a concurrent register race answered 500.
 Follow-up: `/login` and the maintenance screen from the same mockup (owner's next prompts); KI-101 (same wrapped-`23505` miss in reviews/ride-groups/organizers), KI-102 (EditRideForm test flaky under coverage load).
+
+## 2026-10-14 — CR-263 — `/register` story column: text only
+
+Summary: owner request on a screenshot of CR-262's `/register`: drop the story panel's background and keep only its headline and body. `AuthSplitLayout`'s `aside` loses the surface fill, the right border and the decorative abstract route (SVG deleted); the text now sits on the page background, still only from `lg`.
+Contract: none.
+Files: web `features/auth/layout/AuthSplitLayout.tsx`.
+Validation: web typecheck, eslint, vitest auth + register 121/121, Storybook `RegisterScreen` 6/6 with axe; Chromium 1440 light/dark against the dev stack — `aside` background transparent, no border, no SVG.
+Decisions: deliberate departure from the mockup's panel (owner).
+Follow-up: none.

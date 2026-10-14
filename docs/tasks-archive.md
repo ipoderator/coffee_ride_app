@@ -1574,3 +1574,9 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       `auth_identities` + nullable `password_hash` (migration `0028`), button on
       `/login`/`/register` keeping `next`, Russian `/privacy` and `/terms` (ADR-034) —
       done 2026-10-13 on `feat/google-oauth`, committed (PR into `main`). See docs/changelog.md
+- [x] CR-250 (security, LOW) the per-account auth rate-limit Redis key is an
+      HMAC of the normalized email, and its fail-open warning no longer logs the key —
+      done 2026-10-13 on `fix/account-rate-limit-key-hmac`. See docs/changelog.md
+- [x] CR-249 Google sign-in claims an unverified account with the same email
+      (ADR-035): verified, password/sessions/pending links voided, then linked —
+      done 2026-10-13. See docs/changelog.md
