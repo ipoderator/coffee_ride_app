@@ -194,8 +194,15 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   earlier) so a flood never reaches Google; failing CLOSED by decision — the one
   deliberate exception to the fail-open rule above; `siteverify` never retried (a
   token is spent on the first call) and only in `recaptcha-client.ts`; the forms
-  resetting the widget after every failed answer; `register` never sending
-  `confirmPassword`; e2e servers run with both reCAPTCHA keys empty;
+  resetting the widget after every failed answer; e2e servers run with both reCAPTCHA
+  keys empty;
+- `/register` answering a taken email exactly like a new one (ADR-039, CR-262): same
+  `201` and body (no `user` in it), one Argon2 hash on both paths, the owner's
+  «Аккаунт уже есть» email sent by the verification email's delivery policy — never a
+  `409`, a field error or a faster reply for an existing account; the dev-only
+  `verificationUrl` is the one allowed difference. `confirmPassword`, when sent, is
+  checked by `registerRequestSchema`'s refinement — the web form's and the API's one
+  rule;
 - the per-account rate-limit tier staying independent of the per-IP one
   (two separate gates keyed differently, not a combined key) and scoped to
   exactly `/register`/`/login`/`/forgot-password` (the three endpoints

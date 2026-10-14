@@ -88,12 +88,18 @@ describe('POST /v1/auth/register', () => {
 
     expect(response.statusCode).toBe(201);
     const body = response.json();
-    expect(body.user.email).toBe(email);
-    expect(body.user.emailVerified).toBe(false);
-    expect(body.user.id).toBeTypeOf('string');
-    expect(body).not.toHaveProperty('user.passwordHash');
+    // CR-262 (ADR-039): no `user` in the body — the same body as for a taken email.
+    expect(Object.keys(body).sort()).toEqual([
+      'emailVerificationRequired',
+      'verificationUrl',
+    ]);
+    expect(body.emailVerificationRequired).toBe(true);
     expect(JSON.stringify(body)).not.toContain('passwordHash');
     expect(body.verificationUrl).toContain('/v1/auth/verify-email?token=');
+    const [row] = await app.db.execute(
+      sql`SELECT email_verified FROM users WHERE email = ${email}`,
+    );
+    expect(row).toEqual({ email_verified: false });
 
     await app.close();
   });
@@ -123,74 +129,247 @@ describe('POST /v1/auth/register', () => {
       ...testEnv,
       AUTH_SKIP_EMAIL_VERIFICATION: true,
     });
+    const email = uniqueEmail();
 
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+      payload: { email, password: 'a-strong-password-123' },
     });
 
     expect(response.statusCode).toBe(201);
     const body = response.json();
-    expect(body.user.emailVerified).toBe(true);
-    expect(body.verificationUrl).toBeUndefined();
+    expect(body).toEqual({ emailVerificationRequired: false });
+    const [user] = await app.db.execute<{
+      id: string;
+      email_verified: boolean;
+    }>(sql`SELECT id, email_verified FROM users WHERE email = ${email}`);
+    expect(user?.email_verified).toBe(true);
     const tokens = await app.db.execute(
-      sql`SELECT 1 FROM email_verification_tokens WHERE user_id = ${body.user.id}`,
+      sql`SELECT 1 FROM email_verification_tokens WHERE user_id = ${user!.id}`,
     );
     expect(tokens).toHaveLength(0);
 
     await app.close();
   });
 
-  it('rejects a duplicate email with 409', async () => {
-    const app = await buildApp(testEnv);
-    const email = uniqueEmail();
-    const payload = { email, password: 'a-strong-password-123' };
-
-    const first = await app.inject({
-      method: 'POST',
-      url: '/v1/auth/register',
-      payload,
+  // CR-262 (ADR-039): a taken email is not an error — the caller can't tell it
+  // from a new one; the address's owner is emailed instead.
+  describe('an email that already has an account', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
     });
-    expect(first.statusCode).toBe(201);
 
-    const second = await app.inject({
-      method: 'POST',
-      url: '/v1/auth/register',
-      payload,
+    function emailingEnv(overrides: Partial<Env> = {}): Env {
+      return {
+        ...loadEnv({
+          NODE_ENV: 'test',
+          AUTH_SECRET: 'a-test-only-secret',
+          DATABASE_URL,
+          WEB_ORIGIN,
+          UNISENDER_API_KEY: 'a-test-key',
+          EMAIL_FROM_ADDRESS: 'noreply@example.test',
+        }),
+        ...overrides,
+      };
+    }
+
+    function stubEmailApi() {
+      const fetchMock = vi.fn(
+        async (_url: string, _init: RequestInit) =>
+          new Response(JSON.stringify({ status: 'success' }), { status: 200 }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const sentPlaintext = (call: number) =>
+        (
+          JSON.parse(fetchMock.mock.calls[call]![1].body as string) as {
+            message: { body: { plaintext: string } };
+          }
+        ).message.body.plaintext;
+      return { fetchMock, sentPlaintext };
+    }
+
+    it('answers exactly like a new account in production and emails the owner', async () => {
+      // `NODE_ENV: 'production'` drops the dev-only `verificationUrl`, the one
+      // field that differs outside production.
+      const app = await buildApp(emailingEnv({ NODE_ENV: 'production' }));
+      const { fetchMock, sentPlaintext } = stubEmailApi();
+      const email = uniqueEmail();
+      const payload = { email, password: 'a-strong-password-123' };
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload,
+      });
+      const second = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: { ...payload, password: 'another-password-456', next: '/me' },
+      });
+      await app.close();
+
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(201);
+      expect(second.json()).toEqual(first.json());
+      expect(second.json()).toEqual({ emailVerificationRequired: true });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(sentPlaintext(0)).toContain('/verify-email?token=');
+      const notice = sentPlaintext(1);
+      expect(notice).toContain('Аккаунт с ним уже есть');
+      expect(notice).toContain(`${WEB_ORIGIN}/login?next=%2Fme`);
+      expect(notice).toContain(`${WEB_ORIGIN}/forgot-password`);
+      expect(notice).not.toContain('token=');
     });
-    expect(second.statusCode).toBe(409);
-    const body = second.json();
-    expect(body.code).toBe('email_already_registered');
-    expect(second.headers['content-type']).toContain(
-      'application/problem+json',
-    );
 
-    await app.close();
+    it('keeps the first account untouched — no second user, password unchanged', async () => {
+      const app = await buildApp(testEnv);
+      const email = uniqueEmail();
+
+      await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: { email, password: 'a-strong-password-123' },
+      });
+      const second = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: { email, password: 'another-password-456' },
+      });
+      expect(second.statusCode).toBe(201);
+      expect(second.json()).toEqual({ emailVerificationRequired: true });
+
+      const rows = await app.db.execute(
+        sql`SELECT 1 FROM users WHERE email = ${email}`,
+      );
+      expect(rows).toHaveLength(1);
+      const login = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/login',
+        payload: { email, password: 'another-password-456' },
+      });
+      expect(login.statusCode).toBe(401);
+      expect(vi.mocked(logAuthEvent)).toHaveBeenCalledWith(
+        expect.anything(),
+        'register_existing_email',
+        expect.any(String),
+      );
+
+      await app.close();
+    });
+
+    it('is case-insensitive on email', async () => {
+      const app = await buildApp(testEnv);
+      const email = uniqueEmail();
+
+      await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: { email, password: 'a-strong-password-123' },
+      });
+      const second = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: {
+          email: email.toUpperCase(),
+          password: 'a-strong-password-123',
+        },
+      });
+      expect(second.statusCode).toBe(201);
+      expect(second.json()).toEqual({ emailVerificationRequired: true });
+      const rows = await app.db.execute(
+        sql`SELECT 1 FROM users WHERE email = ${email}`,
+      );
+      expect(rows).toHaveLength(1);
+
+      await app.close();
+    });
+
+    it('answers every concurrent registration of one email with 201 and creates one user', async () => {
+      const app = await buildApp(testEnv);
+      const email = uniqueEmail();
+      const payload = { email, password: 'a-strong-password-123' };
+
+      // Five at once (the per-IP tier's whole budget), so at least two of them
+      // usually pass the pre-check together and one loses on the unique index.
+      const responses = await Promise.all(
+        [0, 1, 2, 3, 4].map(() =>
+          app.inject({ method: 'POST', url: '/v1/auth/register', payload }),
+        ),
+      );
+      expect(responses.map((r) => r.statusCode)).toEqual([
+        201, 201, 201, 201, 201,
+      ]);
+      const rows = await app.db.execute(
+        sql`SELECT 1 FROM users WHERE email = ${email}`,
+      );
+      expect(rows).toHaveLength(1);
+
+      await app.close();
+    });
   });
 
-  it('is case-insensitive on email for duplicate detection', async () => {
-    const app = await buildApp(testEnv);
-    const email = uniqueEmail();
-
-    const first = await app.inject({
-      method: 'POST',
-      url: '/v1/auth/register',
-      payload: { email, password: 'a-strong-password-123' },
+  // CR-262 (ADR-039): «Повторите пароль» is checked by the API too.
+  describe('password confirmation', () => {
+    it('accepts a matching confirmation', async () => {
+      const app = await buildApp(testEnv);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: {
+          email: uniqueEmail(),
+          password: 'a-strong-password-123',
+          confirmPassword: 'a-strong-password-123',
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      await app.close();
     });
-    expect(first.statusCode).toBe(201);
 
-    const second = await app.inject({
-      method: 'POST',
-      url: '/v1/auth/register',
-      payload: {
-        email: email.toUpperCase(),
-        password: 'a-strong-password-123',
-      },
+    it('refuses a mismatch with a validation error on confirmPassword and creates nothing', async () => {
+      const app = await buildApp(testEnv);
+      const email = uniqueEmail();
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: {
+          email,
+          password: 'a-strong-password-123',
+          confirmPassword: 'a-strong-password-124',
+        },
+      });
+      expect(response.statusCode).toBe(400);
+      const body = response.json();
+      expect(body.code).toBe('validation_error');
+      expect(body.errors).toEqual([
+        expect.objectContaining({ path: 'confirmPassword' }),
+      ]);
+      expect(JSON.stringify(body)).not.toContain('a-strong-password');
+      const rows = await app.db.execute(
+        sql`SELECT 1 FROM users WHERE email = ${email}`,
+      );
+      expect(rows).toHaveLength(0);
+      await app.close();
     });
-    expect(second.statusCode).toBe(409);
 
-    await app.close();
+    it('refuses a weak (short) password even when both fields match', async () => {
+      const app = await buildApp(testEnv);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/register',
+        payload: {
+          email: uniqueEmail(),
+          password: 'short-pass',
+          confirmPassword: 'short-pass',
+        },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().errors).toEqual([
+        expect.objectContaining({ path: 'password' }),
+      ]);
+      await app.close();
+    });
   });
 
   it('rejects an invalid payload with 400', async () => {
@@ -497,16 +676,17 @@ const PASSWORD = 'a-strong-password-123';
 
 async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   const email = uniqueEmail();
-  const response = await app.inject({
+  await app.inject({
     method: 'POST',
     url: '/v1/auth/register',
     payload: { email, password: PASSWORD },
   });
-  return {
-    email,
-    password: PASSWORD,
-    userId: response.json().user.id as string,
-  };
+  // CR-262: the register body carries no user (ADR-039) — read the id back.
+  const [row] = await app.db.execute<{ id: string }>(
+    sql`SELECT id FROM users WHERE email = ${email}`,
+  );
+  if (!row) throw new Error('register created no user');
+  return { email, password: PASSWORD, userId: row.id };
 }
 
 function sessionCookie(
@@ -1162,7 +1342,7 @@ describe('POST /v1/auth/resend-verification', () => {
     if (!cookie) throw new Error('No session cookie after login');
 
     return {
-      userId: registered.json().user.id as string,
+      userId: login.json().user.id as string,
       firstToken,
       cookie: { session: cookie.value },
     };

@@ -20,16 +20,22 @@ body validation, before anything else: missing → `400 captcha_required`; refus
 expired or already used → `400 captcha_invalid`; Google unreachable, slow (5 s), not
 `200`, or rejecting the secret → `503 captcha_unavailable` (fails closed). The refusal
 never depends on the account. Unset secret → no token asked for. Google sign-in,
-`verify-email`, `reset-password` and `resend-verification` never ask. `register` gets
-`password` only — the web form's «Повторите пароль» is checked in the browser and never
-sent.
+`verify-email`, `reset-password` and `resend-verification` never ask. CR-262 (ADR-039):
+`register` also takes `confirmPassword` — checked by the browser and again here.
 
-POST `/v1/auth/register` — **implemented (CR-011)**. Body: `{ email, password }`
-(`password` min 12 chars, `.claude/rules/security.md`). `201` →
-`{ user: { id, email, emailVerified, createdAt }, verificationUrl? }` —
-`verificationUrl` is present only outside production (real email delivery is
-ADR-007, still Pending; see `docs/decisions.md`). `409 email_already_registered`
-on a duplicate email (case-insensitive). Rate-limited (5/min/IP,
+POST `/v1/auth/register` — **implemented (CR-011)**. Body: `{ email, password,
+confirmPassword?, next?, captchaToken? }` (`password` min 12 chars,
+`.claude/rules/security.md`). CR-262 (ADR-039): `confirmPassword`, when sent, must
+equal `password` — otherwise `400 validation_error` with `errors[].path ===
+'confirmPassword'`; the web form always sends it. `201` →
+`{ emailVerificationRequired, verificationUrl? }` for a new email **and** for one that
+already has an account (case-insensitive) — no account enumeration: the body carries no
+`user`, the taken email's owner gets an «Аккаунт уже есть» email (login +
+forgot-password links) instead, delivered like the verification email so the timing
+matches. `emailVerificationRequired` mirrors `AUTH_SKIP_EMAIL_VERIFICATION` (a setting,
+not a fact about the address). `verificationUrl` is present only outside production and
+only for a new account (before CR-262: `{ user, verificationUrl? }` and `409
+email_already_registered` for a taken email). Rate-limited (5/min/IP,
 `.claude/context/known-issues.md` KI-022 for the interim-hardening caveats).
 CR-245 (KI-089): optional `next` — the page to return to; when `safeNextPath`
 (`packages/types`, the same rules the web pages use) accepts it, the emailed link
@@ -59,8 +65,9 @@ id, independent of login/register's).
 
 Closes KI-026's code-side half: before this, `register` issued the only
 verification token a user would ever get, so an expired or undelivered first
-email left the account permanently unverifiable — `register` answers
-`409 email_already_registered`, so re-registering was not a way out either.
+email left the account permanently unverifiable — `register` answered
+`409 email_already_registered` then (since CR-262 it emails the owner instead), so
+re-registering was not a way out either.
 
 POST `/v1/auth/login` — **implemented (CR-012)**. Body: `{ email, password }`.
 `200` → `{ user }` + `Set-Cookie: session=<opaque token>` (httpOnly, `Secure`

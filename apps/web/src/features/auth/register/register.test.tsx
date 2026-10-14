@@ -132,22 +132,7 @@ describe('RegisterForm', () => {
     expect(button).toBeDisabled();
 
     resolveRequest({
-      user: {
-        id: '1',
-        email: 'rider@example.com',
-        emailVerified: false,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        displayName: null,
-        firstName: null,
-        lastName: null,
-        phone: null,
-        bio: null,
-        avatarUrl: null,
-        profileVisibility: 'co_participants',
-        distanceWeekKm: null,
-        distanceMonthKm: null,
-        distanceYearKm: null,
-      },
+      emailVerificationRequired: true,
     });
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
   });
@@ -168,24 +153,40 @@ describe('RegisterForm', () => {
     expect(registerAccountMock).toHaveBeenCalledOnce();
   });
 
-  it('maps a 409 email_already_registered error onto the email field', async () => {
+  // CR-262 (ADR-039): the API answers a taken email like a new one, so the card
+  // never says whether the address already had an account.
+  it('shows one neutral success card naming the address, whether new or taken', async () => {
+    registerAccountMock.mockResolvedValue({ emailVerificationRequired: true });
+
+    render(<RegisterForm />);
+    fillAndSubmit('rider@example.com', 'a-strong-password-123');
+
+    const card = await screen.findByRole('status');
+    expect(card).toHaveTextContent('Проверьте почту');
+    expect(card).toHaveTextContent('Мы отправили письмо на rider@example.com.');
+    expect(card).toHaveTextContent(
+      'Если аккаунт с этим адресом уже есть, в письме будет ссылка для входа.',
+    );
+    expect(card).not.toHaveTextContent(/уже существует|создан/);
+  });
+
+  it('maps a server refusal of confirmPassword onto the confirm field', async () => {
     registerAccountMock.mockRejectedValue(
-      new ApiError({
-        type: 'https://coffee-ride.example/errors/email_already_registered',
-        title: 'Email already registered',
-        status: 409,
-        detail: 'An account with this email already exists.',
-        instance: '/v1/auth/register',
-        code: 'email_already_registered',
+      englishProblem('validation_error', {
+        status: 400,
+        fields: ['confirmPassword'],
       }),
     );
 
     render(<RegisterForm />);
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
-    expect(
-      await screen.findByText('Аккаунт с таким email уже существует.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Пароли не совпадают.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Повторите пароль')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expectNoEnglishApiText();
   });
 
   it('shows a generic error for an unmapped server failure', async () => {
@@ -210,56 +211,26 @@ describe('RegisterForm', () => {
 
   it('shows the success state, including the dev-only verification link when present', async () => {
     registerAccountMock.mockResolvedValue({
-      user: {
-        id: '1',
-        email: 'rider@example.com',
-        emailVerified: false,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        displayName: null,
-        firstName: null,
-        lastName: null,
-        phone: null,
-        bio: null,
-        avatarUrl: null,
-        profileVisibility: 'co_participants',
-        distanceWeekKm: null,
-        distanceMonthKm: null,
-        distanceYearKm: null,
-      },
+      emailVerificationRequired: true,
       verificationUrl: '/v1/auth/verify-email?token=abc123',
     });
 
     render(<RegisterForm />);
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
-    expect(await screen.findByText('Аккаунт создан')).toBeInTheDocument();
+    expect(await screen.findByText('Проверьте почту')).toBeInTheDocument();
     expect(screen.getByText(/abc123/)).toBeInTheDocument();
   });
 
   it('shows the success state without a dev note when no verification URL is returned', async () => {
     registerAccountMock.mockResolvedValue({
-      user: {
-        id: '1',
-        email: 'rider@example.com',
-        emailVerified: false,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        displayName: null,
-        firstName: null,
-        lastName: null,
-        phone: null,
-        bio: null,
-        avatarUrl: null,
-        profileVisibility: 'co_participants',
-        distanceWeekKm: null,
-        distanceMonthKm: null,
-        distanceYearKm: null,
-      },
+      emailVerificationRequired: true,
     });
 
     render(<RegisterForm />);
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
-    expect(await screen.findByText('Аккаунт создан')).toBeInTheDocument();
+    expect(await screen.findByText('Проверьте почту')).toBeInTheDocument();
     expect(
       screen.queryByText(/Только для этого окружения/),
     ).not.toBeInTheDocument();
@@ -267,64 +238,31 @@ describe('RegisterForm', () => {
 
   it('does not ask to check the inbox when the account is created already verified (CR-220)', async () => {
     registerAccountMock.mockResolvedValue({
-      user: {
-        id: '1',
-        email: 'rider@example.com',
-        emailVerified: true,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        displayName: null,
-        firstName: null,
-        lastName: null,
-        phone: null,
-        bio: null,
-        avatarUrl: null,
-        profileVisibility: 'co_participants',
-        distanceWeekKm: null,
-        distanceMonthKm: null,
-        distanceYearKm: null,
-      },
+      emailVerificationRequired: false,
     });
 
     render(<RegisterForm />);
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
+    expect(await screen.findByText('Готово')).toBeInTheDocument();
     expect(
-      await screen.findByText(
-        'Подтверждать почту не нужно — можно сразу войти.',
-      ),
+      screen.getByText(/Подтверждать почту не нужно — можно сразу войти\./),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Проверьте почту/)).not.toBeInTheDocument();
   });
 
   // CR-141 (KI-064): registering doesn't sign in, so `next` is handed on to
-  // /login — from the form and from the success card.
-  it('keeps `next` on the links to /login', async () => {
+  // /login from the success card (CR-262: the page's «Уже есть аккаунт?» line
+  // carries it too — `register-page.test.tsx`).
+  it('keeps `next` on the success card’s link to /login', async () => {
     registerAccountMock.mockResolvedValue({
-      user: {
-        id: '1',
-        email: 'rider@example.com',
-        emailVerified: false,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        displayName: null,
-        firstName: null,
-        lastName: null,
-        phone: null,
-        bio: null,
-        avatarUrl: null,
-        profileVisibility: 'co_participants',
-        distanceWeekKm: null,
-        distanceMonthKm: null,
-        distanceYearKm: null,
-      },
+      emailVerificationRequired: true,
     });
 
     render(<RegisterForm next="/rides/ride-1" />);
-    expect(
-      screen.getByRole('link', { name: 'Уже есть аккаунт? Войти' }),
-    ).toHaveAttribute('href', '/login?next=%2Frides%2Fride-1');
 
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
-    await screen.findByText('Аккаунт создан');
+    await screen.findByText('Проверьте почту');
     expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute(
       'href',
       '/login?next=%2Frides%2Fride-1',
@@ -347,22 +285,7 @@ describe('RegisterForm', () => {
     'carries only a safe `next` (%s) into the verification link',
     async (next, expected, sentNext) => {
       registerAccountMock.mockResolvedValue({
-        user: {
-          id: '1',
-          email: 'rider@example.com',
-          emailVerified: false,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          displayName: null,
-          firstName: null,
-          lastName: null,
-          phone: null,
-          bio: null,
-          avatarUrl: null,
-          profileVisibility: 'co_participants',
-          distanceWeekKm: null,
-          distanceMonthKm: null,
-          distanceYearKm: null,
-        },
+        emailVerificationRequired: true,
         verificationUrl: '/v1/auth/verify-email?token=tok-1',
       });
 
@@ -375,13 +298,15 @@ describe('RegisterForm', () => {
       expect(registerAccountMock).toHaveBeenCalledWith({
         email: 'rider@example.com',
         password: 'a-strong-password-123',
+        confirmPassword: 'a-strong-password-123',
         ...(sentNext ? { next: sentNext } : {}),
       });
     },
   );
 });
 
-// CR-261: «Повторите пароль» never leaves the browser.
+// CR-261: «Повторите пароль» is checked before sending. CR-262 (ADR-039): it is
+// sent too, and the API checks it again.
 describe('RegisterForm confirm password', () => {
   beforeEach(() => {
     registerAccountMock.mockReset();
@@ -415,13 +340,9 @@ describe('RegisterForm confirm password', () => {
     expect(registerAccountMock).not.toHaveBeenCalled();
   });
 
-  it('clears the mismatch once the passwords match and sends only password', async () => {
+  it('clears the mismatch once the passwords match and sends both fields', async () => {
     registerAccountMock.mockResolvedValue({
-      user: {
-        id: 'user-1',
-        email: 'rider@example.com',
-        emailVerified: false,
-      } as never,
+      emailVerificationRequired: true,
     });
     render(<RegisterForm />);
     fillAndSubmit(
@@ -433,14 +354,14 @@ describe('RegisterForm confirm password', () => {
 
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
-    await screen.findByText('Аккаунт создан');
+    await screen.findByText('Проверьте почту');
     expect(registerAccountMock).toHaveBeenCalledTimes(1);
     const payload = registerAccountMock.mock.calls[0]![0];
     expect(payload).toEqual({
       email: 'rider@example.com',
       password: 'a-strong-password-123',
+      confirmPassword: 'a-strong-password-123',
     });
-    expect(payload).not.toHaveProperty('confirmPassword');
   });
 });
 
@@ -484,20 +405,17 @@ describe('RegisterForm reCAPTCHA', () => {
 
   it('sends the token with the form once ticked', async () => {
     registerAccountMock.mockResolvedValue({
-      user: {
-        id: 'u',
-        email: 'rider@example.com',
-        emailVerified: false,
-      } as never,
+      emailVerificationRequired: true,
     });
     await renderWithCaptcha();
     fake.solve('token-1');
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
-    await screen.findByText('Аккаунт создан');
+    await screen.findByText('Проверьте почту');
     expect(registerAccountMock).toHaveBeenCalledWith({
       email: 'rider@example.com',
       password: 'a-strong-password-123',
+      confirmPassword: 'a-strong-password-123',
       captchaToken: 'token-1',
     });
   });
@@ -538,14 +456,16 @@ describe('RegisterForm reCAPTCHA', () => {
 
   it('resets the tick after any other failure too (the token is spent)', async () => {
     registerAccountMock.mockRejectedValue(
-      englishProblem('email_already_registered', { status: 409 }),
+      englishProblem('internal_error', { status: 500 }),
     );
     await renderWithCaptcha();
     fake.solve('token-1');
     fillAndSubmit('rider@example.com', 'a-strong-password-123');
 
     expect(
-      await screen.findByText('Аккаунт с таким email уже существует.'),
+      await screen.findByText(
+        'Не удалось выполнить запрос. Попробуйте ещё раз.',
+      ),
     ).toBeInTheDocument();
     expect(fake.grecaptcha.reset).toHaveBeenCalledTimes(1);
   });
@@ -562,5 +482,69 @@ describe('RegisterForm reCAPTCHA', () => {
       await screen.findByText('Отметьте «Я не робот».'),
     ).toBeInTheDocument();
     expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+});
+
+// CR-262: the auth mockup's live password states.
+describe('RegisterForm password states', () => {
+  beforeEach(() => {
+    registerAccountMock.mockReset();
+  });
+
+  function type(label: string, value: string) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+
+  it('names the strength in words as the password grows', () => {
+    render(<RegisterForm />);
+    expect(screen.queryByText(/Надёжность пароля/)).not.toBeInTheDocument();
+
+    type('Пароль', 'short');
+    expect(
+      screen.getByText('Надёжность пароля: слишком короткий'),
+    ).toBeInTheDocument();
+    type('Пароль', 'aaaaaaaaaaaa');
+    expect(screen.getByText('Надёжность пароля: слабый')).toBeInTheDocument();
+    type('Пароль', 'coffee-ride-2026');
+    expect(screen.getByText('Надёжность пароля: надёжный')).toBeInTheDocument();
+  });
+
+  it('says whether the two passwords match while typing', () => {
+    render(<RegisterForm />);
+    type('Пароль', 'coffee-ride-2026');
+    expect(
+      screen.queryByText(/Пароли (не )?совпадают/),
+    ).not.toBeInTheDocument();
+
+    type('Повторите пароль', 'coffee-ride-20');
+    expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument();
+    type('Повторите пароль', 'coffee-ride-2026');
+    expect(screen.getByText('Пароли совпадают')).toBeInTheDocument();
+  });
+
+  it('shows and hides each password with its own toggle', () => {
+    render(<RegisterForm />);
+    const [first, second] = screen.getAllByRole('button', {
+      name: 'Показать пароль',
+    });
+    fireEvent.click(first!);
+    expect(screen.getByLabelText('Пароль')).toHaveAttribute('type', 'text');
+    expect(screen.getByLabelText('Повторите пароль')).toHaveAttribute(
+      'type',
+      'password',
+    );
+    fireEvent.click(second!);
+    expect(screen.getByLabelText('Повторите пароль')).toHaveAttribute(
+      'type',
+      'text',
+    );
+  });
+
+  it('refuses a weak-but-long-enough password nowhere — the meter only advises', async () => {
+    registerAccountMock.mockResolvedValue({ emailVerificationRequired: true });
+    render(<RegisterForm />);
+    fillAndSubmit('rider@example.com', 'aaaaaaaaaaaa');
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(registerAccountMock).toHaveBeenCalledOnce();
   });
 });

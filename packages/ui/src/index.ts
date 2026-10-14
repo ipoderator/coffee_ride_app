@@ -30,6 +30,7 @@ export * from './components/ErrorState';
 export * from './components/Button';
 export * from './components/FileInput';
 export * from './components/Input';
+export * from './components/PasswordInput';
 export * from './components/TimeInput';
 export * from './components/Textarea';
 export * from './components/FormField';
