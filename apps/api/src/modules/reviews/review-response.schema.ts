@@ -6,7 +6,6 @@ import { z } from 'zod';
 export const reviewResponseSchema = z.object({
   id: z.string(),
   rideId: z.string(),
-  userId: z.string(),
   authorName: z.string().nullable(),
   rating: z.number(),
   comment: z.string().nullable(),

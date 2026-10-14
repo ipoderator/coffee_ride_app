@@ -20,6 +20,7 @@ import {
   updateStopRequestSchema,
 } from 'types';
 import { attachmentContentDisposition } from '../../lib/content-disposition.js';
+import { uploadRateLimit } from '../../lib/upload-rate-limit.js';
 import { requireAuth, resolveOptionalUser } from '../../plugins/auth.js';
 import { registrationResponseSchema } from '../registrations/registration-response.schema.js';
 import { waitlistEntryResponseSchema } from '../registrations/waitlist-entry-response.schema.js';
@@ -611,7 +612,7 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         params: rideIdParamsSchema,
         response: { 201: routeResponseWrapper },
       },
-      preHandler: requireAuth,
+      preHandler: [requireAuth, uploadRateLimit(app)],
     },
     async (request, reply) => {
       const file = await readGpxUpload(request);
@@ -635,7 +636,7 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         params: rideIdParamsSchema,
         response: { 200: routeResponseWrapper },
       },
-      preHandler: requireAuth,
+      preHandler: [requireAuth, uploadRateLimit(app)],
     },
     async (request, reply) => {
       const file = await readGpxUpload(request);
@@ -750,7 +751,7 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         params: rideIdParamsSchema,
         response: { 201: coverImageResponseSchema },
       },
-      preHandler: requireAuth,
+      preHandler: [requireAuth, uploadRateLimit(app)],
     },
     async (request, reply) => {
       const file = await readCoverImageUpload(request);
@@ -774,7 +775,7 @@ export const ridesRoutes: FastifyPluginAsyncZod = async (app) => {
         params: rideIdParamsSchema,
         response: { 200: coverImageResponseSchema },
       },
-      preHandler: requireAuth,
+      preHandler: [requireAuth, uploadRateLimit(app)],
     },
     async (request, reply) => {
       const file = await readCoverImageUpload(request);

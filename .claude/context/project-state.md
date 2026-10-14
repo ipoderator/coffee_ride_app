@@ -25,11 +25,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-252 (owner, 2026-10-14, tooling): the Lictor security-audit suite (4 skills,
-Apache-2.0, pinned upstream `cfe8c00`) vendored into `.claude/skills/lictor-*`,
-routed in CLAUDE.md; its report `SECURITY-AUDIT.md` is gitignored (public repo).
-CR-251 (Redis command args redacted from API logs) merged to `main` (`f1f2deb`,
-PR #58), not deployed — owner's call. CR-250 deployed 2026-10-13 (`65b5c4f`).
+CR-253..CR-258 (owner, 2026-10-14, security): every finding of the first
+`lictor-security-check` fixed on `fix/security-audit-findings` — verified email to join
+a ride, hidden ride's reviews, per-user upload tier, auth event log, logout cookie
+(KI-099), digest-pinned images. CR-252 vendored the Lictor skills (`e50c2c3`); CR-251
+merged (`f1f2deb`), not deployed — owner's call.
 
 Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
@@ -128,8 +128,8 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
    недоступен» instead of «точки слишком далеко друг от друга». A commercial key
    changes the limit, not the mapping.
-6. **First `lictor-security-check` run** (CR-252) — findings become CRs/KIs, the
-   report stays local.
+6. **KI-097** — owner decision on a nonce CSP (all pages dynamic) vs. the status quo;
+   the last open Lictor finding. Owner-side: restrict the 2GIS MapGL key to the domain.
 7. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
 
@@ -158,4 +158,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-252)
+2026-10-14 (CR-253..CR-258)

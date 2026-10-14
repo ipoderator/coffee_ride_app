@@ -401,11 +401,6 @@ Workaround: none. Keep new inline scripts out of the app.
 Next action: an ADR on nonce CSP via `proxy.ts` (all pages dynamic) vs. the status quo;
 re-inventory 2GIS hosts on any MapGL upgrade (`*.2gis.com`, `blob:` workers).
 
-## Resolved
-
-Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this
-file's own Archiving rule — this section had grown to ~1050 lines of closed issues.
-
 ### KI-098 — `/admin/users/<not a uuid>` shows the not-found page with HTTP 200
 
 Status: open. Discovered: 2026-10-10 (CR-232 item 7).
@@ -419,15 +414,21 @@ valid uuid keeps CR-231's client-side «Пользователь не найде
 Workaround: none needed. Not checked on a production build.
 Next action: if a real status matters, move the check into the layout or `proxy.ts`.
 
-### KI-099 — Logout's `clearCookie` for `__Host-session` lacks `Secure`, so browsers keep the cookie
+### KI-100 — Five admin-cabinet stories fail under `--project storybook` locally
 
-Status: open. Discovered: 2026-10-13 (CR-247 security review).
-Problem: `POST /v1/auth/logout` (`apps/api/src/modules/auth/auth.routes.ts`) calls
-`reply.clearCookie(app.sessionCookieName, { path: '/' })`; `@fastify/cookie` adds no
-`Secure`, and browsers ignore any `Set-Cookie` for a `__Host-` name without it —
-deletion included. In production the browser keeps the (now dead) `__Host-session`.
-Impact: low — logout deletes the session row, so the leftover token is refused; the
-cookie just lingers until it expires. Local dev (`session`, no prefix) is unaffected.
-Workaround: none needed. CR-247's own `__Host-google-oauth` clear passes `secure`.
-Next action: pass the same attributes as `setSessionCookie` (`session-cookie.ts`) when
-clearing; add a production-mode assertion to the logout test.
+Status: open. Discovered: 2026-10-14 (CR-253..CR-258 validation).
+Problem: `npx vitest run --project storybook` fails 5 of 303 on a clean `main`
+(`e50c2c3`) too: `AdminOverview.stories.tsx` (Default, Refresh Failed, Both Themes)
+and `CabinetSectionTabs.stories.tsx` (Admin Last Tab/Dark — `expected 0 to be greater
+than 0` on the tab row's `scrollLeft`, line 53).
+Impact: low — CI doesn't run the storybook project, so it stays green; the local
+`storybook-check` step reads red on every frontend change.
+Workaround: compare a branch's failures with `main`'s before blaming the change.
+Next action: code — make the scroll assertion independent of the test viewport (or give
+the stories a fixed narrow viewport), find the AdminOverview cause; then decide whether
+CI should run the storybook project.
+
+## Resolved
+
+Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this
+file's own Archiving rule — this section had grown to ~1050 lines of closed issues.

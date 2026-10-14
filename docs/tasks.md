@@ -19,6 +19,10 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-253..CR-258 (security, Lictor audit) verified email to join a ride, hidden
+      ride's reviews + no review `userId`, per-user upload tier, auth event log, logout
+      cookie `Secure` (KI-099), digest-pinned base images — done 2026-10-14 on
+      `fix/security-audit-findings`. See docs/changelog.md
 - [x] CR-252 (tooling, security) vendored the Lictor security-audit skills
       (`lictor-security-check`/`-explain`/`-fix-it`/`-rotate`, pinned upstream commit),
       routed in CLAUDE.md; `SECURITY-AUDIT.md` gitignored — done 2026-10-14 on
@@ -43,6 +47,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-245 (production QA) the emailed verification link keeps `next`, so
       «Перейти ко входу» returns to the page registration started from (KI-089) —
       done 2026-10-12 on `fix/verify-email-next`. See docs/changelog.md
-- [x] CR-244 (production QA) password-reset email «not sent» — investigated on
-      production: the typed address matched no account (Gmail `+` alias); no
-      defect — 2026-10-12. See docs/changelog.md

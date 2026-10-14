@@ -1,42 +1,36 @@
-# Current task — CR-252 — vendor the Lictor security-audit skills
+# Current task — CR-253..CR-258 — fix the Lictor security-audit findings
 
-Source: owner, 2026-10-14 ("внедри вот это в наш проект",
-git@github.com:Raffa-jarrl/Lictor-AI.git). Branch `chore/lictor-security-skills`.
+Source: owner, 2026-10-14 ("нужно исправить все выявленные ошибки") after the first
+`lictor-security-check` (CR-252, local `SECURITY-AUDIT.md`). Branch
+`fix/security-audit-findings` (worktree `../coffeeride-security`).
 
-## Goal
+## Scope (audit item → CR)
 
-Make the Lictor security suite (Claude Code skills: `lictor-security-check`,
-`lictor-explain`, `lictor-fix-it`, `lictor-rotate`) available in this project.
+- 1.1 MEDIUM → CR-253: register/waitlist need a verified email; web banner + resend.
+- 1.2 LOW → CR-254: reviews of an admin-hidden ride 404 for non-owners; no `userId`.
+- 1.3 LOW → CR-255: per-user upload tier (10/min) on cover/GPX/avatar POST/PATCH.
+- 1.4 LOW → CR-256: auth events (register/verify/login/google/reset/logout) logged
+  with the user id.
+- 1.6 LOW (KI-099) → CR-257: logout clears `__Host-session` with `Secure`.
+- 1.5 LOW → CR-258: Dockerfile base images pinned by digest.
+- Not fixed here: KI-097 (nonce CSP — needs the owner's ADR call), KI-095 (no upstream
+  patch), the 2GIS key's domain restriction (owner, 2GIS cabinet).
 
-## Requirements / acceptance
+## Acceptance
 
-1. The four skills live in `.claude/skills/`, pinned to a reviewed upstream commit,
-   with the Apache-2.0 license and provenance.
-2. Nothing untrusted lands unread: every vendored file reviewed for hidden
-   instructions, network calls, telemetry.
-3. The audit report can't be committed to the public repo.
-4. CI gates stay green (`format:check` in particular).
-5. CLAUDE.md routes the skills and says where project rules override them.
-
-## Investigation
-
-- Upstream `cfe8c00` (2026-07-08), plugin 0.1.0: Markdown skills only; 48 check files,
-  a report template. Only write: `./SECURITY-AUDIT.md`. No invisible Unicode, no
-  agent-directed HTML comments; URLs are examples, vendor dashboards, lictor-ai.com.
-- `benchmark/` holds a GPL-2.0 OWASP corpus + Python scorer — not part of the skill.
-- Conflicts with project rules: English "friendly founder" voice (we reply in
-  Russian), report in repo root (public repo), `lictor-fix-it` "don't run tests"
-  (our loop requires validation) — resolved in CLAUDE.md routing, files untouched.
-
-## Progress
-
-- [x] vendor - [x] ignore rules - [x] routing - [x] validation - [x] close-task
+Each fix with a test through the real Fastify pipeline (or a component test + story
+for the web banner); api/web/ui coverage gate holds; typecheck, lint, format, build.
 
 ## Validation results
 
-- `prettier --check .` clean; without the ignore 56 vendored files would fail.
-- `touch SECURITY-AUDIT.md` → not in `git status`.
+- `pnpm test:coverage` (live Redis/S3, `coffee_ride_test`) green; `pnpm coverage:check`
+  holds (reviews +0.18, plugins +1.12, lib +0.46, web +0.52).
+- typecheck 8/8, `lint:root` + `lint` 9/9, `format:check`, `build` 7/7.
+- Storybook 298/303: the 5 failures (AdminOverview, CabinetSectionTabs) also fail on
+  clean `main` → KI-100. New `RegistrationTicket/EmailVerificationRequired` passes.
+- Live upload-tier test ran (not skipped) against local Redis.
+- Not run locally: Playwright e2e (CI), Docker image build (CI `docker-smoke`).
 
 ## Final result
 
-Done on `chore/lictor-security-skills`; PR into `main`.
+Done on `fix/security-audit-findings`; PR into `main`.

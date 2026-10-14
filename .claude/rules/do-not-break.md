@@ -198,6 +198,20 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
 - the API logger's `redact: LOG_REDACT` (`lib/log-redaction.ts`): ioredis errors
   carry `command.args` (a BullMQ job's email + one-time link) — never drop the rule
   or log an error under a key other than `err` without extending its paths (CR-251);
+- joining a ride or its waitlist needs a verified email (`requireVerifiedEmail` in
+  `registrations.service.ts`, CR-253), checked inside the locked transaction _after_
+  the idempotent-replay return — moving it before would turn CR-083's `200` replay into
+  a `403` for a registration made before the gate;
+- `GET /v1/rides/:id/reviews` applies `isRidePublic` (owner excepted) and `Review`
+  carries no author `userId` (CR-254, ADR-023's rule);
+- upload `POST`/`PATCH` verbs (cover, GPX, both avatars) run `uploadRateLimit(app)` after
+  `requireAuth` and keep no `config.rateLimit` of their own — that would replace the
+  per-IP default and leave anonymous calls unlimited (CR-255);
+- auth events go through `logAuthEvent` with the user id only — never an email/token
+  (CR-256); logout clears the cookie with `clearSessionCookie`, never a bare
+  `clearCookie` — a `__Host-` deletion without `Secure` is ignored (CR-257, KI-099);
+- Dockerfile base images stay pinned by digest (`node:24-alpine@sha256:…`, CR-258);
+  Dependabot's `docker` entries bump the digest — don't drop it back to a bare tag;
 - cover images/avatars served only through their API-proxy path (`GET
 /v1/rides/:id/cover`, `/v1/users/me/avatar`, `/v1/organizers/:id/avatar`),
   never a direct S3 URL — the bucket stays private, and this is what lets

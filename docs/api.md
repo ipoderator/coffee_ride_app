@@ -550,6 +550,11 @@ most commonly a network retry of a call that actually succeeded — returns `200
 that same existing `registration` instead of an error or a second row; no duplicate
 `registration_confirmed` notification fires either.
 
+**CR-253 (verified email)**: `403 email_verification_required` — the same code as the
+organizer-profile/publish gate — unless the caller's email is verified. Checked inside
+the locked transaction after the idempotent-replay return, so a registration made
+before the gate still replays with `200`. `POST .../waitlist` has the same gate.
+
 **CR-117 (pace groups)**: optional body `{ groupId }` (no body at all stays valid).
 Once the ride has any group, `groupId` is required — `422 group_required`; it must be
 one of _this_ ride's groups — `422 group_not_found` (also for any `groupId` on a ride
@@ -587,7 +592,8 @@ requirement and resource-enumeration-safe `404 ride_not_found` as `POST .../regi
 `409 ride_registration_not_open` for any status other than `registration_open`. `409
 registration_already_exists` if the caller already has an active registration for
 this ride (a genuine conflict — register/cancel instead, not a retry of this call).
-`409 ride_not_full` if the ride still has an open spot, or has no `participantLimit`
+`403 email_verification_required` for an unverified caller (CR-253, as for
+`POST .../register`). `409 ride_not_full` if the ride still has an open spot, or has no `participantLimit`
 at all — call `POST .../register` instead of joining a queue for a spot that isn't
 scarce. Re-derives capacity itself inside the same `SELECT ... FOR UPDATE` lock
 `POST .../register` uses, rather than trusting a stale `409 ride_full` the client
@@ -1031,11 +1037,14 @@ comment? }` — `rating` an integer 1-5, `comment` ≤2000 chars, nullable/omitt
 `201` → `{ review }`.
 
 GET `/v1/rides/:id/reviews` — **implemented (CR-042)**. Public — no session cookie
-required or consulted, same "complete ride record" reasoning as `GET
-/v1/rides/:id`. `404 ride_not_found` for a non-existent ride. Cursor-paginated per
-ADR-011, newest first (`createdAt desc`). `200` → `{ items, nextCursor }`, each item
-`{ id, rideId, userId, authorName, rating, comment, createdAt }` — `authorName` only
-(no phone/email, `.claude/rules/security.md`).
+required, same "complete ride record" reasoning as `GET /v1/rides/:id`. `404
+ride_not_found` for a non-existent ride and (CR-254) for a ride `isRidePublic` hides
+— an admin-hidden one — unless the caller is its organizer (the cookie is read
+optionally for exactly that). Cursor-paginated per ADR-011, newest first (`createdAt
+desc`). `200` → `{ items, nextCursor }`, each item `{ id, rideId, authorName, rating,
+comment, createdAt }` — `authorName` only: no phone/email (`.claude/rules/security.md`)
+and, since CR-254, no author `userId` (ADR-023's rule for the riders list; `Review`
+dropped the field everywhere, `viewerReview` and the `POST` reply included).
 
 CR-043 ("Organizer rating summary"): no new endpoint — `avg(rating)`/`count(*)`
 across every review on any of an organizer's rides is exposed as additive
@@ -1161,6 +1170,10 @@ Every non-2xx response is `application/problem+json` per RFC 9457:
 - participant data is minimized;
 - auth endpoints (`/v1/auth/login`, `/v1/auth/register`, `/v1/auth/forgot-password`) carry
   a stricter rate limit than the general API (`.claude/rules/security.md`);
+- uploads — `POST`/`PATCH` of `/v1/rides/:id/cover`, `/v1/rides/:id/route` (GPX),
+  `/v1/users/me/avatar`, `/v1/organizers/me/avatar` — share one per-user budget of 10
+  a minute on top of the per-IP default: `429 upload_rate_limited` past it (CR-255,
+  `lib/upload-rate-limit.ts`; fails open without Redis);
 - `/v1/auth/forgot-password` and `/v1/auth/verify-email` responses do not reveal whether
   the target email exists — a uniform error envelope does not mean a more informative one.
 

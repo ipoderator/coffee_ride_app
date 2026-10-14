@@ -108,3 +108,12 @@ Files: `.claude/skills/lictor-{security-check,explain,fix-it,rotate}/`, `.claude
 Validation: all upstream skill files read before vendoring (no hidden text, network calls or telemetry; the only write is the report); `prettier --check .` clean (56 vendored files fail without the ignore); `SECURITY-AUDIT.md` confirmed ignored by `git status`.
 Decisions: vendored and pinned, not the plugin marketplace (tracks upstream `main` unpinned); `benchmark/` not copied (GPL-2.0 OWASP corpus, unused by the skill); files kept byte-identical so an update is a diff.
 Follow-up: the first `lictor-security-check` run.
+
+## 2026-10-14 — CR-253..CR-258 — Lictor audit findings fixed
+
+Summary: the first `lictor-security-check` (CR-252) found no critical/high issue; the owner asked to fix every finding. CR-253: joining a ride or its waitlist needs a verified email (`403 email_verification_required`, Russian banner + resend button). CR-254: an admin-hidden ride's reviews 404 for non-owners; `Review` drops `userId`. CR-255: per-user upload tier, 10/min. CR-256: auth events logged with the user id. CR-257: logout clears `__Host-session` with `Secure` (KI-099). CR-258: base images pinned by digest.
+Contract: `POST /v1/rides/:id/register`/`waitlist` +`403 email_verification_required`; `GET /v1/rides/:id/reviews` +404 for a hidden ride, `Review.userId` removed (also `viewerReview`); upload `POST`/`PATCH` +`429 upload_rate_limited`. `docs/api.md` updated.
+Files: `registrations.service.ts`, `reviews.{service,routes}.ts`, `lib/upload-rate-limit.ts`, `lib/auth-events.ts`, `auth/session-cookie.ts`, auth/google/rides/users/organizers routes, `RegistrationTicket.tsx` (+story), `terminology.ts`, `types/domain/review.ts`, 3 Dockerfiles.
+Validation: `pnpm test:coverage` with live Redis/S3 (`coffee_ride_test`) green and `pnpm coverage:check` holds; typecheck, lint, format, build; storybook 298/303 — the 5 failures are on clean `main` too (KI-100).
+Decisions: the email gate sits after the idempotent replay (CR-083 keeps `200`); the upload tier is a second gate keyed by user, so the per-IP default still covers anonymous calls; Dockerfiles pinned, compose images not (no Dependabot coverage for them yet).
+Follow-up: KI-097 (nonce CSP) needs the owner's ADR call; restrict the 2GIS MapGL key to the domain in the 2GIS cabinet (owner).

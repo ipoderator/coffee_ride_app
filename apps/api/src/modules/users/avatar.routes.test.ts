@@ -364,6 +364,45 @@ describe('/v1/users/me/avatar', () => {
     });
   });
 
+  // CR-255: the per-user upload tier. Each attempt from its own IP, so only
+  // the per-user counter can trip; no file part, so a passing request ends in a
+  // cheap 400 — the limiter runs before the body is read.
+  it.skipIf(!process.env.REDIS_URL)(
+    'refuses the 11th upload in a minute with 429 upload_rate_limited, across IPs (CR-255)',
+    async () => {
+      const app = await buildApp({
+        ...testEnv,
+        REDIS_URL: process.env.REDIS_URL,
+      });
+      const { rawToken } = await registerAndLogin(app);
+      const boundary = `----testboundary${randomUUID()}`;
+
+      const statuses: number[] = [];
+      let last;
+      for (let i = 0; i < 11; i += 1) {
+        last = await app.inject({
+          method: 'POST',
+          url: '/v1/users/me/avatar',
+          remoteAddress: `10.1.0.${i + 1}`,
+          headers: {
+            origin: WEB_ORIGIN,
+            'content-type': `multipart/form-data; boundary=${boundary}`,
+          },
+          cookies: { session: rawToken },
+          payload: Buffer.from(
+            `--${boundary}\r\nContent-Disposition: form-data; name="notfile"\r\n\r\nx\r\n--${boundary}--\r\n`,
+          ),
+        });
+        statuses.push(last.statusCode);
+      }
+
+      expect(statuses.slice(0, 10).every((s) => s === 400)).toBe(true);
+      expect(last!.statusCode).toBe(429);
+      expect(last!.json().code).toBe('upload_rate_limited');
+      await app.close();
+    },
+  );
+
   describe('PATCH /v1/users/me/avatar', () => {
     it('rejects a replace with 404 avatar_not_found when none exists yet', async () => {
       const app = await buildApp(testEnv);

@@ -1,5 +1,12 @@
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
-import { registrations, reviews, rides, users } from 'db/schema';
+import {
+  organizerProfiles,
+  registrations,
+  reviews,
+  rides,
+  users,
+} from 'db/schema';
+import { isRidePublic } from '../rides/ride-visibility.js';
 import type { DbClient } from 'db';
 import type {
   CreateReviewRequest,
@@ -84,7 +91,6 @@ const INVALID_CURSOR = () =>
 export function toReview(row: {
   id: string;
   rideId: string;
-  userId: string;
   authorName: string | null;
   rating: number;
   comment: string | null;
@@ -93,7 +99,6 @@ export function toReview(row: {
   return {
     id: row.id,
     rideId: row.rideId,
-    userId: row.userId,
     authorName: row.authorName,
     rating: row.rating,
     comment: row.comment,
@@ -205,22 +210,32 @@ export async function createReview(
 /**
  * CR-042: a ride's reviews, public (no session required — `docs/api.md`'s existing
  * "complete ride record, not a link out" reasoning), newest first. `404
- * ride_not_found` only for a genuinely nonexistent id — no draft-visibility check
- * beyond that, since a review can only ever exist on a `finished` ride
- * ({@link createReview}), so listing a draft/non-finished ride's reviews is simply
- * always empty, never a reason to 404.
+ * ride_not_found` for a nonexistent id and, since CR-254, for a ride
+ * `isRidePublic` hides from this viewer (an admin-hidden ride; drafts never have
+ * reviews — {@link createReview} needs a `finished` ride). No author user id in
+ * the reply — the same rule as the riders list (ADR-023).
  */
 export async function listRideReviews(
   db: DbClient,
+  viewerUserId: string | null,
   rideId: string,
   query: ListRidesQuery,
 ): Promise<ListRideReviewsResponse> {
+  // CR-254 (security audit 1.2): the same `isRidePublic` rule as every other
+  // non-owner ride read — an admin-hidden ride's reviews were still listed.
   const [rideRow] = await db
-    .select({ id: rides.id })
+    .select({
+      status: rides.status,
+      hiddenAt: rides.hiddenAt,
+      organizerUserId: organizerProfiles.userId,
+    })
     .from(rides)
+    .innerJoin(organizerProfiles, eq(rides.organizerId, organizerProfiles.id))
     .where(eq(rides.id, rideId))
     .limit(1);
-  if (!rideRow) {
+  const isOwner =
+    viewerUserId !== null && rideRow?.organizerUserId === viewerUserId;
+  if (!rideRow || (!isOwner && !isRidePublic(rideRow))) {
     throw RIDE_NOT_FOUND();
   }
 
@@ -244,7 +259,6 @@ export async function listRideReviews(
     .select({
       id: reviews.id,
       rideId: reviews.rideId,
-      userId: reviews.userId,
       authorName: users.displayName,
       rating: reviews.rating,
       comment: reviews.comment,

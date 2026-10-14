@@ -115,6 +115,33 @@ const REGISTRATION_ALREADY_EXISTS = () =>
     'You already have an active registration for this ride.',
   );
 
+// CR-253: the same code and status as the organizer-profile/publish gate
+// (`organizers.service.ts`), so `apps/web` handles both with one banner.
+const EMAIL_VERIFICATION_REQUIRED = () =>
+  new RegistrationServiceError(
+    'email_verification_required',
+    403,
+    'Email verification required',
+    'Verify your email before joining a ride.',
+  );
+
+/**
+ * CR-253 (security audit 1.1): a seat or a waitlist place needs a verified email —
+ * otherwise throwaway accounts can fill a ride. Called inside the locked
+ * transaction after the idempotent-replay return, so a registration made before
+ * this gate still replays with `200` (`do-not-break.md`, CR-083).
+ */
+async function requireVerifiedEmail(tx: DbTransaction, userId: string) {
+  const [userRow] = await tx
+    .select({ emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!userRow?.emailVerified) {
+    throw EMAIL_VERIFICATION_REQUIRED();
+  }
+}
+
 const RIDE_FULL = () =>
   new RegistrationServiceError(
     'ride_full',
@@ -1168,6 +1195,8 @@ export async function createRegistration(
       return { row: existingActive, created: false };
     }
 
+    await requireVerifiedEmail(tx, userId);
+
     // CR-117: after the idempotent-replay return above (a retry returns the
     // existing registration as-is, whatever group it carries — `PATCH .../register`
     // changes groups), before capacity: an invalid choice is the caller's input
@@ -1645,6 +1674,8 @@ export async function joinWaitlist(
     if (existingWaiting) {
       return { row: existingWaiting, created: false };
     }
+
+    await requireVerifiedEmail(tx, userId);
 
     // CR-117: same group rules as `createRegistration` — the choice is made when
     // joining, so a promotion never produces a group-less registration on a ride
