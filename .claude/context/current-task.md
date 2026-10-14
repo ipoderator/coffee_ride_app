@@ -82,3 +82,6 @@ api/tests, stories, e2e fixture; docs ADR-039, `api.md`, `auth.md`, rules
 ## Final result
 
 Done, validated and committed on `experiments` (no PR yet). See `docs/changelog.md` CR-262.
+
+Follow-up CR-263 (owner, 2026-10-14): story column is text only — no panel fill, border
+or decorative route (`AuthSplitLayout`). Committed on `experiments`.

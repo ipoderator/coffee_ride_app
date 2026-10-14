@@ -19,10 +19,11 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-263 `/register` story column without background (text only) — done 2026-10-14
 - [x] CR-262 `/register` to the auth mockup (story panel, Google/Yandex ID first,
       strength meter, live match, show/hide), `confirmPassword` checked by the API, no
-      account enumeration on register (ADR-039) — done 2026-10-14 on `experiments`, not
-      committed (owner). See docs/changelog.md
+      account enumeration on register (ADR-039) — done 2026-10-14, committed on
+      `experiments`. See docs/changelog.md
 - [x] CR-261 (security) Google reCAPTCHA v2 on register/password login/forgot-password,
       verified server-side, failing closed; «Повторите пароль» on register (ADR-038) —
       done 2026-10-14, one PR with CR-260 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md
@@ -43,9 +44,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-251 (security) Redis command args (a queued job's email + one-time link)
       redacted from every API log line — done 2026-10-14 on
       `fix/redact-redis-command-args`. See docs/changelog.md
-- [x] CR-250 (security, LOW) the per-account auth rate-limit Redis key is an
-      HMAC of the normalized email, and its fail-open warning no longer logs the key —
-      done 2026-10-13 on `fix/account-rate-limit-key-hmac`. See docs/changelog.md
-- [x] CR-249 Google sign-in claims an unverified account with the same email
-      (ADR-035): verified, password/sessions/pending links voided, then linked —
-      done 2026-10-13. See docs/changelog.md
