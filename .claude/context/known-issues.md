@@ -445,6 +445,23 @@ Workaround: re-run the job.
 Next action: code — wait for the dialog's exit animation explicitly (or a longer
 `waitFor` timeout for this assertion).
 
+### KI-103 — Local web unit tests pick up the root `.env`'s reCAPTCHA site key
+
+Status: open. Discovered: 2026-10-14 (CR-262 merge validation).
+Problem: with `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` set in the root `.env` (it is, since
+CR-261), `pnpm test:coverage` / `vitest --project unit` in `apps/web` fails 31 tests
+in the login, register and forgot-password suites — the forms wait for a CAPTCHA tick
+and never submit. The key reaches `process.env` of the unit project even with the
+shell's variable unset (probe test: «set»); most likely `apps/web/vitest.config.mts`'s
+`storybookTest` plugin loads `next.config.ts`, whose `process.loadEnvFile('../../.env')`
+fills it. `use-captcha.ts`'s module-level `RECAPTCHA_SITE_KEY` then defaults every form
+to captcha-on. Reproduces on `main` `146ff5d`; CI is green (no `.env` there).
+Impact: low — local only; a developer reads it as a regression in the auth forms.
+Workaround: export the key empty before the run — `NEXT_PUBLIC_RECAPTCHA_SITE_KEY=
+pnpm test:coverage` (`loadEnvFile` does not override an already-set variable).
+Next action: code — pin the key empty for the `unit` project (`test.env` in
+`vitest.config.mts` or `vitest.setup.ts`), like e2e's `webServer` env does.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

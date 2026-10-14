@@ -25,9 +25,9 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
-(`reference/coffee-ride-auth-mockup`, tab «Регистрация»), validated on `experiments`,
-committed on `experiments` (no PR yet):
+CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
+(`reference/coffee-ride-auth-mockup`, tab «Регистрация»); **deployed** 2026-10-14
+(`c53271b`, PR #64):
 
 - story column (`lg`+, text only since CR-263), Google/Yandex ID first («Продолжить с …»), strength meter, live
   match line, show/hide (`ui` `PasswordInput`);
@@ -36,7 +36,7 @@ committed on `experiments` (no PR yet):
   emails the owner «Аккаунт уже есть».
 
 Before it: CR-260 + CR-261 — Yandex ID sign-in (ADR-037) and reCAPTCHA v2 on password
-auth (ADR-038), one PR from `feat/yandex-oauth-recaptcha` (committed).
+auth (ADR-038), deployed (`146ff5d`, PR #63).
 
 Before it (details in the changelog): CR-259 page CSP by nonce (ADR-036) and CR-251,
 CR-253..CR-258 Lictor fixes (deployed, PR #61); CR-249/CR-247 Google sign-in (ADR-034/035,
@@ -61,14 +61,12 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-262 — awaiting the owner's review/commit (branch `experiments`); ships after (or
-with) CR-260/CR-261 — no new env var or migration of its own. Next from the same mockup:
-`/login` and the maintenance screen (owner's prompts 2–3).
+CR-262/CR-263 — deployed (see "Current task"). Next from the same mockup: `/login` and
+the maintenance screen (owner's prompts 2–3). KI-103: local web unit runs need the
+reCAPTCHA site key exported empty.
 
-CR-260/CR-261 — awaiting merge and deploy. Owner-side: `YANDEX_CLIENT_ID`/`_SECRET`
-(redirect URI `…/api/v1/auth/yandex/callback`), `RECAPTCHA_SECRET_KEY` and
-`NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (v2 «I'm not a robot», coffeeride.site + localhost) in
-the VPS `.env`, then a web rebuild; the reCAPTCHA secret is not yet confirmed by a real
+CR-260/CR-261 — deployed (`146ff5d`); Yandex and reCAPTCHA keys are in the VPS `.env`
+(each listed twice, same values). Still open: the reCAPTCHA secret confirmed by a real
 solved challenge (a registration → 201, `captcha_unavailable` = secret rejected); name
 reCAPTCHA in the privacy policy.
 
@@ -177,4 +175,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-263)
+2026-10-14 (CR-262/CR-263 deploy)

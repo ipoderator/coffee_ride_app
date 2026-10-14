@@ -116,3 +116,7 @@ Files: web `features/auth/layout/AuthSplitLayout.tsx`.
 Validation: web typecheck, eslint, vitest auth + register 121/121, Storybook `RegisterScreen` 6/6 with axe; Chromium 1440 light/dark against the dev stack — `aside` background transparent, no border, no SVG.
 Decisions: deliberate departure from the mockup's panel (owner).
 Follow-up: none.
+
+## 2026-10-14 — CR-262, CR-263 deployed
+
+Deploy: `c53271b` (PR #64, squash of `experiments`' CR-262/CR-263 rebased on `main`; CR-260/CR-261 were already live at `146ff5d`, PR #63) on coffeeride.site via `deploy/deploy.sh` after green CI on the PR (ci, docker-smoke) and on `main`. No migration, no env change. Before: format, lint, typecheck, build, api 884, web 999 (KI-103 workaround), coverage gate, e2e 56 + Linux baselines in CI. After: API `/health` db/redis/s3 ok; `/`, `/register`, `/login`, `/forgot-password` `200`; Chromium on `/register` and `/login`: new register layout, reCAPTCHA renders, zero `securitypolicyviolation`; no level ≥50 API log lines in the first 10 minutes. A taken email on `/register` now emails its owner (email is live in production).
