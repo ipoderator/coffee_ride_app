@@ -19,6 +19,10 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-252 (tooling, security) vendored the Lictor security-audit skills
+      (`lictor-security-check`/`-explain`/`-fix-it`/`-rotate`, pinned upstream commit),
+      routed in CLAUDE.md; `SECURITY-AUDIT.md` gitignored — done 2026-10-14 on
+      `chore/lictor-security-skills`. See docs/changelog.md
 - [x] CR-251 (security) Redis command args (a queued job's email + one-time link)
       redacted from every API log line — done 2026-10-14 on
       `fix/redact-redis-command-args`. See docs/changelog.md
@@ -42,10 +46,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-244 (production QA) password-reset email «not sent» — investigated on
       production: the typed address matched no account (Gmail `+` alias); no
       defect — 2026-10-12. See docs/changelog.md
-- [x] CR-240..CR-243 (production QA 6–9) phone menu modal (Esc, focus, inert page);
-      no overflow at 320–1023 px (scroll-row fades, header bar from `lg`); share/`.ics`
-      feedback + fallbacks; group chip resync, `fitBounds` guards, menu semantics,
-      visible focus — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
-- [x] CR-239 (production QA) ride page in sync after cancel/register: counts, start
-      number and the phone bar land together; bar shows the count, not «№ N» —
-      done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

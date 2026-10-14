@@ -99,3 +99,12 @@ Files: `apps/api/src/lib/log-redaction.ts` (+ test), `apps/api/src/app.ts`.
 Validation: api 770/770 (live Redis/S3, `coffee_ride_test`); `pnpm coverage:check` holds; typecheck, lint (0 errors), prettier.
 Decisions: pino `redact`, not a custom `err` serializer — no new dependency, applies to every logger child. Production logs checked: none matching; the CR-250 deploy recreated the container, so nothing to purge.
 Follow-up: Dependabot #18 (`braces`, KI-095) has no fix to apply — owner's call on dismissing it.
+
+## 2026-10-14 — CR-252 — Lictor security-audit skills vendored
+
+Summary: the owner asked to adopt the Lictor security suite (github.com/Raffa-jarrl/Lictor-AI). Its four skills are copied unmodified into `.claude/skills/lictor-*` at upstream `cfe8c00` (Apache-2.0, `LICENSE` + `UPSTREAM.md`): a 48-check whole-repo audit, a finding explainer, a guided fixer and a key-rotation runbook. CLAUDE.md routes them and states which project rules override theirs. The audit report `SECURITY-AUDIT.md` is gitignored — the repository is public.
+Contract: none (agent tooling only).
+Files: `.claude/skills/lictor-{security-check,explain,fix-it,rotate}/`, `.claude/CLAUDE.md`, `.gitignore`, `.prettierignore`.
+Validation: all upstream skill files read before vendoring (no hidden text, network calls or telemetry; the only write is the report); `prettier --check .` clean (56 vendored files fail without the ignore); `SECURITY-AUDIT.md` confirmed ignored by `git status`.
+Decisions: vendored and pinned, not the plugin marketplace (tracks upstream `main` unpinned); `benchmark/` not copied (GPL-2.0 OWASP corpus, unused by the skill); files kept byte-identical so an update is a diff.
+Follow-up: the first `lictor-security-check` run.

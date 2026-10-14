@@ -25,11 +25,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-251 (owner, 2026-10-14, security): ioredis error `command.args` — a queued job's
-email + one-time link — reached the API log; the logger now redacts them app-wide
-(`lib/log-redaction.ts`). Validated locally on `fix/redact-redis-command-args`,
-committed and going to `main` through a PR. CR-250 (per-account rate-limit key → HMAC,
-no email in logs) deployed 2026-10-13 (`65b5c4f`, PR #56).
+CR-252 (owner, 2026-10-14, tooling): the Lictor security-audit suite (4 skills,
+Apache-2.0, pinned upstream `cfe8c00`) vendored into `.claude/skills/lictor-*`,
+routed in CLAUDE.md; its report `SECURITY-AUDIT.md` is gitignored (public repo).
+CR-251 (Redis command args redacted from API logs) merged to `main` (`f1f2deb`,
+PR #58), not deployed — owner's call. CR-250 deployed 2026-10-13 (`65b5c4f`).
 
 Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
@@ -128,7 +128,9 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
    недоступен» instead of «точки слишком далеко друг от друга». A commercial key
    changes the limit, not the mapping.
-6. **KI-086** — owner decision: which sidebar item lights on a ride's
+6. **First `lictor-security-check` run** (CR-252) — findings become CRs/KIs, the
+   report stays local.
+7. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
 
 ## Important decisions
@@ -156,4 +158,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-251)
+2026-10-14 (CR-252)

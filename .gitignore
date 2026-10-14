@@ -31,3 +31,7 @@ references/
 # instructions live in .claude/ and the root CLAUDE.md.
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+
+# CR-252: the report `lictor-security-check` writes. It lists open vulnerabilities
+# and this repository is public — the findings go into CR tasks/known-issues instead.
+SECURITY-AUDIT.md

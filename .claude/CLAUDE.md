@@ -133,6 +133,16 @@ Outside a task: `ci-triage` — CI red; `dependabot-triage` — Dependabot PRs/a
 plans; `fewer-permission-prompts` (global); `impeccable` (global) — UI polish beyond a
 mockup; `skill-creator` (global) — new/changed skill, then update this list.
 
+Security audit (vendored Lictor suite, `lictor-security-check/UPSTREAM.md`):
+`lictor-security-check` — whole-repo 48-check audit before a release or after a large
+feature (`security-review` stays the per-diff check against `rules/security.md`);
+`lictor-explain` — explain a finding or a Dependabot/CodeQL alert; `lictor-fix-it` —
+fix audit findings; `lictor-rotate` — rotate a leaked key. This file and `.claude/rules/`
+win over them: reply in Russian; `SECURITY-AUDIT.md` is gitignored (public repo) —
+never commit it or quote live secrets; real findings become CRs/KIs
+(`qa-report-intake`/`known-issue`); `lictor-fix-it` follows the mandatory loop (own
+branch, tests and gates — not its "don't run tests").
+
 Chains: frontend feature `new-cabinet-feature` → `terminology-string` →
 `storybook-check` → (`visual-baselines`) → `simplify` → `close-task`. API feature
 `db-migration` → `new-api-endpoint` → `security-review` → `close-task`. QA report

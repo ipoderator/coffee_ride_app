@@ -1,46 +1,42 @@
-# Current task — CR-251 — Redis command args (job email + token link) reach the log
+# Current task — CR-252 — vendor the Lictor security-audit skills
 
-Source: owner, 2026-10-14 ("нужно решить проблему" — CR-250's Found list). Branch
-`fix/redact-redis-command-args`.
+Source: owner, 2026-10-14 ("внедри вот это в наш проект",
+git@github.com:Raffa-jarrl/Lictor-AI.git). Branch `chore/lictor-security-skills`.
 
 ## Goal
 
-ioredis attaches `command: { name, args }` to reply/abort errors and pino's `err`
-serializer logs it. A BullMQ `queue.add()` passes the job JSON as an arg, so a Redis
-error during an enqueue logged the recipient email and the one-time verify/reset link
-(`sendVerificationEmail`/`sendPasswordResetEmail` catch → `logger.error({ err })`).
+Make the Lictor security suite (Claude Code skills: `lictor-security-check`,
+`lictor-explain`, `lictor-fix-it`, `lictor-rotate`) available in this project.
 
 ## Requirements / acceptance
 
-1. No log line of `apps/api` carries a Redis command's args; the command name stays.
-2. One app-wide rule (logger `redact`), not per call site.
-3. Tests through the real Fastify/pino pipeline: top-level error, error in a property,
-   `AggregateError` members; an ordinary error untouched.
-4. api tests + coverage gate, typecheck, lint, prettier.
+1. The four skills live in `.claude/skills/`, pinned to a reviewed upstream commit,
+   with the Apache-2.0 license and provenance.
+2. Nothing untrusted lands unread: every vendored file reviewed for hidden
+   instructions, network calls, telemetry.
+3. The audit report can't be committed to the public repo.
+4. CI gates stay green (`format:check` in particular).
+5. CLAUDE.md routes the skills and says where project rules override them.
 
 ## Investigation
 
-- Unisender errors were already safe: `redactEmails()` on the provider message,
-  `failed_emails` → generic "rejected the recipient" (the CR-250 "Found" guess was wrong).
-- Live: `evalsha` NOSCRIPT ReplyError with job JSON logged email + token without the
-  rule, `args: "[redacted]"` with it. BullMQ 6.3.6 `addStandardJobArgs` pushes
-  `job.data` into the command args.
-- Production logs: 0 matching lines; the `api` container was recreated by the CR-250
-  deploy and the `json-file` driver drops a removed container's log — nothing to purge.
-- Dependabot #18 = `braces` GHSA-vfj7-8cjw-p6xm (KI-095): no patched release exists;
-  only path is web's dev-only `eslint-config-next` → `fast-glob` → `micromatch`.
+- Upstream `cfe8c00` (2026-07-08), plugin 0.1.0: Markdown skills only; 48 check files,
+  a report template. Only write: `./SECURITY-AUDIT.md`. No invisible Unicode, no
+  agent-directed HTML comments; URLs are examples, vendor dashboards, lictor-ai.com.
+- `benchmark/` holds a GPL-2.0 OWASP corpus + Python scorer — not part of the skill.
+- Conflicts with project rules: English "friendly founder" voice (we reply in
+  Russian), report in repo root (public repo), `lictor-fix-it` "don't run tests"
+  (our loop requires validation) — resolved in CLAUDE.md routing, files untouched.
 
 ## Progress
 
-- [x] implement - [x] tests - [x] validation - [x] close-task
+- [x] vendor - [x] ignore rules - [x] routing - [x] validation - [x] close-task
 
 ## Validation results
 
-- `pnpm test:coverage` (apps/api, live Redis/S3, `coffee_ride_test`): 56 files,
-  770/770; `pnpm coverage:check` holds (api total +0.37, `lib/` +0.17).
-- typecheck clean; lint 0 errors (8 pre-existing warnings, `scripts/preflight.ts`);
-  prettier clean.
+- `prettier --check .` clean; without the ignore 56 vendored files would fail.
+- `touch SECURITY-AUDIT.md` → not in `git status`.
 
 ## Final result
 
-Done locally; committed and going to `main` through a PR.
+Done on `chore/lictor-security-skills`; PR into `main`.
