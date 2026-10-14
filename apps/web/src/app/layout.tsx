@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import localFont from 'next/font/local';
 import Script from 'next/script';
 import { SITE_META_TERMS, ToastProvider } from 'ui';
@@ -103,11 +104,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // ADR-036: `src/proxy.ts`'s per-request script nonce. Reading `headers()`
+  // here is also what renders every page per request — a prerendered page
+  // would carry no nonce, and the CSP would block all of its scripts.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     // `suppressHydrationWarning`: THEME_INIT_SCRIPT adds `.dark` to this
     // element before hydration on purpose, so its `class` legitimately
@@ -122,6 +127,7 @@ export default function RootLayout({
         <Script
           id="theme-init"
           strategy="beforeInteractive"
+          nonce={nonce}
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
       </head>

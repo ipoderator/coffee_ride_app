@@ -1,9 +1,6 @@
 import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
-import {
-  contentSecurityPolicy,
-  PERMISSIONS_POLICY,
-} from './src/lib/security/headers';
+import { PERMISSIONS_POLICY } from './src/lib/security/headers';
 
 // CR-111. Next only auto-loads `.env` from its own project directory, but this
 // monorepo keeps one `.env` at the root (matching `.env.example`) and
@@ -35,16 +32,11 @@ const API_INTERNAL_URL =
 // CR-205: security headers for every page `web` serves — CR-061's helmet only
 // covers `apps/api`'s own responses, and Caddy (`deploy/Caddyfile`) adds none.
 // QA live audit 2026-10-08, item 8: a full CSP allowlist and a
-// Permissions-Policy (`src/lib/security/headers.ts` has the inventory).
+// Permissions-Policy (`src/lib/security/headers.ts` has the inventory). The CSP
+// itself carries a per-request nonce, so `src/proxy.ts` sets it (ADR-036).
 // HSTS: browsers ignore it over plain `http://`, so local dev is unaffected.
 // `/api/*` is excluded — those responses are the API's, with helmet's headers.
 const SECURITY_HEADERS = [
-  {
-    key: 'Content-Security-Policy',
-    value: contentSecurityPolicy({
-      dev: process.env.NODE_ENV !== 'production',
-    }),
-  },
   { key: 'Permissions-Policy', value: PERMISSIONS_POLICY },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },

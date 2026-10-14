@@ -11,7 +11,9 @@ function directives(policy: string): Map<string, string[]> {
 }
 
 describe('contentSecurityPolicy', () => {
-  const production = directives(contentSecurityPolicy({ dev: false }));
+  const production = directives(
+    contentSecurityPolicy({ dev: false, nonce: 'abc123==' }),
+  );
 
   it('keeps CR-205’s framing, base and object directives', () => {
     expect(production.get('frame-ancestors')).toEqual(["'none'"]);
@@ -19,10 +21,11 @@ describe('contentSecurityPolicy', () => {
     expect(production.get('object-src')).toEqual(["'none'"]);
   });
 
-  it('allows scripts from this origin and 2GIS MapGL only', () => {
+  it('trusts scripts by the request’s nonce, never inline by default (ADR-036)', () => {
     expect(production.get('script-src')).toEqual([
       "'self'",
-      "'unsafe-inline'",
+      "'nonce-abc123=='",
+      "'strict-dynamic'",
       'https://mapgl.2gis.com',
       'blob:',
     ]);
@@ -39,7 +42,7 @@ describe('contentSecurityPolicy', () => {
   it('adds eval and hot-reload sockets in development only', () => {
     expect(production.get('script-src')).not.toContain("'unsafe-eval'");
     expect(production.get('connect-src')).not.toContain('ws:');
-    const dev = directives(contentSecurityPolicy({ dev: true }));
+    const dev = directives(contentSecurityPolicy({ dev: true, nonce: 'n' }));
     expect(dev.get('script-src')).toContain("'unsafe-eval'");
     expect(dev.get('connect-src')).toContain('ws:');
   });

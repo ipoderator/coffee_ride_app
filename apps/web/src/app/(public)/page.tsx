@@ -7,10 +7,11 @@ import { DiscoveryTabs } from '@/features/participant/discovery/components/Disco
 // `DiscoveryTabs` owns the whole layout — the "Заезды / Карта" switch plus
 // whichever of `RideGrid`/`DiscoveryList` is active — and this route only
 // provides the landmark. CR-130: `DiscoveryTabs` reads `?view=` via
-// `useSearchParams`, which needs a Suspense boundary on this statically
-// rendered route. The fallback is the prerendered HTML a visitor sees first:
-// the real page title plus skeletons for the data-dependent parts (the views
-// fetch their rides client-side), so the first paint has content and shape.
+// `useSearchParams`, which needs a Suspense boundary on a statically
+// rendered route. The fallback is the HTML a visitor sees first: the real page
+// title plus skeletons for the data-dependent parts (the views fetch their
+// rides client-side), so the first paint has content and shape. ADR-036: the
+// route now renders per request (nonce CSP); the boundary stays harmless.
 // QA live audit 2026-10-08, item 7: `?view=`/filter variants are the same page.
 export const metadata: Metadata = {
   alternates: { canonical: '/' },

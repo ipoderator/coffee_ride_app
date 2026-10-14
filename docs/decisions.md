@@ -1751,3 +1751,53 @@ is no longer produced.
 
 Restore the refusal in `google.service.ts` (`claimUnverifiedAccount` → `throw new
 GoogleSignInError('account_unverified')`); no schema change either way.
+
+## ADR-036 — Page CSP: per-request script nonce, every page rendered per request
+
+Status: Accepted (2026-10-14, owner decision, CR-259). Resolves KI-097.
+
+### Context
+
+The page CSP (CR-226) restricted every origin but kept `'unsafe-inline'` in
+`script-src`: Next's inline bootstrap (`self.__next_f.push`) and the theme init script
+had no other way to run, so an injected inline `<script>` would still execute — the
+last open finding of the Lictor audit (CR-252). A nonce needs a page rendered per
+request; `/` (discovery) and the static pages were prerendered.
+
+### Decision
+
+`apps/web/src/proxy.ts` (Next 16's middleware) generates a 128-bit nonce per document
+request and sets the CSP on the request (Next reads the nonce from it and stamps it on
+its own scripts) and on the response; `x-nonce` hands it to the root layout, which
+passes it to the theme `<Script>`. `script-src` is `'self' 'nonce-…' 'strict-dynamic'`
+plus the MapGL host and `blob:` as the fallback for browsers without
+`'strict-dynamic'`; no `'unsafe-inline'`. MapGL's loader adds its `<script>` with
+`createElement`, which `'strict-dynamic'` trusts. The root layout reads `headers()`, so
+every page renders per request. `style-src` keeps `'unsafe-inline'` (a nonce there would
+also block the `style` attributes React and MapGL set). The other security headers stay
+in `next.config.ts`; `/api/*`, `_next/static`, `_next/image` and router prefetches skip
+the proxy.
+
+### Consequences
+
+- No static HTML for pages any more: each view is server-rendered (the pages fetch
+  their data client-side, so the render is a shell — small at this traffic). The
+  sitemap, robots and icon routes stay static.
+- Partial Prerendering and CDN caching of HTML are off the table while this holds.
+- A new inline script needs the layout's nonce; a new third-party script host is still
+  added in `headers.ts` after checking a real page for `securitypolicyviolation`.
+
+### What this does NOT mean
+
+Not a styles CSP (`style-src 'unsafe-inline'` stays) and not SRI; the API's helmet CSP
+is unchanged.
+
+### Revisit
+
+If render load matters (hash-based CSP with Next's experimental SRI keeps pages static),
+or on a MapGL upgrade (re-inventory its hosts and loader).
+
+### Rollback
+
+Delete `src/proxy.ts`, put the CSP back in `next.config.ts`'s `headers()` with
+`'unsafe-inline'`, drop `headers()`/`nonce` from the root layout; no data involved.

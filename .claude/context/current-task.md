@@ -1,36 +1,35 @@
-# Current task — CR-253..CR-258 — fix the Lictor security-audit findings
+# Current task — CR-259 — page CSP by per-request nonce (ADR-036, KI-097)
 
-Source: owner, 2026-10-14 ("нужно исправить все выявленные ошибки") after the first
-`lictor-security-check` (CR-252, local `SECURITY-AUDIT.md`). Branch
-`fix/security-audit-findings` (worktree `../coffeeride-security`).
+Source: owner, 2026-10-14 (answer to the handoff: «Переходить на nonce», «Деплой»,
+Dependabot #18 — decide by security/priority). Branch `feat/nonce-csp` (worktree
+`../coffeeride-csp`).
 
-## Scope (audit item → CR)
+## Scope
 
-- 1.1 MEDIUM → CR-253: register/waitlist need a verified email; web banner + resend.
-- 1.2 LOW → CR-254: reviews of an admin-hidden ride 404 for non-owners; no `userId`.
-- 1.3 LOW → CR-255: per-user upload tier (10/min) on cover/GPX/avatar POST/PATCH.
-- 1.4 LOW → CR-256: auth events (register/verify/login/google/reset/logout) logged
-  with the user id.
-- 1.6 LOW (KI-099) → CR-257: logout clears `__Host-session` with `Secure`.
-- 1.5 LOW → CR-258: Dockerfile base images pinned by digest.
-- Not fixed here: KI-097 (nonce CSP — needs the owner's ADR call), KI-095 (no upstream
-  patch), the 2GIS key's domain restriction (owner, 2GIS cabinet).
+- Script CSP: per-request nonce + `'strict-dynamic'`, no `'unsafe-inline'`
+  (`apps/web/src/proxy.ts`); root layout reads `headers()` and passes the nonce to the
+  theme script; other headers stay in `next.config.ts`.
+- ADR-036; rules `do-not-break.md`/`security.md`; KI-097 archived.
+- Dependabot #18 (`braces`, KI-095): kept open — an open alert is what produces the fix
+  PR once a patch exists; dev-only risk.
+- Deploy of `1e362ff` (CR-251, CR-253..CR-258): approved by the owner; the auto-mode
+  classifier refused the deploy command — needs the owner's permission.
 
 ## Acceptance
 
-Each fix with a test through the real Fastify pipeline (or a component test + story
-for the web banner); api/web/ui coverage gate holds; typecheck, lint, format, build.
+No `'unsafe-inline'` in `script-src`; a fresh nonce per request matching every page
+script; zero `securitypolicyviolation` on real pages incl. the MapGL map; web gates.
 
 ## Validation results
 
-- `pnpm test:coverage` (live Redis/S3, `coffee_ride_test`) green; `pnpm coverage:check`
-  holds (reviews +0.18, plugins +1.12, lib +0.46, web +0.52).
-- typecheck 8/8, `lint:root` + `lint` 9/9, `format:check`, `build` 7/7.
-- Storybook 298/303: the 5 failures (AdminOverview, CabinetSectionTabs) also fail on
-  clean `main` → KI-100. New `RegistrationTicket/EmailVerificationRequired` passes.
-- Live upload-tier test ran (not skipped) against local Redis.
-- Not run locally: Playwright e2e (CI), Docker image build (CI `docker-smoke`).
+- web unit 944/944 with coverage, web above baseline (other packages untouched, not
+  re-measured in this worktree); typecheck, lint, `lint:root`, `format:check`.
+- `next build`: every page `ƒ` (dynamic); sitemap/robots/icon static.
+- e2e `security-headers.spec.ts` 4/4 (isolated dev servers :3200/:4200, test DB).
+- Production build on :3100, Chromium: `/`, `/?view=map` (MapGL loaded, tiles,
+  canvas), `/login`, `/register`, ride 404 — no CSP violations, theme script ran.
+- Not run locally: full e2e suite, `docker-smoke` (CI).
 
 ## Final result
 
-Done on `fix/security-audit-findings`; PR into `main`.
+Done on `feat/nonce-csp`; committed, PR into `main`; deploy of `main` after the merge (owner approved).
