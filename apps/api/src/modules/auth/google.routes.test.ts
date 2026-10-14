@@ -21,10 +21,14 @@ import {
 } from '../../test-support/fake-google.js';
 import { createGoogleOidcClient } from './google-client.js';
 import {
-  GOOGLE_TRANSACTION_TTL_MS,
-  sealGoogleTransaction,
-} from './google-transaction.js';
-import { GoogleSignInError, signInWithGoogle } from './google.service.js';
+  OAUTH_TRANSACTION_TTL_MS,
+  sealOAuthTransaction,
+} from './oauth-transaction.js';
+import {
+  OAuthSignInError,
+  signInWithOAuth,
+  type OAuthIdentity,
+} from './oauth-sign-in.service.js';
 import { hashPassword } from './password.js';
 import * as password from './password.js';
 
@@ -176,7 +180,7 @@ describe('GET /v1/auth/google', () => {
     expect(cookie?.httpOnly).toBe(true);
     expect(cookie?.sameSite).toBe('Lax');
     expect(cookie?.path).toBe('/');
-    expect(cookie?.maxAge).toBe(GOOGLE_TRANSACTION_TTL_MS / 1000);
+    expect(cookie?.maxAge).toBe(OAUTH_TRANSACTION_TTL_MS / 1000);
     // Plain HTTP locally: `Secure` would drop it (production test below).
     expect(cookie?.secure).toBeFalsy();
     // Nothing readable in it: the verifier and nonce are inside a signed blob, but
@@ -237,6 +241,7 @@ describe('GET /v1/auth/google/status', () => {
 describe('GET /v1/auth/google/callback — success', () => {
   it('creates a verified, password-less user with the Google names and signs them in', async () => {
     const user = googleUser();
+    const log = vi.spyOn(app.log, 'info');
     const { callback, location } = await signIn(user, {
       next: '/rides/abc?x=1',
     });
@@ -272,6 +277,16 @@ describe('GET /v1/auth/google/callback — success', () => {
     });
     expect(me.statusCode).toBe(200);
     expect(me.json().user.email).toBe(user.email);
+    // CR-260: the audit line reaches the app log — the route's request log drops
+    // `info`, which silently lost it since CR-256.
+    expect(log).toHaveBeenCalledWith(
+      {
+        authEvent: 'google_sign_in',
+        userId: row!.id,
+        reqId: expect.any(String),
+      },
+      'Auth event',
+    );
   });
 
   it('clears the transaction cookie and stores no Google token anywhere', async () => {
@@ -397,17 +412,18 @@ describe('GET /v1/auth/google/callback — refusals', () => {
 
     const [body, signature] = original.value.split('.');
     const forged = `${body}x.${signature}`;
-    const stale = sealGoogleTransaction(
+    const stale = sealOAuthTransaction(
       AUTH_SECRET,
+      'google',
       {
         state: query.get('state')!,
         nonce: 'n',
         codeVerifier: 'v',
         next: '/rides/abc',
       },
-      new Date(Date.now() - GOOGLE_TRANSACTION_TTL_MS - 1000),
+      new Date(Date.now() - OAUTH_TRANSACTION_TTL_MS - 1000),
     );
-    const otherKey = sealGoogleTransaction('another-secret', {
+    const otherKey = sealOAuthTransaction('another-secret', 'google', {
       state: query.get('state')!,
       nonce: 'n',
       codeVerifier: 'v',
@@ -639,11 +655,9 @@ describe('password login of a Google-only account', () => {
   });
 });
 
-describe('signInWithGoogle — concurrency', () => {
-  const identity = (
-    overrides: Partial<Parameters<typeof signInWithGoogle>[1]> = {},
-  ) => ({
-    sub: `1${Math.floor(Math.random() * 1e15)}`,
+describe('signInWithOAuth (Google) — concurrency', () => {
+  const identity = (overrides: Partial<OAuthIdentity> = {}) => ({
+    accountId: `1${Math.floor(Math.random() * 1e15)}`,
     email: `${randomUUID()}@gmail.test`,
     emailVerified: true,
     givenName: 'Анна',
@@ -654,7 +668,9 @@ describe('signInWithGoogle — concurrency', () => {
   it('parallel first sign-ins of one Google account end in one user and one identity', async () => {
     const person = identity();
     const results = await Promise.all(
-      Array.from({ length: 6 }, () => signInWithGoogle(app.db, person)),
+      Array.from({ length: 6 }, () =>
+        signInWithOAuth(app.db, 'google', person),
+      ),
     );
 
     expect(new Set(results.map((r) => r.userId)).size).toBe(1);
@@ -672,7 +688,9 @@ describe('signInWithGoogle — concurrency', () => {
     });
 
     const results = await Promise.all(
-      Array.from({ length: 6 }, () => signInWithGoogle(app.db, person)),
+      Array.from({ length: 6 }, () =>
+        signInWithOAuth(app.db, 'google', person),
+      ),
     );
     expect(results.every((r) => !r.created)).toBe(true);
     expect(await identityCount()).toBe(1);
@@ -686,7 +704,7 @@ describe('signInWithGoogle — concurrency', () => {
         url: '/v1/auth/register',
         payload: { email: person.email, password: 'a-strong-password-123' },
       }),
-      signInWithGoogle(app.db, person),
+      signInWithOAuth(app.db, 'google', person),
     ]);
 
     const rows = await app.db.select().from(users);
@@ -698,7 +716,7 @@ describe('signInWithGoogle — concurrency', () => {
       // The password account won: unverified, so Google must not have linked it.
       expect(google.status).toBe('rejected');
       expect((google as PromiseRejectedResult).reason).toBeInstanceOf(
-        GoogleSignInError,
+        OAuthSignInError,
       );
       expect(await identityCount()).toBe(0);
     } else {
@@ -715,7 +733,7 @@ describe('signInWithGoogle — concurrency', () => {
 // The parallel tests above can finish one transaction before the next one opens a
 // connection; these hold a competing transaction open at the exact point of the
 // race, so the `ON CONFLICT DO NOTHING` paths provably run.
-describe('signInWithGoogle — held races', () => {
+describe('signInWithOAuth (Google) — held races', () => {
   type Tx = Parameters<Parameters<FastifyInstance['db']['transaction']>[0]>[0];
 
   /** Runs `write` in a transaction that stays open until `commit()` is called. */
@@ -736,7 +754,7 @@ describe('signInWithGoogle — held races', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
 
   const identity = (email: string) => ({
-    sub: `1${Math.floor(Math.random() * 1e15)}`,
+    accountId: `1${Math.floor(Math.random() * 1e15)}`,
     email,
     emailVerified: true,
     givenName: 'Анна',
@@ -752,7 +770,7 @@ describe('signInWithGoogle — held races', () => {
     });
     await held.written;
 
-    const pending = signInWithGoogle(app.db, identity(email));
+    const pending = signInWithOAuth(app.db, 'google', identity(email));
     await settle();
     held.commit();
     await held.done;
@@ -774,7 +792,7 @@ describe('signInWithGoogle — held races', () => {
     });
     await held.written;
 
-    const pending = signInWithGoogle(app.db, identity(email));
+    const pending = signInWithOAuth(app.db, 'google', identity(email));
     await settle();
     held.commit();
     await held.done;
@@ -800,12 +818,12 @@ describe('signInWithGoogle — held races', () => {
       await tx.insert(authIdentities).values({
         userId: user!.id,
         provider: 'google',
-        providerAccountId: person.sub,
+        providerAccountId: person.accountId,
       });
     });
     await held.written;
 
-    const pending = signInWithGoogle(app.db, person);
+    const pending = signInWithOAuth(app.db, 'google', person);
     await settle();
     held.commit();
     await held.done;
@@ -835,19 +853,21 @@ describe('signInWithGoogle — held races', () => {
       await tx.insert(authIdentities).values({
         userId: other!.id,
         provider: 'google',
-        providerAccountId: person.sub,
+        providerAccountId: person.accountId,
       });
     });
     await held.written;
 
-    const pending = signInWithGoogle(app.db, person).catch((e: unknown) => e);
+    const pending = signInWithOAuth(app.db, 'google', person).catch(
+      (e: unknown) => e,
+    );
     await settle();
     held.commit();
     await held.done;
 
     const error = await pending;
-    expect(error).toBeInstanceOf(GoogleSignInError);
-    expect((error as GoogleSignInError).reason).toBe('conflict');
+    expect(error).toBeInstanceOf(OAuthSignInError);
+    expect((error as OAuthSignInError).reason).toBe('conflict');
   });
 });
 

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { AUTH_TERMS } from 'ui';
-import { parseGoogleOutcome } from '@/features/auth/google/api';
-import { GoogleOutcomeAlert } from '@/features/auth/google/components/GoogleOutcomeAlert';
-import { GoogleSignIn } from '@/features/auth/google/components/GoogleSignIn';
-import { isGoogleSignInAvailable } from '@/features/auth/google/server-status';
+import { parseOAuthOutcome } from '@/features/auth/oauth/api';
+import { OAuthOutcomeAlert } from '@/features/auth/oauth/components/OAuthOutcomeAlert';
+import { OAuthSignIn } from '@/features/auth/oauth/components/OAuthSignIn';
+import { signInProviders } from '@/features/auth/oauth/server-status';
 import { LoginForm } from '@/features/auth/login/components/LoginForm';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { NO_INDEX } from '@/lib/site/site-meta';
@@ -26,20 +26,22 @@ export default async function LoginPage({
   searchParams: Promise<{
     next?: string | string[];
     oauth?: string | string[];
+    provider?: string | string[];
   }>;
 }) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
-  // CR-247: a Google sign-in that came back without a session says why.
-  const googleOutcome = parseGoogleOutcome(params.oauth);
-  const googleAvailable = await isGoogleSignInAvailable();
+  // CR-247, CR-260: a Google/Yandex sign-in that came back without a session says
+  // why.
+  const oauthOutcome = parseOAuthOutcome(params);
+  const providers = await signInProviders();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
       <h1 className="text-h1 text-text">{AUTH_TERMS.loginTitle}</h1>
-      <GoogleOutcomeAlert outcome={googleOutcome} />
+      <OAuthOutcomeAlert result={oauthOutcome} />
       <LoginForm next={next} />
-      {googleAvailable && <GoogleSignIn next={next} />}
+      <OAuthSignIn next={next} providers={providers} />
     </main>
   );
 }

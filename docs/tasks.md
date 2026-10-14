@@ -19,6 +19,12 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-261 (security) Google reCAPTCHA v2 on register/password login/forgot-password,
+      verified server-side, failing closed; «Повторите пароль» on register (ADR-038) —
+      done 2026-10-14, one PR with CR-260 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md
+- [x] CR-260 Yandex ID sign-in («Войти через Яндекс») beside Google: PKCE/state code
+      flow, shared race-safe account linking, one button block (ADR-037) — done
+      2026-10-14, one PR with CR-261 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md
 - [x] CR-259 (security, KI-097) page CSP by per-request nonce + `'strict-dynamic'`,
       no `'unsafe-inline'` for scripts; every page renders per request (ADR-036) —
       done 2026-10-14 on `feat/nonce-csp`. See docs/changelog.md
@@ -43,7 +49,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       `auth_identities` + nullable `password_hash` (migration `0028`), button on
       `/login`/`/register` keeping `next`, Russian `/privacy` and `/terms` (ADR-034) —
       done 2026-10-13 on `feat/google-oauth`, committed (PR into `main`). See docs/changelog.md
-- [x] CR-246 (production QA) Strava sync: a cancel reads «Подключение Strava
-      отменено», an expired `state` returns to the ride, `/me/rides` shows the
-      outcome toast, a return without a verified ride offers «Проверить поездку
-      снова» — done 2026-10-13 on `fix/strava-sync-qa`. See docs/changelog.md

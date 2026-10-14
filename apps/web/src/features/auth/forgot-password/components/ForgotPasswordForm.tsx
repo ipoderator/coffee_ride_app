@@ -11,6 +11,8 @@ import {
   fieldErrorMessage,
   serverFieldErrorMessage,
 } from '@/lib/forms/field-errors';
+import { RecaptchaField } from '../../captcha/components/RecaptchaField';
+import { RECAPTCHA_SITE_KEY, useCaptcha } from '../../captcha/use-captcha';
 
 interface FieldErrors {
   email?: string;
@@ -23,14 +25,18 @@ interface FieldErrors {
  * success state is identical regardless of whether the email exists
  * (`.claude/rules/security.md` — no account enumeration), so there is no
  * "email not found" branch to handle here, only network/validation
- * failures.
+ * failures. CR-261 (ADR-038): plus the reCAPTCHA tick when a site key is
+ * configured — every request here can send an email.
  */
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({
+  captchaSiteKey = RECAPTCHA_SITE_KEY,
+}: { captchaSiteKey?: string | null } = {}) {
   const [email, setEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [succeeded, setSucceeded] = useState(false);
+  const captcha = useCaptcha(captchaSiteKey);
 
   if (succeeded) {
     return (
@@ -50,8 +56,9 @@ export function ForgotPasswordForm() {
     if (isPending) return;
 
     const parsed = forgotPasswordRequestSchema.safeParse({ email });
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
+    const captchaPassed = captcha.check();
+    if (!parsed.success || !captchaPassed) {
+      const issue = parsed.error?.issues[0];
       setFieldErrors({ email: issue && fieldErrorMessage(issue) });
       setFormError(null);
       return;
@@ -62,10 +69,13 @@ export function ForgotPasswordForm() {
     setIsPending(true);
 
     try {
-      await requestPasswordReset(parsed.data);
+      await requestPasswordReset({ ...parsed.data, ...captcha.payload() });
       setSucceeded(true);
     } catch (error) {
-      if (
+      const code = error instanceof ApiError ? error.problem.code : undefined;
+      if (captcha.afterFailure(code)) {
+        // The CAPTCHA field shows the API's refusal.
+      } else if (
         error instanceof ApiError &&
         error.problem.code === 'validation_error' &&
         error.problem.errors
@@ -101,6 +111,14 @@ export function ForgotPasswordForm() {
             disabled={isPending}
           />
         </FormField>
+
+        {captcha.siteKey && (
+          <RecaptchaField
+            id="forgot-password-captcha"
+            siteKey={captcha.siteKey}
+            {...captcha.fieldProps}
+          />
+        )}
 
         {formError && (
           <p role="alert" className="text-body-sm text-danger">

@@ -2,22 +2,22 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { authIdentities, passwordResetTokens, users } from 'db/schema';
 import type { DbClient } from 'db';
 import { markEmailVerified } from './auth.service.js';
-import type { GoogleIdentity } from './google-client.js';
 import { revokeAllSessions } from './session.js';
 
-// CR-247 (ADR-034): turns a validated Google ID token into one of our users. Runs in
+// CR-247 (ADR-034), CR-260 (ADR-037): turns an identity a sign-in provider vouched for
+// (Google's validated ID token, Yandex ID's profile) into one of our users. Runs in
 // one transaction so the decision and the write can't be split by a concurrent
 // request:
 //
-// 1. the Google account (`sub`) is already linked → that user;
-// 2. else a user with the token's email exists (row locked `FOR UPDATE`) → linked.
-//    CR-249 (ADR-035): if that account never confirmed its email, Google's
+// 1. the provider account (`provider` + its stable id) is already linked → that user;
+// 2. else a user with the identity's email exists (row locked `FOR UPDATE`) → linked.
+//    CR-249 (ADR-035): if that account never confirmed its email, the provider's
 //    verification proves the address is this person's, so the account is claimed:
 //    email marked verified, password removed, every session and outstanding
 //    verify/reset link voided, then linked. Whoever registered the address with a
 //    password first (account pre-hijacking) keeps nothing — CR-247 refused instead,
 //    which locked real owners out;
-// 3. else a new user, `emailVerified = true` (Google verified the address), no
+// 3. else a new user, `emailVerified = true` (the provider verified the address), no
 //    password.
 //
 // Races: two callbacks for the same new person both reach step 3 — the loser's
@@ -25,28 +25,44 @@ import { revokeAllSessions } from './session.js';
 // re-reads the winner's row, which is verified, so it links; the identity insert has
 // the same `ON CONFLICT DO NOTHING` against UNIQUE(provider, provider_account_id).
 // A password registration racing step 3 loses on `users_email_unique` (409), or wins
-// with an unverified row that step 2 then claims.
+// with an unverified row that step 2 then claims. One person signing in with Google
+// and Yandex at once ends the same way: one user, one identity per provider.
 
-export const GOOGLE_PROVIDER = 'google';
+/** `auth_identities.provider` values. */
+export const OAUTH_PROVIDERS = ['google', 'yandex'] as const;
+export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+
+/** What the provider vouched for about the person; nothing else is kept. */
+export interface OAuthIdentity {
+  /** The provider's stable account id (Google `sub`, Yandex ID `id`). */
+  accountId: string;
+  email: string | null;
+  emailVerified: boolean;
+  givenName: string | null;
+  familyName: string | null;
+}
 
 // `packages/types`' profile schema caps both names at 60 characters.
 const NAME_MAX_LENGTH = 60;
 
-export type GoogleSignInRefusal =
-  // Google did not vouch for the address (or sent none).
+export type OAuthSignInRefusal =
+  // The provider did not vouch for the address (or sent none).
   | 'email_unverified'
   | 'blocked'
-  // The Google account is linked to a different user than the email matched.
+  // The provider account is linked to a different user than the email matched.
   | 'conflict';
 
-export class GoogleSignInError extends Error {
-  constructor(public readonly reason: GoogleSignInRefusal) {
-    super(`Google sign-in refused: ${reason}`);
-    this.name = 'GoogleSignInError';
+export class OAuthSignInError extends Error {
+  constructor(
+    public readonly provider: OAuthProvider,
+    public readonly reason: OAuthSignInRefusal,
+  ) {
+    super(`${provider} sign-in refused: ${reason}`);
+    this.name = 'OAuthSignInError';
   }
 }
 
-export interface GoogleSignInResult {
+export interface OAuthSignInResult {
   userId: string;
   created: boolean;
 }
@@ -55,12 +71,15 @@ function profileName(value: string | null): string | null {
   return value ? value.slice(0, NAME_MAX_LENGTH) : null;
 }
 
-export async function signInWithGoogle(
+export async function signInWithOAuth(
   db: DbClient,
-  identity: GoogleIdentity,
-): Promise<GoogleSignInResult> {
+  provider: OAuthProvider,
+  identity: OAuthIdentity,
+): Promise<OAuthSignInResult> {
+  const refuse = (reason: OAuthSignInRefusal) =>
+    new OAuthSignInError(provider, reason);
   if (!identity.email || !identity.emailVerified) {
-    throw new GoogleSignInError('email_unverified');
+    throw refuse('email_unverified');
   }
   const email = identity.email.toLowerCase();
   const firstName = profileName(identity.givenName);
@@ -73,13 +92,13 @@ export async function signInWithGoogle(
       .innerJoin(users, eq(authIdentities.userId, users.id))
       .where(
         and(
-          eq(authIdentities.provider, GOOGLE_PROVIDER),
-          eq(authIdentities.providerAccountId, identity.sub),
+          eq(authIdentities.provider, provider),
+          eq(authIdentities.providerAccountId, identity.accountId),
         ),
       )
       .limit(1);
     if (linked) {
-      if (linked.blockedAt) throw new GoogleSignInError('blocked');
+      if (linked.blockedAt) throw refuse('blocked');
       return { userId: linked.id, created: false };
     }
 
@@ -125,7 +144,7 @@ export async function signInWithGoogle(
 
     const now = new Date();
     if (!created) {
-      if (user.blockedAt) throw new GoogleSignInError('blocked');
+      if (user.blockedAt) throw refuse('blocked');
       if (!user.emailVerified) await claimUnverifiedAccount(tx, user.id, now);
     }
 
@@ -133,8 +152,8 @@ export async function signInWithGoogle(
       .insert(authIdentities)
       .values({
         userId: user.id,
-        provider: GOOGLE_PROVIDER,
-        providerAccountId: identity.sub,
+        provider,
+        providerAccountId: identity.accountId,
         createdAt: now,
         updatedAt: now,
       })
@@ -143,18 +162,18 @@ export async function signInWithGoogle(
       })
       .returning({ userId: authIdentities.userId });
     if (!identityRow) {
-      // A concurrent callback for the same Google account linked it first.
+      // A concurrent callback for the same provider account linked it first.
       const [owner] = await tx
         .select({ userId: authIdentities.userId })
         .from(authIdentities)
         .where(
           and(
-            eq(authIdentities.provider, GOOGLE_PROVIDER),
-            eq(authIdentities.providerAccountId, identity.sub),
+            eq(authIdentities.provider, provider),
+            eq(authIdentities.providerAccountId, identity.accountId),
           ),
         )
         .limit(1);
-      if (owner?.userId !== user.id) throw new GoogleSignInError('conflict');
+      if (owner?.userId !== user.id) throw refuse('conflict');
     }
 
     // Names only into empty fields: never overwrite what the user typed.
@@ -174,7 +193,7 @@ export async function signInWithGoogle(
 }
 
 /**
- * CR-249 (ADR-035): Google vouched for the address of an account that never
+ * CR-249 (ADR-035): the provider vouched for the address of an account that never
  * confirmed it. Nothing set up before that confirmation survives: the password (it
  * may be a pre-hijacker's), every session, and every outstanding reset link; the
  * verification links are consumed by {@link markEmailVerified}.

@@ -59,6 +59,11 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
   as for an existing one (no account enumeration).
 - Rate-limit `/v1/auth/login`, `/v1/auth/register`, `/v1/auth/forgot-password`, per IP
   and per account, more aggressively than general API rate limits.
+- The same three take a Google reCAPTCHA v2 token when `RECAPTCHA_SECRET_KEY` is set
+  (ADR-038, CR-261): verified only server-side (`modules/auth/recaptcha-client.ts`),
+  after both rate-limit tiers and before the service, failing closed (`503
+captcha_unavailable`). The secret and tokens are never logged or returned; OAuth
+  sign-in and the token-based routes never ask for a CAPTCHA.
 - Sessions are database-backed (ADR-013): the cookie carries an opaque token, the
   `Session` row stores its SHA-256 hash — never the token itself. Cookie is
   httpOnly, Secure, SameSite=Lax, Path=/. Lifetime 30 days, rolling: `expiresAt` is
@@ -66,9 +71,13 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
 - Revocation must actually revoke: logout deletes the row, a password change revokes
   every session of that user, a block takes effect on the next request. Any session
   cache (Redis) is invalidated on revocation — Postgres stays the source of truth.
-- Google sign-in (ADR-034, CR-247) is the one OAuth provider: server-side OIDC code
-  flow with PKCE/`state`/`nonce`, ID token validated (JWKS signature, iss/aud/exp/
-  nonce), ends in the ordinary ADR-013 session; no Google token is stored or logged.
+- Google sign-in (ADR-034, CR-247): server-side OIDC code flow with PKCE/`state`/
+  `nonce`, ID token validated (JWKS signature, iss/aud/exp/nonce), ends in the ordinary
+  ADR-013 session; no Google token is stored or logged. Yandex ID (ADR-037, CR-260):
+  OAuth 2.0 code flow with PKCE/`state` (compared before anything else in the
+  callback), profile from `login.yandex.ru/info`, identity = Yandex `id`, a present
+  `default_email` counts as verified; no Yandex token stored or logged. Both go through
+  the one `signInWithOAuth` linking service — never a per-provider copy of its rules.
   An existing verified account is linked; an unverified one is claimed (ADR-035:
   verified, password + sessions + pending verify/reset links voided — never linked
   with any of them intact, pre-hijacking); a

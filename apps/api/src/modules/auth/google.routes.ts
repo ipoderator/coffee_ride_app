@@ -8,17 +8,17 @@ import {
   GoogleUnavailableError,
 } from './google-client.js';
 import {
-  GOOGLE_TRANSACTION_TTL_MS,
-  newGoogleTransaction,
-  openGoogleTransaction,
-  sealGoogleTransaction,
+  OAUTH_TRANSACTION_TTL_MS,
+  newOAuthTransaction,
+  openOAuthTransaction,
+  sealOAuthTransaction,
   stateMatches,
-} from './google-transaction.js';
+} from './oauth-transaction.js';
 import {
-  GoogleSignInError,
-  type GoogleSignInRefusal,
-  signInWithGoogle,
-} from './google.service.js';
+  OAuthSignInError,
+  type OAuthSignInRefusal,
+  signInWithOAuth,
+} from './oauth-sign-in.service.js';
 import { logAuthEvent } from '../../lib/auth-events.js';
 import { createSession } from './session.js';
 import { setSessionCookie } from './session-cookie.js';
@@ -46,7 +46,7 @@ const callbackQuerySchema = z.looseObject({
   error: z.string().max(256).optional(),
 });
 
-const REFUSAL_OUTCOME: Record<GoogleSignInRefusal, GoogleSignInOutcome> = {
+const REFUSAL_OUTCOME: Record<OAuthSignInRefusal, GoogleSignInOutcome> = {
   email_unverified: 'email_unverified',
   blocked: 'blocked',
   conflict: 'failed',
@@ -100,17 +100,17 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
       const next = safeNextPath(request.query.next);
       if (!app.googleOidc) return failTo(reply, 'unavailable', next);
 
-      const { transaction, codeChallenge } = newGoogleTransaction(next);
+      const { transaction, codeChallenge } = newOAuthTransaction(next);
       reply.setCookie(
         cookieName,
-        sealGoogleTransaction(env.AUTH_SECRET, transaction),
+        sealOAuthTransaction(env.AUTH_SECRET, 'google', transaction),
         {
           httpOnly: true,
           secure: isProd,
           // Lax: Google's redirect back is a top-level GET, which still carries it.
           sameSite: 'lax',
           path: '/',
-          maxAge: GOOGLE_TRANSACTION_TTL_MS / 1000,
+          maxAge: OAUTH_TRANSACTION_TTL_MS / 1000,
         },
       );
       reply.header('Cache-Control', 'no-store');
@@ -148,7 +148,7 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
       });
       const sealed = request.cookies[cookieName];
       const transaction = sealed
-        ? openGoogleTransaction(env.AUTH_SECRET, sealed)
+        ? openOAuthTransaction(env.AUTH_SECRET, 'google', sealed)
         : null;
       const next = safeNextPath(transaction?.next);
 
@@ -173,7 +173,13 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
           expectedNonce: transaction.nonce,
           codeVerifier: transaction.codeVerifier,
         });
-        ({ userId } = await signInWithGoogle(app.db, identity));
+        ({ userId } = await signInWithOAuth(app.db, 'google', {
+          accountId: identity.sub,
+          email: identity.email,
+          emailVerified: identity.emailVerified,
+          givenName: identity.givenName,
+          familyName: identity.familyName,
+        }));
       } catch (error) {
         if (error instanceof GoogleRejectedError) {
           if (error.reason === 'cancelled') {
@@ -189,7 +195,7 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
           request.log.warn({ err: error }, 'Google unavailable at sign-in.');
           return failTo(reply, 'unavailable', next);
         }
-        if (error instanceof GoogleSignInError) {
+        if (error instanceof OAuthSignInError) {
           // `app.log`: the request log drops `info` on this route.
           app.log.info(
             { reqId: request.id, reason: error.reason },
@@ -203,7 +209,8 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
 
       const session = await createSession(app.db, userId);
       setSessionCookie(app, reply, session, isProd);
-      logAuthEvent(request.log, 'google_sign_in', userId);
+      // `app.log`: the request log drops `info` on this route.
+      logAuthEvent(app.log, 'google_sign_in', userId, request.id);
       return redirectToWeb(reply, next ?? DEFAULT_AFTER_SIGN_IN);
     },
   );

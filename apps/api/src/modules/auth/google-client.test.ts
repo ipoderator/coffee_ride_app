@@ -10,7 +10,7 @@ import {
   GoogleRejectedError,
   GoogleUnavailableError,
 } from './google-client.js';
-import { newGoogleTransaction } from './google-transaction.js';
+import { newOAuthTransaction } from './oauth-transaction.js';
 
 // CR-247 (ADR-034): the Google OIDC client on its own — resilience (timeout/retry/
 // breaker per `.claude/rules/resilience.md`) and the error mapping the route relies on.
@@ -47,7 +47,7 @@ function setup() {
     user: Partial<FakeGoogleUser> = {},
     tamper?: (query: URLSearchParams) => void,
   ) {
-    const { transaction, codeChallenge } = newGoogleTransaction(null);
+    const { transaction, codeChallenge } = newOAuthTransaction(null);
     const url = client.authorizationUrl({
       redirectUri: REDIRECT_URI,
       state: transaction.state,

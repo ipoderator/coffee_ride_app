@@ -90,7 +90,11 @@ test('a new account made from a ride returns to it after email verification and 
   await page.waitForURL(`/register?next=${next}`);
 
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(E2E_PASSWORD);
+  // `exact`: «Повторите пароль» (CR-261) also contains «пароль».
+  await page
+    .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
+    .fill(E2E_PASSWORD);
+  await page.getByLabel(AUTH_TERMS.confirmPasswordLabel).fill(E2E_PASSWORD);
   await page.getByRole('button', { name: AUTH_TERMS.registerSubmit }).click();
   await expect(
     page.getByRole('heading', { name: AUTH_TERMS.registerSuccessTitle }),

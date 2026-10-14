@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadEnv } from './env.js';
+import { GOOGLE_RECAPTCHA_TEST_SECRET, loadEnv } from './env.js';
 
 const BASE_ENV_SOURCE = {
   NODE_ENV: 'test',
@@ -163,5 +163,52 @@ describe('loadEnv', () => {
     expect(() =>
       loadEnv({ ...BASE_ENV_SOURCE, AUTH_SKIP_EMAIL_VERIFICATION: 'yes' }),
     ).toThrow(/Invalid environment configuration/);
+  });
+});
+
+// CR-261 (ADR-038).
+describe('loadEnv RECAPTCHA_SECRET_KEY', () => {
+  const PRODUCTION = {
+    ...BASE_ENV_SOURCE,
+    NODE_ENV: 'production',
+    AUTH_SECRET: 'a-real-generated-secret',
+    WEB_ORIGIN: 'https://coffeeride.example',
+    DATABASE_URL: 'postgresql://prod-host:5432/coffee_ride',
+  };
+
+  it('treats an empty value as not configured', () => {
+    expect(
+      loadEnv({ ...BASE_ENV_SOURCE, RECAPTCHA_SECRET_KEY: '' })
+        .RECAPTCHA_SECRET_KEY,
+    ).toBeUndefined();
+  });
+
+  it("refuses Google's public test secret in production, without echoing it", () => {
+    let message = '';
+    try {
+      loadEnv({
+        ...PRODUCTION,
+        RECAPTCHA_SECRET_KEY: GOOGLE_RECAPTCHA_TEST_SECRET,
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(
+      /RECAPTCHA_SECRET_KEY is Google's public test secret/,
+    );
+    expect(message).not.toContain(GOOGLE_RECAPTCHA_TEST_SECRET);
+  });
+
+  it('allows the test secret outside production and a real one in production', () => {
+    expect(
+      loadEnv({
+        ...BASE_ENV_SOURCE,
+        RECAPTCHA_SECRET_KEY: GOOGLE_RECAPTCHA_TEST_SECRET,
+      }).RECAPTCHA_SECRET_KEY,
+    ).toBe(GOOGLE_RECAPTCHA_TEST_SECRET);
+    expect(
+      loadEnv({ ...PRODUCTION, RECAPTCHA_SECRET_KEY: 'a-real-secret' })
+        .RECAPTCHA_SECRET_KEY,
+    ).toBe('a-real-secret');
   });
 });

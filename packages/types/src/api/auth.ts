@@ -5,6 +5,27 @@ import type { User } from '../domain/user.js';
 // validation and `apps/api`'s server-side validation are the exact same schema —
 // no drift between the two. `.claude/rules/security.md`: minimum password policy
 // favors length over forced complexity — 12+ characters, nothing else required.
+// CR-261 (ADR-038): the token the reCAPTCHA v2 widget issued. Optional in the
+// shape — the API demands it only while `RECAPTCHA_SECRET_KEY` is set, and the
+// web forms validate their own fields before a token exists. Bounded so a junk
+// body can't make the API forward megabytes to Google.
+export const captchaTokenSchema = z.string().min(1).max(10_000);
+
+// The `code`s of the API's reCAPTCHA refusals (ADR-038): no token (`400`), a
+// token Google refused or that expired (`400`), Google unreachable (`503`).
+export const CAPTCHA_ERROR_CODES = [
+  'captcha_required',
+  'captcha_invalid',
+  'captcha_unavailable',
+] as const;
+export type CaptchaErrorCode = (typeof CAPTCHA_ERROR_CODES)[number];
+
+export function isCaptchaErrorCode(
+  code: string | undefined,
+): code is CaptchaErrorCode {
+  return (CAPTCHA_ERROR_CODES as readonly string[]).includes(code ?? '');
+}
+
 export const registerRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(12, 'Password must be at least 12 characters.'),
@@ -12,6 +33,7 @@ export const registerRequestSchema = z.object({
   // appended to the emailed verification link. Optional and never a reason to
   // refuse a registration — the API keeps it only if `safeNextPath` accepts it.
   next: z.string().optional(),
+  captchaToken: captchaTokenSchema.optional(),
 });
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 
@@ -42,6 +64,7 @@ export interface VerifyEmailResponse {
 export const loginRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
+  captchaToken: captchaTokenSchema.optional(),
 });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
@@ -59,6 +82,7 @@ export interface MeResponse {
 // is nothing useful to reject beyond "is this shaped like an email."
 export const forgotPasswordRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
+  captchaToken: captchaTokenSchema.optional(),
 });
 export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
 
@@ -99,5 +123,32 @@ export const GOOGLE_SIGN_IN_OUTCOMES = [
 export type GoogleSignInOutcome = (typeof GOOGLE_SIGN_IN_OUTCOMES)[number];
 
 export interface GoogleSignInStatusResponse {
+  available: boolean;
+}
+
+// CR-260 (ADR-037): Yandex ID sign-in, the same flow and account rules as Google.
+// `GET /v1/auth/yandex/callback` sends a failed sign-in back to
+// `/login?oauth=<outcome>&provider=yandex` (keeping `next`).
+export const YANDEX_SIGN_IN_OUTCOMES = [
+  // Declined on Yandex's consent screen.
+  'cancelled',
+  // The sign-in cookie is missing, expired or forged (took too long, another tab).
+  'expired',
+  // `state` from Yandex doesn't match the cookie's.
+  'state',
+  // Yandex refused the code or its profile failed a check.
+  'failed',
+  // Not configured here, or Yandex unreachable.
+  'unavailable',
+  // The Yandex account has no email address to sign in with.
+  'email_unverified',
+  'blocked',
+] as const;
+export type YandexSignInOutcome = (typeof YANDEX_SIGN_IN_OUTCOMES)[number];
+
+/** `?provider=` on `/login` next to `?oauth=`; absent means Google (CR-247 links). */
+export const OAUTH_OUTCOME_PROVIDER_PARAM = 'provider';
+
+export interface YandexSignInStatusResponse {
   available: boolean;
 }

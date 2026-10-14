@@ -27,7 +27,7 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   unversioned `/health` (DB/Redis/S3, always 200).
 - `plugins/`: `auth` (session → `request.user`; `requireAdmin`, ADR-032), `csrf` (Origin/Referer on unsafe
   methods), `db`, `s3`, `email` (Unisender or null), `maps` (`app.mapProvider` or null),
-  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `google` (`app.googleOidc` or null, ADR-034), `security-headers` (helmet), `error-handler` (RFC 9457),
+  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `google` (`app.googleOidc` or null, ADR-034), `yandex` (`app.yandexOAuth` or null, ADR-037), `recaptcha` (`app.recaptcha` or null, ADR-038), `security-headers` (helmet), `error-handler` (RFC 9457),
   `error-reporting` (`app.reportError`).
 - `lib/`: `cursor` (pagination), `account-rate-limit`, `race-timeout`, `request-id`,
   `trust-proxy`, `read-upload`/`image-processing`/`image-storage` (sharp, S3),
@@ -38,8 +38,11 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   transactions) + `*-response.schema.ts`:
   - `auth` — register/login/logout/me, verify + resend, forgot/reset password;
     `password.ts` (Argon2id), `session.ts` (DB sessions, hashed token), `tokens.ts`;
-    Google sign-in (ADR-034): `google-client.ts` (only Google HTTP, openid-client),
-    `google-transaction.ts` (signed cookie), `google.service.ts`, `google.routes.ts`.
+    OAuth sign-in: shared `oauth-transaction.ts` (signed cookie, key per provider) +
+    `oauth-sign-in.service.ts` (`signInWithOAuth`, atomic linking); Google (ADR-034)
+    `google-client.ts` (only Google HTTP, openid-client) + `google.routes.ts`; Yandex ID
+    (ADR-037) `yandex-client.ts` (only Yandex HTTP) + `yandex.routes.ts`;
+    reCAPTCHA (ADR-038): `recaptcha-client.ts` (only `siteverify` HTTP), gate in `auth.routes.ts`.
   - `users` — profile, avatar, garage (`Bike`), rider-profile visibility.
   - `organizers` — `OrganizerProfile`, rating aggregate, avatar.
   - `rides` — CRUD + lifecycle, reschedule, discovery list (`phase`, bbox, filters),
@@ -77,7 +80,7 @@ participants|updates` — the six-tab workspace «Управление заез�
   (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226); `(public)/privacy`,
   `(public)/terms` (CR-247, text in `features/legal/content.ts`).
 - `features/{auth,organizer,participant,admin}/<feature>/` — ADR-009 modules (`components/`,
-  `api.ts`, tests); auth: login, register, google (CR-247), verify-email, …; admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
+  `api.ts`, tests); auth: login, register, captcha (reCAPTCHA v2 widget + `useCaptcha`, ADR-038), oauth (Google CR-247 + Yandex CR-260), verify-email, …; admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
   participants, profile, rides, route, updates; participant: discovery, my-rides,
   notifications, organizer-entry, profile, ride-detail, rider-profile.
 - `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink,

@@ -108,6 +108,10 @@ export default defineConfig({
         // its own env — set AUTH_RATE_LIMIT_MAX in the root .env for that
         // (see .env.example).
         AUTH_RATE_LIMIT_MAX: '1000',
+        // CR-261 (ADR-038): no reCAPTCHA in e2e — a browser test can't pass a
+        // real one. Set empty, not left out: the root .env loaded by the API may
+        // hold a real secret, and an empty value wins over the file's.
+        RECAPTCHA_SECRET_KEY: '',
         // CR-135: the global 100/min/IP tier too — every e2e actor shares
         // one localhost IP, and the expanded suite outgrew it.
         RATE_LIMIT_MAX: '10000',
@@ -121,6 +125,8 @@ export default defineConfig({
       env: {
         ...process.env,
         ...(ISOLATED_PORTS ? { API_INTERNAL_URL: API_URL } : {}),
+        // CR-261: no reCAPTCHA widget either (see the API's env above).
+        NEXT_PUBLIC_RECAPTCHA_SITE_KEY: '',
       },
     },
   ],

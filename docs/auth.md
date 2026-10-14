@@ -9,6 +9,9 @@ implementation checklist.
 Email + password, primary method. Google sign-in beside it (CR-247, ADR-034): a
 server-side OIDC code flow (PKCE, `state`, `nonce`) that ends in the same DB session
 cookie. Optional per deployment — hidden without `GOOGLE_CLIENT_ID`/`_SECRET`.
+Yandex ID sign-in beside both (CR-260, ADR-037): the OAuth 2.0 code flow (PKCE,
+`state`) plus the Yandex ID profile, same account rules and session; hidden without
+`YANDEX_CLIENT_ID`/`_SECRET`.
 
 ## Who can do what
 
@@ -38,6 +41,10 @@ else's, using the same login.
   pre-hijacker keeps nothing. Password login of a
   password-less account gets the generic `invalid_credentials`; «Забыли пароль?»
   sets a password. Failures return to `/login?oauth=<outcome>`.
+- **Yandex ID (CR-260, ADR-037)**: «Войти через Яндекс», the same rules through the
+  shared `signInWithOAuth`: identity = Yandex `id`, email = `default_email` (Yandex
+  holds only confirmed addresses; none → refused). Failures return to
+  `/login?oauth=<outcome>&provider=yandex`.
 - **Logout**: invalidates the current session.
 - **Password reset**: request by email → single-use, time-limited token → set new
   password. Same generic response whether or not the email exists.
@@ -56,7 +63,7 @@ else's, using the same login.
 - confirm password hashing parameters (Argon2id/bcrypt) against current guidance;
 - define email verification and password-reset email delivery (ties to ADR-007
   notifications decision, still Pending);
-- ~~decide whether/which OAuth providers to add, if any~~ — Google (ADR-034).
+- ~~decide whether/which OAuth providers to add, if any~~ — Google (ADR-034), Yandex ID (ADR-037).
 
 Authentication and authorization are separate concerns and are implemented as such:
 authentication establishes identity; authorization (ownership checks, capability checks)
