@@ -1553,3 +1553,10 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
       irreversible — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
 - [x] CR-238 (production QA) the organizer sees their hidden riders list on the ride
       page — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
+- [x] CR-240..CR-243 (production QA 6–9) phone menu modal (Esc, focus, inert page);
+      no overflow at 320–1023 px (scroll-row fades, header bar from `lg`); share/`.ics`
+      feedback + fallbacks; group chip resync, `fitBounds` guards, menu semantics,
+      visible focus — done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md
+- [x] CR-239 (production QA) ride page in sync after cancel/register: counts, start
+      number and the phone bar land together; bar shows the count, not «№ N» —
+      done 2026-10-12 on `fix/publish-saves-form`. See docs/changelog.md

@@ -9,3 +9,8 @@ pnpm-lock.yaml
 # double quotes, which `format:check` then rejects — formatting it would be
 # undone by the next build and redden CI. Excluded rather than reformatted.
 apps/web/next-env.d.ts
+
+# CR-252: vendored Lictor skills, kept byte-identical to upstream so an update is a
+# plain diff (UPSTREAM.md). Our own note in there stays formatted.
+.claude/skills/lictor-*/**
+!.claude/skills/lictor-security-check/UPSTREAM.md
