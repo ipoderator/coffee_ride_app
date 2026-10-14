@@ -340,6 +340,31 @@ describe('RegisterForm confirm password', () => {
     expect(registerAccountMock).not.toHaveBeenCalled();
   });
 
+  // CR-268: the submit-time error described the old values — editing either
+  // field hands back to the live match line, before any second submit.
+  it('drops the stale mismatch error as soon as a field is edited', async () => {
+    render(<RegisterForm />);
+    fillAndSubmit(
+      'rider@example.com',
+      'a-strong-password-123',
+      'a-strong-password-124',
+    );
+    expect(await screen.findByText('Пароли не совпадают.')).toBeInTheDocument();
+
+    const confirm = screen.getByLabelText('Повторите пароль');
+    fireEvent.change(confirm, { target: { value: 'a-strong-password-123' } });
+
+    expect(screen.queryByText('Пароли не совпадают.')).not.toBeInTheDocument();
+    expect(confirm).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.getByText('Пароли совпадают')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Пароль'), {
+      target: { value: 'a-strong-password-12' },
+    });
+    expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument();
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
   it('clears the mismatch once the passwords match and sends both fields', async () => {
     registerAccountMock.mockResolvedValue({
       emailVerificationRequired: true,
