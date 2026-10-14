@@ -2711,3 +2711,16 @@ cookie just lingers until it expires. Local dev (`session`, no prefix) is unaffe
 Workaround: none needed. CR-247's own `__Host-google-oauth` clear passes `secure`.
 Next action: pass the same attributes as `setSessionCookie` (`session-cookie.ts`) when
 clearing; add a production-mode assertion to the logout test.
+
+### KI-097 — Page CSP keeps `'unsafe-inline'` for scripts
+
+Status: resolved 2026-10-14 (CR-259, ADR-036) — `src/proxy.ts` sets a per-request nonce + `'strict-dynamic'`, no `'unsafe-inline'` for scripts; every page renders per request. Discovered: 2026-10-08 (CR-226, QA live audit item 8).
+Problem: `lib/security/headers.ts` restricts every origin, but scripts allow
+`'unsafe-inline'`: Next's per-page inline bootstrap (`self.__next_f.push`) and the
+theme init script need a per-request nonce, which makes every page dynamic (the
+discovery page is statically prerendered today).
+Impact: an injected inline `<script>` would still run; external scripts, connections,
+frames, forms and framing are blocked.
+Workaround: none. Keep new inline scripts out of the app.
+Next action: an ADR on nonce CSP via `proxy.ts` (all pages dynamic) vs. the status quo;
+re-inventory 2GIS hosts on any MapGL upgrade (`*.2gis.com`, `blob:` workers).

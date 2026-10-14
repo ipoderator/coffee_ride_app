@@ -1563,3 +1563,6 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-244 (production QA) password-reset email «not sent» — investigated on
       production: the typed address matched no account (Gmail `+` alias); no
       defect — 2026-10-12. See docs/changelog.md
+- [x] CR-245 (production QA) the emailed verification link keeps `next`, so
+      «Перейти ко входу» returns to the page registration started from (KI-089) —
+      done 2026-10-12 on `fix/verify-email-next`. See docs/changelog.md

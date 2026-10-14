@@ -9,22 +9,35 @@
 //   `keys.api`, `styles.api`, `disk`, `mapgl` and `tile{0-3}-sdk.maps` — all
 //   `*.2gis.com`; its workers start from `blob:` URLs.
 //
-// Scripts keep `'unsafe-inline'`: Next's per-page inline bootstrap
-// (`self.__next_f.push(...)`) and the theme init script (`app/layout.tsx`)
-// would each need a per-request nonce, which makes every page dynamic
-// (`docs/decisions.md` would need an ADR for that trade). What the policy does
-// stop: scripts, connections, frames, fonts and images from any other origin,
-// `<base>`/`<object>` tricks, form posts elsewhere, and framing.
+// Scripts (ADR-036, KI-097): a fresh per-request nonce plus `'strict-dynamic'`,
+// set by `src/proxy.ts`. Next stamps the nonce on its own bootstrap and chunk
+// scripts (it reads it back from the request's CSP header) and the root layout
+// passes it to the theme init script; a script those trusted scripts create —
+// MapGL's loader appends its `<script>` with `createElement` — inherits the
+// trust. No `'unsafe-inline'`: an injected inline `<script>` cannot run.
+// `'self'`, the MapGL host and `blob:` stay as the fallback for browsers
+// without `'strict-dynamic'` (CSP3 browsers ignore them next to it). Styles
+// keep `'unsafe-inline'`: a nonce there would also switch off the inline
+// `style` attributes React and MapGL set. What else the policy stops: scripts,
+// connections, frames, fonts and images from any other origin, `<base>`/
+// `<object>` tricks, form posts elsewhere, and framing.
 // Dev only: `'unsafe-eval'` (React's dev tooling) and `ws:` (hot reload).
 
 const TWO_GIS = 'https://*.2gis.com';
 
-export function contentSecurityPolicy({ dev }: { dev: boolean }): string {
+export function contentSecurityPolicy({
+  dev,
+  nonce,
+}: {
+  dev: boolean;
+  nonce: string;
+}): string {
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
     'script-src': [
       "'self'",
-      "'unsafe-inline'",
+      `'nonce-${nonce}'`,
+      "'strict-dynamic'",
       ...(dev ? ["'unsafe-eval'"] : []),
       'https://mapgl.2gis.com',
       'blob:',

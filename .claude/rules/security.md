@@ -98,8 +98,9 @@ These items apply from the first auth-related task (CR-011/CR-012) onward — CR
   Referrer-Policy.
 - Pages served by `apps/web` carry their own set (`next.config.ts`'s `headers()`,
   CR-205): `frame-ancestors 'none'`/`X-Frame-Options: DENY`, nosniff,
-  Referrer-Policy, HSTS, no `X-Powered-By`. A script/style CSP there needs Next's
-  inline scripts and 2GIS MapGL verified first — an ADR-sized change, not a tweak.
+  Referrer-Policy, HSTS, no `X-Powered-By`. The page CSP is set per request by
+  `apps/web/src/proxy.ts`: scripts by nonce + `'strict-dynamic'`, no
+  `'unsafe-inline'` (ADR-036).
 - A user-supplied filename never goes into a response header raw — build
   `Content-Disposition` with `apps/api/src/lib/content-disposition.ts` (CR-205).
 - CSRF (decided in ADR-013, not left implicit): single origin — `example.com` serves

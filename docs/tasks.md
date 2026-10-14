@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-259 (security, KI-097) page CSP by per-request nonce + `'strict-dynamic'`,
+      no `'unsafe-inline'` for scripts; every page renders per request (ADR-036) —
+      done 2026-10-14 on `feat/nonce-csp`. See docs/changelog.md
 - [x] CR-253..CR-258 (security, Lictor audit) verified email to join a ride, hidden
       ride's reviews + no review `userId`, per-user upload tier, auth event log, logout
       cookie `Secure` (KI-099), digest-pinned base images — done 2026-10-14 on
@@ -44,6 +47,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       отменено», an expired `state` returns to the ride, `/me/rides` shows the
       outcome toast, a return without a verified ride offers «Проверить поездку
       снова» — done 2026-10-13 on `fix/strava-sync-qa`. See docs/changelog.md
-- [x] CR-245 (production QA) the emailed verification link keeps `next`, so
-      «Перейти ко входу» returns to the page registration started from (KI-089) —
-      done 2026-10-12 on `fix/verify-email-next`. See docs/changelog.md

@@ -25,11 +25,11 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-253..CR-258 (owner, 2026-10-14, security): every finding of the first
-`lictor-security-check` fixed on `fix/security-audit-findings` — verified email to join
-a ride, hidden ride's reviews, per-user upload tier, auth event log, logout cookie
-(KI-099), digest-pinned images. CR-252 vendored the Lictor skills (`e50c2c3`); CR-251
-merged (`f1f2deb`), not deployed — owner's call.
+CR-259 (owner, 2026-10-14, security): KI-097 closed — page CSP by per-request nonce +
+`'strict-dynamic'` (ADR-036, `apps/web/src/proxy.ts`); every page now renders per
+request. On `feat/nonce-csp`. Not deployed yet; CR-251 + CR-253..CR-258 (merged,
+`1e362ff`) also await the production deploy — the owner approved it, the run itself
+needs the owner's permission for the deploy command.
 
 Before it (details in the changelog): CR-249/CR-247 Google sign-in (ADR-034/035,
 deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
@@ -128,8 +128,8 @@ differ from a ride's own review list); splitting `rides.service.ts`/
    maps to `unavailable` → 503 "route builder unavailable", so the user reads «сервис
    недоступен» instead of «точки слишком далеко друг от друга». A commercial key
    changes the limit, not the mapping.
-6. **KI-097** — owner decision on a nonce CSP (all pages dynamic) vs. the status quo;
-   the last open Lictor finding. Owner-side: restrict the 2GIS MapGL key to the domain.
+6. **After the deploy**: re-run `lictor-security-check` (expect no open finding).
+   Owner-side: restrict the 2GIS MapGL key to the domain.
 7. **KI-086** — owner decision: which sidebar item lights on a ride's
    participants/updates tab (CR-150's `activeOn` vs «Заезды» everywhere).
 
@@ -158,4 +158,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-253..CR-258)
+2026-10-14 (CR-259)

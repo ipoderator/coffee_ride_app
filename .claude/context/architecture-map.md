@@ -93,8 +93,9 @@ participants|updates` — the six-tab workspace «Управление заез�
   test), `datetime/zoned-time`, `maps/create-map-renderer.ts` (only `maps-2gis`
   import), `rides/` (+ `server-ride.ts`: server-side ride lookup for the 404, CR-224),
   `uuid.ts` (`isUuid` — route-param pre-check before an API call, CR-232),
-  `site/` (`SITE_URL`, shared metadata), `security/headers.ts` (page CSP +
-  Permissions-Policy, read by `next.config.ts`), `organizer/`, `motion/`, `theme/`.
+  `site/` (`SITE_URL`, shared metadata), `security/headers.ts` (page CSP —
+  set per request with a nonce by `src/proxy.ts`, ADR-036 — + Permissions-Policy, read by
+  `next.config.ts`), `organizer/`, `motion/`, `theme/`.
 - `stories/` — Storybook (CR-158), fixtures in `stories/fixtures.ts`.
 - `e2e/` — one spec per journey, `helpers/{api-fixtures,ui,db-fixtures,mock}.ts`,
   `*.spec.ts-snapshots/` visual baselines (x86_64 Linux only).

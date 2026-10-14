@@ -117,3 +117,12 @@ Files: `registrations.service.ts`, `reviews.{service,routes}.ts`, `lib/upload-ra
 Validation: `pnpm test:coverage` with live Redis/S3 (`coffee_ride_test`) green and `pnpm coverage:check` holds; typecheck, lint, format, build; storybook 298/303 — the 5 failures are on clean `main` too (KI-100).
 Decisions: the email gate sits after the idempotent replay (CR-083 keeps `200`); the upload tier is a second gate keyed by user, so the per-IP default still covers anonymous calls; Dockerfiles pinned, compose images not (no Dependabot coverage for them yet).
 Follow-up: KI-097 (nonce CSP) needs the owner's ADR call; restrict the 2GIS MapGL key to the domain in the 2GIS cabinet (owner).
+
+## 2026-10-14 — CR-259 — Page CSP by per-request nonce (ADR-036, KI-097)
+
+Summary: owner chose the nonce route for KI-097, the last open Lictor finding. `apps/web/src/proxy.ts` sets the page CSP per request: scripts by `'nonce-…' 'strict-dynamic'`, no `'unsafe-inline'`; Next stamps the nonce on its scripts, the root layout passes it to the theme script and reads `headers()`, so every page renders per request. MapGL (loaded via `createElement`) works under `'strict-dynamic'`. Other headers stay in `next.config.ts`.
+Contract: none (page headers only; the API's helmet CSP unchanged).
+Files: `src/proxy.ts` (+test), `lib/security/headers.ts` (+test), `app/layout.tsx`, `next.config.ts`, `e2e/security-headers.spec.ts`, ADR-036, rules `do-not-break`/`security`.
+Validation: web unit 944/944 with coverage (web above baseline); typecheck, lint, `lint:root`, `format:check`, `next build` (all pages `ƒ`); e2e `security-headers.spec.ts` 4/4 (isolated dev servers); production build on :3100 in Chromium: `/`, `/?view=map` (MapGL tiles + canvas), `/login`, `/register`, a ride 404 — zero `securitypolicyviolation`.
+Decisions: `style-src` keeps `'unsafe-inline'` (a nonce would block `style` attributes); `'self'`/MapGL host/`blob:` kept as the pre-`strict-dynamic` fallback; prefetches skip the proxy.
+Follow-up: deploy; re-run `lictor-security-check`.
