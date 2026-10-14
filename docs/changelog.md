@@ -116,3 +116,12 @@ Files: web `features/auth/layout/AuthSplitLayout.tsx`.
 Validation: web typecheck, eslint, vitest auth + register 121/121, Storybook `RegisterScreen` 6/6 with axe; Chromium 1440 light/dark against the dev stack — `aside` background transparent, no border, no SVG.
 Decisions: deliberate departure from the mockup's panel (owner).
 Follow-up: none.
+
+## 2026-10-14 — CR-264 — `/login` to the auth mockup; social sign-in checks re-proven
+
+Summary: owner request (mockup tab «Вход»). `/login` moves into CR-262/263's frame: story text (`lg`+), «Выберите быстрый вход…», Google then Yandex ID as equal buttons («Войти через Google», «Войти с Яндекс ID»), «или через email», the form without a card (placeholders, «Забыли пароль?» on the «Пароль» line, show/hide), «Нет аккаунта? Зарегистрироваться», the consent line. No auth logic changed: the existing Yandex/Google flows already met the brief; new tests pin the gaps.
+Contract: `ui` `FormField.labelAction?` (new optional prop), `LOGIN_PAGE_TERMS`, `AUTH_TERMS.passwordPlaceholder`; `YANDEX_SIGN_IN_TERMS.button` → «Войти с Яндекс ID»; removed `AUTH_TERMS.registerLink`, `OAUTH_SIGN_IN_TERMS.divider`. `OAuthSignIn` renders only the buttons (pages own divider/consent). API: none. No migration, no env var.
+Files: ui `FormField.tsx`, `terminology.ts` (+tests); web `(public)/login/page.tsx` (+test), `features/auth/login/components/{LoginScreen,LoginForm}.tsx`, `OAuthSignIn.tsx`, auth tests, `LoginScreen`/`OAuthSignIn` stories, e2e `helpers/ui.ts`, `login-return`, `password-reset`; api `yandex.routes.test.ts`; `coverage-baseline.json`.
+Validation: format:check (only the untracked mockup differs), lint, lint:root, typecheck, build 7/7; `test:coverage` with live Redis/S3 — api 886, web 1011, ui 298, db 17, resilience 15, maps-2gis 82 (+6 opt-in); `coverage:check` holds, baseline raised; Storybook auth stories 56/56 with axe; e2e `login-return`, `password-reset`, `critical-journeys` 9/9; Chromium on the dev stack with mock provider ids: 1440/768/390/320 no overflow, Yandex/Google start → S256 + state (+ nonce for Google), cookie HttpOnly/Lax/600 s, forged state → «state», no cookie → «expired», unsafe `next` dropped, wrong password → generic, right → `/me`.
+Decisions: Google first on `/login` too (mockup; reverses CR-262's note); reCAPTCHA stays on password login (ADR-038) though the mockup shows none; story column text-only as CR-263; Yandex keeps no nonce (no ID token, ADR-037).
+Follow-up: the maintenance screen (owner's prompt 3).

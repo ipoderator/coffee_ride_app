@@ -45,4 +45,23 @@ describe('FormField', () => {
     expect(input).toHaveAttribute('aria-invalid', 'true');
     expect(error).toHaveAttribute('role', 'alert');
   });
+
+  // CR-264: the login form's «Забыли пароль?» beside «Пароль».
+  it('renders a label action on the label line, before the control, keeping the label linked', () => {
+    render(
+      <FormField
+        id="password"
+        label="Пароль"
+        labelAction={<a href="/forgot-password">Забыли пароль?</a>}
+      >
+        <Input />
+      </FormField>,
+    );
+    const input = screen.getByLabelText('Пароль');
+    const link = screen.getByRole('link', { name: 'Забыли пароль?' });
+    expect(input).toHaveAttribute('id', 'password');
+    expect(
+      link.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

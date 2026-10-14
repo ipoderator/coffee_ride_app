@@ -209,12 +209,37 @@ describe('LoginForm', () => {
     expect(replaceMock).not.toHaveBeenCalledWith('//evil.example/rides');
   });
 
-  it('keeps `next` on the link to /register', () => {
+  // CR-264: the auth mockup's «Вход» — the page owns «Нет аккаунта?».
+  it('puts «Забыли пароль?» on the password line, before the field', () => {
     renderForm('/rides/ride-1');
 
+    const forgot = screen.getByRole('link', { name: 'Забыли пароль?' });
+    expect(forgot).toHaveAttribute('href', '/forgot-password');
     expect(
-      screen.getByRole('link', { name: 'Нет аккаунта? Зарегистрироваться' }),
-    ).toHaveAttribute('href', '/register?next=%2Frides%2Fride-1');
+      forgot.compareDocumentPosition(screen.getByLabelText('Пароль')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Email')).toHaveAttribute(
+      'placeholder',
+      'you@example.ru',
+    );
+    expect(screen.getByLabelText('Пароль')).toHaveAttribute(
+      'placeholder',
+      'Введите пароль',
+    );
+  });
+
+  it('shows and hides the password without submitting', () => {
+    renderForm();
+    const field = screen.getByLabelText('Пароль');
+    expect(field).toHaveAttribute('type', 'password');
+    expect(field).toHaveAttribute('autocomplete', 'current-password');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Показать пароль' }));
+    expect(field).toHaveAttribute('type', 'text');
+    fireEvent.click(screen.getByRole('button', { name: 'Скрыть пароль' }));
+    expect(field).toHaveAttribute('type', 'password');
+    expect(loginMock).not.toHaveBeenCalled();
   });
 
   // Regression (CR-127): the shared session stayed `anonymous` after a

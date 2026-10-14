@@ -53,7 +53,9 @@ test('a user resets a forgotten password and signs in with the new one', async (
   // Step 3: the old password is gone, the new one works.
   await page.goto('/login');
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(account.email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(account.password);
+  await page
+    .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
+    .fill(account.password);
   await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
   await expect(page.getByText(AUTH_TERMS.invalidCredentials)).toBeVisible();
 

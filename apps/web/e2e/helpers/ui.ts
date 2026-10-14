@@ -17,7 +17,9 @@ export const WEB_BASE_URL = `http://localhost:${process.env.E2E_WEB_PORT ?? '300
 export async function loginViaUi(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel(AUTH_TERMS.emailLabel).fill(email);
-  await page.getByLabel(AUTH_TERMS.passwordLabel).fill(password);
+  await page
+    .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
+    .fill(password);
   await page.getByRole('button', { name: AUTH_TERMS.loginSubmit }).click();
   // `LoginForm.handleSubmit` awaits the login fetch before its
   // `router.replace('/me')` — without waiting for that navigation here, a

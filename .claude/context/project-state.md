@@ -25,7 +25,14 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
+CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»), validated on
+`experiments`, committed on `experiments` (no PR yet): same frame as `/register`
+(`LoginScreen`), Google then Yandex ID («Войти с Яндекс ID»), «или через email»,
+«Забыли пароль?» on the password line (`ui` `FormField.labelAction`), show/hide. No auth
+logic change; Yandex/social-only password login/forged code/prod cookie flags pinned
+by new API tests.
+
+Before it: CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
 (`reference/coffee-ride-auth-mockup`, tab «Регистрация»), validated on `experiments`,
 committed on `experiments` (no PR yet):
 
@@ -61,9 +68,9 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-262 — awaiting the owner's review/commit (branch `experiments`); ships after (or
-with) CR-260/CR-261 — no new env var or migration of its own. Next from the same mockup:
-`/login` and the maintenance screen (owner's prompts 2–3).
+CR-264 — committed on `experiments` (no PR yet); no env var or migration. CR-262/263 —
+committed on `experiments` (no PR yet); ship after (or with)
+CR-260/CR-261. Next from the same mockup: the maintenance screen (owner's prompt 3).
 
 CR-260/CR-261 — awaiting merge and deploy. Owner-side: `YANDEX_CLIENT_ID`/`_SECRET`
 (redirect URI `…/api/v1/auth/yandex/callback`), `RECAPTCHA_SECRET_KEY` and
@@ -177,4 +184,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-263)
+2026-10-14 (CR-264)

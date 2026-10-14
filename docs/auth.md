@@ -46,7 +46,8 @@ else's, using the same login.
   pre-hijacker keeps nothing. Password login of a
   password-less account gets the generic `invalid_credentials`; «Забыли пароль?»
   sets a password. Failures return to `/login?oauth=<outcome>`.
-- **Yandex ID (CR-260, ADR-037)**: «Войти через Яндекс», the same rules through the
+- **Yandex ID (CR-260, ADR-037)**: «Войти с Яндекс ID» (CR-264 wording; «Продолжить
+  с Яндекс ID» on `/register`), the same rules through the
   shared `signInWithOAuth`: identity = Yandex `id`, email = `default_email` (Yandex
   holds only confirmed addresses; none → refused). Failures return to
   `/login?oauth=<outcome>&provider=yandex`.
