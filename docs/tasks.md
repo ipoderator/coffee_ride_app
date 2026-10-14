@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-265 maintenance mode by env (`MAINTENANCE_MODE`, 503 + `Retry-After`, the
+      «Техработы» screen), unexpected-error state, static 503 fallback at Caddy
+      (ADR-040) — done 2026-10-14, committed on `experiments`. See docs/changelog.md
 - [x] CR-264 `/login` to the auth mockup («Вход»: story text, Google/Yandex ID first,
       «или через email», «Забыли пароль?» by the field, show/hide); Yandex/social-only
       sign-in checks re-proven — done 2026-10-14, committed on `experiments`. See docs/changelog.md
@@ -40,7 +43,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
       ride's reviews + no review `userId`, per-user upload tier, auth event log, logout
       cookie `Secure` (KI-099), digest-pinned base images — done 2026-10-14 on
       `fix/security-audit-findings`. See docs/changelog.md
-- [x] CR-252 (tooling, security) vendored the Lictor security-audit skills
-      (`lictor-security-check`/`-explain`/`-fix-it`/`-rotate`, pinned upstream commit),
-      routed in CLAUDE.md; `SECURITY-AUDIT.md` gitignored — done 2026-10-14 on
-      `chore/lictor-security-skills`. See docs/changelog.md

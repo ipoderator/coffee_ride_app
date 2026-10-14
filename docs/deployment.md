@@ -107,6 +107,13 @@ The same script: it rebuilds, applies any new migrations before the new `api` st
 and recreates only containers whose image or configuration changed. Never rely on
 application boot to apply migrations.
 
+## Maintenance mode (CR-265, ADR-040)
+
+`MAINTENANCE_MODE=true` in `.env` + `docker compose … up -d --no-build web api` closes the
+site with the «Технический пит-стоп» screen (`503` + `Retry-After`); emptying it and the
+same command reopens it. While `web` restarts, Caddy serves the static
+`deploy/maintenance/index.html`. Step-by-step: `deploy/MAINTENANCE.md`.
+
 ## Production host (CR-219)
 
 `coffeeride.site` (and `www.` → 301) runs on the VPS `72.56.110.108` from

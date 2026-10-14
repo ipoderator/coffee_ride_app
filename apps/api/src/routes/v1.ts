@@ -22,6 +22,7 @@ import {
   stravaRoutes,
 } from '../modules/strava/strava.routes.js';
 import { registerCsrf } from '../plugins/csrf.js';
+import { registerMaintenance } from '../plugins/maintenance.js';
 
 // Versioned root (ADR-011): every product endpoint lives under /v1. Future
 // feature modules register themselves here too, one per capability
@@ -41,6 +42,9 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   // unaffected. Applies to `PATCH /v1/users/me` too, verified in
   // `users.routes.test.ts` rather than assumed.
   registerCsrf(app, opts.env);
+  // CR-265: `MAINTENANCE_MODE` answers every `/v1/*` route but the provider
+  // callbacks with `503`; `/health` stays outside it, like the CSRF check above.
+  registerMaintenance(app, opts.env);
 
   await app.register(authRoutes, { prefix: '/auth', env: opts.env });
   await app.register(googleAuthRoutes, { prefix: '/auth', env: opts.env });

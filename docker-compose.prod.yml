@@ -47,6 +47,8 @@ services:
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # CR-265: the static page Caddy serves when `web` is down.
+      - ./deploy/maintenance:/srv/maintenance:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -79,6 +81,10 @@ services:
     logging: *default-logging
     environment:
       NODE_ENV: production
+      # CR-265: planned maintenance — `true` answers every page with the
+      # maintenance screen (503 + Retry-After). The same pair goes to `api`.
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-}
+      MAINTENANCE_RETRY_AFTER_SECONDS: ${MAINTENANCE_RETRY_AFTER_SECONDS:-}
     depends_on:
       - api
     deploy:
@@ -142,6 +148,8 @@ services:
       # CR-220: test-deploy switch — `true` skips email verification
       # (apps/api/src/env.ts). Empty/unset keeps it on.
       AUTH_SKIP_EMAIL_VERIFICATION: ${AUTH_SKIP_EMAIL_VERIFICATION:-}
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-}
+      MAINTENANCE_RETRY_AFTER_SECONDS: ${MAINTENANCE_RETRY_AFTER_SECONDS:-}
     # No `ports:` — unlike `caddy`, never reachable except from `web` and
     # `caddy` over the compose network (ADR-018 §2).
     deploy:

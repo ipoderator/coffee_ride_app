@@ -499,6 +499,28 @@ export const NOT_FOUND_TERMS = {
   metaTitle: 'Страница не найдена — Coffee Ride',
 } as const;
 
+/**
+ * CR-265: the auth mockup's «Техработы» tab (`reference/coffee-ride-auth-mockup`)
+ * and its sibling, the unexpected-error state — one frame, two texts. The error
+ * text says nothing about the cause: no message, code or digest reaches the page.
+ */
+export const SYSTEM_STATUS_TERMS = {
+  refresh: 'Обновить страницу',
+  contact: 'Написать нам',
+  maintenance: {
+    metaTitle: 'Технические работы — Coffee Ride',
+    title: 'Технический пит-стоп. Скоро снова в путь.',
+    body: 'Мы обновляем Кофе Райд, чтобы сервис работал стабильнее. Ваши аккаунты, регистрации и заезды сохранены.',
+    status: 'Плановые технические работы',
+  },
+  error: {
+    metaTitle: 'Ошибка — Coffee Ride',
+    title: 'Что-то пошло не так.',
+    body: 'Страница не открылась из-за непредвиденной ошибки. Обновите её — обычно это помогает. Если ошибка повторяется, напишите нам.',
+    status: 'Непредвиденная ошибка',
+  },
+} as const;
+
 // QA live audit 2026-10-08, item 6: names for the map SDK's own controls,
 // handed to the adapter at `apps/web`'s map composition point.
 export const MAP_CONTROL_TERMS = {

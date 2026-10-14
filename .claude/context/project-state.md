@@ -25,12 +25,16 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»), validated on
-`experiments`, committed on `experiments` (no PR yet): same frame as `/register`
-(`LoginScreen`), Google then Yandex ID («Войти с Яндекс ID»), «или через email»,
-«Забыли пароль?» on the password line (`ui` `FormField.labelAction`), show/hide. No auth
-logic change; Yandex/social-only password login/forged code/prod cookie flags pinned
-by new API tests.
+CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
+«Техработы», ADR-040), committed on `experiments` (no PR yet): `MAINTENANCE_MODE=true`
+on `web`/`api` → pages 503 + `Retry-After` with «Технический пит-стоп», `/v1/*` 503
+`maintenance` (`/health` and provider callbacks up); `app/error.tsx`/`global-error.tsx`
+in the same frame; Caddy serves `deploy/maintenance/index.html` when `web` is down.
+Runbook `deploy/MAINTENANCE.md`.
+
+Before it: CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»),
+committed on `experiments` (no PR yet): same frame as `/register` (`LoginScreen`),
+Google then Yandex ID, «или через email», «Забыли пароль?» on the password line.
 
 Before it: CR-262 (owner, 2026-10-14) — `/register` to the auth mockup
 (`reference/coffee-ride-auth-mockup`, tab «Регистрация»), validated on `experiments`,
@@ -68,9 +72,12 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
 
 ## In progress
 
-CR-264 — committed on `experiments` (no PR yet); no env var or migration. CR-262/263 —
-committed on `experiments` (no PR yet); ship after (or with)
-CR-260/CR-261. Next from the same mockup: the maintenance screen (owner's prompt 3).
+CR-265 — committed on `experiments` (no PR yet); new env `MAINTENANCE_MODE`/
+`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On deploy Caddy is
+recreated once (new read-only mount `deploy/maintenance`); first production switch per
+`deploy/MAINTENANCE.md`. CR-264, CR-262/263 — committed on `experiments` (no PR yet);
+ship after (or with) CR-260/CR-261. Next from the same mockup: the final check (owner's
+prompt 4).
 
 CR-260/CR-261 — awaiting merge and deploy. Owner-side: `YANDEX_CLIENT_ID`/`_SECRET`
 (redirect URI `…/api/v1/auth/yandex/callback`), `RECAPTCHA_SECRET_KEY` and
@@ -184,4 +191,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-264)
+2026-10-14 (CR-265)

@@ -27,7 +27,7 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
   unversioned `/health` (DB/Redis/S3, always 200).
 - `plugins/`: `auth` (session → `request.user`; `requireAdmin`, ADR-032), `csrf` (Origin/Referer on unsafe
   methods), `db`, `s3`, `email` (Unisender or null), `maps` (`app.mapProvider` or null),
-  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `google` (`app.googleOidc` or null, ADR-034), `yandex` (`app.yandexOAuth` or null, ADR-037), `recaptcha` (`app.recaptcha` or null, ADR-038), `security-headers` (helmet), `error-handler` (RFC 9457),
+  `openapi` (`/docs`), `strava` (`app.stravaClient` or null), `google` (`app.googleOidc` or null, ADR-034), `yandex` (`app.yandexOAuth` or null, ADR-037), `recaptcha` (`app.recaptcha` or null, ADR-038), `maintenance` (`MAINTENANCE_MODE` → `/v1/*` 503, ADR-040), `security-headers` (helmet), `error-handler` (RFC 9457),
   `error-reporting` (`app.reportError`).
 - `lib/`: `cursor` (pagination), `account-rate-limit`, `race-timeout`, `request-id`,
   `trust-proxy`, `read-upload`/`image-processing`/`image-storage` (sharp, S3),
@@ -84,7 +84,7 @@ participants|updates` — the six-tab workspace «Управление заез�
   participants, profile, rides, route, updates; participant: discovery, my-rides,
   notifications, organizer-entry, profile, ride-detail, rider-profile.
 - `components/site/` (AppHeader, SiteChrome, BottomTabBar, ThemeToggle, BackLink,
-  NotFoundPanel),
+  NotFoundPanel, SystemStatusScreen — maintenance + `app/error.tsx`/`global-error.tsx`, ADR-040),
   `components/cabinet/` (CabinetShell, CabinetSidebar, CabinetSectionTabs,
   OrganizerCabinetFrame, …), `components/admin/` (reason dialog, list body, action list,
   search form, select).
@@ -96,7 +96,8 @@ participants|updates` — the six-tab workspace «Управление заез�
   test), `datetime/zoned-time`, `maps/create-map-renderer.ts` (only `maps-2gis`
   import), `rides/` (+ `server-ride.ts`: server-side ride lookup for the 404, CR-224),
   `uuid.ts` (`isUuid` — route-param pre-check before an API call, CR-232),
-  `site/` (`SITE_URL`, shared metadata), `security/headers.ts` (page CSP —
+  `site/` (`SITE_URL`, shared metadata, `maintenance.ts` — env flag read by `src/proxy.ts`
+  and the root layout, ADR-040; `contact.ts`), `security/headers.ts` (page CSP —
   set per request with a nonce by `src/proxy.ts`, ADR-036 — + Permissions-Policy, read by
   `next.config.ts`), `organizer/`, `motion/`, `theme/`.
 - `stories/` — Storybook (CR-158), fixtures in `stories/fixtures.ts`.
@@ -130,7 +131,8 @@ participants|updates` — the six-tab workspace «Управление заез�
 - Production: `apps/{web,api}/Dockerfile`, `packages/db/Dockerfile`,
   `docker-compose.prod.yml` (caddy → web → api, `migrate` profile, `backup`),
   `docker-compose.infra.yml` (single-VPS Postgres/Redis/S3 overlay, ADR-031),
-  `deploy/deploy.sh` + `deploy/production.env.example`, `deploy/Caddyfile`,
+  `deploy/deploy.sh` + `deploy/production.env.example`, `deploy/Caddyfile` (+ `handle_errors` → `deploy/maintenance/index.html`, ADR-040;
+  runbook `deploy/MAINTENANCE.md`),
   `deploy/smoke/` (`pnpm smoke:docker`, layers the overlay). Procedure:
   `docs/deployment.md`.
 - CI: `.github/workflows/ci.yml` (`ci`, `docker-smoke`), `load-test.yml` (k6),

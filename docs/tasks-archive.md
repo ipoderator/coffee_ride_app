@@ -1583,3 +1583,7 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-251 (security) Redis command args (a queued job's email + one-time link)
       redacted from every API log line — done 2026-10-14 on
       `fix/redact-redis-command-args`. See docs/changelog.md
+- [x] CR-252 (tooling, security) vendored the Lictor security-audit skills
+      (`lictor-security-check`/`-explain`/`-fix-it`/`-rotate`, pinned upstream commit),
+      routed in CLAUDE.md; `SECURITY-AUDIT.md` gitignored — done 2026-10-14 on
+      `chore/lictor-security-skills`. See docs/changelog.md
