@@ -1,60 +1,33 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect } from 'storybook/test';
-import {
-  GOOGLE_SIGN_IN_TERMS,
-  OAUTH_SIGN_IN_TERMS,
-  YANDEX_SIGN_IN_TERMS,
-} from 'ui';
+import { GOOGLE_SIGN_IN_TERMS, YANDEX_SIGN_IN_TERMS } from 'ui';
 import type { OAuthOutcome } from '@/features/auth/oauth/api';
 import { OAuthOutcomeAlert } from '@/features/auth/oauth/components/OAuthOutcomeAlert';
 import { OAuthSignIn } from '@/features/auth/oauth/components/OAuthSignIn';
-import { LoginForm } from '@/features/auth/login/components/LoginForm';
-import { SessionProvider } from '@/lib/auth/session-context';
 
-// CR-247 (ADR-034), CR-260 (ADR-037): «Войти через Яндекс» / «Войти через Google»
-// under the login form, as `/login` renders them for the providers the server has
-// configured (the page decides; with none it renders the form alone).
+// CR-247 (ADR-034), CR-260 (ADR-037): the external sign-in buttons for the providers
+// the server has configured (the page decides; with none it renders nothing).
+// CR-264: the same two-column block on `/login` and `/register`, Google first; the
+// pages own the divider and the consent line (`LoginScreen`/`RegisterScreen`).
 
 const NEXT = '/rides/ride-1';
-
-// `LoginForm` asks `/api/v1/auth/me` for the session.
-function stubSignedOut() {
-  const original = globalThis.fetch;
-  globalThis.fetch = async (input, init) => {
-    const raw = input instanceof Request ? input.url : String(input);
-    const url = new URL(raw, window.location.href);
-    if (url.pathname === '/api/v1/auth/me') {
-      return Response.json({ code: 'unauthorized' }, { status: 401 });
-    }
-    return original(input, init);
-  };
-  return () => {
-    globalThis.fetch = original;
-  };
-}
 
 const meta = {
   title: 'Auth/OAuthSignIn',
   component: OAuthSignIn,
   tags: ['autodocs'],
   args: { next: NEXT, providers: { google: true, yandex: true } },
-  beforeEach: stubSignedOut,
-  // `LoginForm` uses the App Router.
-  parameters: { nextjs: { appDirectory: true } },
   render: (args) => (
-    <SessionProvider>
-      <div className="flex max-w-md flex-col gap-6">
-        <LoginForm next={args.next} />
-        <OAuthSignIn {...args} />
-      </div>
-    </SessionProvider>
+    <div className="max-w-122">
+      <OAuthSignIn {...args} />
+    </div>
   ),
 } satisfies Meta<typeof OAuthSignIn>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Both providers configured: each button keeps `next`; one consent line for both. */
+/** Both providers configured: each button keeps `next`. */
 export const BothProviders: Story = {
   play: async ({ canvas }) => {
     await expect(
@@ -69,15 +42,25 @@ export const BothProviders: Story = {
       'href',
       `/api/v1/auth/google?next=${encodeURIComponent(NEXT)}`,
     );
-    await expect(
-      canvas.getAllByRole('link', { name: OAUTH_SIGN_IN_TERMS.consentPrivacy }),
-    ).toHaveLength(1);
   },
 };
 
 export const BothProvidersDark: Story = {
   ...BothProviders,
   globals: { theme: 'dark' },
+};
+
+/** `/register`'s wording: «Продолжить с …». */
+export const RegisterIntent: Story = {
+  args: { intent: 'register' },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole('link', { name: GOOGLE_SIGN_IN_TERMS.continueButton }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('link', { name: YANDEX_SIGN_IN_TERMS.continueButton }),
+    ).toBeInTheDocument();
+  },
 };
 
 /** Only Yandex ID configured. */

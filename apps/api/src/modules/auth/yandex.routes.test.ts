@@ -31,6 +31,7 @@ import {
   sealOAuthTransaction,
 } from './oauth-transaction.js';
 import { OAuthSignInError, signInWithOAuth } from './oauth-sign-in.service.js';
+import * as password from './password.js';
 import { hashPassword } from './password.js';
 import { createYandexOAuthClient } from './yandex-client.js';
 
@@ -38,6 +39,11 @@ import { createYandexOAuthClient } from './yandex-client.js';
 // itself played by `test-support/fake-yandex.ts` (real PKCE, single-use codes). The
 // account rules are `signInWithOAuth`'s, shared with Google — their full race suite
 // lives in `google.routes.test.ts`; here they are proven for `provider = 'yandex'`.
+
+vi.mock('./password.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./password.js')>();
+  return { ...actual, verifyPassword: vi.fn(actual.verifyPassword) };
+});
 
 const WEB_ORIGIN = 'http://localhost:3000';
 const AUTH_SECRET = 'a-test-only-secret';
@@ -189,12 +195,26 @@ describe('GET /v1/auth/yandex', () => {
     const set = started.response.cookies.find(
       (c) => c.name === '__Host-yandex-oauth',
     );
-    expect(set).toMatchObject({ secure: true, httpOnly: true, path: '/' });
+    expect(set).toMatchObject({
+      secure: true,
+      httpOnly: true,
+      sameSite: 'Lax',
+      path: '/',
+    });
     expect(set?.domain).toBeUndefined();
     const cleared = callback.cookies.find(
       (c) => c.name === '__Host-yandex-oauth',
     );
     expect(cleared).toMatchObject({ value: '', secure: true, path: '/' });
+    // CR-264: the session it ends in is the ordinary production cookie.
+    const session = callback.cookies.find((c) => c.name === '__Host-session');
+    expect(session).toMatchObject({
+      secure: true,
+      httpOnly: true,
+      sameSite: 'Lax',
+      path: '/',
+    });
+    expect(session?.domain).toBeUndefined();
   });
 
   it('sends the person back to /login with provider=yandex when Yandex is not configured', async () => {
@@ -540,6 +560,25 @@ describe('GET /v1/auth/yandex/callback — refusals', () => {
     expect(await sessionCount()).toBe(sessionsAfterFirst);
   });
 
+  // CR-264: a code Yandex never issued, and a real one it refuses to exchange.
+  it('refuses a forged or rejected code without signing anyone in', async () => {
+    await expectRefused(
+      await signIn(yandexUser(), {
+        next: '/rides/abc',
+        tamperQuery: (query) => query.set('code', 'forged-code'),
+      }),
+      'failed',
+    );
+    await expectRefused(
+      await signIn(yandexUser(), {
+        next: '/rides/abc',
+        options: { tokenEndpoint: 'invalid_grant' },
+      }),
+      'failed',
+    );
+    expect(await identities()).toHaveLength(0);
+  });
+
   it('maps an unreachable Yandex to unavailable', async () => {
     await expectRefused(
       await signIn(yandexUser(), {
@@ -629,6 +668,42 @@ describe('GET /v1/auth/yandex/callback — refusals', () => {
       }),
       'blocked',
     );
+  });
+});
+
+// CR-264: a person who only ever signed in with Yandex has no password to log in with.
+describe('password login of a Yandex-only account', () => {
+  it('answers the generic invalid_credentials after the same Argon2 verify', async () => {
+    const user = yandexUser();
+    await signIn(user);
+    const verify = vi.mocked(password.verifyPassword);
+    verify.mockClear();
+
+    const yandexOnly = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: user.default_email!,
+        password: 'a-strong-password-123',
+      },
+    });
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: {
+        email: `${randomUUID()}@yandex.test`,
+        password: 'a-strong-password-123',
+      },
+    });
+
+    expect(yandexOnly.statusCode).toBe(401);
+    expect(yandexOnly.json()).toEqual(unknown.json());
+    expect(yandexOnly.json().code).toBe('invalid_credentials');
+    expect(yandexOnly.cookies).toEqual([]);
+    // One real Argon2id verify (against the decoy hash) on both paths.
+    expect(verify).toHaveBeenCalledTimes(2);
+    expect(verify.mock.calls[0]![0]).toMatch(/^\$argon2id\$/);
+    expect(verify.mock.calls[0]![0]).toBe(verify.mock.calls[1]![0]);
   });
 });
 

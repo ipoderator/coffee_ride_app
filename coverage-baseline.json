@@ -4,23 +4,23 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 93.72,
-        "statements": 92.65,
-        "functions": 97.03,
-        "branches": 83.64
+        "lines": 94.55,
+        "statements": 93.52,
+        "functions": 97.47,
+        "branches": 85.38
       },
       "scopes": {
         "src/modules/auth/": {
-          "lines": 96.03,
-          "statements": 95.21,
-          "functions": 97.72,
-          "branches": 85.22
+          "lines": 99.08,
+          "statements": 98.27,
+          "functions": 100,
+          "branches": 93.61
         },
         "src/modules/registrations/": {
-          "lines": 93.85,
-          "statements": 93.71,
-          "functions": 95.34,
-          "branches": 86.08
+          "lines": 93.97,
+          "statements": 93.83,
+          "functions": 95.45,
+          "branches": 86.36
         },
         "src/modules/rides/": {
           "lines": 94.62,
@@ -41,32 +41,32 @@
           "branches": 64.51
         },
         "src/modules/notifications/": {
-          "lines": 88.37,
-          "statements": 87.83,
-          "functions": 98.33,
-          "branches": 72.5
+          "lines": 88.83,
+          "statements": 88.31,
+          "functions": 98.43,
+          "branches": 72.83
         },
         "src/modules/reviews/": {
-          "lines": 86.41,
-          "statements": 85.54,
+          "lines": 86.58,
+          "statements": 85.71,
           "functions": 88.23,
-          "branches": 66.66
+          "branches": 70.9
         },
         "src/plugins/": {
-          "lines": 95.65,
-          "statements": 95,
+          "lines": 96.84,
+          "statements": 96.11,
           "functions": 100,
-          "branches": 90.24
+          "branches": 93.47
         },
         "src/lib/": {
-          "lines": 95.45,
-          "statements": 95.15,
-          "functions": 95.45,
-          "branches": 87.36
+          "lines": 95.9,
+          "statements": 95.62,
+          "functions": 96.07,
+          "branches": 87.87
         },
         "src/modules/strava/": {
           "lines": 96.65,
-          "statements": 94.75,
+          "statements": 94.78,
           "functions": 98.18,
           "branches": 90.52
         }
@@ -74,26 +74,26 @@
     },
     "apps/web": {
       "total": {
-        "lines": 84,
-        "statements": 82.35,
-        "functions": 81.68,
-        "branches": 81.95
+        "lines": 85.11,
+        "statements": 83.52,
+        "functions": 83.23,
+        "branches": 82.7
       }
     },
     "packages/ui": {
       "total": {
         "lines": 100,
-        "statements": 99.6,
+        "statements": 99.73,
         "functions": 100,
-        "branches": 93.69
+        "branches": 94.22
       }
     },
     "packages/maps-2gis": {
       "total": {
-        "lines": 99.5,
-        "statements": 98.41,
-        "functions": 98.55,
-        "branches": 91.44
+        "lines": 99.51,
+        "statements": 98.45,
+        "functions": 98.59,
+        "branches": 91.82
       }
     },
     "packages/resilience": {

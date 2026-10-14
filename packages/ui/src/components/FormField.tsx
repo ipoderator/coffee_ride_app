@@ -1,4 +1,4 @@
-import { cloneElement, type ReactElement } from 'react';
+import { cloneElement, type ReactElement, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 
 interface ControlProps {
@@ -15,6 +15,9 @@ export interface FormFieldProps {
    * (`.claude/rules/frontend.md` Forms section). Takes over from `hint` when set. */
   error?: string;
   hint?: string;
+  /** CR-264: a control on the label's line, at its far end — e.g. the login form's
+   * «Забыли пароль?» link. Comes before the field in tab order, as it reads. */
+  labelAction?: ReactNode;
   className?: string;
   /** Exactly one form control (`Input`, or anything accepting the same three
    * a11y props) — cloned with `id`/`aria-describedby`/`aria-invalid` wired in,
@@ -29,6 +32,7 @@ export function FormField({
   label,
   error,
   hint,
+  labelAction,
   className,
   children,
 }: FormFieldProps) {
@@ -40,9 +44,18 @@ export function FormField({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-body-sm font-medium text-text">
-        {label}
-      </label>
+      {labelAction ? (
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor={id} className="text-body-sm font-medium text-text">
+            {label}
+          </label>
+          {labelAction}
+        </div>
+      ) : (
+        <label htmlFor={id} className="text-body-sm font-medium text-text">
+          {label}
+        </label>
+      )}
       {cloneElement(children, {
         id,
         'aria-describedby': describedBy,

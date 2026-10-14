@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   formatCalendarDate,
   countdownParts,
@@ -296,6 +296,20 @@ describe('CR-119 formatters', () => {
     expect(formatTimeZoneHint(date, 'UTC')).toBe('UTC');
     expect(formatTimeZoneHint(date, 'Europe/Berlin')).toBe('UTC+2');
     expect(formatTimeZoneHint(date, 'Asia/Kolkata')).toBe('UTC+5:30');
+  });
+
+  it('reads a bare `GMT` zone name as a zero offset', async () => {
+    // ICU before 78 prints a zero `longOffset` as `GMT`, ICU 78 as `GMT+00:00` —
+    // pinned here so both the hint and the coverage stay ICU-independent.
+    const { formatTimeZoneHint } = await import('./format');
+    const spy = vi
+      .spyOn(Intl.DateTimeFormat.prototype, 'formatToParts')
+      .mockReturnValue([{ type: 'timeZoneName', value: 'GMT' }]);
+    try {
+      expect(formatTimeZoneHint(new Date(), 'Europe/London')).toBe('UTC');
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('formats group paces compactly, and a pace range across groups', async () => {

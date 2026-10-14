@@ -207,6 +207,8 @@ export const AUTH_TERMS = {
   emailLabel: 'Email',
   emailPlaceholder: 'you@example.ru',
   passwordLabel: 'Пароль',
+  // CR-264: the login form's password field, as the auth mockup words it.
+  passwordPlaceholder: 'Введите пароль',
   // CR-262: the auth mockup's wording of the same 12+ policy.
   passwordHint: 'Не менее 12 символов. Длинная фраза лучше сложной комбинации.',
   // CR-261: the register form's second password field, checked before sending.
@@ -234,8 +236,21 @@ export const AUTH_TERMS = {
   invalidCredentials: 'Неверный email или пароль.',
   // CR-230 (ADR-032): only after the password verified (`403 account_blocked`).
   accountBlocked: 'Аккаунт заблокирован администратором.',
-  registerLink: 'Нет аккаунта? Зарегистрироваться',
   forgotPasswordLink: 'Забыли пароль?',
+} as const;
+
+// CR-264: `/login` laid out like the auth mockup's «Вход» tab — the same frame as
+// `/register` (story text beside the form on wide screens), social sign-in first.
+export const LOGIN_PAGE_TERMS = {
+  lead: 'Выберите быстрый вход или используйте email.',
+  // No Google/Yandex configured: the email form is the only way.
+  leadEmailOnly: 'Войдите по email и паролю.',
+  divider: 'или через email',
+  storyTitle: 'Найдите свой следующий заезд.',
+  storyBody:
+    'Маршрут на карте, подходящая группа и все детали старта — ещё до регистрации.',
+  switchPrompt: 'Нет аккаунта?',
+  switchLink: 'Зарегистрироваться',
 } as const;
 
 // CR-262: `/register` laid out like the auth mockup — a story panel beside the
@@ -290,11 +305,9 @@ export const CAPTCHA_TERMS = {
 
 // CR-247 (ADR-034): «Войти через Google» on `/login` and `/register`, and the
 // message `/login?oauth=<outcome>` shows when the sign-in came back without a session.
-// CR-247, CR-260: the block under the login/register form that holds the external
-// sign-in buttons (Google, Yandex ID) — one divider and one consent line for all.
+// CR-247, CR-260: the consent line under the login/register page — signing in with a
+// provider creates an account. CR-264: each page owns its divider.
 export const OAUTH_SIGN_IN_TERMS = {
-  divider: 'или',
-  // Shown under the buttons: signing in with a provider creates an account.
   consentPrefix: 'Продолжая, вы принимаете ',
   consentTerms: 'условия использования',
   consentJoin: ' и ',
@@ -327,15 +340,16 @@ export const GOOGLE_SIGN_IN_TERMS = {
 // CR-260 (ADR-037): «Войти через Яндекс» and why a Yandex sign-in came back to
 // `/login?oauth=<outcome>&provider=yandex` without a session.
 export const YANDEX_SIGN_IN_TERMS = {
-  button: 'Войти через Яндекс',
+  // CR-264: the auth mockup's «Вход» wording, as Yandex ID names itself.
+  button: 'Войти с Яндекс ID',
   // CR-262: `/register`'s wording, as Yandex ID names itself.
   continueButton: 'Продолжить с Яндекс ID',
   outcome: {
     cancelled: 'Вход через Яндекс отменён.',
     expired:
-      'Время на вход через Яндекс истекло. Нажмите «Войти через Яндекс» ещё раз.',
+      'Время на вход через Яндекс истекло. Нажмите «Войти с Яндекс ID» ещё раз.',
     state:
-      'Не удалось подтвердить вход через Яндекс. Нажмите «Войти через Яндекс» ещё раз.',
+      'Не удалось подтвердить вход через Яндекс. Нажмите «Войти с Яндекс ID» ещё раз.',
     failed: 'Яндекс не подтвердил вход. Попробуйте ещё раз.',
     unavailable:
       'Вход через Яндекс сейчас недоступен. Войдите по email и паролю.',
