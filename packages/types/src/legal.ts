@@ -70,7 +70,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentType, LegalDocumentMeta> = {
         version: '1.0',
         effectiveAt: '2026-10-15',
         sha256:
-          '9770db6170acdcdba94ab4a9e34b220697669876ccb336a95b377bacd876dd7b',
+          '569c0c777df26561b5eeae83825a5c3727e68d2443540390a652907bf43a3a8c',
         material: true,
         summary:
           'Полная редакция: возраст, безопасность заездов, запреты, модерация и обжалование, отмены, сторонние сервисы, прекращение аккаунта, применимое право. Принимается отдельной отметкой при создании аккаунта. Заменяет краткую редакцию от 14 октября 2026 г.',
@@ -84,7 +84,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentType, LegalDocumentMeta> = {
         version: '1.0',
         effectiveAt: '2026-10-15',
         sha256:
-          '02271fdb2cb3e0e8f966ecc4ad7d77016212d2a0cb113dd6b481590c796ace05',
+          'c364eecb8a16b1d3623583ef0ce74ca4c01bf89cb146b51dd250d63b96c2d68b',
         material: true,
         summary:
           'Полная редакция: цели и правовые основания, получатели, сроки хранения по категориям, reCAPTCHA, журнал принятия документов, защита, права и инциденты. Согласие на обработку вынесено в отдельный документ. Заменяет краткую редакцию от 14 октября 2026 г.',
@@ -98,7 +98,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocumentType, LegalDocumentMeta> = {
         version: '1.0',
         effectiveAt: '2026-10-15',
         sha256:
-          '960f990590a6e7a7368a14f7bb267c3678f30c4fb72f8c40c5eb69726fcad030',
+          'bdcb60469601204a4e13f20ef7e3b925ecd7c2bd45a56f66503f1c84b5894367',
         material: true,
         summary:
           'Первая редакция отдельного согласия на обработку персональных данных.',

@@ -121,7 +121,8 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
     expect(GOOGLE.calls).toHaveLength(1);
     expect(GOOGLE.calls[0]!.get('secret')).toBe(SECRET);
     expect(GOOGLE.calls[0]!.get('response')).toBe('good-token');
-    expect(GOOGLE.calls[0]!.get('remoteip')).toBe('203.0.113.7');
+    // The person's IP never goes to Google (KI-105).
+    expect(GOOGLE.calls[0]!.has('remoteip')).toBe(false);
     // Neither the secret nor the token ever goes back to the client.
     expect(response.body).not.toContain(SECRET);
     expect(response.body).not.toContain('good-token');

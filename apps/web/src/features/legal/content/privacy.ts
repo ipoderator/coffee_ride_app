@@ -7,11 +7,12 @@ import type { LegalDocumentContent } from './types';
 //
 // Checked against: `packages/db/src/schema/*` (what is stored), `apps/api/src/
 // modules/auth/*` (sessions ADR-013, Google ADR-034, Yandex ADR-037, reCAPTCHA
-// ADR-038 — the token and the IP go to `siteverify`, consents ADR-041),
+// ADR-038 — only the widget's one-time token goes to `siteverify`, consents ADR-041),
 // `modules/notifications/queue.ts` (which emails, job retention),
 // `lib/account-rate-limit.ts` (HMAC keys, 1-minute windows), `packages/maps-2gis`
 // (only routing on the server), ADR-033 (Strava), `docker-compose.prod.yml` (logs
-// 10 MB × 5 per service, daily backups kept 14 days, everything on one host),
+// 10 MB × 5 per service, daily backups kept 14 days, everything on one host in Russia
+// — KI-105),
 // `apps/web/src/lib/theme/theme.ts` (the only browser storage).
 export const PRIVACY_POLICY_VERSIONS: Record<string, LegalDocumentContent> = {
   '1.0': {
@@ -83,20 +84,18 @@ export const PRIVACY_POLICY_VERSIONS: Record<string, LegalDocumentContent> = {
         items: [
           'Другие участники и организатор заезда видят ваше имя (или отображаемое имя) и группу в списке участников, если организатор его не скрыл. Карточку профиля — фото, «о себе», велосипеды, километраж — видят те, кому это разрешает ваша настройка видимости. Отзывы показываются на странице заезда.',
           'Телефон видите только вы. Контакт для связи из заезда видят записавшиеся участники. Email видите вы и администратор сервиса — для поддержки и модерации.',
-          'Google — при входе через Google и при проверке «Я не робот»: для проверки сервер передаёт Google ответ виджета и ваш IP-адрес.',
+          'Google — при входе через Google вы входите на странице Google; для проверки «Я не робот» сервер передаёт Google только одноразовый ответ виджета, без данных о вас.',
           'Яндекс — при входе через Яндекс ID.',
           'Unisender Go — отправляет наши письма; получает адрес получателя и текст письма.',
           '2ГИС — карты загружаются в браузер напрямую с серверов 2ГИС (они видят ваш IP-адрес); при построении маршрута сервер передаёт 2ГИС только координаты точек маршрута.',
           'Strava — только при проверке финиша, как описано в разделе 3.',
         ],
-        notes: [
-          'Google и Strava — иностранные компании (США); передача им данных при входе через Google, проверке «Я не робот» и синхронизации со Strava является трансграничной. Мы не продаём данные и не передаём их для рекламы.',
-        ],
+        notes: ['Мы не продаём данные и не передаём их для рекламы.'],
       },
       {
         heading: '8. Где хранятся данные',
         paragraphs: [
-          'База данных, файлы (аватары, обложки, GPX), временные данные (счётчики частоты запросов, очередь писем) и резервные копии находятся на сервере, на котором работает Coffee Ride. Файлы хранятся в закрытом хранилище и выдаются только через сервис, с проверкой доступа.',
+          'Данные хранятся и обрабатываются в России. База данных, файлы (аватары, обложки, GPX), временные данные (счётчики частоты запросов, очередь писем) и резервные копии находятся на сервере Coffee Ride в Российской Федерации. Файлы хранятся в закрытом хранилище и выдаются только через сервис, с проверкой доступа.',
         ],
       },
       {

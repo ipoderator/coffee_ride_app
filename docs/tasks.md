@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-270 legal texts: data stored in Russia, no cross-border transfer (`siteverify`
+      without the IP, ADR-042), ride safety rules from the owner's sample — done
+      2026-10-15. Server move to Russia pending (KI-105). See docs/changelog.md
 - [x] CR-269 full `/terms`, `/privacy`, new `/personal-data-consent` (versioned, with
       history); two separate unticked consents on `/register`; consent step before a
       first Google/Yandex account; re-consent on `/legal-update`; audit trail

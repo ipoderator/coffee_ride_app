@@ -10,7 +10,8 @@ import {
 // (`.claude/rules/resilience.md`); `ResilienceError` never leaves this file —
 // callers see a verdict, or `RecaptchaUnavailableError` (Google down/slow/odd, or
 // the secret itself rejected). The secret and the token are never logged, and
-// never part of an error message.
+// never part of an error message. Only the token goes to Google — no `remoteip`
+// (it is optional): nothing about the person leaves the server (KI-105).
 export const RECAPTCHA_VERIFY_URL =
   'https://www.google.com/recaptcha/api/siteverify';
 
@@ -30,7 +31,7 @@ export type RecaptchaVerdict =
   { ok: true } | { ok: false; reason: 'expired' | 'invalid' };
 
 export interface RecaptchaVerifier {
-  verify(token: string, remoteIp?: string): Promise<RecaptchaVerdict>;
+  verify(token: string): Promise<RecaptchaVerdict>;
 }
 
 interface SiteverifyResponse {
@@ -58,12 +59,11 @@ export function createRecaptchaVerifier(options: {
   });
 
   return {
-    async verify(token, remoteIp) {
+    async verify(token) {
       const form = new URLSearchParams({
         secret: options.secretKey,
         response: token,
       });
-      if (remoteIp) form.set('remoteip', remoteIp);
 
       let body: SiteverifyResponse;
       try {
