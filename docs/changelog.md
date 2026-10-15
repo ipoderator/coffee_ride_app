@@ -126,3 +126,12 @@ Files: api `modules/legal/*`, `modules/auth/oauth-signup.*`, `oauth-sign-in.serv
 Validation: typecheck 8/8, lint 0 errors, prettier; api 945 (+33 new), web unit 1093, ui 307, db 17; Storybook auth/legal 67/67 with axe; e2e login-return + critical-journeys + access-control 10/10; production build; browser check 60/60 (fake Google/Yandex/siteverify: documents 320/390/1440 + axe, consents, API bypass, OAuth park/accept/cancel/concurrent, re-consent, logout); no email/token in the API log.
 Decisions: ADR-041.
 Follow-up: owner inputs (operator details, hosting country, age threshold, cross-border notice) and a lawyer's review before production; existing accounts are asked to accept once after deploy; full suite at prompt 5.
+
+## 2026-10-15 — CR-268, CR-269 ported to `main`
+
+Summary: both were built on the cloud branch `experiments` (as CR-267/CR-268) and cherry-picked onto `main` in `feat/legal-consents`, renumbered (`main` already had CR-267). Context/doc conflicts merged by hand; code applied cleanly. Under CR-267's one database per Vitest worker, the new `oauth-signup`/`legal` route tests failed in the full run (`DELETE FROM users` before `rides`) — fixed like the other auth files. `AdminActionsLog`'s first test awaited a label the filter `<option>` shows before the list loads — now awaits the row.
+Contract: none beyond CR-269's.
+Files: api `modules/{auth/oauth-signup,legal/legal}.routes.test.ts`; web `features/legal/consent.test.tsx`, `features/admin/actions/actions.test.tsx`; `coverage-baseline.json`.
+Validation: format/lint:root clean on tracked files, lint 9/9, typecheck 8/8, build 7/7; `test:coverage` with live Redis/S3 — api 950 (+2 shuffled seeds), web 1095, ui 307, db 17, resilience 15, maps-2gis 82; `coverage:check` holds, baseline raised (no floor lowered); Storybook auth/legal 56/56 with axe; e2e 57/57 without the two screenshot specs (2 timeouts in the full run passed on re-run); docker smoke not run locally (Docker Hub layer download failed) — CI runs it.
+Decisions: none.
+Follow-up: CR-269's owner inputs and lawyer review before deploy.

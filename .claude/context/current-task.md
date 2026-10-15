@@ -97,6 +97,9 @@ legal_acceptance_required` while acceptance is pending (logout and acceptance ex
 
 ## Final result
 
-Implemented and validated; not committed (owner instruction for this prompt). Needs
-owner input (operator details, hosting country, age, cross-border notice, incident
+Ported to `main` (owner, 2026-10-15): branch `feat/legal-consents`, cherry-picks of
+`experiments`' `a48bede`/`8d83648` renumbered CR-267→CR-268, CR-268→CR-269; the two
+new api test files now delete `rides` before `users` (CR-267's per-worker databases),
+two consent-step error-path tests, coverage baseline raised. Committed; PR pending.
+Needs owner input (operator details, hosting country, age, cross-border notice, incident
 e-mail promise) and a lawyer's review before production.
