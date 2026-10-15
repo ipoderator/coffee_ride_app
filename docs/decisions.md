@@ -2073,3 +2073,33 @@ legal_acceptance_required` while anything is pending (logout and the acceptance
 /v1/legal/documents`.
 - The texts are a draft for a lawyer: the operator's legal details, the hosting
   country and the age threshold are owner inputs (CR-269 changelog entry).
+
+## ADR-042 — No personal data leaves Russia: reCAPTCHA without `remoteip`, storage in Russia
+
+Status: Accepted (2026-10-15, owner, CR-270). Amends ADR-038 (what `siteverify`
+receives) and fixes the storage statement of ADR-041's documents.
+
+### Context
+
+ADR-038 sent the client IP with every `siteverify` call, so the privacy policy called
+the Google/Strava exchanges a cross-border transfer. The owner's position: the
+service transfers no personal data abroad, it only verifies. The production server is
+in the Netherlands (KI-105); the owner is moving it to Russia (152-ФЗ ст. 18 ч. 5).
+
+### Decision
+
+- `siteverify` gets only the secret and the widget's one-time token — no `remoteip`
+  (optional in Google's API). `RecaptchaVerifier.verify` takes the token alone, so no
+  caller can add the IP back by accident.
+- The documents name no cross-border transfer; the privacy policy says the data is
+  stored and processed in Russia (§8).
+- Version 1.0 of the three documents is corrected in place (new hashes) rather than
+  superseded by 1.1: it has never been deployed or accepted in production. From the
+  first production deploy on, ADR-041's immutability applies without exception.
+
+### Consequences
+
+- Google scores the challenge without the server-side IP; the browser still talks to
+  Google directly when the widget loads (as it does with 2GIS), which the policy states.
+- §8 holds once the production server runs in Russia — the owner is moving it
+  (KI-105). The lawyer reviews the wording.

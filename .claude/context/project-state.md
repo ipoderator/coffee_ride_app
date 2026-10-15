@@ -25,7 +25,12 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-269 (owner, 2026-10-15) — prompt 4 «Условия, конфиденциальность и согласия» of the
+CR-270 (owner, 2026-10-15) — CR-269's legal texts corrected: data stored in Russia,
+no cross-border transfer (`siteverify` without the IP, ADR-042), ride safety rules
+from the owner's sample; branch `fix/legal-texts-russia`. The owner is moving the
+production server to Russia (KI-105 open until done); not deployed yet.
+
+Before it: CR-269 (owner, 2026-10-15) — prompt 4 «Условия, конфиденциальность и согласия» of the
 updated mockup package (ADR-041), built on `experiments`, ported with CR-268 to
 `feat/legal-consents` (cherry-picks onto `main`, renumbered from CR-268/CR-267): full `/terms`, `/privacy`, new `/personal-data-consent`
 (versioned 1.0 + history); two separate unticked consents on `/register`; a first

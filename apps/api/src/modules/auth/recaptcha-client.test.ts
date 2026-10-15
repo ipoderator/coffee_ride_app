@@ -27,12 +27,12 @@ function verifierAnswering(answer: () => Promise<Response> | Response) {
 }
 
 describe('createRecaptchaVerifier', () => {
-  it('posts the secret, token and client IP form-encoded to siteverify', async () => {
+  it('posts only the secret and the token, form-encoded, to siteverify', async () => {
     const { fetchImpl, verifier } = verifierAnswering(() =>
       jsonResponse({ success: true, hostname: 'coffeeride.site' }),
     );
 
-    await expect(verifier.verify('a-token', '203.0.113.7')).resolves.toEqual({
+    await expect(verifier.verify('a-token')).resolves.toEqual({
       ok: true,
     });
 
@@ -46,17 +46,9 @@ describe('createRecaptchaVerifier', () => {
     const form = new URLSearchParams(String(init?.body));
     expect(form.get('secret')).toBe(SECRET);
     expect(form.get('response')).toBe('a-token');
-    expect(form.get('remoteip')).toBe('203.0.113.7');
-    expect(init?.signal).toBeInstanceOf(AbortSignal);
-  });
-
-  it('leaves remoteip out when the caller has none', async () => {
-    const { fetchImpl, verifier } = verifierAnswering(() =>
-      jsonResponse({ success: true }),
-    );
-    await verifier.verify('a-token');
-    const form = new URLSearchParams(String(fetchImpl.mock.calls[0]![1]?.body));
+    // Only the token: the person's IP never goes to Google (KI-105).
     expect(form.has('remoteip')).toBe(false);
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('reads a spent or expired token as expired', async () => {

@@ -166,7 +166,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
 
     let verdict;
     try {
-      verdict = await recaptcha.verify(token, request.ip);
+      verdict = await recaptcha.verify(token);
     } catch (error) {
       if (!(error instanceof RecaptchaUnavailableError)) throw error;
       request.log.warn({ err: error }, 'reCAPTCHA verification unavailable');

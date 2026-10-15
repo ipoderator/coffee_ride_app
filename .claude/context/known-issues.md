@@ -470,3 +470,23 @@ version with the shorter terms.
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this
 file's own Archiving rule — this section had grown to ~1050 lines of closed issues.
+
+### KI-105 — Production database abroad (Netherlands) vs. personal-data localisation
+
+Status: open. Discovered: 2026-10-15 (CR-269).
+Problem: the owner reports the hosting provider is Russian but the production server
+(72.56.110.108 — Postgres, S3, Redis, backups) is in the Netherlands. 152-ФЗ ст. 18
+ч. 5 requires Russian citizens' personal data to be recorded, systematised, stored and
+updated in databases located in Russia; a primary database abroad is also itself a
+cross-border transfer (ст. 12). `features/legal/content/privacy.ts` §8 does not name
+the country yet, so the published text is incomplete either way.
+Impact: blocks deploying CR-269's legal texts as truthful and compliant; legal risk
+(КоАП 13.11, Roskomnadzor) for the live service now. Severity: high (legal).
+Workaround: none in code. Since CR-270 the documents say the data is stored in Russia
+— the owner's decision (2026-10-15): the server is being moved, so the statement holds;
+deploy timing is the owner's call. Closes once the server runs in Russia.
+Next action: owner — move the production stack (Postgres, S3, Redis, backups) to a
+Russian data centre (same provider's RU location), then deploy; operator details and
+the lawyer's review still pending. Related: the
+cross-border wording for Google/Strava (privacy §7) and the age threshold (terms §2,
+drafted 18+) await the lawyer too.

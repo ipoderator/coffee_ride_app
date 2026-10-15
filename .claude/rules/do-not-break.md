@@ -193,7 +193,8 @@ lock`/`unlock` around the whole `migrate()` call, same `{ max: 1 }` client
   `/forgot-password`, in `preHandler` after the per-account tier (the per-IP tier runs
   earlier) so a flood never reaches Google; failing CLOSED by decision — the one
   deliberate exception to the fail-open rule above; `siteverify` never retried (a
-  token is spent on the first call) and only in `recaptcha-client.ts`; the forms
+  token is spent on the first call) and only in `recaptcha-client.ts`, with the token
+  alone — never `remoteip` or any other personal data (ADR-042, CR-270); the forms
   resetting the widget after every failed answer; e2e servers run with both reCAPTCHA
   keys empty;
 - `/register` answering a taken email exactly like a new one (ADR-039, CR-262): same
