@@ -24,7 +24,7 @@
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^6.1.1",
-    "@fastify/type-provider-zod": "^1.0.0",
+    "@fastify/type-provider-zod": "^1.0.1",
     "argon2": "^0.45.1",
     "bullmq": "^6.3.6",
     "db": "workspace:*",
