@@ -144,3 +144,12 @@ Files: web `features/legal/content/{privacy,terms,personal-data-consent}.ts`; ty
 Validation: web legal/auth/public unit 166/166; api auth+legal 240 (+3 live skipped), auth branches back above the floor (a cookie-less `/oauth-signup` test); Storybook legal/register 27/27 with axe; typecheck 8/8; lint 9/9.
 Decisions: ADR-042.
 Follow-up: the owner's server move to Russia (KI-105); operator details and the lawyer's review.
+
+## 2026-10-15 — CR-265..CR-270 deployed
+
+Summary: production moved from `92ffe50` to `5c04b36` (`deploy/deploy.sh`, exit 0): maintenance mode (CR-265, off — `MAINTENANCE_MODE` unset; Caddy recreated with the `deploy/maintenance` mount), CI/test changes (CR-266, CR-267), the auth final-check fix (CR-268), legal documents and consents (CR-269, migration `0029` applied) and the CR-270 wording. Every existing account is asked once to accept the documents on its next sign-in.
+Contract: migration `0029` in production.
+Files: none (deploy).
+Validation: `/`, `/privacy`, `/terms`, `/personal-data-consent`, `/register`, `/login`, `/legal-update` 200; `GET /api/v1/legal/documents` serves the CR-270 hashes; `/privacy` says «Данные хранятся и обрабатываются в России»; `/api/v1/auth/me` anonymous 401; containers up, no `level:50` in the api log 10 min after.
+Decisions: none.
+Follow-up: the owner's server move to Russia (KI-105); operator details and the lawyer's review; a real sign-in to see the re-consent screen.
