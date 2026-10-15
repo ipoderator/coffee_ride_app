@@ -8,9 +8,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentLegalConsents } from 'types';
 import {
+  AUTH_TERMS,
   LEGAL_CONSENT_TERMS,
   LEGAL_UPDATE_TERMS,
   OAUTH_SIGNUP_TERMS,
+  UI_TERMS,
 } from 'ui';
 import {
   consentErrorMessage,
@@ -236,6 +238,45 @@ describe('OAuthSignupConsent', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       LEGAL_CONSENT_TERMS.versionOutdated,
     );
+  });
+
+  it('offers a retry when the pending sign-up cannot be read', async () => {
+    fetchMock
+      .mockResolvedValueOnce(problem(500, 'internal_error'))
+      .mockResolvedValueOnce(json({ provider: 'google', email: 'a@gmail.ru' }));
+    render(<OAuthSignupConsent />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: UI_TERMS.retry }),
+    );
+    expect(
+      await screen.findByText(OAUTH_SIGNUP_TERMS.lead('Google', 'a@gmail.ru')),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the form with a plain message when the account cannot be created', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ provider: 'google', email: 'a@gmail.ru' }))
+      .mockResolvedValueOnce(problem(409, 'oauth_signup_failed'))
+      .mockRejectedValueOnce(new TypeError('network down'));
+    render(<OAuthSignupConsent />);
+    await screen.findByText(OAUTH_SIGNUP_TERMS.lead('Google', 'a@gmail.ru'));
+    tickConsents();
+    const submit = screen.getByRole('button', {
+      name: OAUTH_SIGNUP_TERMS.submit,
+    });
+    fireEvent.click(submit);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      OAUTH_SIGNUP_TERMS.failed,
+    );
+
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        AUTH_TERMS.genericError,
+      ),
+    );
+    expect(assign).not.toHaveBeenCalled();
   });
 
   it('cancels: tells the server, then goes back to /register', async () => {

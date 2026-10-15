@@ -34,6 +34,7 @@ let app: FastifyInstance;
 
 beforeEach(async () => {
   app = await buildApp(testEnv);
+  await app.db.execute(sql`DELETE FROM rides`);
   await app.db.execute(sql`DELETE FROM users`);
 });
 

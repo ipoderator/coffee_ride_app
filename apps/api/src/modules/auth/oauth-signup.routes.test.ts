@@ -67,6 +67,7 @@ beforeEach(async () => {
     clientSecret: FAKE_YANDEX_CLIENT_SECRET,
     fetchImpl: yandex.fetchImpl,
   });
+  await app.db.execute(sql`DELETE FROM rides`);
   await app.db.execute(sql`DELETE FROM users`);
   await app.db.execute(sql`DELETE FROM oauth_pending_signups`);
 });
