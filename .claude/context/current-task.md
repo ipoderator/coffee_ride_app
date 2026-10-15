@@ -19,6 +19,5 @@ web unit 166/166; api auth+legal 239; Storybook 27/27; typecheck 8/8; lint 9/9.
 
 ## Final result
 
-Implemented and validated; committed, PR into `main`. Not deployed (owner: commit and
-push only). The owner is moving the server to Russia (KI-105); operator details and
+Merged (PR #74, `5c04b36`) and deployed to production 2026-10-15 (owner). The owner is moving the server to Russia (KI-105); operator details and
 the lawyer's review still pending.

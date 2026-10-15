@@ -28,7 +28,8 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 CR-270 (owner, 2026-10-15) — CR-269's legal texts corrected: data stored in Russia,
 no cross-border transfer (`siteverify` without the IP, ADR-042), ride safety rules
 from the owner's sample; branch `fix/legal-texts-russia`. The owner is moving the
-production server to Russia (KI-105 open until done); not deployed yet.
+production server to Russia (KI-105 open until done). **Deployed** 2026-10-15 with
+CR-265..CR-269 (`5c04b36`, migration `0029` applied).
 
 Before it: CR-269 (owner, 2026-10-15) — prompt 4 «Условия, конфиденциальность и согласия» of the
 updated mockup package (ADR-041), built on `experiments`, ported with CR-268 to
@@ -68,7 +69,7 @@ Earlier: CR-219..CR-265 — see `docs/changelog.md` and `project-state-archive.m
 
 ## In progress
 
-CR-269 + CR-268 — on `feat/legal-consents` (PR to `main`), not deployed. CR-269 needs owner input
+CR-269 + CR-268 — merged (PR #73) and deployed 2026-10-15 with CR-270. CR-269 needs owner input
 before production: the operator's legal name/ИНН/ОГРН/address, the hosting
 provider and country (localisation, ст. 18 ч. 5 152-ФЗ), the age threshold (drafted
 18+), the cross-border transfer notice to Роскомнадзор (Google, Strava), the incident
@@ -76,7 +77,7 @@ e-mail promise; then a lawyer's review. After deploy every existing account is a
 to accept the documents once. Next: prompt 5 — the final check (full suite, lint,
 build) including consents. KI-104: expired sessions/tokens/pending sign-ups not purged.
 
-CR-265 — merged (`7d22fa2`, PR #69), deploy pending; new env
+CR-265 — deployed 2026-10-15 (`5c04b36`), maintenance off; new env
 `MAINTENANCE_MODE`/`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On
 deploy Caddy is recreated once (new read-only mount `deploy/maintenance`); first
 production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. Next
