@@ -3,7 +3,7 @@ import {
   AUTH_TERMS,
   GOOGLE_SIGN_IN_TERMS,
   LOGIN_PAGE_TERMS,
-  OAUTH_SIGN_IN_TERMS,
+  LEGAL_TERMS,
   YANDEX_SIGN_IN_TERMS,
 } from './terminology';
 
@@ -23,12 +23,13 @@ describe('login screen terms (CR-264)', () => {
     );
   });
 
-  it('builds the consent line from the shared provider terms', () => {
-    expect(
-      `${OAUTH_SIGN_IN_TERMS.consentPrefix}${OAUTH_SIGN_IN_TERMS.consentTerms}${OAUTH_SIGN_IN_TERMS.consentJoin}${OAUTH_SIGN_IN_TERMS.consentPrivacy}${OAUTH_SIGN_IN_TERMS.consentEnd}`,
-    ).toBe(
-      'Продолжая, вы принимаете условия использования и политику конфиденциальности.',
+  // CR-268 (ADR-041): signing in accepts nothing — the line only names the documents.
+  it('names the documents as information, without implying acceptance', () => {
+    const line = `${LEGAL_TERMS.infoPrefix}${LEGAL_TERMS.infoTerms}${LEGAL_TERMS.infoJoin}${LEGAL_TERMS.infoPrivacy}${LEGAL_TERMS.infoEnd}`;
+    expect(line).toBe(
+      'Документы сервиса: условия использования, политика конфиденциальности.',
     );
+    expect(line).not.toMatch(/принима/);
   });
 
   it('words the page like the mockup', () => {

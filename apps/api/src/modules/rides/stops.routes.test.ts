@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // Same rationale as `rides.routes.test.ts`/`route.routes.test.ts`: a real Postgres,
 // `DELETE FROM rides` before `DELETE FROM users` (`rides.organizer_id ->
@@ -37,7 +38,7 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const verificationUrl: string = register.json().verificationUrl;
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(

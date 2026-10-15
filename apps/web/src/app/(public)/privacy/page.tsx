@@ -1,16 +1,24 @@
 import type { Metadata } from 'next';
 import { LEGAL_TERMS } from 'ui';
-import { LegalDocument } from '@/features/legal/components/LegalDocument';
-import { PRIVACY_POLICY } from '@/features/legal/content';
+import { LegalDocumentPage } from '@/features/legal/components/LegalDocumentPage';
 
 // CR-247: required by Google's OAuth consent screen and linked under «Войти через
-// Google». Indexable on purpose — it is a public document.
+// Google». Indexable on purpose — it is a public document. CR-268: versioned;
+// information only — the consent is `/personal-data-consent` (ADR-041).
 export const metadata: Metadata = {
   title: `${LEGAL_TERMS.privacyTitle} — Coffee Ride`,
 };
 
-export default function PrivacyPage() {
+export default function PrivacyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ version?: string | string[] }>;
+}) {
   return (
-    <LegalDocument title={LEGAL_TERMS.privacyTitle} content={PRIVACY_POLICY} />
+    <LegalDocumentPage
+      type="privacy"
+      title={LEGAL_TERMS.privacyHeading}
+      searchParams={searchParams}
+    />
   );
 }

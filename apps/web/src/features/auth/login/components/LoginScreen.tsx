@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { AUTH_TERMS, LOGIN_PAGE_TERMS, OAUTH_SIGN_IN_TERMS } from 'ui';
+import { AUTH_TERMS, LOGIN_PAGE_TERMS } from 'ui';
+import { LegalInfoLinks } from '@/components/legal/LegalInfoLinks';
 import { registerHref } from '@/lib/auth/next-path';
 import { AuthSplitLayout } from '../../layout/AuthSplitLayout';
 import type { OAuthOutcome, SignInProvider } from '../../oauth/api';
@@ -11,7 +12,8 @@ import { LoginForm } from './LoginForm';
  * CR-264: `/login` laid out like the auth mockup's «Вход» tab
  * (`reference/coffee-ride-auth-mockup`), in the same frame as `/register`
  * (CR-262): Google/Yandex ID first, «или через email», the email form, then
- * «Нет аккаунта?» and the consent line. The page resolves `next`, the provider
+ * «Нет аккаунта?» and the documents line (CR-268: information only — signing in
+ * accepts nothing, ADR-041). The page resolves `next`, the provider
  * outcome and which providers are on; this renders them (and the stories reuse it).
  */
 export function LoginScreen({
@@ -62,17 +64,7 @@ export function LoginScreen({
           {LOGIN_PAGE_TERMS.switchLink}
         </Link>
       </p>
-      <p className="mt-2 text-center text-body-sm text-text-secondary">
-        {OAUTH_SIGN_IN_TERMS.consentPrefix}
-        <Link href="/terms" className="text-primary hover:underline">
-          {OAUTH_SIGN_IN_TERMS.consentTerms}
-        </Link>
-        {OAUTH_SIGN_IN_TERMS.consentJoin}
-        <Link href="/privacy" className="text-primary hover:underline">
-          {OAUTH_SIGN_IN_TERMS.consentPrivacy}
-        </Link>
-        {OAUTH_SIGN_IN_TERMS.consentEnd}
-      </p>
+      <LegalInfoLinks className="mt-2 text-center text-body-sm text-text-secondary" />
     </AuthSplitLayout>
   );
 }

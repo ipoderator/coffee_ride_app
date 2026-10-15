@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { OAUTH_SIGN_IN_TERMS, REGISTER_PAGE_TERMS } from 'ui';
+import { REGISTER_PAGE_TERMS } from 'ui';
 import { AuthSplitLayout } from '@/features/auth/layout/AuthSplitLayout';
 import { OAuthSignIn } from '@/features/auth/oauth/components/OAuthSignIn';
 import { signInProviders } from '@/features/auth/oauth/server-status';
@@ -20,6 +20,8 @@ export const metadata: Metadata = {
 // CR-262: laid out like the auth mockup's «Регистрация» tab
 // (`reference/coffee-ride-auth-mockup`) — Google/Yandex ID first (a provider
 // sign-in creates the account on first use, CR-247/CR-260), then the email form.
+// CR-268 (ADR-041): the documents are accepted by the form's own checkboxes — and,
+// for a first Google/Yandex sign-in, on `/register/consent` — so no consent line.
 export default async function RegisterPage({
   searchParams,
 }: {
@@ -67,17 +69,6 @@ export default async function RegisterPage({
         >
           {REGISTER_PAGE_TERMS.switchLink}
         </Link>
-      </p>
-      <p className="mt-2 text-center text-body-sm text-text-secondary">
-        {REGISTER_PAGE_TERMS.consentPrefix}
-        <Link href="/terms" className="text-primary hover:underline">
-          {OAUTH_SIGN_IN_TERMS.consentTerms}
-        </Link>
-        {OAUTH_SIGN_IN_TERMS.consentJoin}
-        <Link href="/privacy" className="text-primary hover:underline">
-          {OAUTH_SIGN_IN_TERMS.consentPrivacy}
-        </Link>
-        {OAUTH_SIGN_IN_TERMS.consentEnd}
       </p>
     </AuthSplitLayout>
   );

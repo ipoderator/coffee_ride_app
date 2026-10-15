@@ -72,6 +72,28 @@ function assertLocal(): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * CR-268 (ADR-041): `POST /v1/auth/register` needs the current version of each
+ * document the account accepts — read once from the API, as any client would.
+ */
+let cachedConsents: Record<string, string> | null = null;
+async function consents(): Promise<Record<string, string>> {
+  if (cachedConsents) return cachedConsents;
+  const { data } = await api<{
+    items: Array<{
+      type: string;
+      version: string;
+      acceptanceRequired: boolean;
+    }>;
+  }>('GET', '/v1/legal/documents');
+  cachedConsents = Object.fromEntries(
+    data.items
+      .filter((item) => item.acceptanceRequired)
+      .map((item) => [item.type, item.version]),
+  );
+  return cachedConsents;
+}
+
 async function api<T = unknown>(
   method: string,
   path: string,
@@ -132,7 +154,7 @@ async function createAccount(person: Person): Promise<Account> {
   const { data: registered } = await api<{ verificationUrl?: string }>(
     'POST',
     '/v1/auth/register',
-    { body: { email, password: DEMO_PASSWORD } },
+    { body: { email, password: DEMO_PASSWORD, consents: await consents() } },
   );
   if (!registered.verificationUrl) {
     throw new Error('register returned no verificationUrl (production API?).');

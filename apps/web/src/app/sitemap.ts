@@ -31,6 +31,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // CR-247: public documents (Google's OAuth consent screen links them).
     { url: new URL('/privacy', base).toString(), changeFrequency: 'yearly' },
     { url: new URL('/terms', base).toString(), changeFrequency: 'yearly' },
+    // CR-268: the separate consent to processing (ADR-041).
+    {
+      url: new URL('/personal-data-consent', base).toString(),
+      changeFrequency: 'yearly',
+    },
     ...rides.map((ride) => ({
       url: new URL(`/rides/${ride.id}`, base).toString(),
       lastModified: ride.updatedAt,

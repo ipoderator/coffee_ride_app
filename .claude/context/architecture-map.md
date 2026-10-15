@@ -42,7 +42,12 @@ packages: db · types · ui · config · maps-core · maps-2gis · resilience
     `oauth-sign-in.service.ts` (`signInWithOAuth`, atomic linking); Google (ADR-034)
     `google-client.ts` (only Google HTTP, openid-client) + `google.routes.ts`; Yandex ID
     (ADR-037) `yandex-client.ts` (only Yandex HTTP) + `yandex.routes.ts`;
-    reCAPTCHA (ADR-038): `recaptcha-client.ts` (only `siteverify` HTTP), gate in `auth.routes.ts`.
+    reCAPTCHA (ADR-038): `recaptcha-client.ts` (only `siteverify` HTTP), gate in `auth.routes.ts`;
+    first-provider-sign-in consent step (ADR-041): `oauth-signup.service.ts` (parked identity,
+    single-use completion) + `oauth-signup.routes.ts` (`/v1/auth/oauth-signup`).
+  - `legal` — consents (ADR-041): `legal.service.ts` (check versions, record, pending) +
+    `legal.routes.ts` (`GET /documents`, `POST /acceptances`); the re-consent gate is in
+    `plugins/auth.ts`'s `requireAuth`.
   - `users` — profile, avatar, garage (`Bike`), rider-profile visibility.
   - `organizers` — `OrganizerProfile`, rating aggregate, avatar.
   - `rides` — CRUD + lifecycle, reschedule, discovery list (`phase`, bbox, filters),
@@ -78,7 +83,8 @@ participants|updates` — the six-tab workspace «Управление заез�
   `users/[id]`, `rides`, `reviews`, `actions`; layout 404s non-admins via
   `lib/admin/server-admin.ts`, ADR-032); `not-found.tsx`
   (+ `rides/[id]/not-found.tsx`), `robots.ts`, `sitemap.ts` (CR-224/226); `(public)/privacy`,
-  `(public)/terms` (CR-247, text in `features/legal/content.ts`).
+  `(public)/terms`, `(public)/personal-data-consent` (CR-247/268, versioned texts in
+  `features/legal/content/`), `(public)/register/consent` and `legal-update` (ADR-041).
 - `features/{auth,organizer,participant,admin}/<feature>/` — ADR-009 modules (`components/`,
   `api.ts`, tests); auth: login, register, captcha (reCAPTCHA v2 widget + `useCaptcha`, ADR-038), oauth (Google CR-247 + Yandex CR-260; `intent="register"` button grid, CR-262), layout (`AuthSplitLayout`, the auth mockup's story panel, CR-262), password (strength meter + match line, CR-262), verify-email, …; admin: overview, users, rides, reviews, actions; organizer: activity, cover-image, groups, live-rides, overview,
   participants, profile, rides, route, updates; participant: discovery, my-rides,
@@ -87,11 +93,12 @@ participants|updates` — the six-tab workspace «Управление заез�
   NotFoundPanel, SystemStatusScreen — maintenance + `app/error.tsx`/`global-error.tsx`, ADR-040),
   `components/cabinet/` (CabinetShell, CabinetSidebar, CabinetSectionTabs,
   OrganizerCabinetFrame, …), `components/admin/` (reason dialog, list body, action list,
-  search form, select).
+  search form, select), `components/legal/` (`LegalConsentFields` — the consent boxes
+  shared by register, OAuth consent and re-consent; `LegalInfoLinks`, ADR-041).
 - `lib/`: `admin/` (client, nav registry, `use-admin-list`, server gate, error map,
   URL filters — pure `url-filters` + client `use-admin-url-filters`, CR-232),
   `cabinet/` (nav + widget registries, feature flags, ride workspace sections,
-  readiness), `auth/` (session context, `next-path` re-exporting `types`' shared `safeNextPath` (CR-245), resend button),
+  readiness), `auth/` (session context with `legalPending`, `LegalAcceptanceGate` (ADR-041), `next-path` re-exporting `types`' shared `safeNextPath` (CR-245), resend button),
   `api/` (errors, asset URLs, current user), `forms/` (Russian field errors + guard
   test), `datetime/zoned-time`, `maps/create-map-renderer.ts` (only `maps-2gis`
   import), `rides/` (+ `server-ride.ts`: server-side ride lookup for the 404, CR-224),
@@ -107,13 +114,15 @@ participants|updates` — the six-tab workspace «Управление заез�
 ## packages
 
 - `db` — Drizzle schema `src/schema/*.ts` (one file per entity: user, session, auth-identity, tokens,
+  legal-acceptance + oauth-pending-signup (ADR-041),
   organizer-profile, ride, route, stop, route-point, ride-group, ride-requirement,
   registration, waitlist-entry, ride-update, notification, review, bike, admin); migrations
   `migrations/0000`–`0027`; `migrate.ts` (advisory lock), `seed-demo.ts`, `admin-cli.ts`
   (`admin:grant|revoke|list`),
   `scripts/backup.sh|restore.sh`.
 - `types` — Zod contracts `src/api/*`, domain enums/types `src/domain/*`; `zod-config.ts`
-  (browser-only `jitless`, CR-226).
+  (browser-only `jitless`, CR-226); `legal.ts` — the legal documents' version/hash
+  registry and consent schemas (ADR-041).
 - `ui` — tokens (`tokens.css`, ADR-024), `format.ts` (Russian numbers/dates/units),
   `terminology.ts` (every user-visible string), components (Button, Input, PasswordInput (CR-262), TimeInput, Dialog/
   ConfirmDialog, MetricTile, StatusBadge, EmptyState, ErrorState, Skeleton, …).

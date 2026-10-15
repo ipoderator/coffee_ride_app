@@ -25,45 +25,27 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-267 (owner, 2026-10-14) — final check of the auth mockup work (CR-260..CR-265, prompt
+CR-268 (owner, 2026-10-15) — prompt 4 «Условия, конфиденциальность и согласия» of the
+updated mockup package (ADR-041), on `experiments`, not committed (owner: no commit/
+push/PR in this prompt): full `/terms`, `/privacy`, new `/personal-data-consent`
+(versioned 1.0 + history); two separate unticked consents on `/register`; a first
+Google/Yandex sign-in waits on `/register/consent` (no account/session before);
+`/login` only names the documents; acceptances recorded (`legal_acceptances`, version +
+SHA-256 + source); re-consent on `/legal-update` with `403 legal_acceptance_required`
+from the API meanwhile. Migration `0029`. The texts are a draft: owner inputs + lawyer.
+
+Before it: CR-267 (owner, 2026-10-14) — final check of the auth mockup work (CR-260..CR-265, prompt
 4), on `experiments` (main merged in): the whole flow in Chromium against `next start` +
 the real API with fake Google/Yandex/siteverify (75/75), maintenance on → off with a
 signed-in tab (37/37), mockup tabs compared at 1440/390, axe, leak scan of the API log.
 One fix: `/register` dropped the stale «Пароли не совпадают.» once a field changes.
 
-Before it: CR-265 (owner, 2026-10-14) — maintenance mode and the unexpected-error state (mockup tab
-«Техработы», ADR-040), merged (`7d22fa2`, PR #69), not yet deployed:
-`MAINTENANCE_MODE=true` on `web`/`api` → pages 503 + `Retry-After` with «Технический
-пит-стоп», `/v1/*` 503 `maintenance` (`/health` and provider callbacks up);
-`app/error.tsx`/`global-error.tsx` in the same frame; Caddy serves
-`deploy/maintenance/index.html` when `web` is down. Runbook `deploy/MAINTENANCE.md`.
-
-Before it: CR-264 (owner, 2026-10-14) — `/login` to the auth mockup (tab «Вход»);
-**deployed** 2026-10-14 (`92ffe50`, PR #66): same frame as `/register` (`LoginScreen`),
-Google then Yandex ID, «или через email», «Забыли пароль?» on the password line.
-
-Before it: CR-262 + CR-263 (owner, 2026-10-14) — `/register` to the auth mockup
-(`reference/coffee-ride-auth-mockup`, tab «Регистрация»); **deployed** 2026-10-14
-(`c53271b`, PR #64):
-
-- story column (`lg`+, text only since CR-263), Google/Yandex ID first («Продолжить с …»), strength meter, live
-  match line, show/hide (`ui` `PasswordInput`);
-- ADR-039: `confirmPassword` checked by the API too; `/register` answers a taken email
-  like a new one (`201 { emailVerificationRequired, verificationUrl? }`, no `user`) and
-  emails the owner «Аккаунт уже есть».
-
-Before it: CR-260 + CR-261 — Yandex ID sign-in (ADR-037) and reCAPTCHA v2 on password
-auth (ADR-038), deployed (`146ff5d`, PR #63).
-
-Before it (details in the changelog): CR-259 page CSP by nonce (ADR-036) and CR-251,
-CR-253..CR-258 Lictor fixes (deployed, PR #61); CR-249/CR-247 Google sign-in (ADR-034/035,
-deployed); CR-246 Strava sync copy; CR-235..CR-245 production QA; CR-234 Strava sync;
-CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deployment.md`).
+Earlier: CR-219..CR-265 — see `docs/changelog.md` and `project-state-archive.md`.
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
 - **Stack/infra:** pnpm + Turborepo, Node 24 LTS; Next.js 15 / React 19 / Tailwind v4;
-  Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0027`); Redis
+  Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0029`); Redis
   (BullMQ notifications, rate limits); S3 — SeaweedFS locally/CI (ADR-025); 2GIS via
   `maps-core`/`maps-2gis` (ADR-010/020). Production: Docker images for web/api/migrate,
   `docker-compose.prod.yml` + Caddy (ADR-018), smoke-tested in CI (`docker-smoke`)
@@ -77,6 +59,14 @@ CR-228..CR-233 admin panel; CR-219 — **coffeeride.site is live** (`docs/deploy
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-268 — uncommitted on `experiments` (on top of CR-267 `a48bede`). Needs owner input
+before production: the operator's legal name/ИНН/ОГРН/address, the hosting
+provider and country (localisation, ст. 18 ч. 5 152-ФЗ), the age threshold (drafted
+18+), the cross-border transfer notice to Роскомнадзор (Google, Strava), the incident
+e-mail promise; then a lawyer's review. After deploy every existing account is asked
+to accept the documents once. Next: prompt 5 — the final check (full suite, lint,
+build) including consents. KI-104: expired sessions/tokens/pending sign-ups not purged.
 
 CR-267 — on `experiments`, no PR yet (web-only fix + tests; no env, no migration).
 
@@ -197,4 +187,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-14 (CR-267)
+2026-10-15 (CR-268)

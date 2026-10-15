@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // Same rationale as `users.routes.test.ts`/`auth.routes.test.ts`: a real Postgres,
 // `DELETE FROM users` (cascades to `organizer_profiles`) to avoid the cross-file lock
@@ -41,7 +42,7 @@ async function registerAndLogin(
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
 
   if (options.verifyEmail) {

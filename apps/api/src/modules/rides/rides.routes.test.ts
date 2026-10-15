@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // Same rationale as `organizers.routes.test.ts`: a real Postgres, `DELETE FROM users`
 // (cascades to `organizer_profiles`; `rides.organizer_id` references
@@ -42,7 +43,7 @@ async function registerAndLogin(
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
 
   if (options.verifyEmail ?? true) {

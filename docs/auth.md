@@ -51,6 +51,19 @@ else's, using the same login.
   shared `signInWithOAuth`: identity = Yandex `id`, email = `default_email` (Yandex
   holds only confirmed addresses; none → refused). Failures return to
   `/login?oauth=<outcome>&provider=yandex`.
+- **Legal consents (CR-268, ADR-041)**: an account is created only with two separate,
+  unticked-by-default consents — the terms (`/terms`) and the processing of personal
+  data (`/personal-data-consent`); the privacy policy (`/privacy`) is information.
+  `/register` asks for them as checkboxes (the button is disabled until both, the API
+  refuses without them); a first Google/Yandex sign-in parks the verified identity
+  server-side and asks on `/register/consent` before any account or session exists
+  (an opaque httpOnly cookie, no PII in it). Password login and a returning provider
+  sign-in accept nothing — `/login` names the documents for information. A material new
+  version is accepted again after sign-in (`/legal-update`); until then the API refuses
+  changes (`403 legal_acceptance_required`) while documents, logout and the deletion
+  request stay open. Every acceptance is recorded with the document's version and
+  SHA-256 (`legal_acceptances`); versions and hashes live in `packages/types`'
+  `LEGAL_DOCUMENTS`, the texts in `apps/web/src/features/legal/content/`.
 - **Logout**: invalidates the current session.
 - **Password reset**: request by email → single-use, time-limited token → set new
   password. Same generic response whether or not the email exists.

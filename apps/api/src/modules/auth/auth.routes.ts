@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
 import {
+  CONSENT_DOCUMENT_TYPES,
   forgotPasswordRequestSchema,
   loginHref,
   loginRequestSchema,
@@ -33,6 +34,11 @@ import {
   toPublicUser,
   verifyEmail,
 } from './auth.service.js';
+import {
+  assertCurrentConsents,
+  pendingAcceptances,
+} from '../legal/legal.service.js';
+import { legalStateSchema } from '../legal/legal.routes.js';
 import { RecaptchaUnavailableError } from './recaptcha-client.js';
 import { createSession, revokeSession } from './session.js';
 import { clearSessionCookie, setSessionCookie } from './session-cookie.js';
@@ -64,6 +70,7 @@ const resetPasswordResponseSchema = z.object({
 
 const meResponseSchema = z.object({
   user: userResponseSchema,
+  legal: legalStateSchema,
 });
 
 // Stricter tier than the general API default (`.claude/rules/security.md`,
@@ -192,6 +199,9 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
       preHandler: [
         async (request) =>
           enforceAccountRateLimit('register', request.body.email),
+        // CR-268 (ADR-041): a stale page is told before the CAPTCHA is spent.
+        async (request) =>
+          assertCurrentConsents(request.body.consents, CONSENT_DOCUMENT_TYPES),
         async (request) => enforceCaptcha(request, request.body.captchaToken),
       ],
     },
@@ -409,18 +419,23 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     },
   );
 
-  app.post('/logout', { preHandler: requireAuth }, async (request, reply) => {
-    const token = request.cookies[request.server.sessionCookieName];
-    // `requireAuth` already 401s when the cookie is missing/invalid, so a
-    // valid raw token is guaranteed to be present here.
-    if (token) {
-      await revokeSession(app.db, token);
-    }
-    logAuthEvent(request.log, 'logout', request.user!.id);
+  // CR-268: signing out never waits on re-consent (ADR-041).
+  app.post(
+    '/logout',
+    { preHandler: requireAuth, config: { legalAcceptanceExempt: true } },
+    async (request, reply) => {
+      const token = request.cookies[request.server.sessionCookieName];
+      // `requireAuth` already 401s when the cookie is missing/invalid, so a
+      // valid raw token is guaranteed to be present here.
+      if (token) {
+        await revokeSession(app.db, token);
+      }
+      logAuthEvent(request.log, 'logout', request.user!.id);
 
-    clearSessionCookie(app, reply, isProd);
-    return reply.status(204).send();
-  });
+      clearSessionCookie(app, reply, isProd);
+      return reply.status(204).send();
+    },
+  );
 
   app.get(
     '/me',
@@ -431,7 +446,8 @@ export const authRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
     async (request, reply) => {
       // `requireAuth` guarantees `request.user` is set (401s otherwise).
       const user = toPublicUser(request.user!);
-      return reply.status(200).send({ user });
+      const pending = await pendingAcceptances(app.db, user.id);
+      return reply.status(200).send({ user, legal: { pending } });
     },
   );
 };

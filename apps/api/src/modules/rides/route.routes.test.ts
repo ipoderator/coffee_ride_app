@@ -7,6 +7,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-027 ("GPX upload"): mocks the S3 wire call only (`S3Client.prototype.send`) —
 // same technique CR-008 used for `packages/maps-2gis`'s `fetch` — so this suite runs
@@ -73,7 +74,7 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const verificationUrl: string = register.json().verificationUrl;
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(

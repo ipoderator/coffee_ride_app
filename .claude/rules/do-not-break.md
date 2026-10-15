@@ -405,3 +405,16 @@ verify-email/components/VerifyEmailStatus.tsx`, CR-211): the single-use
   shared with Google). The transaction cookie's HMAC label is per provider — keep
   Google's `coffee-ride/google-oauth-transaction/v1` unchanged. Their auth events go
   through `app.log` with `reqId` — the callbacks' request log drops `info` (CR-260).
+- legal consents (ADR-041, CR-268): an account is never created without both
+  acceptances in the same transaction — `registerRequestSchema.consents` is required,
+  and a first Google/Yandex sign-in goes through `oauth_pending_signups` +
+  `/register/consent` (`signInWithOAuth(…, { allowCreate: false })` in the callbacks —
+  never `true` there). A published document version is immutable: change the text →
+  add a version in `packages/types`' `LEGAL_DOCUMENTS` (`legal-content.test.ts` pins
+  each hash); the API records the registry's version and hash, never the client's.
+  `requireAuth` refuses unsafe methods with `403 legal_acceptance_required` while a
+  material version is pending — a route that must stay open (logout, the acceptance)
+  says so with `config.legalAcceptanceExempt`, never by skipping `requireAuth`. The
+  pending sign-up cookie carries only the random token (no identity/email); its
+  completion consumes the row by `DELETE … RETURNING` inside the creating transaction.
+  An ADR-035 claim deletes the registrant's acceptances.

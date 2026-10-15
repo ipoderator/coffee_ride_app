@@ -19,6 +19,11 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-268 full `/terms`, `/privacy`, new `/personal-data-consent` (versioned, with
+      history); two separate unticked consents on `/register`; consent step before a
+      first Google/Yandex account; re-consent on `/legal-update`; audit trail
+      `legal_acceptances` (ADR-041) — done 2026-10-15 on `experiments` (not committed).
+      Owner inputs + lawyer review pending. See docs/changelog.md
 - [x] CR-267 final check of the auth mockup work (CR-260..CR-265): the whole flow in
       Chromium with fake Google/Yandex/siteverify, maintenance on/off, mockup comparison,
       axe, leak scan; fixed the stale «Пароли не совпадают.» on `/register` — done
@@ -40,6 +45,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-260 Yandex ID sign-in («Войти через Яндекс») beside Google: PKCE/state code
       flow, shared race-safe account linking, one button block (ADR-037) — done
       2026-10-14, one PR with CR-261 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md
-- [x] CR-259 (security, KI-097) page CSP by per-request nonce + `'strict-dynamic'`,
-      no `'unsafe-inline'` for scripts; every page renders per request (ADR-036) —
-      done 2026-10-14 on `feat/nonce-csp`. See docs/changelog.md

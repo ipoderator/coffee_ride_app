@@ -6,8 +6,9 @@ import {
   users,
 } from 'db/schema';
 import type { DbClient } from 'db';
-import type { User } from 'types';
+import { CONSENT_DOCUMENT_TYPES, type User } from 'types';
 import { versionedImagePath } from '../../lib/image-url.js';
+import { recordAcceptances } from '../legal/legal.service.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { revokeAllSessions } from './session.js';
 import {
@@ -141,6 +142,15 @@ export async function registerUser(
       if (!inserted) {
         throw new Error('User insert returned no row.');
       }
+
+      // CR-268 (ADR-041): the route checked the consents' versions; the record is
+      // written with the account, so neither exists without the other.
+      await recordAcceptances(
+        tx,
+        inserted.id,
+        CONSENT_DOCUMENT_TYPES,
+        'register_password',
+      );
 
       if (rawToken) {
         await tx.insert(emailVerificationTokens).values({

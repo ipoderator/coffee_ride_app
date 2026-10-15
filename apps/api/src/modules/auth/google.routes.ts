@@ -20,6 +20,7 @@ import {
   signInWithOAuth,
 } from './oauth-sign-in.service.js';
 import { logAuthEvent } from '../../lib/auth-events.js';
+import { redirectToOAuthSignupConsent } from './oauth-signup.routes.js';
 import { createSession } from './session.js';
 import { setSessionCookie } from './session-cookie.js';
 
@@ -173,13 +174,29 @@ export const googleAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
           expectedNonce: transaction.nonce,
           codeVerifier: transaction.codeVerifier,
         });
-        ({ userId } = await signInWithOAuth(app.db, 'google', {
+        const person = {
           accountId: identity.sub,
           email: identity.email,
           emailVerified: identity.emailVerified,
           givenName: identity.givenName,
           familyName: identity.familyName,
-        }));
+        };
+        const result = await signInWithOAuth(app.db, 'google', person, {
+          allowCreate: false,
+        });
+        // CR-268 (ADR-041): a new person accepts the documents before the
+        // account and the session exist.
+        if (result.kind === 'consent_required') {
+          return await redirectToOAuthSignupConsent(
+            app,
+            reply,
+            env,
+            'google',
+            person,
+            next,
+          );
+        }
+        ({ userId } = result);
       } catch (error) {
         if (error instanceof GoogleRejectedError) {
           if (error.reason === 'cancelled') {

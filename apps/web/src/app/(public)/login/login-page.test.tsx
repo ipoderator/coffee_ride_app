@@ -104,7 +104,9 @@ describe('/login page', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('has one h1, the story as h2, and the consent line with both legal links', async () => {
+  // CR-268 (ADR-041): signing in accepts nothing — the documents are named for
+  // information, with no checkbox and no «Продолжая, вы принимаете…».
+  it('has one h1, the story as h2, and the documents as information only', async () => {
     await renderPage();
     expect(
       screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent),
@@ -115,11 +117,13 @@ describe('/login page', () => {
         name: 'Найдите свой следующий заезд.',
       }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/принимаете/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'условия использования' }),
     ).toHaveAttribute('href', '/terms');
     expect(
-      screen.getByRole('link', { name: 'политику конфиденциальности' }),
+      screen.getByRole('link', { name: 'политика конфиденциальности' }),
     ).toHaveAttribute('href', '/privacy');
   });
 });

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, APIResponse } from '@playwright/test';
+import { currentLegalConsents } from 'types';
 
 // CR-092. Seeds state via direct API calls (register/verify/login/organizer
 // profile/ride lifecycle) so each critical-journey spec only drives the UI for
@@ -50,7 +51,8 @@ export async function registerAndVerify(
 ): Promise<{ email: string; password: string; userId: string }> {
   const register = await request.post('/api/v1/auth/register', {
     headers: UNSAFE_HEADERS,
-    data: { email, password },
+    // CR-268 (ADR-041): every account accepts the current documents.
+    data: { email, password, consents: currentLegalConsents() },
   });
   await assertOk(register, 'register');
   // CR-262 (ADR-039): the register body carries no user — the id comes from

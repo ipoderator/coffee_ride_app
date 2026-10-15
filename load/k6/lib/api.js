@@ -39,11 +39,27 @@ export function uniqueEmail(tag = 'user') {
 /** Registers and verifies a fresh account — mirrors
  * api-fixtures.ts's registerAndVerify. Returns the new user's id alongside
  * the credentials so callers can match accounts to API responses later. */
+// CR-268 (ADR-041): register needs the current version of each document the
+// account accepts; read once per VU from the public list.
+let consents = null;
+function currentConsents() {
+  if (consents) return consents;
+  const items = assertOk(
+    http.get(`${BASE_URL}/v1/legal/documents`),
+    'legal documents',
+  ).json('items');
+  consents = {};
+  for (const item of items) {
+    if (item.acceptanceRequired) consents[item.type] = item.version;
+  }
+  return consents;
+}
+
 export function registerAndVerify(email = uniqueEmail(), password = PASSWORD) {
   const register = assertOk(
     http.post(
       `${BASE_URL}/v1/auth/register`,
-      JSON.stringify({ email, password }),
+      JSON.stringify({ email, password, consents: currentConsents() }),
       { headers: JSON_HEADERS },
     ),
     'register',

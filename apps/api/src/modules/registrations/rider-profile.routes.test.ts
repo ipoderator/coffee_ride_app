@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-126: `resolveRiderAccess`'s three visibility tiers, plus the profile/avatar
 // routes it gates. Same S3-mocking technique as `users/avatar.routes.test.ts` — no
@@ -50,7 +51,7 @@ async function registerAndLoginUser(app: App) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   // Organizer actions (creating an organizer profile, publishing a ride) require a
   // verified email (`.claude/rules/security.md`) — every helper user here verifies

@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { currentLegalConsents } from 'types';
 import { RegisterForm } from './components/RegisterForm';
 import { ApiError, registerAccount } from './api';
 import { installFakeGrecaptcha } from '../captcha/fake-grecaptcha';
+import { tickConsents } from '@/test-support/consents';
 import {
   ENGLISH_API_TEXTS,
   englishProblem,
@@ -30,6 +32,9 @@ function fillAndSubmit(
   fireEvent.change(screen.getByLabelText('Повторите пароль'), {
     target: { value: confirmPassword },
   });
+  if (!screen.getByLabelText(/Я принимаю условия/).matches(':checked')) {
+    tickConsents();
+  }
   fireEvent.click(
     screen.getByRole('button', { name: /Зарегистрироваться|Регистрация…/ }),
   );
@@ -60,6 +65,7 @@ describe('RegisterForm', () => {
   it('words an empty form in Russian, never the schema’s English', async () => {
     render(<RegisterForm />);
 
+    tickConsents();
     fireEvent.click(screen.getByRole('button', { name: 'Зарегистрироваться' }));
 
     expect(
@@ -299,6 +305,7 @@ describe('RegisterForm', () => {
         email: 'rider@example.com',
         password: 'a-strong-password-123',
         confirmPassword: 'a-strong-password-123',
+        consents: currentLegalConsents(),
         ...(sentNext ? { next: sentNext } : {}),
       });
     },
@@ -386,6 +393,7 @@ describe('RegisterForm confirm password', () => {
       email: 'rider@example.com',
       password: 'a-strong-password-123',
       confirmPassword: 'a-strong-password-123',
+      consents: currentLegalConsents(),
     });
   });
 });
@@ -441,6 +449,7 @@ describe('RegisterForm reCAPTCHA', () => {
       email: 'rider@example.com',
       password: 'a-strong-password-123',
       confirmPassword: 'a-strong-password-123',
+      consents: currentLegalConsents(),
       captchaToken: 'token-1',
     });
   });

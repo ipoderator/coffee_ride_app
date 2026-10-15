@@ -1,18 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GOOGLE_SIGN_IN_OUTCOMES, YANDEX_SIGN_IN_OUTCOMES } from 'types';
-import { GOOGLE_SIGN_IN_TERMS, LEGAL_TERMS, YANDEX_SIGN_IN_TERMS } from 'ui';
+import { GOOGLE_SIGN_IN_TERMS, YANDEX_SIGN_IN_TERMS } from 'ui';
 import { OAuthOutcomeAlert } from './components/OAuthOutcomeAlert';
 import { OAuthSignIn } from './components/OAuthSignIn';
 import { oauthSignInHref, parseOAuthOutcome } from './api';
 import { isSignInProviderAvailable, signInProviders } from './server-status';
-import { LegalDocument } from '@/features/legal/components/LegalDocument';
-import {
-  LEGAL_CONTACT_EMAIL,
-  PRIVACY_POLICY,
-  TERMS_OF_USE,
-} from '@/features/legal/content';
 
 // CR-247 (ADR-034), CR-260 (ADR-037): «Войти через Google» / «Войти через Яндекс»
 // on /login and /register.
@@ -172,37 +165,5 @@ describe('OAuthOutcomeAlert', () => {
     );
     rerender(<OAuthOutcomeAlert result={null} />);
     expect(container).toBeEmptyDOMElement();
-  });
-});
-
-describe('LegalDocument', () => {
-  it.each([
-    [LEGAL_TERMS.privacyTitle, PRIVACY_POLICY],
-    [LEGAL_TERMS.termsTitle, TERMS_OF_USE],
-  ])(
-    '%s has one h1, its sections, the dated wording and the contact',
-    (title, content) => {
-      const html = renderToStaticMarkup(
-        <LegalDocument title={title} content={content} />,
-      );
-      expect(html.match(/<h1/g)).toHaveLength(1);
-      expect(html.match(/<h2/g)).toHaveLength(content.sections.length);
-      expect(html).toContain('14 октября 2026');
-      expect(html).toContain(`mailto:${LEGAL_CONTACT_EMAIL}`);
-    },
-  );
-
-  it('the privacy policy covers data, sessions, deletion, Google and Yandex', () => {
-    const text = JSON.stringify(PRIVACY_POLICY);
-    for (const topic of [
-      'Cookies и сессии',
-      'Удаление аккаунта',
-      'Google',
-      'Яндекс ID',
-      'yandex-oauth',
-      'Strava',
-    ]) {
-      expect(text).toContain(topic);
-    }
   });
 });

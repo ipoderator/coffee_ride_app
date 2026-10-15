@@ -83,7 +83,9 @@ describe('/register page', () => {
     ).toBeInTheDocument();
   });
 
-  it('has one h1, the story as h2, and the consent line with both legal links', async () => {
+  // CR-268 (ADR-041): no «Создавая аккаунт, вы принимаете…» line — two separate,
+  // unticked consents, each linking its own document, and the button waits.
+  it('has one h1, the story as h2, and two separate unticked consents', async () => {
     await renderPage();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
@@ -92,11 +94,26 @@ describe('/register page', () => {
         name: 'От первого клика — до общего старта.',
       }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/вы принимаете/)).not.toBeInTheDocument();
+    const terms = screen.getByLabelText(/Я принимаю условия использования/);
+    const data = screen.getByLabelText(
+      /Я даю согласие на обработку персональных данных/,
+    );
+    expect(terms).not.toBeChecked();
+    expect(data).not.toBeChecked();
     expect(
-      screen.getByRole('link', { name: 'условия использования' }),
+      screen.getByRole('link', { name: /^условия использования/ }),
     ).toHaveAttribute('href', '/terms');
     expect(
-      screen.getByRole('link', { name: 'политику конфиденциальности' }),
+      screen.getByRole('link', {
+        name: /^согласие на обработку персональных данных/,
+      }),
+    ).toHaveAttribute('href', '/personal-data-consent');
+    expect(
+      screen.getByRole('link', { name: /^политике конфиденциальности/ }),
     ).toHaveAttribute('href', '/privacy');
+    expect(
+      screen.getByRole('button', { name: 'Зарегистрироваться' }),
+    ).toBeDisabled();
   });
 });

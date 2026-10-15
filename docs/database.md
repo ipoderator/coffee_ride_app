@@ -42,6 +42,21 @@ registrations.service.ts`'s `resolveRiderAccess`; never governs `phone`,
   `providerAccountId` (Google's `sub`), `createdAt`/`updatedAt`. UNIQUE(`provider`,
   `providerAccountId`) is the "one external account → one user" invariant; no provider
   token is stored. An auth implementation detail, not a domain entity.
+- LegalAcceptance (`legal_acceptances`, CR-268, ADR-041) — the proof that a User
+  accepted a legal document: `id`, `userId` (FK → User, cascade delete), `document`
+  (`terms` | `personal_data_consent`, CHECK), `version`, `contentSha256` (hex SHA-256
+  of that version's text, CHECK), `source` (`register_password` | `oauth_google` |
+  `oauth_yandex` | `reconsent`, CHECK), `acceptedAt`. UNIQUE(`userId`, `document`,
+  `version`) makes accepting idempotent (`ON CONFLICT DO NOTHING`) and serves every
+  read. No IP/User-Agent. Written in the transaction that creates the account; an
+  ADR-035 claim deletes the registrant's rows. Not a domain entity.
+- OAuthPendingSignup (`oauth_pending_signups`, CR-268, ADR-041) — a first Google/Yandex
+  sign-in waiting for consent: `id`, `tokenHash` (SHA-256 of the cookie token, unique),
+  `provider` (CHECK), `providerAccountId`, `email`, `givenName`, `familyName`, `next`,
+  `expiresAt` (10 min, indexed for the purge), `createdAt`. UNIQUE(`provider`,
+  `providerAccountId`): a second callback replaces the first. Consumed by `DELETE …
+RETURNING` in the account-creating transaction; expired rows purged on the next
+  insert. No FK — there is no user yet.
 - Session — one row per active login (CR-012, ADR-013): `id`, `userId` (FK →
   User, cascade delete), `tokenHash` (SHA-256 of the opaque cookie token —
   same never-store-the-raw-value pattern as `EmailVerificationToken`),

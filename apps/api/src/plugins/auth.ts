@@ -3,6 +3,9 @@ import { eq } from 'drizzle-orm';
 import { platformAdmins, users } from 'db/schema';
 import type { Env } from '../env.js';
 import { validateSession } from '../modules/auth/session.js';
+import { pendingAcceptances } from '../modules/legal/legal.service.js';
+
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 // CR-012 (`docs/decisions.md` ADR-013, `.claude/rules/security.md`). Session
 // cookie name centralized here — the one place that both sets (auth.routes.ts)
@@ -31,6 +34,11 @@ declare module 'fastify' {
     user?: typeof users.$inferSelect;
     sessionId?: string;
   }
+  interface FastifyContextConfig {
+    // CR-268 (ADR-041): a route a signed-in person may call while documents wait
+    // for re-acceptance (logout, the acceptance itself).
+    legalAcceptanceExempt?: boolean;
+  }
 }
 
 /**
@@ -57,6 +65,27 @@ export async function requireAuth(
 
   request.user = validated.user;
   request.sessionId = validated.sessionId;
+
+  // CR-268 (ADR-041): while a material new version of the terms or the
+  // personal-data consent waits for acceptance, nothing changes on this person's
+  // behalf — reads, logout and the acceptance itself stay open. The web gate sends
+  // them to `/legal-update`; this is what makes it more than a UI rule.
+  if (
+    UNSAFE_METHODS.has(request.method) &&
+    !request.routeOptions.config.legalAcceptanceExempt
+  ) {
+    const pending = await pendingAcceptances(app.db, validated.user.id);
+    if (pending.length > 0) {
+      return reply.status(403).type('application/problem+json').send({
+        type: 'https://coffee-ride.example/errors/legal_acceptance_required',
+        title: 'Legal acceptance required',
+        status: 403,
+        detail: 'Accept the updated documents to continue.',
+        instance: request.url,
+        code: 'legal_acceptance_required',
+      });
+    }
+  }
 }
 
 /**

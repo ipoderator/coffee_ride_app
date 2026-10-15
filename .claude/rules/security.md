@@ -84,6 +84,13 @@ captcha_unavailable`). The secret and tokens are never logged or returned; OAuth
   with any of them intact, pre-hijacking); a
   password-less account's password login is the generic `invalid_credentials` with
   the same decoy Argon2 work.
+- Legal consents (ADR-041, CR-268): creating an account — password or first Google/
+  Yandex sign-in — requires the two separate consents (terms; personal-data
+  processing) at their current versions, recorded with the version and text hash in
+  the creating transaction; a first provider sign-in creates nothing until the person
+  accepts on `/register/consent` (the identity waits server-side behind an opaque
+  httpOnly token). While a material new version is pending, `requireAuth` holds every
+  unsafe method (`403 legal_acceptance_required`) except logout and the acceptance.
 - 2FA is out of scope for MVP; the auth/session design should not preclude adding it
   later, but do not build it now.
 
