@@ -23,8 +23,19 @@ never depends on the account. Unset secret → no token asked for. Google sign-i
 `verify-email`, `reset-password` and `resend-verification` never ask. CR-262 (ADR-039):
 `register` also takes `confirmPassword` — checked by the browser and again here.
 
+**Legal consents (CR-269, ADR-041).** Creating an account needs both consents —
+`consents: { terms, personal_data_consent }`, each the version of the document the
+page showed (strings, `packages/types`' `LEGAL_DOCUMENTS`). Missing, partial or not a
+string → `400 validation_error`; a version that is not the current one → `409
+legal_version_outdated` (reload the documents). What is recorded (`legal_acceptances`)
+is the registry's version and SHA-256, never the client's. A signed-in person with a
+material new version pending gets `403 legal_acceptance_required` from every unsafe
+`/v1` method behind `requireAuth` except `POST /v1/auth/logout` and `POST
+/v1/legal/acceptances`; reads stay open.
+
 POST `/v1/auth/register` — **implemented (CR-011)**. Body: `{ email, password,
-confirmPassword?, next?, captchaToken? }` (`password` min 12 chars,
+confirmPassword?, next?, captchaToken?, consents }` (CR-269: `consents` required, see
+above) (`password` min 12 chars,
 `.claude/rules/security.md`). CR-262 (ADR-039): `confirmPassword`, when sent, must
 equal `password` — otherwise `400 validation_error` with `errors[].path ===
 'confirmPassword'`; the web form always sends it. `201` →
@@ -122,6 +133,29 @@ cookie every time. Per-IP 10/min.
 
 GET `/v1/auth/yandex/status` — **implemented (CR-260)**. `200 { available }`.
 
+**First Google/Yandex sign-in (CR-269, ADR-041).** A callback whose verified
+identity matches no account (by provider id or email) creates nothing: it stores the
+identity in `oauth_pending_signups` (10 min, keyed by the SHA-256 of a random token),
+sets the token in an httpOnly cookie (`__Host-oauth-signup` in production,
+`oauth-signup` elsewhere; `SameSite=Lax`, `Path=/`, `Max-Age=600`) and answers `303` to
+`/register/consent`. An existing account still signs straight in.
+
+GET `/v1/auth/oauth-signup` — **implemented (CR-269)**. `200 { provider, email }` for
+the cookie's pending sign-up; `410 oauth_signup_expired` without one. `no-store`.
+
+POST `/v1/auth/oauth-signup` — **implemented (CR-269)**. Body: `{ consents: { terms,
+personal_data_consent } }`. In one transaction: consumes the pending row (`DELETE …
+RETURNING` — a replay or a concurrent second request gets `410
+oauth_signup_expired`), creates or links the account by the `signInWithOAuth` rules,
+records both acceptances (`oauth_google`/`oauth_yandex`). Then the session cookie, the
+signup cookie cleared, `200 { next }` (`/me` by default). `400`/`409
+legal_version_outdated` as for register (the pending row stays); `409
+oauth_signup_failed` when the account got blocked or the identity went to someone else
+meanwhile. Per-IP 10/min.
+
+DELETE `/v1/auth/oauth-signup` — **implemented (CR-269)**. «Отмена»: deletes the
+pending row, clears the cookie, `204`.
+
 POST `/v1/auth/forgot-password` — **implemented (CR-060)**. Body: `{ email }`.
 Always `204` with no body, whether or not the email belongs to a real
 account (`.claude/rules/security.md`: no account enumeration) — a real
@@ -141,6 +175,22 @@ too, and every one of that user's sessions is revoked
 login); the caller is not automatically logged in and must `POST
 /v1/auth/login` with the new password. Same rate-limit tier as
 register/login.
+
+## Legal (CR-269, ADR-041)
+
+GET `/v1/legal/documents` — **implemented**. Public. `200 { items: [{ type, path,
+version, effectiveAt, sha256, acceptanceRequired }] }` — the current version of
+`terms`, `privacy` and `personal_data_consent` (a fixed list of three, not paginated).
+What a client other than `apps/web` (seed, k6) sends as `consents`.
+
+POST `/v1/legal/acceptances` — **implemented**. Signed in. Body: `{ consents: {
+terms?, personal_data_consent? } }` — every pending document at its current version
+(others are ignored). `200 { pending: [] }`; `400 consent_required` when a pending
+document is missing; `409 legal_version_outdated`. Idempotent (UNIQUE user + document +
+version). Exempt from the re-consent gate it clears.
+
+`GET /v1/auth/me` also returns `legal: { pending: ConsentDocumentType[] }` — the
+documents to accept again (optional in the shared type, always sent).
 
 ## Users
 

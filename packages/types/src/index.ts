@@ -21,6 +21,7 @@ export * from './api/rider-profile.js';
 export * from './api/admin.js';
 export * from './api/strava.js';
 export * from './next-path.js';
+export * from './legal.js';
 export * from './domain/user.js';
 export * from './domain/bike.js';
 export * from './domain/organizer-profile.js';

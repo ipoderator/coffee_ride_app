@@ -10,6 +10,7 @@ import { ForgotPasswordForm } from '@/features/auth/forgot-password/components/F
 import { LoginForm } from '@/features/auth/login/components/LoginForm';
 import { RegisterForm } from '@/features/auth/register/components/RegisterForm';
 import { SessionProvider } from '@/lib/auth/session-context';
+import { tickConsents } from './consent-helpers';
 
 // CR-261 (ADR-038): the auth forms with «Повторите пароль» and the reCAPTCHA v2
 // tick. Google's widget is a cross-origin frame the stories can't drive, so
@@ -133,6 +134,7 @@ export const RegisterMismatchAndNoTick: Story = {
       canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
       'a-strong-password-124',
     );
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );
@@ -170,6 +172,7 @@ export const RegisterCaptchaUnavailable: Story = {
       'a-strong-password-123',
     );
     await userEvent.click(await canvas.findByLabelText('Я не робот'));
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );

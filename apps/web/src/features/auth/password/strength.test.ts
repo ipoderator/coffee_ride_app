@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { registerRequestSchema } from 'types';
+import { currentLegalConsents, registerRequestSchema } from 'types';
 import { PASSWORD_MIN_LENGTH, passwordStrength } from './strength';
 
 describe('passwordStrength (CR-262)', () => {
@@ -11,13 +11,17 @@ describe('passwordStrength (CR-262)', () => {
     const short = 'x'.repeat(PASSWORD_MIN_LENGTH - 1);
     expect(passwordStrength(short)).toBe('too_short');
     expect(
-      registerRequestSchema.safeParse({ email: 'a@b.ru', password: short })
-        .success,
+      registerRequestSchema.safeParse({
+        email: 'a@b.ru',
+        password: short,
+        consents: currentLegalConsents(),
+      }).success,
     ).toBe(false);
     expect(
       registerRequestSchema.safeParse({
         email: 'a@b.ru',
         password: 'x'.repeat(PASSWORD_MIN_LENGTH),
+        consents: currentLegalConsents(),
       }).success,
     ).toBe(true);
   });

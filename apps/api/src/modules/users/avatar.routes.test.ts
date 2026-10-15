@@ -17,6 +17,7 @@ import {
 } from 'vitest';
 import { createRedisClient } from '../../redis.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-097 (KI-023 remainder): same S3-mocking technique as `rides/
 // cover-image.routes.test.ts` — mocks the wire call only, so this exercises the
@@ -80,7 +81,7 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const login = await app.inject({
     method: 'POST',

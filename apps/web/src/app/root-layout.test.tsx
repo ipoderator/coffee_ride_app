@@ -28,6 +28,9 @@ vi.mock('@/components/site/SiteChrome', () => ({
     </>
   ),
 }));
+vi.mock('@/lib/auth/LegalAcceptanceGate', () => ({
+  LegalAcceptanceGate: () => null,
+}));
 vi.mock('@/lib/auth/session-context', () => ({
   SessionProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-session="">{children}</div>

@@ -16,6 +16,9 @@ export type AuthEvent =
   | 'login'
   | 'google_sign_in'
   | 'yandex_sign_in'
+  // CR-269 (ADR-041): a first Google/Yandex sign-in accepted the documents and
+  // got its account (followed by its `*_sign_in` line).
+  | 'oauth_signup'
   | 'password_reset'
   | 'logout';
 

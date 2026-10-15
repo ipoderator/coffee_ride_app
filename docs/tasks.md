@@ -19,6 +19,15 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-269 full `/terms`, `/privacy`, new `/personal-data-consent` (versioned, with
+      history); two separate unticked consents on `/register`; consent step before a
+      first Google/Yandex account; re-consent on `/legal-update`; audit trail
+      `legal_acceptances` (ADR-041) — done 2026-10-15 on `experiments`, ported to
+      `feat/legal-consents`. Owner inputs + lawyer review pending. See docs/changelog.md
+- [x] CR-268 final check of the auth mockup work (CR-260..CR-265): the whole flow in
+      Chromium with fake Google/Yandex/siteverify, maintenance on/off, mockup comparison,
+      axe, leak scan; fixed the stale «Пароли не совпадают.» on `/register` — done
+      2026-10-15, ported to `feat/legal-consents`. See docs/changelog.md
 - [x] CR-267 `apps/api` test files in parallel: one Postgres copy and one Redis
       database per Vitest worker; order/timing dependencies fixed — done 2026-10-15.
       See docs/changelog.md
@@ -30,14 +39,3 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 - [x] CR-264 `/login` to the auth mockup («Вход»: story text, Google/Yandex ID first,
       «или через email», «Забыли пароль?» by the field, show/hide); Yandex/social-only
       sign-in checks re-proven — done 2026-10-14, committed on `experiments`. See docs/changelog.md
-- [x] CR-263 `/register` story column without background (text only) — done 2026-10-14
-- [x] CR-262 `/register` to the auth mockup (story panel, Google/Yandex ID first,
-      strength meter, live match, show/hide), `confirmPassword` checked by the API, no
-      account enumeration on register (ADR-039) — done 2026-10-14, committed on
-      `experiments`. See docs/changelog.md
-- [x] CR-261 (security) Google reCAPTCHA v2 on register/password login/forgot-password,
-      verified server-side, failing closed; «Повторите пароль» on register (ADR-038) —
-      done 2026-10-14, one PR with CR-260 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md
-- [x] CR-260 Yandex ID sign-in («Войти через Яндекс») beside Google: PKCE/state code
-      flow, shared race-safe account linking, one button block (ADR-037) — done
-      2026-10-14, one PR with CR-261 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md

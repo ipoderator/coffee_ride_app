@@ -9,6 +9,7 @@ import { SiteChrome } from '@/components/site/SiteChrome';
 import { filterEnabled } from '@/lib/cabinet/feature-flags';
 import { ORGANIZER_NAV_ITEMS } from '@/lib/cabinet/organizer-nav';
 import { PARTICIPANT_NAV_ITEMS } from '@/lib/cabinet/participant-nav';
+import { LegalAcceptanceGate } from '@/lib/auth/LegalAcceptanceGate';
 import { SessionProvider } from '@/lib/auth/session-context';
 import { readMaintenanceConfig } from '@/lib/site/maintenance';
 import { SITE_OPEN_GRAPH } from '@/lib/site/site-meta';
@@ -157,6 +158,8 @@ function SiteFrame({ children }: { children: React.ReactNode }) {
           CR-108: `AppHeader` sits outside that cap so its bottom border runs
           the full width of the viewport, and caps its own inner nav instead. */}
       <SessionProvider>
+        {/* CR-269 (ADR-041): re-consent after a material new document version. */}
+        <LegalAcceptanceGate />
         <ToastProvider>
           {/* CR-132: `SiteChrome` leaves both off on `/organizer/*`,
               which draws its own header and frame. */}

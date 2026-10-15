@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
+import { CONSENT_DOCUMENT_TYPES, type LegalConsents } from 'types';
 import {
   AUTH_TERMS,
   Button,
@@ -11,6 +12,13 @@ import {
   PasswordInput,
   VALIDATION_TERMS,
 } from 'ui';
+import {
+  allConsentsGiven,
+  consentErrorMessage,
+  consentPayload,
+  LegalConsentFields,
+  type ConsentState,
+} from '@/components/legal/LegalConsentFields';
 import { loginHref, safeNextPath, verifyEmailHref } from '@/lib/auth/next-path';
 import { ApiError, registerAccount, registerRequestSchema } from '../api';
 import {
@@ -66,7 +74,11 @@ function toVerifyEmailWebPath(
  * an account — the API no longer says which (ADR-039), and neither does this.
  * Laid out for the auth mockup: no card around the form, a strength meter under
  * «Пароль» and a live match line under «Повторите пароль»; the page renders the
- * «Уже есть аккаунт?» line and the consent text.
+ * «Уже есть аккаунт?» line.
+ *
+ * CR-269 (ADR-041): two separate, unticked consents — the terms and the processing
+ * of personal data — above the reCAPTCHA check; «Создать аккаунт» stays disabled
+ * until both are ticked, and the API refuses a request without them anyway.
  */
 export function RegisterForm({
   next = null,
@@ -75,6 +87,9 @@ export function RegisterForm({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [consents, setConsents] = useState<ConsentState>({});
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const consentsGiven = allConsentsGiven(CONSENT_DOCUMENT_TYPES, consents);
   const captcha = useCaptcha(captchaSiteKey);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -138,9 +153,13 @@ export function RegisterForm({
     // Duplicate-submit protection: the button is also disabled while pending,
     // but a form can still receive a second submit (e.g. Enter key) before
     // React re-renders — this guard is the actual guarantee.
-    if (isPending) return;
+    if (isPending || !consentsGiven) return;
 
-    const parsed = registerRequestSchema.safeParse({ email, password });
+    const parsed = registerRequestSchema.safeParse({
+      email,
+      password,
+      consents: consentPayload(CONSENT_DOCUMENT_TYPES) as LegalConsents,
+    });
     const nextErrors: FieldErrors = {};
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
@@ -168,6 +187,7 @@ export function RegisterForm({
 
     setFieldErrors({});
     setFormError(null);
+    setConsentError(null);
     setIsPending(true);
 
     try {
@@ -185,8 +205,12 @@ export function RegisterForm({
       setSubmittedEmail(parsed.data.email);
     } catch (error) {
       const code = error instanceof ApiError ? error.problem.code : undefined;
+      const consentMessage =
+        error instanceof ApiError ? consentErrorMessage(error.problem) : null;
       if (captcha.afterFailure(code)) {
         // The CAPTCHA field shows the API's refusal.
+      } else if (consentMessage) {
+        setConsentError(consentMessage);
       } else if (error instanceof ApiError) {
         if (error.problem.code === 'validation_error' && error.problem.errors) {
           const nextErrors: FieldErrors = {};
@@ -270,6 +294,18 @@ export function RegisterForm({
         )}
       </div>
 
+      <LegalConsentFields
+        idPrefix="register"
+        documents={CONSENT_DOCUMENT_TYPES}
+        value={consents}
+        onChange={(document, checked) => {
+          setConsents((current) => ({ ...current, [document]: checked }));
+          setConsentError(null);
+        }}
+        disabled={isPending}
+        error={consentError}
+      />
+
       {captcha.siteKey && (
         <RecaptchaField
           id="register-captcha"
@@ -284,7 +320,12 @@ export function RegisterForm({
         </p>
       )}
 
-      <Button type="submit" isLoading={isPending} className="w-full">
+      <Button
+        type="submit"
+        isLoading={isPending}
+        disabled={!consentsGiven}
+        className="w-full"
+      >
         {isPending
           ? AUTH_TERMS.registerSubmitPending
           : AUTH_TERMS.registerSubmit}

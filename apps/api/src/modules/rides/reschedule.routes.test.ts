@@ -11,6 +11,7 @@ import {
   type NotificationQueue,
 } from '../notifications/notifications.service.js';
 import { rescheduleRide } from './rides.service.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-190 (ADR-029 draft): `POST /v1/rides/:id/reschedule`. Real Postgres, same
 // rationale as `rides.routes.test.ts`; no `REDIS_URL`, so the route itself
@@ -38,7 +39,7 @@ async function signUp(app: App): Promise<{ session: string; userId: string }> {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const token = new URL(
     register.json().verificationUrl,

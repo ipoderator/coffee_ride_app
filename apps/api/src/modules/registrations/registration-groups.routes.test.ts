@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-117 ("Pace groups") — the participant side: choosing a group at register/
 // waitlist time, carrying it through promotion, changing it, and the two lists that
@@ -34,7 +35,7 @@ async function registerAndLoginUser(app: App, displayName?: string) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const verificationUrl: string = register.json().verificationUrl;
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(

@@ -21,6 +21,7 @@ import {
   type OAuthSignInRefusal,
   signInWithOAuth,
 } from './oauth-sign-in.service.js';
+import { redirectToOAuthSignupConsent } from './oauth-signup.routes.js';
 import { createSession } from './session.js';
 import { setSessionCookie } from './session-cookie.js';
 import {
@@ -180,7 +181,22 @@ export const yandexAuthRoutes: FastifyPluginAsyncZod<{ env: Env }> = async (
           code,
           codeVerifier: transaction.codeVerifier,
         });
-        ({ userId } = await signInWithOAuth(app.db, 'yandex', identity));
+        const result = await signInWithOAuth(app.db, 'yandex', identity, {
+          allowCreate: false,
+        });
+        // CR-269 (ADR-041): a new person accepts the documents before the
+        // account and the session exist.
+        if (result.kind === 'consent_required') {
+          return await redirectToOAuthSignupConsent(
+            app,
+            reply,
+            env,
+            'yandex',
+            identity,
+            next,
+          );
+        }
+        ({ userId } = result);
       } catch (caught) {
         if (caught instanceof YandexRejectedError) {
           request.log.warn(

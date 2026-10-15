@@ -16,6 +16,7 @@ import {
   vi,
 } from 'vitest';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // ADR-019/CR-086: mocks the S3 wire call only (`S3Client.prototype.send`) — same
 // technique `route.routes.test.ts` uses — so this suite runs without a live MinIO
@@ -81,7 +82,7 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const verificationUrl: string = register.json().verificationUrl;
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(

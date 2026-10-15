@@ -6,6 +6,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-229/CR-230 (ADR-032). Real Postgres, same cleanup order as the other suites
 // (`rides` before `users` — `rides.organizer_id` is `ON DELETE RESTRICT`).
@@ -59,6 +60,7 @@ async function createUser({ verified = true } = {}) {
   const register = await request('POST', '/v1/auth/register', undefined, {
     email,
     password: PASSWORD,
+    consents: CONSENTS,
   });
   const verificationToken = new URL(
     register.json().verificationUrl as string,

@@ -19,6 +19,7 @@ import { createRedisClient } from '../../redis.js';
 import { hashSessionToken } from './session.js';
 import { hashToken } from './tokens.js';
 import { logAuthEvent } from '../../lib/auth-events.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-256: a pass-through spy — the real logger call still runs.
 vi.mock('../../lib/auth-events.js', async (importOriginal) => {
@@ -87,7 +88,7 @@ describe('POST /v1/auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email, password: 'a-strong-password-123' },
+      payload: { consents: CONSENTS, email, password: 'a-strong-password-123' },
     });
 
     expect(response.statusCode).toBe(201);
@@ -119,7 +120,11 @@ describe('POST /v1/auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+      payload: {
+        consents: CONSENTS,
+        email: uniqueEmail(),
+        password: 'a-strong-password-123',
+      },
     });
 
     expect(response.statusCode).toBe(201);
@@ -138,7 +143,7 @@ describe('POST /v1/auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email, password: 'a-strong-password-123' },
+      payload: { consents: CONSENTS, email, password: 'a-strong-password-123' },
     });
 
     expect(response.statusCode).toBe(201);
@@ -199,7 +204,11 @@ describe('POST /v1/auth/register', () => {
       const app = await buildApp(emailingEnv({ NODE_ENV: 'production' }));
       const { fetchMock, sentPlaintext } = stubEmailApi();
       const email = uniqueEmail();
-      const payload = { email, password: 'a-strong-password-123' };
+      const payload = {
+        email,
+        password: 'a-strong-password-123',
+        consents: CONSENTS,
+      };
 
       const first = await app.inject({
         method: 'POST',
@@ -234,12 +243,20 @@ describe('POST /v1/auth/register', () => {
       await app.inject({
         method: 'POST',
         url: '/v1/auth/register',
-        payload: { email, password: 'a-strong-password-123' },
+        payload: {
+          consents: CONSENTS,
+          email,
+          password: 'a-strong-password-123',
+        },
       });
       const second = await app.inject({
         method: 'POST',
         url: '/v1/auth/register',
-        payload: { email, password: 'another-password-456' },
+        payload: {
+          consents: CONSENTS,
+          email,
+          password: 'another-password-456',
+        },
       });
       expect(second.statusCode).toBe(201);
       expect(second.json()).toEqual({ emailVerificationRequired: true });
@@ -270,12 +287,17 @@ describe('POST /v1/auth/register', () => {
       await app.inject({
         method: 'POST',
         url: '/v1/auth/register',
-        payload: { email, password: 'a-strong-password-123' },
+        payload: {
+          consents: CONSENTS,
+          email,
+          password: 'a-strong-password-123',
+        },
       });
       const second = await app.inject({
         method: 'POST',
         url: '/v1/auth/register',
         payload: {
+          consents: CONSENTS,
           email: email.toUpperCase(),
           password: 'a-strong-password-123',
         },
@@ -293,7 +315,11 @@ describe('POST /v1/auth/register', () => {
     it('answers every concurrent registration of one email with 201 and creates one user', async () => {
       const app = await buildApp(testEnv);
       const email = uniqueEmail();
-      const payload = { email, password: 'a-strong-password-123' };
+      const payload = {
+        email,
+        password: 'a-strong-password-123',
+        consents: CONSENTS,
+      };
 
       // Five at once (the per-IP tier's whole budget), so at least two of them
       // usually pass the pre-check together and one loses on the unique index.
@@ -335,7 +361,11 @@ describe('POST /v1/auth/register', () => {
       const pending = app.inject({
         method: 'POST',
         url: '/v1/auth/register',
-        payload: { email, password: 'a-strong-password-123' },
+        payload: {
+          consents: CONSENTS,
+          email,
+          password: 'a-strong-password-123',
+        },
       });
       await expect
         .poll(
@@ -374,6 +404,7 @@ describe('POST /v1/auth/register', () => {
         method: 'POST',
         url: '/v1/auth/register',
         payload: {
+          consents: CONSENTS,
           email: uniqueEmail(),
           password: 'a-strong-password-123',
           confirmPassword: 'a-strong-password-123',
@@ -390,6 +421,7 @@ describe('POST /v1/auth/register', () => {
         method: 'POST',
         url: '/v1/auth/register',
         payload: {
+          consents: CONSENTS,
           email,
           password: 'a-strong-password-123',
           confirmPassword: 'a-strong-password-124',
@@ -415,6 +447,7 @@ describe('POST /v1/auth/register', () => {
         method: 'POST',
         url: '/v1/auth/register',
         payload: {
+          consents: CONSENTS,
           email: uniqueEmail(),
           password: 'short-pass',
           confirmPassword: 'short-pass',
@@ -434,7 +467,11 @@ describe('POST /v1/auth/register', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: 'not-an-email', password: 'too-short' },
+      payload: {
+        consents: CONSENTS,
+        email: 'not-an-email',
+        password: 'too-short',
+      },
     });
 
     expect(response.statusCode).toBe(400);
@@ -474,6 +511,7 @@ describe('POST /v1/auth/register', () => {
         method: 'POST',
         url: '/v1/auth/register',
         payload: {
+          consents: CONSENTS,
           email: uniqueEmail(),
           password: 'a-strong-password-123',
           next,
@@ -524,7 +562,11 @@ describe('POST /v1/auth/register', () => {
         await app.inject({
           method: 'POST',
           url: '/v1/auth/register',
-          payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+          payload: {
+            consents: CONSENTS,
+            email: uniqueEmail(),
+            password: 'a-strong-password-123',
+          },
         }),
       );
     }
@@ -549,7 +591,11 @@ describe('POST /v1/auth/register', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/auth/register',
-        payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+        payload: {
+          consents: CONSENTS,
+          email: uniqueEmail(),
+          password: 'a-strong-password-123',
+        },
       });
       statuses.push(response.statusCode);
     }
@@ -574,7 +620,11 @@ describe('POST /v1/auth/verify-email', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: uniqueEmail(), password: 'a-strong-password-123' },
+      payload: {
+        consents: CONSENTS,
+        email: uniqueEmail(),
+        password: 'a-strong-password-123',
+      },
     });
     const url: string = response.json().verificationUrl;
     const token = new URL(url, 'http://localhost').searchParams.get('token');
@@ -736,7 +786,7 @@ async function registerTestUser(app: Awaited<ReturnType<typeof buildApp>>) {
   await app.inject({
     method: 'POST',
     url: '/v1/auth/register',
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   // CR-262: the register body carries no user (ADR-039) — read the id back.
   const [row] = await app.db.execute<{ id: string }>(
@@ -1387,7 +1437,7 @@ describe('POST /v1/auth/resend-verification', () => {
     const registered = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email, password: PASSWORD },
+      payload: { consents: CONSENTS, email, password: PASSWORD },
     });
     const firstToken = new URL(
       registered.json().verificationUrl as string,
@@ -1654,7 +1704,7 @@ describe('CSRF: Origin/Referer check on /v1 unsafe methods', () => {
       method: 'POST',
       url: '/v1/auth/register',
       headers: { origin: 'http://evil.example' },
-      payload: { email: uniqueEmail(), password: PASSWORD },
+      payload: { consents: CONSENTS, email: uniqueEmail(), password: PASSWORD },
     });
 
     expect(response.statusCode).toBe(403);
@@ -1670,7 +1720,7 @@ describe('CSRF: Origin/Referer check on /v1 unsafe methods', () => {
       method: 'POST',
       url: '/v1/auth/register',
       headers: { origin: WEB_ORIGIN },
-      payload: { email: uniqueEmail(), password: PASSWORD },
+      payload: { consents: CONSENTS, email: uniqueEmail(), password: PASSWORD },
     });
 
     expect(response.statusCode).toBe(201);

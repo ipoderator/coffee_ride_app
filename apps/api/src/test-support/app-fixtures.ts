@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { buildApp } from '../app.js';
+import { CONSENTS } from './legal.js';
 
 // CR-137. Request helpers for the integration suites that drive a whole
 // journey through `buildApp` (`file-storage.live.test.ts`,
@@ -18,7 +19,7 @@ export async function signUp(app: App): Promise<string> {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   if (register.statusCode !== 201) {
     throw new Error(`register failed: ${register.statusCode} ${register.body}`);

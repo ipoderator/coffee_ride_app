@@ -35,7 +35,7 @@ vi.mock('./session-context', async () => {
 const sessionMock = vi.mocked(useOptionalSession);
 
 function session(status: SessionStatus): SessionState {
-  return { status, user: null, refresh: () => {} };
+  return { status, user: null, legalPending: [], refresh: () => {} };
 }
 
 function problem(status: number, code: string) {
