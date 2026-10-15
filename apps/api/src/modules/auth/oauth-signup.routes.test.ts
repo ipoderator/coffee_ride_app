@@ -356,6 +356,25 @@ describe('first Google sign-in — the consent step', () => {
     expect((await complete(cookie)).statusCode).toBe(410);
   });
 
+  it('answers a browser without the cookie: completion expired, cancel a no-op', async () => {
+    const refused = await app.inject({
+      method: 'POST',
+      url: SIGNUP,
+      headers: { origin: WEB_ORIGIN },
+      payload: { consents: CONSENTS },
+    });
+    expect(refused.statusCode).toBe(410);
+    expect(refused.json().code).toBe('oauth_signup_expired');
+
+    const cancelled = await app.inject({
+      method: 'DELETE',
+      url: SIGNUP,
+      headers: { origin: WEB_ORIGIN },
+    });
+    expect(cancelled.statusCode).toBe(204);
+    expect(await count(users)).toBe(0);
+  });
+
   it('refuses a cross-origin completion (CSRF check)', async () => {
     const { callback } = await googleCallback(googleUser());
     const refused = await app.inject({

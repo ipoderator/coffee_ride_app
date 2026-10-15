@@ -141,6 +141,6 @@ Follow-up: CR-269's owner inputs and lawyer review before deploy.
 Summary: owner decisions on CR-269's open inputs. The privacy policy states the data is stored and processed in Russia (the owner moves the server from the Netherlands, KI-105); the cross-border note and «включая трансграничную передачу» are gone, and `siteverify` no longer receives the client IP (ADR-042). The terms take from the owner's sample ride rules: full legal capacity from 18, riding only under one's own name, bike check and repair kit, no riding unwell or intoxicated, reporting incidents to the organizer, the organizer may stop an unsafe rider, own responsibility for health and property (no blanket waiver of claims). Version 1.0 corrected in place (never deployed).
 Contract: `RecaptchaVerifier.verify(token)` — no IP argument. No migration.
 Files: web `features/legal/content/{privacy,terms,personal-data-consent}.ts`; types `legal.ts` (hashes); api `modules/auth/{recaptcha-client,auth.routes}.ts` + tests; `docs/decisions.md`; rules `do-not-break.md`.
-Validation: web legal/auth/public unit 166/166; api auth+legal 239 (+3 live skipped); Storybook legal/register 27/27 with axe; typecheck 8/8; lint 9/9.
+Validation: web legal/auth/public unit 166/166; api auth+legal 240 (+3 live skipped), auth branches back above the floor (a cookie-less `/oauth-signup` test); Storybook legal/register 27/27 with axe; typecheck 8/8; lint 9/9.
 Decisions: ADR-042.
 Follow-up: the owner's server move to Russia (KI-105); operator details and the lawyer's review.
