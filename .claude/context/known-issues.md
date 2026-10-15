@@ -450,6 +450,22 @@ pnpm test:coverage` (`loadEnvFile` does not override an already-set variable).
 Next action: code — pin the key empty for the `unit` project (`test.env` in
 `vitest.config.mts` or `vitest.setup.ts`), like e2e's `webServer` env does.
 
+### KI-104 — Expired sessions, spent tokens and stale pending sign-ups are never purged
+
+Status: open. Discovered: 2026-10-15 (CR-269, writing the privacy policy's retention
+section against the code).
+Problem: nothing deletes expired `sessions` rows (logout, reset and block hard-delete;
+an expired session only stops validating), used/expired `email_verification_tokens` and
+`password_reset_tokens` (hashes), or expired `oauth_pending_signups` rows when no later
+Google/Yandex first sign-in happens (the purge runs on insert). They stay until the
+account is deleted (cascade) — `/privacy` 1.0 says exactly that.
+Impact: low — hashes and dates only, plus a parked email/name for at most until the
+next first-time provider sign-in; longer retention than necessary (152-ФЗ, ст. 5 ч. 7).
+Workaround: none needed; the policy describes the real behaviour.
+Next action: code — a periodic purge (BullMQ repeatable job or the `backup` loop's
+cadence) of expired sessions/tokens/pending sign-ups, then a non-material policy
+version with the shorter terms.
+
 ## Resolved
 
 Moved to `.claude/context/known-issues-archive.md` (37 entries) on 2026-09-20, per this

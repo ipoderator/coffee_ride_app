@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // Same rationale as `auth.routes.test.ts`: a real Postgres, `DELETE FROM
 // users` (not `TRUNCATE ... CASCADE`) to avoid the cross-file lock deadlock
@@ -38,7 +39,7 @@ async function registerAndLogin(app: Awaited<ReturnType<typeof buildApp>>) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const login = await app.inject({
     method: 'POST',

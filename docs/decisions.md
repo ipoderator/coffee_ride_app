@@ -2015,3 +2015,61 @@ maintenance` + `Retry-After`; `/health`, `/docs` and the Google/Yandex/Strava
 - The callbacks may write sessions during maintenance; a maintenance that must freeze
   writes completely has to stop `api` (Caddy then serves the static page).
 - Turning the mode on/off restarts the containers: a few seconds of the static page.
+
+## ADR-041 — Separate, versioned legal consents with an audit trail; consent before a first OAuth account
+
+Status: Accepted (2026-10-15, owner request, CR-269 — prompt 4 «Условия,
+конфиденциальность и согласия» of the auth mockup package).
+
+### Context
+
+Until now a single line under `/login` and `/register` — «Продолжая, вы принимаете
+условия использования и политику конфиденциальности» — stood in for consent, a first
+Google/Yandex sign-in created the account on the callback, and nothing recorded what
+anyone had accepted. The owner asked for separate, explicit consents (the terms; the
+processing of personal data as its own document, 152-ФЗ ст. 9), the same before a
+first provider account exists, re-acceptance of material new versions, and a provable,
+minimal record.
+
+### Decision
+
+- **Registry** (`packages/types/src/legal.ts`): three documents — `terms`, `privacy`
+  (information only), `personal_data_consent` — each a list of immutable versions
+  (`version`, `effectiveAt`, `sha256` of the version's text as JSON, `material`,
+  `summary`). The texts live by version in `apps/web/src/features/legal/content/`; a
+  test recomputes every hash, so editing a published text without a new version fails.
+  An acceptance counts if it is of the latest material version or a later one.
+- **Record** (`legal_acceptances`, migration `0029`): user, document, version, hash,
+  source, `accepted_at`; UNIQUE(user, document, version) → idempotent; CHECKs on
+  document/source/hash; cascade with the user. No IP/User-Agent. The client sends the
+  versions its page showed; anything but the current version is `409
+legal_version_outdated`; what is stored comes from the registry.
+- **Password register**: `consents` required by the shared schema; checked before the
+  CAPTCHA; rows written in the user's transaction. A taken email (ADR-039) writes none.
+- **First Google/Yandex sign-in**: `signInWithOAuth(…, { allowCreate: false })` stops
+  short of creating; the verified identity is parked in `oauth_pending_signups` (10
+  min) under the SHA-256 of a random token whose raw value goes into an httpOnly
+  `__Host-` cookie — no identity or email in any cookie. `/register/consent` reads the
+  address back, posts both consents; completion `DELETE … RETURNING`s the row in the
+  transaction that creates the account and the acceptance, so replays and concurrent
+  posts get `410`. Existing accounts sign straight in.
+- **Re-consent**: `GET /v1/auth/me` returns `legal.pending`; a client gate
+  (`LegalAcceptanceGate`) sends the person to `/legal-update` (documents and logout stay
+  open, deletion is a mailto); `requireAuth` refuses unsafe methods with `403
+legal_acceptance_required` while anything is pending (logout and the acceptance
+  route exempt) — the rule is the API's, not the UI's. An ADR-035 claim deletes the
+  registrant's acceptances, so the real owner accepts for themself.
+- Accounts from before this decision have no rows: after the deploy every signed-in
+  person is asked once.
+
+### Consequences
+
+- Every unsafe authenticated request costs one indexed read of `legal_acceptances`.
+- A text change is a code change plus a new registry version; `material: true` asks
+  everyone again on their next visit, `false` asks nobody.
+- The record goes with the account (cascade); keeping proof after deletion would be a
+  separate, owner-decided retention rule.
+- Clients other than `apps/web` (seed, k6) read the current versions from `GET
+/v1/legal/documents`.
+- The texts are a draft for a lawyer: the operator's legal details, the hosting
+  country and the age threshold are owner inputs (CR-269 changelog entry).

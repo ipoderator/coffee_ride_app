@@ -266,7 +266,6 @@ export const REGISTER_PAGE_TERMS = {
     'Создайте профиль один раз, выбирайте заезды на карте и записывайтесь в подходящую группу.',
   switchPrompt: 'Уже есть аккаунт?',
   switchLink: 'Войти',
-  consentPrefix: 'Создавая аккаунт, вы принимаете ',
 } as const;
 
 // CR-262: the register form's password fields — the show/hide toggle, the strength
@@ -305,16 +304,6 @@ export const CAPTCHA_TERMS = {
 
 // CR-247 (ADR-034): «Войти через Google» on `/login` and `/register`, and the
 // message `/login?oauth=<outcome>` shows when the sign-in came back without a session.
-// CR-247, CR-260: the consent line under the login/register page — signing in with a
-// provider creates an account. CR-264: each page owns its divider.
-export const OAUTH_SIGN_IN_TERMS = {
-  consentPrefix: 'Продолжая, вы принимаете ',
-  consentTerms: 'условия использования',
-  consentJoin: ' и ',
-  consentPrivacy: 'политику конфиденциальности',
-  consentEnd: '.',
-} as const;
-
 export const GOOGLE_SIGN_IN_TERMS = {
   // Google's branding guidelines: «Sign in with Google» in the page's language.
   button: 'Войти через Google',
@@ -361,11 +350,91 @@ export const YANDEX_SIGN_IN_TERMS = {
 
 // CR-247: `/privacy` and `/terms`. The documents' own text lives with the pages
 // (`apps/web/src/features/legal/`); these are the names every link uses.
+// CR-269 (ADR-041): the versioned documents, the separate consent and their
+// history.
 export const LEGAL_TERMS = {
   privacyTitle: 'Политика конфиденциальности',
+  // CR-269: the page's h1 — a soft hyphen (U+00AD) lets «конфиденциальности»
+  // break correctly on a 320px screen, where it is wider than the column at h1
+  // size and Chromium on Linux has no Russian hyphenation dictionary.
+  privacyHeading: 'Политика конфиден\u00ADциальности',
   termsTitle: 'Условия использования',
-  updatedLabel: 'Редакция от',
+  personalDataConsentTitle: 'Согласие на обработку персональных данных',
   contactLabel: 'Связаться с нами',
+  // `date` comes formatted (`formatDate`).
+  versionLine: (version: string, date: string) =>
+    `Версия ${version}, действует с ${date}`,
+  historyTitle: 'История версий',
+  historyVersion: (version: string, date: string) =>
+    `Версия ${version} от ${date}`,
+  historyCurrent: 'действующая',
+  archivedNotice: 'Это прежняя редакция документа.',
+  archivedCurrentLink: 'Открыть действующую редакцию',
+  // CR-269: `/login` and `/register` name the documents as information; an
+  // account accepts them with its own checkboxes (`LEGAL_CONSENT_TERMS`).
+  infoPrefix: 'Документы сервиса: ',
+  infoTerms: 'условия использования',
+  infoJoin: ', ',
+  infoPrivacy: 'политика конфиденциальности',
+  infoEnd: '.',
+} as const;
+
+// CR-269 (ADR-041): the two separate, required, unticked consents on `/register`
+// and `/register/consent`, and the re-consent on `/legal-update`. Never merged with
+// the reCAPTCHA check or with each other.
+export const LEGAL_CONSENT_TERMS = {
+  legend: 'Согласия',
+  termsPrefix: 'Я принимаю ',
+  termsLink: 'условия использования',
+  personalDataPrefix: 'Я даю ',
+  personalDataLink: 'согласие на обработку персональных данных',
+  // Read after a link that opens in a new tab.
+  newTab: '(откроется в новой вкладке)',
+  // While a required box is unticked (the submit button is disabled).
+  hint: (count: number) =>
+    count > 1
+      ? 'Отметьте оба согласия, чтобы продолжить.'
+      : 'Отметьте согласие, чтобы продолжить.',
+  privacyPrefix: 'Как мы обрабатываем данные — в ',
+  privacyLink: 'политике конфиденциальности',
+  privacyEnd: '.',
+  // The API's refusals (`LegalErrorCode`).
+  consentRequired: 'Отметьте согласия, чтобы продолжить.',
+  versionOutdated:
+    'Документы обновились. Обновите страницу, прочитайте новую редакцию и отметьте согласия ещё раз.',
+} as const;
+
+// CR-269 (ADR-041): `/register/consent` — a first Google/Yandex sign-in accepts the
+// documents before the account exists.
+export const OAUTH_SIGNUP_TERMS = {
+  title: 'Почти готово',
+  provider: { google: 'Google', yandex: 'Яндекс ID' },
+  lead: (provider: string, email: string) =>
+    `Вы входите через ${provider} как ${email}. Чтобы создать аккаунт Coffee Ride, примите документы.`,
+  submit: 'Создать аккаунт',
+  submitPending: 'Создаём аккаунт…',
+  cancel: 'Отмена',
+  loading: 'Загружаем данные входа…',
+  expiredTitle: 'Время на вход истекло',
+  expiredBody:
+    'Начните вход через Google или Яндекс ID ещё раз — на то, чтобы принять документы, будет 10 минут.',
+  expiredAction: 'Вернуться к регистрации',
+  failed: 'Не удалось создать аккаунт. Попробуйте войти ещё раз.',
+} as const;
+
+// CR-269 (ADR-041): `/legal-update` — a signed-in person accepts a material new
+// version. Documents, sign-out and deletion stay open meanwhile.
+export const LEGAL_UPDATE_TERMS = {
+  title: 'Документы обновились',
+  lead: 'Чтобы и дальше записываться на заезды и менять данные, примите новую редакцию. Читать документы, выйти и запросить удаление аккаунта можно и без этого.',
+  changesTitle: 'Что изменилось',
+  submit: 'Принять и продолжить',
+  submitPending: 'Сохраняем…',
+  logout: 'Выйти',
+  deletePrefix: 'Не согласны? ',
+  deleteLink: 'Запросите удаление аккаунта',
+  deleteEnd: ' — письмом с адреса аккаунта.',
+  deleteSubject: 'Удаление аккаунта Coffee Ride',
 } as const;
 
 /**

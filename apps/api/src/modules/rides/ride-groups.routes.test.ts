@@ -6,6 +6,7 @@ import { buildApp } from '../../app.js';
 import { loadEnv } from '../../env.js';
 import { getTestDatabaseUrl } from '../../test-support/test-database-url.js';
 import { buildRoutePreview } from './route-preview.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-117 ("Pace groups") organizer CRUD + CR-116 (discovery card fields). Same
 // real-Postgres rationale as `stops.routes.test.ts`: `DELETE FROM rides` before
@@ -33,7 +34,7 @@ async function registerAndLoginUser(app: App) {
     method: 'POST',
     url: '/v1/auth/register',
     headers: { origin: WEB_ORIGIN },
-    payload: { email, password: PASSWORD },
+    payload: { consents: CONSENTS, email, password: PASSWORD },
   });
   const verificationUrl: string = register.json().verificationUrl;
   const token = new URL(verificationUrl, 'http://internal').searchParams.get(

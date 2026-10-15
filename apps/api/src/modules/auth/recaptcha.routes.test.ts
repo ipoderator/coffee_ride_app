@@ -9,6 +9,7 @@ import {
   createRecaptchaVerifier,
   RECAPTCHA_VERIFY_URL,
 } from './recaptcha-client.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-261 (ADR-038): the reCAPTCHA gate on register, password login and
 // forgot-password, end to end through the real routes and database. Google's
@@ -107,7 +108,12 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
       method: 'POST',
       url: '/v1/auth/register',
       remoteAddress: '203.0.113.7',
-      payload: { email, password: PASSWORD, captchaToken: 'good-token' },
+      payload: {
+        consents: CONSENTS,
+        email,
+        password: PASSWORD,
+        captchaToken: 'good-token',
+      },
     });
 
     expect(response.statusCode).toBe(201);
@@ -144,7 +150,12 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/v1/auth/register',
-        payload: { email, password: PASSWORD, captchaToken },
+        payload: {
+          consents: CONSENTS,
+          email,
+          password: PASSWORD,
+          captchaToken,
+        },
       });
 
       expect(response.statusCode).toBe(status);
@@ -162,7 +173,12 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: uniqueEmail(), password: PASSWORD, captchaToken: '' },
+      payload: {
+        consents: CONSENTS,
+        email: uniqueEmail(),
+        password: PASSWORD,
+        captchaToken: '',
+      },
     });
     expect(response.statusCode).toBe(400);
     expect(response.json().code).toBe('validation_error');
@@ -174,6 +190,7 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
       method: 'POST',
       url: '/v1/auth/register',
       payload: {
+        consents: CONSENTS,
         email: uniqueEmail(),
         password: 'short',
         captchaToken: 'good-token',
@@ -191,6 +208,7 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
         url: '/v1/auth/register',
         remoteAddress: `198.51.100.${i + 1}`,
         payload: {
+          consents: CONSENTS,
           email: uniqueEmail(),
           password: PASSWORD,
           captchaToken: 'google-down-token',
@@ -203,6 +221,7 @@ describe('POST /v1/auth/register with reCAPTCHA on', () => {
       url: '/v1/auth/register',
       remoteAddress: '198.51.100.9',
       payload: {
+        consents: CONSENTS,
         email: uniqueEmail(),
         password: PASSWORD,
         captchaToken: 'good-token',
@@ -403,7 +422,7 @@ describe('the reCAPTCHA gate and the rest of auth', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: uniqueEmail(), password: PASSWORD },
+      payload: { consents: CONSENTS, email: uniqueEmail(), password: PASSWORD },
     });
     expect(response.statusCode).toBe(201);
     expect(GOOGLE.calls).toHaveLength(0);

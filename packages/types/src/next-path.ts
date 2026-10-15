@@ -17,7 +17,8 @@ const PARSE_BASE = 'http://next-path.invalid';
 
 // Returning to a sign-in page after signing in would loop; `/verify-email`
 // (CR-197) would re-submit an already-used token.
-const AUTH_PAGES = ['/login', '/register', '/verify-email'];
+// CR-269: `/legal-update` would send an accepted re-consent back to itself.
+const AUTH_PAGES = ['/login', '/register', '/verify-email', '/legal-update'];
 
 function hasUnsafeCharacter(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
@@ -75,6 +76,11 @@ function withNext(page: string, next: string | null | undefined): string {
  */
 export function verifyEmailHref(token: string, next?: string | null): string {
   return withNext(`/verify-email?token=${encodeURIComponent(token)}`, next);
+}
+
+/** CR-269: `/legal-update`, carrying `next` when it is a safe return target. */
+export function legalUpdateHref(next?: string | null): string {
+  return withNext('/legal-update', next);
 }
 
 /** `/login`, carrying `next` when it is a safe return target. */

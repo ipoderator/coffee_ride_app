@@ -5,6 +5,7 @@ import {
   REGISTRATION_ACTION_TERMS,
   VERIFY_EMAIL_TERMS,
 } from 'ui';
+import { currentLegalConsents } from 'types';
 import {
   createOrganizerProfile,
   createPublishedRide,
@@ -102,6 +103,11 @@ test('a new account made from a ride returns to it after email verification and 
     .getByLabel(AUTH_TERMS.passwordLabel, { exact: true })
     .fill(E2E_PASSWORD);
   await page.getByLabel(AUTH_TERMS.confirmPasswordLabel).fill(E2E_PASSWORD);
+  // CR-269 (ADR-041): two separate consents; the button waits for both.
+  await page.getByLabel(/Я принимаю условия использования/).check();
+  await page
+    .getByLabel(/Я даю согласие на обработку персональных данных/)
+    .check();
   await page.getByRole('button', { name: AUTH_TERMS.registerSubmit }).click();
   await expect(
     page.getByRole('heading', { name: AUTH_TERMS.registerSuccessTitle }),
@@ -148,7 +154,11 @@ test('the verification page drops an external `next`', async ({ page }) => {
   const request = await newIsolatedRequest();
   const register = await request.post('/api/v1/auth/register', {
     headers: { Origin: WEB_BASE_URL },
-    data: { email: uniqueEmail(), password: E2E_PASSWORD },
+    data: {
+      email: uniqueEmail(),
+      password: E2E_PASSWORD,
+      consents: currentLegalConsents(),
+    },
   });
   expect(register.ok()).toBe(true);
   const { verificationUrl } = (await register.json()) as {

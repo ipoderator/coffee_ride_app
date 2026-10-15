@@ -1594,3 +1594,14 @@ avatar` gated by `resolveRiderAccess`, never a bare `GET /v1/users/
 - [x] CR-259 (security, KI-097) page CSP by per-request nonce + `'strict-dynamic'`,
       no `'unsafe-inline'` for scripts; every page renders per request (ADR-036) —
       done 2026-10-14 on `feat/nonce-csp`. See docs/changelog.md
+- [x] CR-263 `/register` story column without background (text only) — done 2026-10-14
+- [x] CR-262 `/register` to the auth mockup (story panel, Google/Yandex ID first,
+      strength meter, live match, show/hide), `confirmPassword` checked by the API, no
+      account enumeration on register (ADR-039) — done 2026-10-14, committed on
+      `experiments`. See docs/changelog.md
+- [x] CR-261 (security) Google reCAPTCHA v2 on register/password login/forgot-password,
+      verified server-side, failing closed; «Повторите пароль» on register (ADR-038) —
+      done 2026-10-14, one PR with CR-260 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md
+- [x] CR-260 Yandex ID sign-in («Войти через Яндекс») beside Google: PKCE/state code
+      flow, shared race-safe account linking, one button block (ADR-037) — done
+      2026-10-14, one PR with CR-261 (`feat/yandex-oauth-recaptcha`). See docs/changelog.md

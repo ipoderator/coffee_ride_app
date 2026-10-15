@@ -3,6 +3,7 @@ import type { Env } from '../env.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
 import { googleAuthRoutes } from '../modules/auth/google.routes.js';
 import { yandexAuthRoutes } from '../modules/auth/yandex.routes.js';
+import { oauthSignupRoutes } from '../modules/auth/oauth-signup.routes.js';
 import { usersRoutes } from '../modules/users/users.routes.js';
 import { organizersRoutes } from '../modules/organizers/organizers.routes.js';
 import { ridesRoutes } from '../modules/rides/rides.routes.js';
@@ -17,6 +18,7 @@ import {
 } from '../modules/notifications/notifications.routes.js';
 import { reviewsRoutes } from '../modules/reviews/reviews.routes.js';
 import { adminRoutes } from '../modules/admin/admin.routes.js';
+import { legalRoutes } from '../modules/legal/legal.routes.js';
 import {
   rideStravaRoutes,
   stravaRoutes,
@@ -49,6 +51,8 @@ export const v1Routes: FastifyPluginAsyncZod<{ env: Env }> = async (
   await app.register(authRoutes, { prefix: '/auth', env: opts.env });
   await app.register(googleAuthRoutes, { prefix: '/auth', env: opts.env });
   await app.register(yandexAuthRoutes, { prefix: '/auth', env: opts.env });
+  await app.register(oauthSignupRoutes, { prefix: '/auth', env: opts.env });
+  await app.register(legalRoutes, { prefix: '/legal' });
   await app.register(usersRoutes, { prefix: '/users' });
   await app.register(organizersRoutes, { prefix: '/organizers' });
   await app.register(ridesRoutes, { prefix: '/rides' });

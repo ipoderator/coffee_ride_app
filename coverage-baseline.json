@@ -4,14 +4,14 @@
   "packages": {
     "apps/api": {
       "total": {
-        "lines": 94.56,
-        "statements": 93.57,
-        "functions": 97.48,
-        "branches": 85.48
+        "lines": 94.75,
+        "statements": 93.75,
+        "functions": 97.58,
+        "branches": 85.72
       },
       "scopes": {
         "src/modules/auth/": {
-          "lines": 99.08,
+          "lines": 99.21,
           "statements": 98.44,
           "functions": 100,
           "branches": 93.92
@@ -53,10 +53,10 @@
           "branches": 70.9
         },
         "src/plugins/": {
-          "lines": 97.02,
-          "statements": 96.39,
+          "lines": 97.16,
+          "statements": 96.55,
           "functions": 100,
-          "branches": 93.75
+          "branches": 94.11
         },
         "src/lib/": {
           "lines": 95.9,
@@ -74,9 +74,9 @@
     },
     "apps/web": {
       "total": {
-        "lines": 85.29,
-        "statements": 83.69,
-        "functions": 83.34,
+        "lines": 85.37,
+        "statements": 83.75,
+        "functions": 83.62,
         "branches": 82.78
       }
     },
@@ -85,7 +85,7 @@
         "lines": 100,
         "statements": 99.74,
         "functions": 100,
-        "branches": 94.22
+        "branches": 94.24
       }
     },
     "packages/maps-2gis": {

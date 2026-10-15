@@ -51,16 +51,15 @@ describe('AdminActionsLog', () => {
     );
     render(<AdminActionsLog />);
 
+    // Wait for a row, not an action label: the «Действие» filter's options carry
+    // the same labels from the first render, before the list has loaded.
     expect(
-      await screen.findByText(ADMIN_TERMS.actionLabels.user_blocked),
-    ).toBeInTheDocument();
-    expect(request).toHaveBeenCalledWith('/actions');
-    expect(
-      screen.getByRole('link', { name: 'rider@example.com' }),
+      await screen.findByRole('link', { name: 'rider@example.com' }),
     ).toHaveAttribute(
       'href',
       '/admin/users/11111111-1111-4111-8111-111111111111',
     );
+    expect(request).toHaveBeenCalledWith('/actions');
     // A ride target is text: a hidden ride's public page would 404.
     expect(screen.getByText('Вечерний гравий').closest('a')).toBeNull();
     expect(

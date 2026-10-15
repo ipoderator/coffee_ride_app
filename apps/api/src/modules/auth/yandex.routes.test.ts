@@ -34,6 +34,7 @@ import { OAuthSignInError, signInWithOAuth } from './oauth-sign-in.service.js';
 import * as password from './password.js';
 import { hashPassword } from './password.js';
 import { createYandexOAuthClient } from './yandex-client.js';
+import { CONSENTS } from '../../test-support/legal.js';
 
 // CR-260 (ADR-037): Yandex ID sign-in end to end against a real Postgres, with Yandex
 // itself played by `test-support/fake-yandex.ts` (real PKCE, single-use codes). The
@@ -124,10 +125,15 @@ async function signIn(
     next,
     options,
     tamperQuery,
+    acceptConsent = true,
   }: {
     next?: string;
     options?: YandexIssueOptions;
     tamperQuery?: (query: URLSearchParams) => void;
+    // CR-269: a new person's callback stops at `/register/consent`; by default
+    // the helper accepts the documents there, as the page would. `false` keeps
+    // the callback's own answer.
+    acceptConsent?: boolean;
   } = {},
 ) {
   const started = await start(next);
@@ -138,7 +144,25 @@ async function signIn(
     url: `${CALLBACK}?${query.toString()}`,
     headers: { cookie: cookieHeader(started.response) },
   });
-  return { started, callback, location: String(callback.headers.location) };
+  const location = String(callback.headers.location);
+  if (!acceptConsent || location !== `${WEB_ORIGIN}/register/consent`) {
+    return { started, callback, location, completion: null };
+  }
+  const completion = await app.inject({
+    method: 'POST',
+    url: '/v1/auth/oauth-signup',
+    headers: { cookie: cookieHeader(callback), origin: WEB_ORIGIN },
+    payload: { consents: CONSENTS },
+  });
+  return {
+    started,
+    callback,
+    completion,
+    location:
+      completion.statusCode === 200
+        ? `${WEB_ORIGIN}${completion.json().next}`
+        : location,
+  };
 }
 
 async function userByEmail(email: string) {
@@ -194,7 +218,7 @@ describe('GET /v1/auth/yandex', () => {
     await app.close();
     await startApp({ ...testEnv, NODE_ENV: 'production' });
 
-    const { callback, started } = await signIn(yandexUser());
+    const { callback, started, completion } = await signIn(yandexUser());
     const set = started.response.cookies.find(
       (c) => c.name === '__Host-yandex-oauth',
     );
@@ -209,8 +233,21 @@ describe('GET /v1/auth/yandex', () => {
       (c) => c.name === '__Host-yandex-oauth',
     );
     expect(cleared).toMatchObject({ value: '', secure: true, path: '/' });
+    // CR-269: a new person's consent step rides on a `__Host-` cookie too.
+    const signup = callback.cookies.find(
+      (c) => c.name === '__Host-oauth-signup',
+    );
+    expect(signup).toMatchObject({
+      secure: true,
+      httpOnly: true,
+      sameSite: 'Lax',
+      path: '/',
+    });
+    expect(signup?.domain).toBeUndefined();
     // CR-264: the session it ends in is the ordinary production cookie.
-    const session = callback.cookies.find((c) => c.name === '__Host-session');
+    const session = completion!.cookies.find(
+      (c) => c.name === '__Host-session',
+    );
     expect(session).toMatchObject({
       secure: true,
       httpOnly: true,
@@ -267,7 +304,7 @@ describe('GET /v1/auth/yandex/callback — success', () => {
   it('creates a verified, password-less user with the Yandex names and signs them in', async () => {
     const user = yandexUser();
     const log = vi.spyOn(app.log, 'info');
-    const { callback, location } = await signIn(user, {
+    const { callback, completion, location } = await signIn(user, {
       next: '/rides/abc?x=1',
     });
 
@@ -289,7 +326,10 @@ describe('GET /v1/auth/yandex/callback — success', () => {
       }),
     ]);
 
-    const session = callback.cookies.find((c) => c.name === 'session');
+    // CR-269: no session before the documents are accepted — the callback
+    // only parked the identity; the consent step signs the person in.
+    expect(callback.cookies.find((c) => c.name === 'session')).toBeUndefined();
+    const session = completion!.cookies.find((c) => c.name === 'session');
     expect(session?.httpOnly).toBe(true);
     const me = await app.inject({
       method: 'GET',
@@ -400,9 +440,21 @@ describe('GET /v1/auth/yandex/callback — success', () => {
       url: `/v1/auth/google/callback?${googleQuery.toString()}`,
       headers: { cookie: cookieHeader(googleStart) },
     });
-    expect(String(googleCallback.headers.location)).toBe(`${WEB_ORIGIN}/me`);
+    // CR-269: the first sign-in is a new account — consent first.
+    expect(String(googleCallback.headers.location)).toBe(
+      `${WEB_ORIGIN}/register/consent`,
+    );
+    const consent = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/oauth-signup',
+      headers: { cookie: cookieHeader(googleCallback), origin: WEB_ORIGIN },
+      payload: { consents: CONSENTS },
+    });
+    expect(consent.statusCode).toBe(200);
 
-    await signIn(yandexUser({ default_email: email }));
+    expect((await signIn(yandexUser({ default_email: email }))).location).toBe(
+      `${WEB_ORIGIN}/me`,
+    );
     expect(await app.db.select().from(users)).toHaveLength(1);
     expect((await identities()).map((i) => i.provider).sort()).toEqual([
       'google',

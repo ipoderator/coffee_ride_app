@@ -4,7 +4,6 @@ import {
   AUTH_TERMS,
   GOOGLE_SIGN_IN_TERMS,
   LEGAL_TERMS,
-  OAUTH_SIGN_IN_TERMS,
   YANDEX_SIGN_IN_TERMS,
 } from './terminology';
 
@@ -38,14 +37,20 @@ describe.each([
   });
 });
 
-describe('OAUTH_SIGN_IN_TERMS', () => {
-  it('builds the consent line from the legal page names', () => {
-    const line = `${OAUTH_SIGN_IN_TERMS.consentPrefix}${OAUTH_SIGN_IN_TERMS.consentTerms}${OAUTH_SIGN_IN_TERMS.consentJoin}${OAUTH_SIGN_IN_TERMS.consentPrivacy}`;
-    expect(line).toBe(
-      'Продолжая, вы принимаете условия использования и политику конфиденциальности',
+describe('LEGAL_TERMS (CR-269)', () => {
+  it('names the documents in the info line by their page titles', () => {
+    expect(LEGAL_TERMS.termsTitle.toLowerCase()).toBe(LEGAL_TERMS.infoTerms);
+    expect(LEGAL_TERMS.privacyTitle.toLowerCase()).toBe(
+      LEGAL_TERMS.infoPrivacy,
     );
-    expect(LEGAL_TERMS.termsTitle.toLowerCase()).toBe(
-      OAUTH_SIGN_IN_TERMS.consentTerms,
+  });
+
+  it('words a version line and a history entry with the version and date', () => {
+    expect(LEGAL_TERMS.versionLine('1.0', '15 октября 2026 г.')).toBe(
+      'Версия 1.0, действует с 15 октября 2026 г.',
+    );
+    expect(LEGAL_TERMS.historyVersion('1.0', '15 октября 2026 г.')).toBe(
+      'Версия 1.0 от 15 октября 2026 г.',
     );
   });
 });

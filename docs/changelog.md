@@ -108,3 +108,30 @@ Files: web `features/organizer/rides/rides.test.tsx`.
 Validation: the file 94/94, and 3× under artificial CPU load (10 × `yes`) — 94/94 each; prettier.
 Decisions: test-only; `Dialog` unchanged (binding in an effect is correct for the app). Resolves KI-102 (moved to the archive).
 Follow-up: none.
+
+## 2026-10-15 — CR-268 — Final check of the auth mockup work (CR-260..CR-265)
+
+Summary: owner request (mockup prompt 4). The whole flow re-proven in Chromium against `next start` and the real API with fake Google/Yandex/`siteverify`: register (confirm, CAPTCHA required/invalid/passed, no user on a refused CAPTCHA) → verify email (single-use) → password login (generic errors, safe `next`, HttpOnly/Lax cookie) → logout → Google and Yandex linking → unsafe `next` dropped → social-only password login generic → forged state / no cookie / denial → concurrent callbacks (1 user, 1 identity, replay refused) → maintenance on/off with a signed-in tab. One fix: `/register` kept the submit-time «Пароли не совпадают.» after the passwords were made equal; it now clears when either field changes.
+Contract: none.
+Files: web `features/auth/register/components/RegisterForm.tsx`, `register.test.tsx`; `coverage-baseline.json`; experiments merged with `main` (CR-262..CR-265 had landed via #64..#69).
+Validation: format:check (only the untracked mockup), lint (warnings 8/29 unchanged), lint:root, typecheck, build 7/7; `test:coverage` with live Redis/S3 — api 917, web 1063, ui 301, db 17, resilience 15, maps-2gis 82 (+6 opt-in), `coverage:check` holds (the first run hit KI-102 once); Storybook auth + status stories 44/44 with axe, full 326/331 (KI-100); e2e 63/69 — the 6 failures are `visual-regression` discovery/ride/dashboard screenshots, glyph anti-aliasing only (local render vs the CI baselines), no auth screen; browser checks 75/75 (flow) + 37/37 (maintenance); axe clean on `/login`, `/register`, the maintenance screen; no email/token/code/secret in the API log.
+Decisions: the mockup's white provider buttons and GIS/Yandex-constructor rendering not adopted (server-side code flow, ADR-034/037) — listed for the owner; harness raised the rate limits (all traffic from 127.0.0.1).
+Follow-up: deploy CR-265 + this fix; production checks listed in the owner report.
+
+## 2026-10-15 — CR-269 — Terms, privacy and separate legal consents (ADR-041)
+
+Summary: owner request (mockup package prompt 4). Full `/terms`, `/privacy` and a new `/personal-data-consent`, versioned (1.0, 15.10.2026) with a history; every fact checked against code/infra. `/register` has two separate unticked consents (button disabled until both, CAPTCHA apart); a first Google/Yandex sign-in waits on `/register/consent` with no account or session; `/login` only names the documents. Acceptances are recorded (version + text SHA-256 + source); a material new version is re-accepted on `/legal-update`, the API holding changes meanwhile.
+Contract: migration `0029` (`legal_acceptances`, `oauth_pending_signups`); `register` requires `consents` (breaking for API callers — seed, k6, e2e, tests updated); new `GET/POST/DELETE /v1/auth/oauth-signup`, `GET /v1/legal/documents`, `POST /v1/legal/acceptances`; `GET /v1/auth/me` + `legal.pending`; `403 legal_acceptance_required`, `409 legal_version_outdated`, `410 oauth_signup_expired`; types `legal.ts`; ui `LEGAL_CONSENT_TERMS`, `OAUTH_SIGNUP_TERMS`, `LEGAL_UPDATE_TERMS` (`OAUTH_SIGN_IN_TERMS` and the register consent line removed).
+Files: api `modules/legal/*`, `modules/auth/oauth-signup.*`, `oauth-sign-in.service.ts`, `{google,yandex,auth}.routes.ts`, `plugins/auth.ts`; db `schema/{legal-acceptance,oauth-pending-signup}.ts`; web `features/legal/**`, `features/auth/oauth-signup/**`, `components/legal/*`, `lib/auth/LegalAcceptanceGate.tsx`, register/login, 3 legal pages, `/register/consent`, `/legal-update`; docs api/auth/database/decisions.
+Validation: typecheck 8/8, lint 0 errors, prettier; api 945 (+33 new), web unit 1093, ui 307, db 17; Storybook auth/legal 67/67 with axe; e2e login-return + critical-journeys + access-control 10/10; production build; browser check 60/60 (fake Google/Yandex/siteverify: documents 320/390/1440 + axe, consents, API bypass, OAuth park/accept/cancel/concurrent, re-consent, logout); no email/token in the API log.
+Decisions: ADR-041.
+Follow-up: owner inputs (operator details, hosting country, age threshold, cross-border notice) and a lawyer's review before production; existing accounts are asked to accept once after deploy; full suite at prompt 5.
+
+## 2026-10-15 — CR-268, CR-269 ported to `main`
+
+Summary: both were built on the cloud branch `experiments` (as CR-267/CR-268) and cherry-picked onto `main` in `feat/legal-consents`, renumbered (`main` already had CR-267). Context/doc conflicts merged by hand; code applied cleanly. Under CR-267's one database per Vitest worker, the new `oauth-signup`/`legal` route tests failed in the full run (`DELETE FROM users` before `rides`) — fixed like the other auth files. `AdminActionsLog`'s first test awaited a label the filter `<option>` shows before the list loads — now awaits the row.
+Contract: none beyond CR-269's.
+Files: api `modules/{auth/oauth-signup,legal/legal}.routes.test.ts`; web `features/legal/consent.test.tsx`, `features/admin/actions/actions.test.tsx`; `coverage-baseline.json`.
+Validation: format/lint:root clean on tracked files, lint 9/9, typecheck 8/8, build 7/7; `test:coverage` with live Redis/S3 — api 950 (+2 shuffled seeds), web 1095, ui 307, db 17, resilience 15, maps-2gis 82; `coverage:check` holds, baseline raised (no floor lowered); Storybook auth/legal 56/56 with axe; e2e 57/57 without the two screenshot specs (2 timeouts in the full run passed on re-run); docker smoke not run locally (Docker Hub layer download failed) — CI runs it.
+Decisions: none.
+Follow-up: CR-269's owner inputs and lawyer review before deploy.

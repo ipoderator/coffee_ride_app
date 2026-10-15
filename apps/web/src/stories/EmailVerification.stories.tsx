@@ -4,6 +4,7 @@ import { AUTH_TERMS, VERIFY_EMAIL_TERMS } from 'ui';
 import { RegisterForm } from '@/features/auth/register/components/RegisterForm';
 import { VerifyEmailStatus } from '@/features/auth/verify-email/components/VerifyEmailStatus';
 import { SessionProvider } from '@/lib/auth/session-context';
+import { tickConsents } from './consent-helpers';
 
 // CR-197 (QA `fe0b4c2`): a visitor who registers from a ride goes register →
 // verify email → «Перейти ко входу» → sign in, and must land back on the ride.
@@ -123,6 +124,7 @@ export const RegisterSucceeded: Story = {
       canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
       'a-strong-password-123',
     );
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );
@@ -159,6 +161,7 @@ export const RegisterSucceededVerified: Story = {
       canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
       'a-strong-password-123',
     );
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );

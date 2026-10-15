@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { User } from '../domain/user.js';
+import { legalConsentsSchema, type LegalAcceptanceState } from '../legal.js';
 
 // CR-011: the register/verify-email contract, shared so `apps/web`'s client-side
 // validation and `apps/api`'s server-side validation are the exact same schema —
@@ -40,6 +41,10 @@ export const registerRequestSchema = z
     // refuse a registration — the API keeps it only if `safeNextPath` accepts it.
     next: z.string().optional(),
     captchaToken: captchaTokenSchema.optional(),
+    // CR-269 (ADR-041): the two separate consents — the terms and the processing
+    // of personal data — as the versions the form showed. Required: an account is
+    // never created without them, whoever calls the API.
+    consents: legalConsentsSchema,
   })
   .refine(
     (body) =>
@@ -89,8 +94,28 @@ export interface LoginResponse {
   user: User;
 }
 
+// CR-269 (ADR-041): a first Google/Yandex sign-in waiting on `/register/consent`.
+// `GET /v1/auth/oauth-signup` → this; `POST` with both consents → `{ next }`.
+export interface OAuthSignupInfo {
+  provider: 'google' | 'yandex';
+  email: string;
+}
+export const oauthSignupCompleteRequestSchema = z.object({
+  consents: legalConsentsSchema,
+});
+export type OAuthSignupCompleteRequest = z.infer<
+  typeof oauthSignupCompleteRequestSchema
+>;
+export interface OAuthSignupCompleteResponse {
+  next: string;
+}
+
 export interface MeResponse {
   user: User;
+  // CR-269 (ADR-041): documents to accept again before acting (re-consent).
+  // Always sent by the API; optional in the type so the contract change stays
+  // additive (`.claude/rules/extensibility.md`) — a reader treats absent as none.
+  legal?: LegalAcceptanceState;
 }
 
 // CR-060 (`.claude/rules/security.md`). Deliberately no `email` format

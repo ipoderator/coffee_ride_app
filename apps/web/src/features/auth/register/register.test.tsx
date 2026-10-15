@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { currentLegalConsents } from 'types';
 import { RegisterForm } from './components/RegisterForm';
 import { ApiError, registerAccount } from './api';
 import { installFakeGrecaptcha } from '../captcha/fake-grecaptcha';
+import { tickConsents } from '@/test-support/consents';
 import {
   ENGLISH_API_TEXTS,
   englishProblem,
@@ -30,6 +32,9 @@ function fillAndSubmit(
   fireEvent.change(screen.getByLabelText('Повторите пароль'), {
     target: { value: confirmPassword },
   });
+  if (!screen.getByLabelText(/Я принимаю условия/).matches(':checked')) {
+    tickConsents();
+  }
   fireEvent.click(
     screen.getByRole('button', { name: /Зарегистрироваться|Регистрация…/ }),
   );
@@ -60,6 +65,7 @@ describe('RegisterForm', () => {
   it('words an empty form in Russian, never the schema’s English', async () => {
     render(<RegisterForm />);
 
+    tickConsents();
     fireEvent.click(screen.getByRole('button', { name: 'Зарегистрироваться' }));
 
     expect(
@@ -299,6 +305,7 @@ describe('RegisterForm', () => {
         email: 'rider@example.com',
         password: 'a-strong-password-123',
         confirmPassword: 'a-strong-password-123',
+        consents: currentLegalConsents(),
         ...(sentNext ? { next: sentNext } : {}),
       });
     },
@@ -340,6 +347,31 @@ describe('RegisterForm confirm password', () => {
     expect(registerAccountMock).not.toHaveBeenCalled();
   });
 
+  // CR-268: the submit-time error described the old values — editing either
+  // field hands back to the live match line, before any second submit.
+  it('drops the stale mismatch error as soon as a field is edited', async () => {
+    render(<RegisterForm />);
+    fillAndSubmit(
+      'rider@example.com',
+      'a-strong-password-123',
+      'a-strong-password-124',
+    );
+    expect(await screen.findByText('Пароли не совпадают.')).toBeInTheDocument();
+
+    const confirm = screen.getByLabelText('Повторите пароль');
+    fireEvent.change(confirm, { target: { value: 'a-strong-password-123' } });
+
+    expect(screen.queryByText('Пароли не совпадают.')).not.toBeInTheDocument();
+    expect(confirm).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.getByText('Пароли совпадают')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Пароль'), {
+      target: { value: 'a-strong-password-12' },
+    });
+    expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument();
+    expect(registerAccountMock).not.toHaveBeenCalled();
+  });
+
   it('clears the mismatch once the passwords match and sends both fields', async () => {
     registerAccountMock.mockResolvedValue({
       emailVerificationRequired: true,
@@ -361,6 +393,7 @@ describe('RegisterForm confirm password', () => {
       email: 'rider@example.com',
       password: 'a-strong-password-123',
       confirmPassword: 'a-strong-password-123',
+      consents: currentLegalConsents(),
     });
   });
 });
@@ -416,6 +449,7 @@ describe('RegisterForm reCAPTCHA', () => {
       email: 'rider@example.com',
       password: 'a-strong-password-123',
       confirmPassword: 'a-strong-password-123',
+      consents: currentLegalConsents(),
       captchaToken: 'token-1',
     });
   });

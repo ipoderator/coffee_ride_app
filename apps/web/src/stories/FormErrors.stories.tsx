@@ -8,6 +8,7 @@ import { ResetPasswordForm } from '@/features/auth/reset-password/components/Res
 import { OrganizerProfileForm } from '@/features/organizer/profile/components/OrganizerProfileForm';
 import { ReviewForm } from '@/features/participant/ride-detail/components/ReviewForm';
 import { SessionProvider } from '@/lib/auth/session-context';
+import { tickConsents } from './consent-helpers';
 
 // CR-194 (QA 13653ed): a field that fails validation reads in Russian. These
 // stories drive the real forms into each failure — empty, wrong shape, a field
@@ -97,6 +98,7 @@ async function expectNoEnglish(canvasElement: HTMLElement) {
 export const RegisterEmpty: Story = {
   render: () => <RegisterForm />,
   play: async ({ canvas, canvasElement, userEvent }) => {
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );
@@ -129,6 +131,7 @@ export const RegisterInvalid: Story = {
       canvas.getByLabelText(AUTH_TERMS.passwordLabel),
       'short',
     );
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );
@@ -164,6 +167,7 @@ export const RegisterServerRejectsFields: Story = {
       canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
       'a-strong-password-123',
     );
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );
@@ -196,6 +200,7 @@ export const RegisterUnknownServerCode: Story = {
       canvas.getByLabelText(AUTH_TERMS.confirmPasswordLabel),
       'a-strong-password-123',
     );
+    await tickConsents(canvas, userEvent);
     await userEvent.click(
       canvas.getByRole('button', { name: AUTH_TERMS.registerSubmit }),
     );

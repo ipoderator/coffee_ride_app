@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { User } from 'types';
+import type { ConsentDocumentType, User } from 'types';
 import { ApiError } from '@/lib/api/errors';
 import { getCurrentUser } from '@/lib/api/current-user';
 
@@ -32,6 +32,10 @@ export type SessionStatus =
 export interface SessionState {
   status: SessionStatus;
   user: User | null;
+  /** CR-269 (ADR-041): consent documents the signed-in user must accept again
+   * (`GET /v1/auth/me`'s `legal.pending`); empty when nothing is pending or nobody
+   * is signed in. `LegalAcceptanceGate` acts on it. */
+  legalPending: ConsentDocumentType[];
   /** Re-resolves the session. Used after sign-out so the header updates
    * without a full page load. */
   refresh: () => void;
@@ -42,6 +46,7 @@ const SessionContext = createContext<SessionState | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [user, setUser] = useState<User | null>(null);
+  const [legalPending, setLegalPending] = useState<ConsentDocumentType[]>([]);
   const [attempt, setAttempt] = useState(0);
 
   // `loading` at once, not after the re-fetch lands: `CabinetShell` acts on
@@ -59,11 +64,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((response) => {
         if (cancelled) return;
         setUser(response.user);
+        // Optional chaining: an API from before CR-269 (mid-deploy) has no `legal`.
+        setLegalPending(response.legal?.pending ?? []);
         setStatus('authenticated');
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         setUser(null);
+        setLegalPending([]);
         setStatus(
           error instanceof ApiError && error.problem.status === 401
             ? 'anonymous'
@@ -77,7 +85,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [attempt]);
 
   return (
-    <SessionContext.Provider value={{ status, user, refresh }}>
+    <SessionContext.Provider value={{ status, user, legalPending, refresh }}>
       {children}
     </SessionContext.Provider>
   );
