@@ -31,7 +31,8 @@ the production runbook. Branch `feat/cr-271-vsecheki-caddy`; local validation pa
 PR/required CI/merge and deployment are the remaining delivery steps.
 
 Before it: CR-270 — legal texts corrected for Russian storage/no cross-border transfer
-(ADR-042); CR-269 — versioned legal documents and consent audit trail (ADR-041);
+(ADR-042), deployed 2026-10-15 with CR-265..CR-269 (`5c04b36`, migration `0029`);
+CR-269 — versioned legal documents and consent audit trail (ADR-041);
 CR-268 — final auth mockup verification; CR-267 — parallel API tests; CR-266 — parallel
 CI. See `docs/changelog.md` and `project-state-archive.md` for full history.
 
@@ -56,7 +57,7 @@ CI. See `docs/changelog.md` and `project-state-archive.md` for full history.
 CR-271 — local implementation/validation complete; delivery through PR, required CI,
 merge and production cleanup/verification is in progress.
 
-CR-269 + CR-268 — on `feat/legal-consents` (PR to `main`), not deployed. CR-269 needs owner input
+CR-269 + CR-268 — merged (PR #73) and deployed 2026-10-15 with CR-270. CR-269 needs owner input
 before production: the operator's legal name/ИНН/ОГРН/address, the hosting
 provider and country (localisation, ст. 18 ч. 5 152-ФЗ), the age threshold (drafted
 18+), the cross-border transfer notice to Роскомнадзор (Google, Strava), the incident
@@ -64,7 +65,7 @@ e-mail promise; then a lawyer's review. After deploy every existing account is a
 to accept the documents once. Next: prompt 5 — the final check (full suite, lint,
 build) including consents. KI-104: expired sessions/tokens/pending sign-ups not purged.
 
-CR-265 — merged (`7d22fa2`, PR #69), deploy pending; new env
+CR-265 — deployed 2026-10-15 (`5c04b36`), maintenance off; new env
 `MAINTENANCE_MODE`/`MAINTENANCE_RETRY_AFTER_SECONDS` (empty = off/600), no migration. On
 deploy Caddy is recreated once (new read-only mount `deploy/maintenance`); first
 production switch per `deploy/MAINTENANCE.md`. CR-264, CR-262/CR-263 — deployed. Next
