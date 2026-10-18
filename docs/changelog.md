@@ -144,3 +144,12 @@ Files: web `features/legal/content/{privacy,terms,personal-data-consent}.ts`; ty
 Validation: web legal/auth/public unit 166/166; api auth+legal 240 (+3 live skipped), auth branches back above the floor (a cookie-less `/oauth-signup` test); Storybook legal/register 27/27 with axe; typecheck 8/8; lint 9/9.
 Decisions: ADR-042.
 Follow-up: the owner's server move to Russia (KI-105); operator details and the lawyer's review.
+
+## 2026-10-18 — CR-271 — Keep VseCheki in the versioned Caddy configuration
+
+Summary: the production-only Caddy block for `всечеки.site` (`xn--b1agamj3b4b.site`) is now repository-owned, so a Coffee Ride deploy cannot silently erase it. Caddy keeps Coffee Ride on `web:3000` and proxies the separate owner's site to `vsecheki-web:80`; the `www.` host redirects permanently. The runbook records the shared-network dependency, recovery after network recreation, both-site checks and rollback.
+Contract: production routing only; no Coffee Ride API, data, environment or application behavior change.
+Files: `deploy/Caddyfile`; `docs/{deployment,decisions}.md`; infra context and invariant docs.
+Validation: exact block matches the production handoff; Caddy config valid; Compose config valid; Prettier and `git diff --check` clean; live pre-deploy smoke — VseCheki `200`, `www.` `301`, Coffee Ride `200`, `vsecheki-web` on `coffee-ride_default`.
+Decisions: ADR-043.
+Follow-up: merge through required `ci` + `docker-smoke`, deploy from `main`, remove the temporary server backup, then re-run both-site and clean-tree checks.

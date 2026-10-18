@@ -2103,3 +2103,39 @@ in the Netherlands (KI-105); the owner is moving it to Russia (152-ФЗ ст. 18
   Google directly when the widget loads (as it does with 2GIS), which the policy states.
 - §8 holds once the production server runs in Russia — the owner is moving it
   (KI-105). The lawyer reviews the wording.
+
+## ADR-043 — Share Coffee Ride's public Caddy with the owner's VseCheki site
+
+Status: Accepted (2026-10-18, owner, CR-271). Extends ADR-018's Caddy boundary without
+changing Coffee Ride's own request path.
+
+### Context
+
+The production host has one process bound to public ports 80/443: the Caddy service in
+the Coffee Ride Compose project. The same owner publishes `всечеки.site` (punycode
+`xn--b1agamj3b4b.site`) from a separate Compose project on that host. A server-only
+Caddyfile edit made the second site work, but the repository remained unaware of it, so
+the next Coffee Ride deploy could remove the route.
+
+### Decision
+
+- Keep the VseCheki bare-domain reverse proxy and `www.` redirect in Coffee Ride's
+  versioned `deploy/Caddyfile`; Caddy remains the only public listener.
+- Proxy that site to `vsecheki-web:80`, a separately managed container attached to the
+  external `coffee-ride_default` network. Do not share Coffee Ride data, volumes or
+  environment variables with it.
+- Coffee Ride itself still routes only `caddy → web → api`; Caddy must not gain a direct
+  Coffee Ride API route. ADR-018's single-origin and CSRF assumptions are unchanged.
+- A network-destructive operation such as `docker compose down` requires bringing the
+  VseCheki stack up again after Coffee Ride so its container rejoins the recreated
+  network. The production runbook records the command and both-site verification.
+
+### Consequences
+
+- A normal Coffee Ride deploy preserves both domains because the Caddy configuration is
+  now repository-owned and reviewed in CI.
+- The projects stay operationally coupled at the public proxy and Docker-network layer:
+  Coffee Ride's Caddy/network availability also affects VseCheki, while their application
+  data and configuration remain isolated.
+- Removing the VseCheki site blocks and reloading Caddy is a contained rollback; Coffee
+  Ride's own host and upstream are unaffected.

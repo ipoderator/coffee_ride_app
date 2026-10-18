@@ -133,10 +133,13 @@ packages=true` env var scoped to the one `pnpm --filter=api deploy` `RUN`
   never read as a failure (`.claude/rules/resilience.md`);
 - feature-module isolation between organizer/participant cabinet features
   (`.claude/rules/extensibility.md`);
-- Caddy proxying to `web` only, never directly to `api` (`docker-compose.
-prod.yml`, ADR-018) — `apps/web/next.config.ts`'s rewrite is the one place
-  `/api/v1/*` routing happens; don't add a second `/api` route at the proxy
-  layer;
+- Caddy proxying to `web` only, never directly to `api` (`docker-compose.prod.yml`,
+  ADR-018) — `apps/web/next.config.ts`'s rewrite is the one place `/api/v1/*` routing
+  happens; don't add a second `/api` route at the proxy layer;
+- Caddy also serving `xn--b1agamj3b4b.site` through `vsecheki-web:80` on the shared
+  `coffee-ride_default` network (ADR-043, CR-271). Keep that site block when changing
+  `deploy/Caddyfile`; after a command that deletes/recreates the Compose network, bring
+  the external `vsecheki` stack up again before treating the deploy as healthy;
 - `api`'s `WEB_ORIGIN` staying derived as `https://${DOMAIN}` inside
   `docker-compose.prod.yml` rather than a second, independently-set variable
   (ADR-018) — letting it drift from `DOMAIN` would silently break the CSRF
