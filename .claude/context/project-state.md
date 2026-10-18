@@ -25,31 +25,16 @@ registration_closed → started → finished`, `cancelled`), the six-tab ride wo
 
 ## Current task
 
-CR-270 (owner, 2026-10-15) — CR-269's legal texts corrected: data stored in Russia,
-no cross-border transfer (`siteverify` without the IP, ADR-042), ride safety rules
-from the owner's sample; branch `fix/legal-texts-russia`. The owner is moving the
-production server to Russia (KI-105 open until done). **Deployed** 2026-10-15 with
-CR-265..CR-269 (`5c04b36`, migration `0029` applied).
+CR-271 (owner, 2026-10-18) — keep the server's `всечеки.site` Caddy route in
+`deploy/Caddyfile` (ADR-043), with the shared Docker-network recovery and rollback in
+the production runbook. Branch `feat/cr-271-vsecheki-caddy`; local validation passed,
+PR/required CI/merge and deployment are the remaining delivery steps.
 
-Before it: CR-269 (owner, 2026-10-15) — prompt 4 «Условия, конфиденциальность и согласия» of the
-updated mockup package (ADR-041), built on `experiments`, ported with CR-268 to
-`feat/legal-consents` (cherry-picks onto `main`, renumbered from CR-268/CR-267): full `/terms`, `/privacy`, new `/personal-data-consent`
-(versioned 1.0 + history); two separate unticked consents on `/register`; a first
-Google/Yandex sign-in waits on `/register/consent` (no account/session before);
-`/login` only names the documents; acceptances recorded (`legal_acceptances`, version +
-SHA-256 + source); re-consent on `/legal-update` with `403 legal_acceptance_required`
-from the API meanwhile. Migration `0029`. The texts are a draft: owner inputs + lawyer.
-
-Before it: CR-268 (owner, 2026-10-15) — final check of the auth mockup work (CR-260..CR-265, prompt
-4): the whole flow in Chromium against `next start` +
-the real API with fake Google/Yandex/siteverify (75/75), maintenance on → off with a
-signed-in tab (37/37), mockup tabs compared at 1440/390, axe, leak scan of the API log.
-One fix: `/register` dropped the stale «Пароли не совпадают.» once a field changes.
-
-Before it: CR-267 — `apps/api` test files in parallel, one Postgres/Redis database per
-Vitest worker (PR #71); CR-266 — CI split into parallel jobs + gate `ci` (PR #70).
-
-Earlier: CR-219..CR-265 — see `docs/changelog.md` and `project-state-archive.md`.
+Before it: CR-270 — legal texts corrected for Russian storage/no cross-border transfer
+(ADR-042), deployed 2026-10-15 with CR-265..CR-269 (`5c04b36`, migration `0029`);
+CR-269 — versioned legal documents and consent audit trail (ADR-041);
+CR-268 — final auth mockup verification; CR-267 — parallel API tests; CR-266 — parallel
+CI. See `docs/changelog.md` and `project-state-archive.md` for full history.
 
 ## Implemented (by area — details in the changelog and `architecture-map.md`)
 
@@ -57,8 +42,8 @@ Earlier: CR-219..CR-265 — see `docs/changelog.md` and `project-state-archive.m
   Fastify 5 + Zod + OpenAPI; Drizzle + Postgres (migrations `0000`–`0029`); Redis
   (BullMQ notifications, rate limits); S3 — SeaweedFS locally/CI (ADR-025); 2GIS via
   `maps-core`/`maps-2gis` (ADR-010/020). Production: Docker images for web/api/migrate,
-  `docker-compose.prod.yml` + Caddy (ADR-018), smoke-tested in CI (`docker-smoke`)
-  except Caddy/backup (KI-045).
+  `docker-compose.prod.yml` + Caddy (ADR-018; shared VseCheki host route ADR-043),
+  smoke-tested in CI (`docker-smoke`) except Caddy/backup (KI-045).
 - **Quality gates:** CI `ci` job — format, lint, typecheck, Vitest with a coverage
   floor (`coverage-baseline.json`, CR-136), build, Playwright e2e incl. visual
   baselines (CR-138); Storybook + axe (CR-158); k6 load suite (manual/nightly,
@@ -68,6 +53,9 @@ Earlier: CR-219..CR-265 — see `docs/changelog.md` and `project-state-archive.m
   `.claude/rules/` path-scoped; Stop/PreCompact hook reminds about context files.
 
 ## In progress
+
+CR-271 — local implementation/validation complete; delivery through PR, required CI,
+merge and production cleanup/verification is in progress.
 
 CR-269 + CR-268 — merged (PR #73) and deployed 2026-10-15 with CR-270. CR-269 needs owner input
 before production: the operator's legal name/ИНН/ОГРН/address, the hosting
@@ -194,4 +182,4 @@ file (CR-204).
 
 ## Last updated
 
-2026-10-15 (CR-269)
+2026-10-18 (CR-271)

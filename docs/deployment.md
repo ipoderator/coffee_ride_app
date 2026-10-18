@@ -129,6 +129,26 @@ While this host is a test deploy with no verified email sender, its `.env` sets
 verified, so publishing a ride needs no email. The API logs a preflight warning
 while it is on; unset it (and configure `EMAIL_FROM_ADDRESS`) before real users.
 
+### Shared Caddy: VseCheki (CR-271, ADR-043)
+
+The same Caddy instance also terminates TLS for `xn--b1agamj3b4b.site` (the IDN
+`всечеки.site`) and proxies it to the separately managed `vsecheki-web:80` container.
+That container joins the external `coffee-ride_default` network; it does not share
+Coffee Ride data, volumes or environment variables.
+
+A normal `deploy/deploy.sh` keeps the network and the connection. If an operator runs
+`docker compose down` (or otherwise recreates `coffee-ride_default`), reconnect the
+external stack after Coffee Ride is up:
+
+```sh
+cd /opt/deployments/vsecheki && sudo docker compose -f deploy/docker-compose.yml up -d
+```
+
+Verify `https://xn--b1agamj3b4b.site/` returns `200`, its `www.` host redirects to the
+bare domain, and `https://coffeeride.site/` still answers. To stop serving VseCheki,
+remove its two site blocks from `deploy/Caddyfile` and reload/recreate Caddy; this does
+not change Coffee Ride routing.
+
 ## Admin access (ADR-032)
 
 `/admin` opens only for a user with a `platform_admins` row, granted from the host —

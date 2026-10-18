@@ -19,6 +19,9 @@ None — see `project-state.md` → "Next" for candidate work awaiting the owner
 
 ## Recently done
 
+- [x] CR-271 keep `всечеки.site` in Coffee Ride's versioned Caddy configuration;
+      document the shared proxy/network recovery and rollback (ADR-043) — done
+      2026-10-18. See docs/changelog.md
 - [x] CR-270 legal texts: data stored in Russia, no cross-border transfer (`siteverify`
       without the IP, ADR-042), ride safety rules from the owner's sample — done
       2026-10-15. Server move to Russia pending (KI-105). See docs/changelog.md

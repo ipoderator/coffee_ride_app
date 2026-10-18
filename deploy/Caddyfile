@@ -1,9 +1,9 @@
-# CR-075, ADR-018. Mounted read-only into the `caddy` service in
+# CR-075/271, ADR-018/043. Mounted read-only into the `caddy` service in
 # `docker-compose.prod.yml`. `{$VAR}` is Caddy's own env-var substitution —
 # populated from the real host `.env` at container start, not templated by
 # any script.
 #
-# Only one upstream: `web` (Next.js, apps/web/Dockerfile's runtime port).
+# Coffee Ride has one upstream: `web` (Next.js, apps/web/Dockerfile's runtime port).
 # `/api/v1/*` is NOT routed here — apps/web/next.config.ts's own rewrite
 # already forwards it to `apps/api` internally (ADR-018 §2). Routing it a
 # second time here would duplicate that logic in two places.
@@ -36,4 +36,15 @@
 # record; without one Caddy only logs a failed ACME attempt for it.
 www.{$DOMAIN} {
 	redir https://{$DOMAIN}{uri} permanent
+}
+
+# Блок для Caddy, который держит 80/443 на сервере (Caddyfile проекта coffee-ride).
+# Домен всечеки.site в punycode. Контейнер vsecheki-web должен быть в той же сети Docker.
+xn--b1agamj3b4b.site {
+	encode gzip
+	reverse_proxy vsecheki-web:80
+}
+
+www.xn--b1agamj3b4b.site {
+	redir https://xn--b1agamj3b4b.site{uri} permanent
 }

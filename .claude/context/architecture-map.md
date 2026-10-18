@@ -140,7 +140,9 @@ participants|updates` — the six-tab workspace «Управление заез�
 - Production: `apps/{web,api}/Dockerfile`, `packages/db/Dockerfile`,
   `docker-compose.prod.yml` (caddy → web → api, `migrate` profile, `backup`),
   `docker-compose.infra.yml` (single-VPS Postgres/Redis/S3 overlay, ADR-031),
-  `deploy/deploy.sh` + `deploy/production.env.example`, `deploy/Caddyfile` (+ `handle_errors` → `deploy/maintenance/index.html`, ADR-040;
+  `deploy/deploy.sh` + `deploy/production.env.example`, `deploy/Caddyfile` (Coffee Ride +
+  the owner-managed `xn--b1agamj3b4b.site` upstream on the shared Compose network,
+  ADR-043; `handle_errors` → `deploy/maintenance/index.html`, ADR-040;
   runbook `deploy/MAINTENANCE.md`),
   `deploy/smoke/` (`pnpm smoke:docker`, layers the overlay). Procedure:
   `docs/deployment.md`.
