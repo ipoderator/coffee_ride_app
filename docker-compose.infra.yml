@@ -78,7 +78,7 @@ services:
   # S3-compatible object storage — the same SeaweedFS image local development and CI
   # use (ADR-025). The bucket stays private; `api` proxies every object (ADR-019).
   s3:
-    image: ghcr.io/chrislusf/seaweedfs:4.48
+    image: ghcr.io/chrislusf/seaweedfs:4.50
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -109,7 +109,7 @@ services:
   # shell` exits non-zero on "already exists", so that one error counts as
   # success here; any other failure still fails the deploy.
   s3-init:
-    image: ghcr.io/chrislusf/seaweedfs:4.48
+    image: ghcr.io/chrislusf/seaweedfs:4.50
     restart: 'no'
     environment:
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
